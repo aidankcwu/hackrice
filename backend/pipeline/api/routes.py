@@ -177,7 +177,9 @@ async def wearables_ingest(
     """
 
     _check_token(x_ingest_token)
-    return ingest(_pipeline(request).db, payload, now=_now(_pipeline(request)))
+    pipeline = _pipeline(request)
+    return ingest(pipeline.db, payload, now=time.time(),
+                  wall_to_tick=pipeline.clock.wall_to_tick)
 
 
 @router.post("/api/wearables/ingest/health-auto-export")
@@ -191,7 +193,7 @@ async def wearables_ingest_hae(
     _check_token(x_ingest_token)
     pipeline = _pipeline(request)
     return ingest_samples(pipeline.db, health_auto_export_to_samples(payload),
-                          now=_now(pipeline))
+                          now=time.time(), wall_to_tick=pipeline.clock.wall_to_tick)
 
 
 @router.post("/api/wearables/ingest/whoop")
@@ -210,7 +212,7 @@ async def wearables_ingest_whoop(
     _check_token(x_ingest_token)
     pipeline = _pipeline(request)
     result = ingest_samples(pipeline.db, whoop_to_samples(payload),
-                            now=_now(pipeline))
+                            now=time.time(), wall_to_tick=pipeline.clock.wall_to_tick)
     result["seeded_rows"] = pipeline.db.insert_seeded_rows(whoop_seeded_rows(payload))
     return result
 
@@ -221,10 +223,13 @@ async def wearables_status(request: Request) -> dict:
 
     pipeline = _pipeline(request)
     present = pipeline.db.biometric_metrics_present()
-    now = _now(pipeline)
+    now = (pipeline.last_tick.t if pipeline.last_tick is not None
+           else pipeline.clock.wall_to_tick(time.time()))
+    # Live rows are stored on the tick clock; 15 wall minutes span 900 * speed
+    # seconds there.
     live = [
         row for row in present
-        if row["origin"] == "live" and (row["last_t"] or 0) >= now - LIVE_FRESH_S
+        if row["origin"] == "live" and (row["last_t"] or 0) >= now - LIVE_FRESH_S * pipeline.clock.speed
     ]
     return {
         "metrics": present,

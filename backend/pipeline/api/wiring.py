@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import logging
 import time
+from dataclasses import dataclass
 from typing import Literal
 
 from ..actions.speech import SpeechLimiter, spoken
@@ -26,6 +27,21 @@ from ..sim.scenario import DEFAULT_SCENARIO, Scenario
 from ..sim.source import SimSource
 
 log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class Clock:
+    """Translate timestamps between the real device and simulation clocks."""
+
+    wall_start: float
+    sim_start_t: float
+    speed: float
+
+    def wall_to_tick(self, wall_t: float) -> float:
+        return self.sim_start_t + (wall_t - self.wall_start) * self.speed
+
+    def tick_to_wall(self, tick_t: float) -> float:
+        return self.wall_start + (tick_t - self.sim_start_t) / self.speed
 
 
 class Pipeline:
@@ -49,6 +65,9 @@ class Pipeline:
         self.episodes = episodes
         self.gate = gate
         self.source = source
+        # SimSource records its start on the wall clock before any ticks exist.
+        self.clock = Clock(wall_start=source.start_t, sim_start_t=source.start_t,
+                           speed=speed)
         self.biometrics_start_t = source.start_t
         self.started_at: float | None = None
         self.last_tick: Tick | None = None

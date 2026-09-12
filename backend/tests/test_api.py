@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import time
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -121,15 +122,17 @@ async def test_wearable_ingest_round_trip_and_status(tmp_path):
         assert {r["origin"] for r in before["metrics"]} == {"seed"}
         assert before["catalogue"]["heart_rate"]["unit"] == "bpm"
 
-        t = pipeline.last_tick.t
+        wall_t = time.time()
+        t = pipeline.clock.wall_to_tick(wall_t)
         body = {"device": "whoop",
-                "samples": [{**NOW_SAMPLE, "t": t + i} for i in range(3)]}
+                "samples": [{**NOW_SAMPLE, "t": wall_t + i} for i in range(3)]}
         posted = (await client.post("/api/wearables/ingest", json=body)).json()
-        assert posted == {"accepted": 3, "rejected": 0, "reasons": {}}
+        assert posted == {"accepted": 3, "rejected": 0, "reasons": {},
+                          "wall_t": [wall_t + i for i in range(3)]}
 
         # The live rows now win for that window, seeded rows and all.
         read = (await client.get("/api/biometrics", params={
-            "metric": "heart_rate", "from": t, "to": t + 2})).json()
+            "metric": "heart_rate", "from": t, "to": t + 2 * pipeline.clock.speed})).json()
         assert read["origin"] == "live" and read["source"] == "whoop"
         assert [v for _, v in read["points"]] == [118.0, 118.0, 118.0]
 
@@ -142,8 +145,9 @@ async def test_wearable_ingest_round_trip_and_status(tmp_path):
 async def test_health_auto_export_and_whoop_adapter_routes(tmp_path):
     pipeline, client = await wearables_client(tmp_path, "adapters")
     async with client:
-        t = pipeline.last_tick.t
-        stamp = datetime.fromtimestamp(t, tz=timezone.utc).astimezone(
+        wall_t = time.time()
+        t = pipeline.clock.wall_to_tick(float(int(wall_t)))
+        stamp = datetime.fromtimestamp(wall_t, tz=timezone.utc).astimezone(
             timezone(timedelta(hours=-5))).strftime("%Y-%m-%d %H:%M:%S %z")
         hae = (await client.post("/api/wearables/ingest/health-auto-export", json={
             "data": {"metrics": [
@@ -153,7 +157,8 @@ async def test_health_auto_export_and_whoop_adapter_routes(tmp_path):
                  "data": [{"date": stamp, "Min": 12, "Max": 20, "Avg": 16}]},
             ]}
         })).json()
-        assert hae == {"accepted": 2, "rejected": 0, "reasons": {}}
+        assert hae["accepted"] == 2 and hae["rejected"] == 0 and hae["reasons"] == {}
+        assert hae["wall_t"] == [float(int(wall_t))] * 2
         # The seeded day runs on past `t`, so read the window rather than the
         # newest row overall -- live wins inside the window it covers.
         rr = pipeline.db.biometric_window("respiratory_rate", t - 2, t + 2)
@@ -162,19 +167,20 @@ async def test_health_auto_export_and_whoop_adapter_routes(tmp_path):
 
         whoop = (await client.post("/api/wearables/ingest/whoop", json={
             "cycle_id": 1, "sleep_id": "s",
-            "created_at": datetime.fromtimestamp(t, tz=timezone.utc).isoformat(),
-            "updated_at": datetime.fromtimestamp(t, tz=timezone.utc).isoformat(),
+            "created_at": datetime.fromtimestamp(wall_t, tz=timezone.utc).isoformat(),
+            "updated_at": datetime.fromtimestamp(wall_t, tz=timezone.utc).isoformat(),
             "score": {"recovery_score": 44, "resting_heart_rate": 57,
                       "hrv_rmssd_milli": 41.2, "spo2_percentage": 97.3,
                       "skin_temp_celsius": 33.4},
         })).json()
         assert whoop["accepted"] == 3 and whoop["seeded_rows"] == 1
-        hrv = pipeline.db.biometric_window("hrv_rmssd", t - 2, t + 2)
+        whoop_t = pipeline.clock.wall_to_tick(wall_t)
+        hrv = pipeline.db.biometric_window("hrv_rmssd", whoop_t - 2, whoop_t + 2)
         assert hrv["origin"] == "live" and hrv["source"] == "whoop"
         assert [v for _, v in hrv["points"]] == [41.2]
         assert [v for _, v in pipeline.db.biometric_series(
-            "wrist_temp_dev", t - 2, t + 2)] == [0.4]
-        resting = [r for r in pipeline.db.list_seeded(day_key(t), day_key(t))
+            "wrist_temp_dev", whoop_t - 2, whoop_t + 2)] == [0.4]
+        resting = [r for r in pipeline.db.list_seeded(day_key(whoop_t), day_key(whoop_t))
                    if r.metric == "resting_hr"]
         assert resting and resting[0].value == 57.0 and resting[0].source == "whoop"
     await pipeline.stop()
@@ -200,3 +206,32 @@ async def test_ingest_token_is_enforced_only_when_the_env_sets_one(tmp_path, mon
         assert (await client.post("/api/wearables/ingest", json=body)).status_code == 200
     await pipeline.stop()
 
+
+async def test_fast_sim_maps_live_wall_samples_into_the_tick_window(tmp_path):
+    pipeline = build_pipeline(Settings(db_path=tmp_path / "fast-live.db"), source="sim",
+                              reasoner_mode="fake", speed=10)
+    await pipeline.start()
+    for _ in range(100):
+        if pipeline.last_tick is not None:
+            break
+        await asyncio.sleep(0.01)
+    app = create_app(pipeline)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                 base_url="http://test") as client:
+        wall_t = time.time()
+        response = await client.post("/api/wearables/ingest", json={
+            "device": "whoop", "samples": [{**NOW_SAMPLE, "t": wall_t}],
+        })
+        assert response.json()["accepted"] == 1
+        tick_t = pipeline.clock.wall_to_tick(wall_t)
+        rows = (await client.get("/api/biometrics", params={
+            "metric": "heart_rate", "from": tick_t - 1, "to": tick_t + 1,
+        })).json()
+        assert rows["origin"] == "live" and rows["points"] == [[tick_t, 118.0]]
+
+        old = await client.post("/api/wearables/ingest", json={
+            "device": "whoop", "samples": [{**NOW_SAMPLE, "t": wall_t - 3 * 86400}],
+        })
+        assert old.json()["accepted"] == 0
+        assert old.json()["reasons"] == {"t outside the +/-48h window": 1}
+    await pipeline.stop()

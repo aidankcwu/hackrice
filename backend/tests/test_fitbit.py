@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 from urllib.parse import parse_qs, urlparse
@@ -89,4 +90,43 @@ async def test_routes_unconfigured_and_authorize_redirect(tmp_path):
         response = await http.get("/api/wearables/fitbit/authorize", follow_redirects=False)
         assert response.status_code == 307
         assert parse_qs(urlparse(response.headers["location"]).query)["code_challenge_method"] == ["S256"]
+    set_sync(None)
+
+
+@pytest.mark.asyncio
+async def test_callback_starts_one_poll_loop_and_an_initial_sync():
+    class Client:
+        class Config:
+            client_id = "id"
+            client_secret = "secret"
+        class Store:
+            def load(self): return {}
+        config = Config()
+        store = Store()
+        async def exchange_code(self, code, verifier): return {}
+        def authorize_url(self, state): return f"https://example.test/?state={state}", "verifier"
+
+    class Sync:
+        def __init__(self):
+            self.client = Client()
+            self.connected = False
+            self.last_sync_t = self.last_error = None
+            self.sync_calls = self.poll_calls = 0
+        @property
+        def requests_last_hour(self): return 0
+        async def sync_once(self): self.sync_calls += 1; return {}
+        async def run_forever(self):
+            self.poll_calls += 1
+            await asyncio.Event().wait()
+
+    sync = Sync()
+    app = FastAPI(); app.include_router(router)
+    set_sync(sync)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as http:
+        redirect = await http.get("/api/wearables/fitbit/authorize", follow_redirects=False)
+        state = parse_qs(urlparse(redirect.headers["location"]).query)["state"][0]
+        assert (await http.get("/api/wearables/fitbit/callback", params={"code": "ok", "state": state})).status_code == 200
+        await asyncio.sleep(0)
+        assert sync.connected and sync.sync_calls == 1 and sync.poll_calls == 1
+        assert (await http.get("/api/wearables/fitbit/status")).json()["polling"] is True
     set_sync(None)

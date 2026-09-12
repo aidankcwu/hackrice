@@ -40,3 +40,23 @@ async def test_pipeline_wires_all_components(tmp_path):
         assert expected <= pipeline.status().keys()
     finally:
         await pipeline.stop()
+
+
+def test_clock_is_identity_at_speed_one_and_scales_at_speed_ten(tmp_path):
+    one = build_pipeline(Settings(db_path=tmp_path / "one.db"), source="sim",
+                         reasoner_mode="fake", speed=1)
+    try:
+        wall = one.clock.wall_start + 30
+        assert one.clock.wall_to_tick(wall) == wall
+        assert one.clock.tick_to_wall(wall) == wall
+    finally:
+        one.db.close()
+
+    fast = build_pipeline(Settings(db_path=tmp_path / "fast.db"), source="sim",
+                          reasoner_mode="fake", speed=10)
+    try:
+        last_tick_t = fast.clock.wall_to_tick(fast.clock.wall_start + 60)
+        sample_t = fast.clock.wall_to_tick(fast.clock.wall_start + 30)
+        assert abs((last_tick_t - sample_t) - 300) <= 1
+    finally:
+        fast.db.close()

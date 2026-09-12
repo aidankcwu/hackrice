@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from ..config import Settings, get_settings
 from ..wearables.connect import attach_fitbit
-from ..wearables.fitbit_routes import router as fitbit_router
+from ..wearables.fitbit_routes import router as fitbit_router, set_sync
 from .routes import router
 from .wiring import Pipeline, build_pipeline
 
@@ -27,13 +27,12 @@ def create_app(pipeline: Pipeline | None = None, *, settings: Settings | None = 
             active = build_pipeline(settings or get_settings(), **kwargs)
         app.state.pipeline = active
         await active.start()
-        fitbit_sync, fitbit_task = attach_fitbit(active.db)
+        fitbit_sync, fitbit_task = attach_fitbit(active.db, active.clock)
         app.state.fitbit = fitbit_sync
         try:
             yield
         finally:
-            if fitbit_task is not None:
-                fitbit_task.cancel()
+            set_sync(None)
             await active.stop()
 
     app = FastAPI(lifespan=lifespan)

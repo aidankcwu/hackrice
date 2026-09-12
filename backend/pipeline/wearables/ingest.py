@@ -14,7 +14,7 @@ every minute must never be able to fail the whole batch on one odd reading.
 from __future__ import annotations
 
 import time
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from ..db import Database
 from . import DEVICES, LIVE_METRICS, Sample
@@ -93,6 +93,7 @@ def ingest_samples(
     *,
     now: float | None = None,
     result: dict[str, Any] | None = None,
+    wall_to_tick: Callable[[float], float] | None = None,
 ) -> dict[str, Any]:
     """Validate and store already-parsed samples. Idempotent on ``(t, metric)``.
 
@@ -119,16 +120,24 @@ def ingest_samples(
             continue
         accepted.append(sample)
 
+    # Validate timestamps on the device's wall clock, then store them on the
+    # pipeline clock so live and simulated rows share query windows.
+    stored = [Sample(t=wall_to_tick(s.t) if wall_to_tick else s.t,
+                     metric=s.metric, value=s.value, unit=s.unit, device=s.device)
+              for s in accepted]
     db.insert_biometric_series(
-        [(s.t, s.metric, float(s.value), s.device) for s in dedupe(accepted)],
+        [(s.t, s.metric, float(s.value), s.device) for s in dedupe(stored)],
         origin="live",
     )
     out["accepted"] += len(accepted)
+    if wall_to_tick is not None:
+        out["wall_t"] = [s.t for s in accepted]
     return out
 
 
-def ingest(db: Database, payload: Any, *, now: float | None = None) -> dict[str, Any]:
+def ingest(db: Database, payload: Any, *, now: float | None = None,
+           wall_to_tick: Callable[[float], float] | None = None) -> dict[str, Any]:
     """Canonical ingest: parse, validate, store. Never raises on bad input."""
 
     samples, result = parse_payload(payload)
-    return ingest_samples(db, samples, now=now, result=result)
+    return ingest_samples(db, samples, now=now, result=result, wall_to_tick=wall_to_tick)
