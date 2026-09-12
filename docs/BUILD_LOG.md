@@ -50,3 +50,26 @@ Six bounded subtasks, alternated between coders:
 | S5b | Next.js dashboard with the silent-decision feed | Opus |
 
 Every diff is reviewed by Fable and Astra before it lands.
+
+## Sat 12 Sep, ~02:30 — Astra's plan review (second supervisor)
+
+Astra 6 reviewed the plan read-only against the spec. Objections we adopted:
+
+- **Tolerate everything.** Ingress models accept unknown fields and treat a
+  missing boolean as *unknown*, never as *false*. AI tags older than ~3 s are
+  unknown too, with confidence decaying before that.
+- **Claim, don't wait.** The T1 concurrency cap is an atomic try-claim. If the
+  reasoner is busy the escalation is dropped and logged — the gate never awaits
+  inference, frame fetches, or speech.
+- **Copy frames at admission.** The four evidence frames are copied out of the
+  90 s ring *before* the model call and stored durably. Nothing else survives.
+- **One clock.** Cooldowns, watches, and frame TTL all run on `tick.t`, so a
+  10× simulation doesn't desync them.
+- **Entry and exit debounce**, plus a grace window for AI gaps so a dropped
+  VLM call doesn't close and reopen an episode.
+- **Cuts:** SSE (poll instead), live gym/sauna episodes, elaborate seed
+  generation. Caffeine and alcohol become point *sightings*, not episodes.
+- **Fake mode is explicit.** `--reasoner fake` is a flag, never a silent
+  fallback when a key is missing.
+- **Stage line:** "Two supervisors, one from each vendor, reviewed every
+  design decision and every diff. Neither could ship without the other."

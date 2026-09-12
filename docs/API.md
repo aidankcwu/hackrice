@@ -15,7 +15,28 @@ Person B's. Paths are relative to the FastAPI service (default `:8000`).
 3. **Speech out.** B calls `speak(text: str, urgency: Literal["low","normal","high"])`
    after its rate limiter. A implements it (ElevenLabs → socket → phone →
    glasses). B ships a stub that logs. Wire A's implementation via
-   `pipeline.actions.speech.set_speak_fn(fn)` at startup.
+   `pipeline.actions.speech.set_speak_fn(fn)` at startup. **`speak()` is
+   fire-and-forget**: it must return immediately (schedule its own task) and
+   never raise into B's action handler.
+
+Agreed details (from plan review):
+
+- **Frame encoding.** `FrameStore.get(refs)` returns `dict[ref, jpeg_bytes]`;
+  the HTTP route base64-encodes. Partial expiry returns the survivors; only
+  all-expired is a 410. B copies the four selected frames out of the store
+  **at escalation admission**, before inference, into a durable
+  `escalated_frames` table — that copy is the only way a frame outlives 90 s
+  (SPEC §2.5).
+- **One clock.** Every timing decision downstream (cooldowns, watches, frame
+  TTL, episode boundaries) uses `tick.t`, never wall-clock. A must stamp `t`
+  from the capture packet. This is what lets `--source sim --speed 10` run
+  the whole pipeline faster without desyncing anything.
+- **One FastAPI app.** `pipeline.api.app:create_app()` is the single server.
+  A adds a router (WebSocket ingest, `/frames`) to it; B's `/frames` is
+  simulation-only and is replaced, not duplicated, when A's router mounts.
+- **TickBus is B's choice, not the contract.** The contract is the Tick
+  object. If A prefers to hand B a callback instead, `bus.publish` is that
+  callback.
 
 ## Dashboard REST
 
@@ -30,7 +51,7 @@ Person B's. Paths are relative to the FastAPI service (default `:8000`).
 | `GET /api/pending_checks` | open `watch` rows |
 | `GET /api/summary/today` | annotate lines accumulated today (part 4 of the T1 envelope) |
 | `GET /api/seeded?days=7` | seeded integration rows (for the "7-day" panel) |
-| `GET /api/events` | SSE stream: `event: tick\|episode\|decision\|score\|status`, `data: <json>` |
+| `GET /api/events` | SSE stream (deferred — dashboard polls at 1 s for the demo) |
 | `GET /frames?refs=` | see seam §2 |
 
 Decision row shape:
