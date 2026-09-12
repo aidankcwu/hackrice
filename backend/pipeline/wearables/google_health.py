@@ -132,7 +132,19 @@ class GoogleHealthClient:
 
     async def paginate(self, data_type: str, start: datetime | str, end: datetime | str) -> AsyncIterator[dict[str, Any]]:
         fmt = lambda value: value if isinstance(value, str) else value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-        params: dict[str, Any] = {"startTime": fmt(start), "endTime": fmt(end),
+        # The list method takes the time range as an AIP-160 ``filter``; bare
+        # startTime/endTime query params are rejected with 400 (verified live).
+        # Field prefix is the data type in snake_case; the time field depends
+        # on the data type's shape: sample / interval / daily summary.
+        snake = data_type.replace("-", "_")
+        if data_type.startswith("daily-"):
+            day = lambda v: fmt(v)[:10]
+            flt = f'{snake}.date >= "{day(start)}" AND {snake}.date <= "{day(end)}"'
+        elif data_type in {"steps", "sleep", "exercise", "sedentary-period", "active-minutes"}:
+            flt = f'{snake}.interval.start_time >= "{fmt(start)}" AND {snake}.interval.start_time < "{fmt(end)}"'
+        else:
+            flt = f'{snake}.sample_time.physical_time >= "{fmt(start)}" AND {snake}.sample_time.physical_time < "{fmt(end)}"'
+        params: dict[str, Any] = {"filter": flt,
                                   "pageSize": 25 if data_type in {"sleep", "exercise"} else 1000}
         while True:
             payload = await self.get(f"/users/me/dataTypes/{data_type}/dataPoints", params)
