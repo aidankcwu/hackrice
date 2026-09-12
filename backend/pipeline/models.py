@@ -22,6 +22,7 @@ __all__ = [
     "DeviceBlock",
     "AiBlock",
     "Tick",
+    "Escalation",
     "Episode",
     "Decision",
     "Insight",
@@ -75,6 +76,9 @@ EpisodeKind = Literal[
     "screen_block",
     "gym_session",
     "sauna_session",
+    # Point observations (short episodes), not sustained states.
+    "caffeine_sighting",
+    "alcohol_sighting",
 ]
 
 _TICK_BLOCK_CONFIG = ConfigDict(extra="allow")
@@ -179,6 +183,24 @@ class Tick(BaseModel):
         if value in (None, "unknown"):
             return None
         return value
+
+
+class Escalation(BaseModel):
+    """What the trigger gate hands to the reasoner (SPEC §3, §4).
+
+    The gate never awaits the reasoner. ``Reasoner.try_escalate(esc) -> bool``
+    atomically claims the single T1 slot; ``False`` means dropped on
+    contention (SPEC §5.4) and the reasoner has already logged a dropped
+    :class:`Decision`.
+    """
+
+    trigger: str
+    t: float
+    tick: Tick
+    #: Recent tick history, oldest first, ending with ``tick`` (~60 s).
+    window: list[Tick] = Field(default_factory=list)
+    episode_id: str | None = None
+    reason: str = ""
 
 
 class Episode(BaseModel):
