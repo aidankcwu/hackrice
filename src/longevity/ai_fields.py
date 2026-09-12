@@ -135,6 +135,15 @@ BOOL_FIELDS = [
     "screen_present",
     "vegetation_visible",
     "people_present",
+    # Light exposure. `outdoor_visible` is deliberately *not* the same question as
+    # `scene in OUTDOOR_SCENES`: it is true through a window too, which is how a
+    # desk by daylight is distinguished from a windowless room (SPEC §7 circadian).
+    "direct_sunlight_visible",
+    "outdoor_visible",
+    # Substances. Nicotine outweighs both caffeine and alcohol in the longevity
+    # literature and had no field at all until now.
+    "smoking_or_vaping_visible",
+    "medication_visible",
 ]
 
 ENUM_FIELDS = {
@@ -148,6 +157,8 @@ ENUM_FIELDS = {
 FIELD_ORDER = [
     "scene", "activity", "food_present", "food_type", "caffeine_visible",
     "alcohol_visible", "screen_present", "vegetation_visible", "people_present",
+    "direct_sunlight_visible", "outdoor_visible", "smoking_or_vaping_visible",
+    "medication_visible",
     "caption", "objects", "drink", "conf",
 ]
 
@@ -178,7 +189,13 @@ PROMPT = (
     "scene is the most specific matching location from this list.\n"
     "activity is the most specific matching thing the wearer is doing from this list.\n"
     "food_type is the most specific matching food visible from this list, or none.\n"
-    "drink identifies the plainly visible drink, or none when no drink is visible."
+    "drink identifies the plainly visible drink, or none when no drink is visible.\n"
+    "direct_sunlight_visible is true only for unobstructed sun or the hard shadows "
+    "it casts, not for a merely bright or overcast sky.\n"
+    "outdoor_visible is true whenever the outdoors appears in the frame at all, "
+    "including when seen through a window from inside.\n"
+    "smoking_or_vaping_visible covers a lit cigarette, cigar, pipe, hookah or vape.\n"
+    "medication_visible covers pills, blister packs, prescription bottles and inhalers."
 )
 
 # --- Structured-output schema -------------------------------------------------
