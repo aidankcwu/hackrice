@@ -1,5 +1,5 @@
-import { mockBiometrics, mockDecisions, mockEpisodes, mockPending, mockScores, mockSeeded, mockStatus, mockSummary, mockTicks } from "./mock";
-import type { Biometrics, Decision, Episode, Insight, MetricScore, PendingCheck, Scores, SeededDay, Status, Tick, TodaySummary } from "./types";
+import { mockBiometrics, mockBiometricsMulti, mockDecisions, mockEpisodes, mockPending, mockScores, mockSeeded, mockStatus, mockSummary, mockTicks, mockWearablesStatus } from "./mock";
+import type { Biometrics, BiometricsMulti, Decision, Episode, Insight, MetricScore, PendingCheck, Scores, SeededDay, Status, Tick, TodaySummary, WearablesStatus } from "./types";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 export const configuredMock = process.env.NEXT_PUBLIC_MOCK === "1";
@@ -79,7 +79,26 @@ export const api = {
     if (fromT !== undefined) query.set("from", String(Math.floor(fromT)));
     if (toT !== undefined) query.set("to", String(Math.ceil(toT)));
     const r = await request<Biometrics>(`/api/biometrics?${query.toString()}`, mockBiometrics());
-    return {...r, data: {metric: r.data?.metric ?? metric, source: r.data?.source ?? "", points: r.data?.points ?? []}};
+    return {...r, data: {metric: r.data?.metric ?? metric, source: r.data?.source ?? "", origin: r.data?.origin ?? "seed", points: r.data?.points ?? []}};
+  },
+  // Several series in one round trip; each entry says whether the numbers came
+  // off a real device (`live`) or the seeded demo day (`seed`).
+  biometricsMulti: async (metrics: string[], fromT?: number, toT?: number)=>{
+    const query = new URLSearchParams({metrics: metrics.join(",")});
+    if (fromT !== undefined) query.set("from", String(Math.floor(fromT)));
+    if (toT !== undefined) query.set("to", String(Math.ceil(toT)));
+    const r = await request<BiometricsMulti>(`/api/biometrics?${query.toString()}`, mockBiometricsMulti(metrics));
+    const series = r.data?.series ?? {};
+    return {...r, data: {series: Object.fromEntries(metrics.map(m => [m, {
+      source: series[m]?.source ?? "", origin: series[m]?.origin ?? "seed", points: series[m]?.points ?? [],
+    }]))} as BiometricsMulti};
+  },
+  wearablesStatus: async ()=>{
+    const r = await request<WearablesStatus>("/api/wearables/status", mockWearablesStatus);
+    return {...r, data: {
+      metrics: r.data?.metrics ?? [], live_connected: r.data?.live_connected ?? false,
+      live_devices: r.data?.live_devices ?? [], catalogue: r.data?.catalogue ?? {},
+    } as WearablesStatus};
   },
 };
 export type ApiResult<T>={data:T;mock:boolean};

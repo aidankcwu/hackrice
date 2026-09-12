@@ -128,8 +128,13 @@ CREATE TABLE IF NOT EXISTS biometric_series (
     metric TEXT NOT NULL,
     value  REAL NOT NULL,
     source TEXT NOT NULL,
+    -- 'seed' (the SPEC §14.2 demo series) or 'live' (a real wearable, pushed
+    -- in over /api/wearables/ingest). Added after the table shipped, so
+    -- init_schema also applies it to existing files via ALTER TABLE.
+    origin TEXT NOT NULL DEFAULT 'seed',
     PRIMARY KEY (t, metric)
 );
+CREATE INDEX IF NOT EXISTS ix_biometric_metric ON biometric_series(metric, t);
 
 CREATE TABLE IF NOT EXISTS today_summary (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -194,8 +199,27 @@ class Database:
     def init_schema(self) -> "Database":
         with self._lock:
             self.conn.executescript(SCHEMA)
+            self._migrate()
             self.conn.commit()
         return self
+
+    def _migrate(self) -> None:
+        """Additive column migrations for databases created by older builds.
+
+        ``CREATE TABLE IF NOT EXISTS`` leaves an existing file alone, so a
+        column added after a table shipped has to be applied by hand. Each step
+        is guarded by ``PRAGMA table_info`` and is a no-op on a fresh database.
+        """
+
+        columns = {
+            row["name"]
+            for row in self.conn.execute("PRAGMA table_info(biometric_series)")
+        }
+        if "origin" not in columns:
+            self.conn.execute(
+                "ALTER TABLE biometric_series"
+                " ADD COLUMN origin TEXT NOT NULL DEFAULT 'seed'"
+            )
 
     def close(self) -> None:
         with self._lock:
@@ -518,28 +542,106 @@ class Database:
         return [SeededRow(**dict(r)) for r in rows]
 
     def insert_biometric_series(
-        self, rows: Iterable[tuple[float, str, float, str]]
+        self, rows: Iterable[tuple[float, str, float, str]], origin: str = "seed"
     ) -> int:
-        payload = list(rows)
+        """Store ``(t, metric, value, source)`` rows. Idempotent on ``(t, metric)``.
+
+        ``origin`` is ``'seed'`` for the SPEC §14.2 demo series and ``'live'``
+        for anything a real wearable pushed in.
+        """
+
+        payload = [(t, metric, value, source, origin)
+                   for t, metric, value, source in rows]
         if not payload:
             return 0
         with self._lock:
             self.conn.executemany(
-                "INSERT OR REPLACE INTO biometric_series (t, metric, value, source)"
-                " VALUES (?,?,?,?)",
+                "INSERT OR REPLACE INTO biometric_series"
+                " (t, metric, value, source, origin) VALUES (?,?,?,?,?)",
                 payload,
             )
             self.conn.commit()
         return len(payload)
 
-    def biometric_series(self, metric: str, t0: float, t1: float) -> list[tuple[float, float]]:
+    def _biometric_rows(
+        self, metric: str, t0: float, t1: float, origin: str | None = None
+    ) -> list[sqlite3.Row]:
+        """Rows for one metric and window, with live winning over seed.
+
+        With ``origin=None`` (the normal read) a window that contains even one
+        ``live`` row returns *only* its live rows: a connected wearable
+        replaces the seeded demo series rather than interleaving with it, which
+        would otherwise draw a sawtooth between two different people's hearts.
+        Pass ``origin`` explicitly to read one layer regardless.
+        """
+
+        sql = ("SELECT t, value, source, origin FROM biometric_series"
+               " WHERE metric = ? AND t >= ? AND t <= ?")
+        args: list[object] = [metric, t0, t1]
+        if origin is not None:
+            sql += " AND origin = ?"
+            args.append(origin)
+        with self._lock:
+            rows = self.conn.execute(sql + " ORDER BY t ASC", tuple(args)).fetchall()
+        if origin is None and any(row["origin"] == "live" for row in rows):
+            return [row for row in rows if row["origin"] == "live"]
+        return rows
+
+    def biometric_series(
+        self, metric: str, t0: float, t1: float, origin: str | None = None
+    ) -> list[tuple[float, float]]:
+        return [(row["t"], row["value"])
+                for row in self._biometric_rows(metric, t0, t1, origin)]
+
+    def biometric_window(
+        self, metric: str, t0: float, t1: float, origin: str | None = None
+    ) -> dict[str, object]:
+        """``biometric_series`` plus the source and origin the points came from."""
+
+        rows = self._biometric_rows(metric, t0, t1, origin)
+        return {
+            "source": rows[-1]["source"] if rows else "",
+            "origin": rows[-1]["origin"] if rows else (origin or "seed"),
+            "points": [(row["t"], row["value"]) for row in rows],
+        }
+
+    def latest_biometric(
+        self, metric: str
+    ) -> tuple[float, float, str, str] | None:
+        """Newest ``(t, value, source, origin)`` for one metric, or ``None``.
+
+        Live wins on ties: if a wearable and the seed both stamped the same
+        second, the wearable is the one that measured it.
+        """
+
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT t, value, source, origin FROM biometric_series"
+                " WHERE metric = ? ORDER BY t DESC,"
+                " CASE origin WHEN 'live' THEN 0 ELSE 1 END ASC LIMIT 1",
+                (metric,),
+            ).fetchone()
+        if row is None:
+            return None
+        return (row["t"], row["value"], row["source"], row["origin"])
+
+    def biometric_metrics_present(self) -> list[dict[str, object]]:
+        """One row per ``(metric, origin)`` actually stored, newest source first."""
+
         with self._lock:
             rows = self.conn.execute(
-                "SELECT t, value FROM biometric_series"
-                " WHERE metric = ? AND t >= ? AND t <= ? ORDER BY t ASC",
-                (metric, t0, t1),
+                "SELECT metric, origin, COUNT(*) AS n, MAX(t) AS last_t,"
+                " (SELECT source FROM biometric_series b2"
+                "  WHERE b2.metric = b.metric AND b2.origin = b.origin"
+                "  ORDER BY t DESC LIMIT 1) AS source"
+                " FROM biometric_series b GROUP BY metric, origin"
+                " ORDER BY metric ASC, origin ASC"
             ).fetchall()
-        return [(row["t"], row["value"]) for row in rows]
+        return [
+            {"metric": row["metric"], "source": row["source"],
+             "origin": row["origin"], "count": row["n"], "last_t": row["last_t"]}
+            for row in rows
+        ]
 
     # -- today's summary (part 4 of the envelope) ------------------------
 

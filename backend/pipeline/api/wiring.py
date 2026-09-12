@@ -165,12 +165,16 @@ def build_pipeline(settings: Settings, *, source: Literal["sim"],
     episodes = EpisodeBuilder(db, timings)
     # SPEC §14.3: the biometric_anomaly trigger reads the seeded wearable HR
     # series on the tick clock; the gate never imports the seed modules.
+    # A live wearable pushing into /api/wearables/ingest lands in the same
+    # table with origin='live' and wins for any window it covers, so the feed
+    # needs no branch: seeded until something real shows up.
     feed = CallableBiometricFeed(
-        lambda t0, t1: db.biometric_series("heart_rate", t0, t1),
+        db.biometric_series,
         lambda: resting_hr_for(db, end_day),
+        db.latest_biometric,
     )
     gate = TriggerGate(default_triggers(timings, settings.demo_mode, feed=feed), timings, db,
-                       episodes, reasoner.try_escalate, settings.demo_mode)
+                       episodes, reasoner.try_escalate, settings.demo_mode, feed=feed)
     sim_source = SimSource(scenario or DEFAULT_SCENARIO, frame_store, speed=speed)
     if seed_db:
         seed_biometric_series(db, sim_source.start_t)

@@ -216,6 +216,79 @@ def test_biometric_series_range_query(db: Database) -> None:
     ]) == 3
     assert db.biometric_series("heart_rate", 99.0, 101.0) == [(100.0, 58.0)]
     assert db.stats()["biometric_count"] == 3
+    # Rows written without an explicit origin are the seeded demo series.
+    assert db.biometric_series("heart_rate", 99.0, 101.0, origin="seed") == [(100.0, 58.0)]
+    assert db.biometric_series("heart_rate", 99.0, 101.0, origin="live") == []
+
+
+def test_live_rows_win_over_seeded_rows_in_the_same_window(db: Database) -> None:
+    """A connected wearable replaces the seeded day rather than interleaving."""
+
+    db.insert_biometric_series(
+        [(float(t), "heart_rate", 58.0, "sim") for t in range(100, 110)])
+    db.insert_biometric_series(
+        [(105.0, "heart_rate", 96.0, "whoop"), (106.0, "heart_rate", 97.0, "whoop")],
+        origin="live",
+    )
+    assert db.biometric_series("heart_rate", 100.0, 109.0) == [(105.0, 96.0), (106.0, 97.0)]
+    # A window with no live row at all still shows the seeded series.
+    assert len(db.biometric_series("heart_rate", 100.0, 104.0)) == 5
+    # And either layer can still be read on its own. The primary key is
+    # (t, metric), so the two live rows overwrote the seeded rows they landed
+    # on -- eight seeded rows survive, not ten.
+    assert len(db.biometric_series("heart_rate", 100.0, 109.0, origin="seed")) == 8
+
+    window = db.biometric_window("heart_rate", 100.0, 109.0)
+    assert window["source"] == "whoop" and window["origin"] == "live"
+    assert db.biometric_window("heart_rate", 200.0, 300.0) == {
+        "source": "", "origin": "seed", "points": []}
+
+
+def test_latest_biometric_and_metrics_present(db: Database) -> None:
+    assert db.latest_biometric("heart_rate") is None
+    db.insert_biometric_series([
+        (100.0, "heart_rate", 58.0, "apple_watch"),
+        (140.0, "heart_rate", 61.0, "apple_watch"),
+        (120.0, "spo2", 97.0, "apple_watch"),
+    ])
+    db.insert_biometric_series([(130.0, "spo2", 95.0, "oura")], origin="live")
+
+    assert db.latest_biometric("heart_rate") == (140.0, 61.0, "apple_watch", "seed")
+    assert db.latest_biometric("spo2") == (130.0, 95.0, "oura", "live")
+
+    present = {(row["metric"], row["origin"]): row for row in db.biometric_metrics_present()}
+    assert present[("heart_rate", "seed")]["count"] == 2
+    assert present[("heart_rate", "seed")]["last_t"] == 140.0
+    assert present[("spo2", "live")] == {
+        "metric": "spo2", "source": "oura", "origin": "live",
+        "count": 1, "last_t": 130.0,
+    }
+
+
+def test_origin_column_is_added_to_a_database_created_before_it(tmp_path) -> None:
+    """init_schema migrates an existing file rather than needing a fresh one."""
+
+    import sqlite3
+
+    path = tmp_path / "old.db"
+    legacy = sqlite3.connect(path)
+    legacy.execute(
+        "CREATE TABLE biometric_series (t REAL NOT NULL, metric TEXT NOT NULL,"
+        " value REAL NOT NULL, source TEXT NOT NULL, PRIMARY KEY (t, metric))"
+    )
+    legacy.execute("INSERT INTO biometric_series VALUES (10.0, 'heart_rate', 58.0, 'oura')")
+    legacy.commit()
+    legacy.close()
+
+    database = Database(path).connect().init_schema()
+    try:
+        columns = {row[1] for row in database.conn.execute(
+            "PRAGMA table_info(biometric_series)")}
+        assert "origin" in columns
+        assert database.latest_biometric("heart_rate") == (10.0, 58.0, "oura", "seed")
+        database.init_schema()  # idempotent: a second call must not raise
+    finally:
+        database.close()
 
 
 def test_stats_counts_ai_ticks(db: Database) -> None:

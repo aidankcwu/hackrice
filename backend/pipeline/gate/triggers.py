@@ -14,6 +14,7 @@ __all__ = [
     "Trigger",
     "biometric_anomaly_trigger",
     "default_triggers",
+    "wearable_now_line",
 ]
 
 #: Activities that explain a high heart rate on their own (SPEC §14.3).
@@ -36,41 +37,76 @@ _BIOMETRIC_REASON = "Heart rate {hr:.0f} vs resting {rest:.0f} while not exercis
 
 @runtime_checkable
 class BiometricFeed(Protocol):
-    """Read-only view of the seeded intraday wearable series (SPEC §14.2).
+    """Read-only view of the intraday wearable series (SPEC §14.2).
 
-    Both methods are synchronous and cheap -- the gate runs on every tick and
-    never awaits. ``hr_series`` returns ``(t, bpm)`` pairs on the tick clock.
+    Every method is synchronous and cheap -- the gate runs on every tick and
+    never awaits. ``series`` returns ``(t, value)`` pairs on the tick clock for
+    any metric in :data:`pipeline.wearables.LIVE_METRICS`; ``hr_series`` is the
+    heart-rate special case the ``biometric_anomaly`` trigger was built around
+    and is kept as its own name because that trigger reads it every tick.
+
+    The feed does not care whether the numbers are seeded or came off a real
+    watch -- that is the store's business (live rows win for any window they
+    cover), which is what lets a wearable be plugged in mid-run.
     """
 
     def hr_series(self, t0: float, t1: float) -> list[tuple[float, float]]: ...
 
     def resting_hr(self) -> float: ...
 
+    def series(self, metric: str, t0: float, t1: float) -> list[tuple[float, float]]: ...
+
+    def latest(self, metric: str) -> tuple[float, float] | None: ...
+
 
 @dataclass(frozen=True, slots=True)
 class CallableBiometricFeed:
-    """A :class:`BiometricFeed` over two injected callables.
+    """A :class:`BiometricFeed` over injected callables.
 
-    Keeps the gate free of any dependency on the seeded store: wiring passes
-    ``db.biometric_series``-shaped functions in, nothing here imports them.
-    ``resting`` is re-read per call so an overnight update is picked up.
+    Keeps the gate free of any dependency on the store: wiring passes
+    ``db.biometric_series`` / ``db.latest_biometric``-shaped functions in,
+    nothing here imports them. ``resting_fn`` is re-read per call so an
+    overnight update is picked up.
     """
 
-    series: Callable[[float, float], list[tuple[float, float]]]
-    resting: Callable[[], float]
+    series_fn: Callable[[str, float, float], list[tuple[float, float]]]
+    resting_fn: Callable[[], float]
+    #: ``db.latest_biometric``-shaped: ``(t, value, source, origin) | None``.
+    latest_fn: Callable[[str], tuple[float, float, str, str] | None] | None = None
     metric: str = "heart_rate"
 
-    def hr_series(self, t0: float, t1: float) -> list[tuple[float, float]]:
+    def series(self, metric: str, t0: float, t1: float) -> list[tuple[float, float]]:
         try:
-            return list(self.series(t0, t1))
+            return list(self.series_fn(metric, t0, t1))
         except Exception:  # pragma: no cover - a feed read must never break a tick
             return []
 
+    def hr_series(self, t0: float, t1: float) -> list[tuple[float, float]]:
+        return self.series(self.metric, t0, t1)
+
     def resting_hr(self) -> float:
         try:
-            return float(self.resting())
+            return float(self.resting_fn())
         except Exception:  # pragma: no cover - defensive
             return 0.0
+
+    def _latest_row(self, metric: str) -> tuple[float, float, str, str] | None:
+        if self.latest_fn is None:
+            return None
+        try:
+            return self.latest_fn(metric)
+        except Exception:  # pragma: no cover - defensive
+            return None
+
+    def latest(self, metric: str) -> tuple[float, float] | None:
+        row = self._latest_row(metric)
+        return None if row is None else (row[0], row[1])
+
+    def latest_source(self, metric: str) -> str | None:
+        """Which device reported the newest sample, for the "wearable now" line."""
+
+        row = self._latest_row(metric)
+        return None if row is None else row[2]
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,6 +204,121 @@ def hr_context_line(
         f"Heart rate (wearable, bpm) over the last {window_s:.0f}s, "
         f"resting {rest:.0f}: {points}"
     )
+
+
+#: A sample older than this is not "now" any more and is left out of the line.
+_NOW_WINDOW_S = 30 * 60
+
+#: Steps are a rate, not a level, so they are summed over a short trailing window.
+_STEPS_WINDOW_S = 10 * 60
+
+
+def _fmt_hr(v: float) -> str:
+    return f"HR {v:.0f} bpm"
+
+
+def _fmt_hrv(v: float) -> str:
+    return f"HRV {v:.0f} ms"
+
+
+def _fmt_spo2(v: float) -> str:
+    return f"SpO2 {v:.0f}%"
+
+
+def _fmt_rr(v: float) -> str:
+    return f"RR {v:.0f}"
+
+
+def _fmt_temp(v: float) -> str:
+    return f"wrist temp {v:+.1f}\u00b0C"
+
+
+def _fmt_strain(v: float) -> str:
+    return f"strain {v:.1f}"
+
+
+#: Rendered in this order; anything the feed has no recent sample for is simply
+#: skipped, so a wearer with only a watch gets a shorter line, not a line of
+#: em-dashes.
+_NOW_FIELDS: tuple[tuple[str, Callable[[float], str]], ...] = (
+    ("heart_rate", _fmt_hr),
+    ("hrv_rmssd", _fmt_hrv),
+    ("spo2", _fmt_spo2),
+    ("respiratory_rate", _fmt_rr),
+    ("wrist_temp_dev", _fmt_temp),
+    ("strain", _fmt_strain),
+)
+
+
+def wearable_now_line(feed: BiometricFeed, t: float) -> str | None:
+    """One line of "what the wearable says right now", for any escalation.
+
+    Every T1 call gets this, not just ``biometric_anomaly``: the frames show
+    what the wearer was looking at and the tick table shows what the phone
+    measured, but only the wearable can say whether the body was calm while it
+    happened. That context is as useful on a ``food_in_frame`` as on an HR
+    spike, and it costs one row read per metric.
+
+    Returns ``None`` when nothing recent is available -- the caller attaches
+    nothing rather than a line saying there is nothing.
+    """
+
+    parts: list[str] = []
+    devices: list[str] = []
+    source_of = getattr(feed, "latest_source", None)
+
+    def note(metric: str) -> None:
+        if not callable(source_of):
+            return
+        try:
+            device = source_of(metric)
+        except Exception:  # pragma: no cover - defensive
+            return
+        if device and device not in devices:
+            devices.append(device)
+
+    def recent(metric: str) -> float | None:
+        """The newest value at or before ``t``, within the freshness window.
+
+        The window read comes first and ``latest`` is only the fallback,
+        because ``t`` is the *tick* clock: under ``--source sim`` the seeded
+        day stretches hours past the current tick, so "the newest row in the
+        table" is usually in the future and says nothing about now.
+        """
+
+        try:
+            window = feed.series(metric, t - _NOW_WINDOW_S, t)
+        except Exception:  # pragma: no cover - a feed read never breaks a tick
+            window = []
+        if window:
+            return float(window[-1][1])
+        try:
+            latest = feed.latest(metric)
+        except Exception:  # pragma: no cover - defensive
+            return None
+        if latest is None or abs(latest[0] - t) > _NOW_WINDOW_S:
+            return None
+        return float(latest[1])
+
+    for metric, render in _NOW_FIELDS:
+        value = recent(metric)
+        if value is None:
+            continue
+        parts.append(render(value))
+        note(metric)
+
+    try:
+        steps = feed.series("steps_delta", t - _STEPS_WINDOW_S, t)
+    except Exception:  # pragma: no cover - defensive
+        steps = []
+    if steps:
+        parts.append(f"steps last 10 min {sum(v for _, v in steps):.0f}")
+        note("steps_delta")
+
+    if not parts:
+        return None
+    who = f" ({'/'.join(devices)})" if devices else ""
+    return f"Wearable now{who}: " + ", ".join(parts)
 
 
 def biometric_anomaly_trigger(timings: Timings, feed: BiometricFeed) -> Trigger:

@@ -13,6 +13,7 @@ from pipeline.gate import (
     biometric_anomaly_trigger,
     default_triggers,
 )
+from pipeline.gate.triggers import wearable_now_line
 from pipeline.models import AiBlock, Escalation, PendingCheck, SensorBlock, Tick
 from pipeline.sim import DEFAULT_SCENARIO, SimSource
 
@@ -119,10 +120,18 @@ def test_suppressed_trigger_does_not_block_others(tmp_path) -> None:
 
 
 class StubFeed:
-    """A flat HR series on the tick clock, one sample per second."""
+    """A flat HR series on the tick clock, one sample per second.
 
-    def __init__(self, bpm: float, resting: float = 58.0, seconds: float = 40.0) -> None:
+    ``extra`` stands in for the rest of the SPEC §14.1 metric set: a mapping of
+    metric -> (t, value) used by the "wearable now" line.
+    """
+
+    def __init__(self, bpm: float, resting: float = 58.0, seconds: float = 40.0,
+                 extra: dict[str, tuple[float, float]] | None = None,
+                 steps: list[tuple[float, float]] | None = None) -> None:
         self.bpm, self.resting, self.seconds = bpm, resting, seconds
+        self.extra = extra or {}
+        self.steps = steps or []
         self.reads = 0
 
     def hr_series(self, t0: float, t1: float) -> list[tuple[float, float]]:
@@ -134,6 +143,23 @@ class StubFeed:
 
     def resting_hr(self) -> float:
         return self.resting
+
+    def series(self, metric: str, t0: float, t1: float) -> list[tuple[float, float]]:
+        if metric == "heart_rate":
+            return self.hr_series(t0, t1)
+        if metric == "steps_delta":
+            return [(t, v) for t, v in self.steps if t0 <= t <= t1]
+        return []
+
+    def latest(self, metric: str) -> tuple[float, float] | None:
+        if metric == "heart_rate":
+            return (self.seconds, self.bpm)
+        return self.extra.get(metric)
+
+    def latest_source(self, metric: str) -> str | None:
+        if metric == "heart_rate":
+            return "apple_watch"
+        return "whoop" if metric in self.extra else None
 
 
 def bio_gate(tmp_path, name: str, feed: BiometricFeed):
@@ -219,14 +245,104 @@ def test_default_triggers_appends_the_biometric_trigger_last() -> None:
 def test_callable_feed_adapts_injected_callables_and_swallows_failures() -> None:
     stub = StubFeed(100.0)
     feed = CallableBiometricFeed(
-        lambda t0, t1: stub.hr_series(t0, t1), lambda: stub.resting
+        lambda metric, t0, t1: stub.series(metric, t0, t1),
+        lambda: stub.resting,
+        lambda metric: (12.0, 41.0, "whoop", "live") if metric == "hrv_rmssd" else None,
     )
     assert isinstance(feed, BiometricFeed)
     assert feed.resting_hr() == 58.0
     assert len(feed.hr_series(0.0, 20.0)) == 21
+    assert feed.latest("hrv_rmssd") == (12.0, 41.0)
+    assert feed.latest_source("hrv_rmssd") == "whoop"
+    assert feed.latest("spo2") is None
 
-    def boom(*_: float) -> list[tuple[float, float]]:
+    def boom(*_: object) -> list[tuple[float, float]]:
         raise RuntimeError("db is mid-migration")
 
-    broken = CallableBiometricFeed(boom, lambda: 58.0)
+    broken = CallableBiometricFeed(boom, lambda: 58.0, boom)
     assert broken.hr_series(0.0, 20.0) == []  # a feed read never breaks a tick
+    assert broken.latest("heart_rate") is None
+    assert broken.latest_source("heart_rate") is None
+
+
+def test_a_feed_with_no_latest_hook_renders_no_wearable_line() -> None:
+    """A bare HR-only feed must not crash the line, it just has nothing to say."""
+
+    feed = CallableBiometricFeed(lambda m, a, b: [], lambda: 58.0)
+    assert wearable_now_line(feed, 100.0) is None
+
+
+def test_wearable_now_line_renders_every_metric_present() -> None:
+    feed = StubFeed(96.0, seconds=100.0, extra={
+        "hrv_rmssd": (95.0, 41.0),
+        "spo2": (90.0, 97.0),
+        "respiratory_rate": (90.0, 17.0),
+        "wrist_temp_dev": (60.0, 0.1),
+        "strain": (30.0, 6.2),
+    }, steps=[(t, 0.0) for t in range(40, 101, 20)])
+    line = wearable_now_line(feed, 100.0)
+    assert line is not None
+    assert line.startswith("Wearable now (apple_watch/whoop): ")
+    for fragment in ("HR 96 bpm", "HRV 41 ms", "SpO2 97%", "RR 17",
+                     "wrist temp +0.1", "strain 6.2", "steps last 10 min 0"):
+        assert fragment in line, line
+
+
+def test_wearable_now_line_skips_stale_and_missing_metrics() -> None:
+    """A sample from an hour ago is not "now" and a missing metric is silent."""
+
+    feed = StubFeed(70.0, seconds=100.0, extra={"hrv_rmssd": (-9999.0, 41.0)})
+    line = wearable_now_line(feed, 100.0)
+    assert line == "Wearable now (apple_watch): HR 70 bpm"
+
+
+def test_every_escalation_carries_the_wearable_line(tmp_path) -> None:
+    """Not just biometric_anomaly -- the body's state is context for anything."""
+
+    feed = StubFeed(62.0, seconds=100.0, extra={"spo2": (95.0, 97.0)})
+    db = Database(tmp_path / "wear.db").connect().init_schema()
+    episodes = EpisodeBuilder(db, Timings.demo())
+    escalations: list[Escalation] = []
+    gate = TriggerGate(
+        default_triggers(Timings.demo(), True), Timings.demo(), db, episodes,
+        lambda e: escalations.append(e) is None, True, feed=feed,
+    )
+    for seq in range(40):
+        t = tick(seq, screen_present=True)
+        episodes.on_tick(t)
+        gate.on_tick(t)
+    assert escalations, "a camera trigger should have fired"
+    first = escalations[0]
+    assert first.trigger != "biometric_anomaly"
+    assert any(line.startswith("Wearable now") for line in first.extra_text), first.extra_text
+    db.close()
+
+
+def test_the_biometric_escalation_keeps_its_hr_series_line(tmp_path) -> None:
+    """The HR series is the detail; the "wearable now" line is the context."""
+
+    feed = StubFeed(100.0, extra={"strain": (20.0, 6.2)})
+    db, gate, escalations = bio_gate(tmp_path, "both", feed)
+    gate.feed = feed
+    for i in range(40):
+        gate.on_tick(tick(i, activity="seated"))
+    assert escalations
+    lines = escalations[0].extra_text
+    assert len(lines) == 2
+    assert lines[0].startswith("Heart rate (wearable, bpm)")
+    assert lines[1].startswith("Wearable now")
+    db.close()
+
+
+def test_a_gate_without_a_feed_attaches_nothing(tmp_path) -> None:
+    db = Database(tmp_path / "nofeed.db").connect().init_schema()
+    episodes = EpisodeBuilder(db, Timings.demo())
+    escalations: list[Escalation] = []
+    gate = TriggerGate(default_triggers(Timings.demo(), True), Timings.demo(), db,
+                       episodes, lambda e: escalations.append(e) is None, True)
+    for seq in range(40):
+        t = tick(seq, screen_present=True)
+        episodes.on_tick(t)
+        gate.on_tick(t)
+    assert escalations and escalations[0].extra_text == []
+    db.close()

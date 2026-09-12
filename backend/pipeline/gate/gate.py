@@ -10,7 +10,7 @@ from ..config import Timings
 from ..db import Database
 from ..episodes import EpisodeBuilder
 from ..models import Escalation, Tick
-from .triggers import Trigger
+from .triggers import BiometricFeed, Trigger, wearable_now_line
 
 log = logging.getLogger(__name__)
 
@@ -24,6 +24,7 @@ class TriggerGate:
         episodes: EpisodeBuilder,
         try_escalate: Callable[[Escalation], bool],
         demo_mode: bool,
+        feed: BiometricFeed | None = None,
     ) -> None:
         self.triggers = list(triggers)
         self.timings = timings
@@ -31,6 +32,10 @@ class TriggerGate:
         self.episodes = episodes
         self.try_escalate = try_escalate
         self.demo_mode = demo_mode
+        # SPEC §14.3 folds the wearable into `biometric_anomaly`; the same
+        # numbers are worth having on every other escalation too, so the feed
+        # is held here as well and read once per fire.
+        self.feed = feed
         self.window: deque[Tick] = deque()
         self.fired: Counter[str] = Counter()
         self.dropped = 0
@@ -39,6 +44,23 @@ class TriggerGate:
         self._last_trigger_t: dict[str, float] = {}
         self._escalated_episode_ids: set[str] = set()
         self._unbound_episode_kinds: set[str] = set()
+
+    def _wearable_lines(self, t: float) -> list[str]:
+        """The "wearable now" line for one escalation, or nothing.
+
+        Read at fire time, not every tick: escalations are rare and the feed
+        read costs one row per metric. Never raises -- a broken feed must not
+        cost an escalation.
+        """
+
+        if self.feed is None:
+            return []
+        try:
+            line = wearable_now_line(self.feed, t)
+        except Exception:  # pragma: no cover - defensive
+            log.debug("wearable context unavailable", exc_info=True)
+            return []
+        return [line] if line else []
 
     def _submit(self, escalation: Escalation) -> bool:
         accepted = self.try_escalate(escalation)
@@ -60,6 +82,7 @@ class TriggerGate:
             escalation = Escalation(
                 trigger=f"watch:{check.reason}", t=tick.t, tick=tick,
                 window=list(self.window), reason=check.reason,
+                extra_text=self._wearable_lines(tick.t),
             )
             accepted = self._submit(escalation)
             self.db.mark_pending_fired(check.id)
@@ -101,6 +124,10 @@ class TriggerGate:
                 # own `reason` is a template only `enrich` can fill.
                 reason, extra_text = trigger.enrich(window)
                 reason = reason or trigger.name
+            # Every escalation carries the wearable's current numbers, after
+            # any trigger-specific lines -- the HR series a `biometric_anomaly`
+            # brings is the detail, this is the standing context.
+            extra_text = extra_text + self._wearable_lines(tick.t)
             escalation = Escalation(
                 trigger=trigger.name, t=tick.t, tick=tick, window=window,
                 episode_id=episode.id if episode is not None else None,

@@ -1,0 +1,289 @@
+"""Vendor payload -> canonical samples. Pure functions, no I/O.
+
+Two real integration paths are supported today (see ``docs/WEARABLES.md``):
+
+* **Health Auto Export** -- the iOS app that can POST HealthKit metrics to an
+  arbitrary REST endpoint every few minutes. The fastest way to get a real
+  Apple Watch onto this backend without shipping an app.
+* **WHOOP API v2** -- OAuth REST objects (``recovery``, ``cycle``, ``sleep``,
+  ``workout``). WHOOP exposes no raw intraday HR stream, so what lands here is
+  per-record summary values stamped at the record's own boundary.
+
+Everything returns :class:`~pipeline.wearables.Sample` objects in canonical
+units; validation (unknown metric, stale timestamp, non-numeric value) is the
+ingest's job, not the adapter's, so an adapter stays trivially testable.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Any, Iterable
+
+from ..db import day_key
+from ..models import SeededRow
+from . import LIVE_METRICS, Sample
+
+__all__ = [
+    "WHOOP_SKIN_TEMP_BASELINE_C",
+    "HEALTH_AUTO_EXPORT_METRICS",
+    "health_auto_export_to_samples",
+    "whoop_to_samples",
+    "whoop_seeded_rows",
+    "dedupe",
+    "parse_health_auto_export_date",
+]
+
+#: WHOOP reports absolute skin temperature; this backend stores a deviation
+#: (SPEC §14.1 "skin temperature deviation, °C from baseline"). WHOOP does not
+#: publish the wearer's own baseline through the API, so a fixed 33.0 °C
+#: wrist-skin baseline is subtracted. The number is a constant, not a
+#: measurement -- treat the resulting deviation as coarse.
+WHOOP_SKIN_TEMP_BASELINE_C = 33.0
+
+#: Health Auto Export metric name -> this backend's metric name. Names the app
+#: does not emit, or that this backend does not accept, are simply absent.
+HEALTH_AUTO_EXPORT_METRICS: dict[str, str] = {
+    "heart_rate": "heart_rate",
+    "heart_rate_variability": "hrv_rmssd",
+    "blood_oxygen_saturation": "spo2",
+    "respiratory_rate": "respiratory_rate",
+    "apple_sleeping_wrist_temperature": "wrist_temp_dev",
+    "step_count": "steps_delta",
+    "active_energy": "active_energy",
+    "walking_heart_rate_average": "walking_hr_avg",
+    "environmental_audio_exposure": "env_sound_db",
+}
+
+_HAE_DATE_FORMATS = ("%Y-%m-%d %H:%M:%S %z", "%Y-%m-%d %H:%M:%S")
+
+
+def _as_float(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _unit_for(metric: str) -> str:
+    info = LIVE_METRICS.get(metric)
+    return info.unit if info is not None else ""
+
+
+def parse_health_auto_export_date(raw: Any) -> float | None:
+    """``"2026-09-12 14:02:00 -0500"`` -> epoch seconds, offset respected.
+
+    The app stamps every point in the phone's local zone *with* the offset, so
+    the parse must not fall back to the server's zone. A naive string (no
+    offset, seen on some older builds) is read as local time.
+    """
+
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+        return float(raw)
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    text = raw.strip()
+    for fmt in _HAE_DATE_FORMATS:
+        try:
+            parsed = datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+        return parsed.timestamp()
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+def health_auto_export_to_samples(payload: dict[str, Any]) -> list[Sample]:
+    """Health Auto Export REST JSON -> samples, in payload order.
+
+    Accepts both point shapes the app emits: ``qty`` for a plain reading and
+    ``Min``/``Max``/``Avg`` for an aggregated one, where ``Avg`` is taken.
+    """
+
+    if not isinstance(payload, dict):
+        return []
+    data = payload.get("data")
+    metrics = data.get("metrics") if isinstance(data, dict) else payload.get("metrics")
+    if not isinstance(metrics, list):
+        return []
+
+    samples: list[Sample] = []
+    for block in metrics:
+        if not isinstance(block, dict):
+            continue
+        metric = HEALTH_AUTO_EXPORT_METRICS.get(str(block.get("name", "")).strip())
+        if metric is None:
+            continue
+        points = block.get("data")
+        if not isinstance(points, list):
+            continue
+        for point in points:
+            if not isinstance(point, dict):
+                continue
+            t = parse_health_auto_export_date(point.get("date"))
+            if t is None:
+                continue
+            value = _as_float(point.get("qty"))
+            if value is None:
+                value = _as_float(point.get("Avg", point.get("avg")))
+            if value is None:
+                continue
+            samples.append(
+                Sample(t=t, metric=metric, value=value,
+                       unit=_unit_for(metric), device="apple_watch")
+            )
+    return samples
+
+
+# -- WHOOP API v2 ---------------------------------------------------------
+
+
+def _whoop_time(raw: Any) -> float | None:
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+        return float(raw)
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
+
+
+def _whoop_records(payload: Any) -> list[tuple[str | None, dict[str, Any]]]:
+    """Flatten whatever WHOOP shape arrived into ``(kind_hint, record)`` pairs.
+
+    Accepts one record, ``{"records": [...]}`` as returned by the collection
+    endpoints, and ``{"type": "recovery", "record"/"records": ...}`` for a
+    caller that already knows which endpoint it polled.
+    """
+
+    if isinstance(payload, list):
+        return [(None, r) for r in payload if isinstance(r, dict)]
+    if not isinstance(payload, dict):
+        return []
+    hint = payload.get("type") or payload.get("kind")
+    hint = str(hint).lower() if isinstance(hint, str) else None
+    for key in ("records", "data"):
+        inner = payload.get(key)
+        if isinstance(inner, list):
+            return [(hint, r) for r in inner if isinstance(r, dict)]
+    record = payload.get("record")
+    if isinstance(record, dict):
+        return [(hint, record)]
+    return [(hint, payload)]
+
+
+def _whoop_kind(record: dict[str, Any], hint: str | None) -> str | None:
+    """Which v2 object this is, from an explicit hint or its own shape."""
+
+    if hint in {"recovery", "cycle", "sleep", "workout"}:
+        return hint
+    score = record.get("score") if isinstance(record.get("score"), dict) else {}
+    if "sport_id" in record or "sport_name" in record:
+        return "workout"
+    if "recovery_score" in score or ("cycle_id" in record and "sleep_id" in record):
+        return "recovery"
+    if "nap" in record or "sleep_performance_percentage" in score or "respiratory_rate" in score:
+        return "sleep"
+    if "strain" in score and "kilojoule" in score:
+        return "cycle"
+    if "strain" in score:
+        return "cycle"
+    return None
+
+
+def _sample(t: float | None, metric: str, value: Any) -> Sample | None:
+    number = _as_float(value)
+    if t is None or number is None:
+        return None
+    return Sample(t=t, metric=metric, value=number,
+                  unit=_unit_for(metric), device="whoop")
+
+
+def whoop_to_samples(payload: Any) -> list[Sample]:
+    """WHOOP v2 objects -> intraday samples.
+
+    WHOOP publishes no raw HR stream, so heart rate arrives only as the average
+    over a cycle or a workout. Each value is stamped at the boundary it
+    actually describes: a cycle's numbers at cycle end, a workout's average at
+    its start and its max at its end, a sleep's respiratory rate at wake.
+    """
+
+    samples: list[Sample] = []
+    for hint, record in _whoop_records(payload):
+        kind = _whoop_kind(record, hint)
+        if kind is None:
+            continue
+        score = record.get("score")
+        score = score if isinstance(score, dict) else {}
+        start = _whoop_time(record.get("start") or record.get("created_at"))
+        end = _whoop_time(record.get("end") or record.get("updated_at")) or start
+
+        if kind == "recovery":
+            at = _whoop_time(record.get("updated_at") or record.get("created_at"))
+            candidates = [
+                _sample(at, "hrv_rmssd", score.get("hrv_rmssd_milli")),
+                _sample(at, "spo2", score.get("spo2_percentage")),
+            ]
+            skin = _as_float(score.get("skin_temp_celsius"))
+            if skin is not None and at is not None:
+                candidates.append(Sample(
+                    t=at, metric="wrist_temp_dev",
+                    value=round(skin - WHOOP_SKIN_TEMP_BASELINE_C, 3),
+                    unit=_unit_for("wrist_temp_dev"), device="whoop",
+                ))
+            samples.extend(s for s in candidates if s is not None)
+        elif kind == "cycle":
+            candidates = [
+                _sample(end, "strain", score.get("strain")),
+                _sample(end, "heart_rate", score.get("average_heart_rate")),
+            ]
+            samples.extend(s for s in candidates if s is not None)
+        elif kind == "sleep":
+            sample = _sample(end, "respiratory_rate", score.get("respiratory_rate"))
+            if sample is not None:
+                samples.append(sample)
+        elif kind == "workout":
+            candidates = [
+                _sample(start, "heart_rate", score.get("average_heart_rate")),
+                _sample(end, "heart_rate", score.get("max_heart_rate")),
+            ]
+            samples.extend(s for s in candidates if s is not None)
+    return samples
+
+
+def whoop_seeded_rows(payload: Any) -> list[SeededRow]:
+    """The daily rows a WHOOP payload carries (SPEC §14.2 ``seeded`` table).
+
+    Only resting heart rate today: it is a once-a-night number, so it belongs
+    with the other per-day rows the scorer reads, not in the intraday series.
+    """
+
+    rows: list[SeededRow] = []
+    for hint, record in _whoop_records(payload):
+        if _whoop_kind(record, hint) != "recovery":
+            continue
+        score = record.get("score")
+        score = score if isinstance(score, dict) else {}
+        resting = _as_float(score.get("resting_heart_rate"))
+        at = _whoop_time(record.get("updated_at") or record.get("created_at"))
+        if resting is None or at is None:
+            continue
+        rows.append(SeededRow(day=day_key(at), metric="resting_hr",
+                              value=resting, unit="bpm", source="whoop"))
+    return rows
+
+
+def dedupe(samples: Iterable[Sample]) -> list[Sample]:
+    """Last write wins per ``(t, metric)`` -- the storage primary key."""
+
+    by_key: dict[tuple[float, str], Sample] = {}
+    for sample in samples:
+        by_key[(sample.t, sample.metric)] = sample
+    return [by_key[key] for key in sorted(by_key)]

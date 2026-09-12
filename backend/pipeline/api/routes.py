@@ -3,16 +3,27 @@
 from __future__ import annotations
 
 import base64
+import os
 import time
 from datetime import date, timedelta
-from typing import Literal
+from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
 
 from ..db import day_key
 from ..models import PendingCheck
 from ..scoring.scorer import rollup
+from ..wearables import LIVE_METRICS
+from ..wearables.adapters import (
+    health_auto_export_to_samples,
+    whoop_seeded_rows,
+    whoop_to_samples,
+)
+from ..wearables.ingest import ingest, ingest_samples
+
+#: A live sample newer than this counts as "a wearable is connected right now".
+LIVE_FRESH_S = 15 * 60
 
 router = APIRouter()
 
@@ -91,22 +102,139 @@ async def seeded(request: Request, days: int = Query(7, ge=1)) -> dict:
     return {"rows": _dump(pipeline.db.list_seeded(start.isoformat(), end.isoformat()))}
 
 
+def _now(pipeline) -> float:
+    """The tick clock if it is running, wall clock otherwise.
+
+    Everything in ``biometric_series`` is stamped on the tick clock (SPEC
+    §14.2) so that ``--speed N`` does not desync the series from the frames.
+    """
+
+    return pipeline.last_tick.t if pipeline.last_tick is not None else time.time()
+
+
 @router.get("/api/biometrics")
 async def biometrics(
     request: Request,
     metric: str = "heart_rate",
+    metrics: str | None = None,
     from_: float | None = Query(None, alias="from"),
     to: float | None = None,
 ) -> dict:
+    """One metric, or several at once via ``?metrics=a,b,c``.
+
+    The single-metric shape is unchanged. With ``metrics`` the response is
+    ``{"series": {metric: {source, origin, points}}}`` -- one round trip for
+    the whole wearable strip, and each entry says whether the numbers came off
+    a real device (``live``) or the seeded demo day (``seed``).
+    """
+
     pipeline = _pipeline(request)
-    end = to if to is not None else (
-        pipeline.last_tick.t if pipeline.last_tick is not None else time.time()
-    )
+    end = to if to is not None else _now(pipeline)
     start = from_ if from_ is not None else end - 3600.0
+    if metrics is not None:
+        wanted = [name.strip() for name in metrics.split(",") if name.strip()]
+        return {
+            "series": {
+                name: pipeline.db.biometric_window(name, start, end)
+                for name in wanted
+            }
+        }
+    window = pipeline.db.biometric_window(metric, start, end)
     return {
         "metric": metric,
-        "source": "apple_watch",
-        "points": pipeline.db.biometric_series(metric, start, end),
+        "source": window["source"] or "apple_watch",
+        "origin": window["origin"],
+        "points": window["points"],
+    }
+
+
+# -- live wearable ingest (docs/WEARABLES.md) -----------------------------
+
+
+def _check_token(token: str | None) -> None:
+    """Shared-secret gate, only enforced when the deployment sets one.
+
+    Read from the environment rather than ``Settings`` on purpose: the ingest
+    endpoint is the one thing that gets exposed to the LAN during a demo, and
+    the secret should be settable without a config file or a restart of the
+    whole config object.
+    """
+
+    expected = os.environ.get("WEARABLE_INGEST_TOKEN", "").strip()
+    if expected and (token or "").strip() != expected:
+        raise HTTPException(status_code=401, detail="bad or missing X-Ingest-Token")
+
+
+@router.post("/api/wearables/ingest")
+async def wearables_ingest(
+    request: Request,
+    payload: dict[str, Any],
+    x_ingest_token: str | None = Header(default=None),
+) -> dict:
+    """Canonical push endpoint.
+
+    ``{"device": "apple_watch", "samples": [{"t", "metric", "value", "unit"}]}``
+    """
+
+    _check_token(x_ingest_token)
+    return ingest(_pipeline(request).db, payload, now=_now(_pipeline(request)))
+
+
+@router.post("/api/wearables/ingest/health-auto-export")
+async def wearables_ingest_hae(
+    request: Request,
+    payload: dict[str, Any],
+    x_ingest_token: str | None = Header(default=None),
+) -> dict:
+    """Health Auto Export's REST JSON, straight from the iOS automation."""
+
+    _check_token(x_ingest_token)
+    pipeline = _pipeline(request)
+    return ingest_samples(pipeline.db, health_auto_export_to_samples(payload),
+                          now=_now(pipeline))
+
+
+@router.post("/api/wearables/ingest/whoop")
+async def wearables_ingest_whoop(
+    request: Request,
+    payload: dict[str, Any],
+    x_ingest_token: str | None = Header(default=None),
+) -> dict:
+    """WHOOP API v2 objects, forwarded one record or one page at a time.
+
+    Resting heart rate is a once-a-night number, so it lands in the daily
+    ``seeded`` table the scorer already reads rather than in the intraday
+    series (SPEC §14.2).
+    """
+
+    _check_token(x_ingest_token)
+    pipeline = _pipeline(request)
+    result = ingest_samples(pipeline.db, whoop_to_samples(payload),
+                            now=_now(pipeline))
+    result["seeded_rows"] = pipeline.db.insert_seeded_rows(whoop_seeded_rows(payload))
+    return result
+
+
+@router.get("/api/wearables/status")
+async def wearables_status(request: Request) -> dict:
+    """What is actually stored, and whether anything real is pushing right now."""
+
+    pipeline = _pipeline(request)
+    present = pipeline.db.biometric_metrics_present()
+    now = _now(pipeline)
+    live = [
+        row for row in present
+        if row["origin"] == "live" and (row["last_t"] or 0) >= now - LIVE_FRESH_S
+    ]
+    return {
+        "metrics": present,
+        "live_connected": bool(live),
+        "live_devices": sorted({str(row["source"]) for row in live if row["source"]}),
+        "catalogue": {
+            name: {"unit": info.unit, "devices": list(info.devices),
+                   "cadence_s": info.cadence_s, "label": info.label}
+            for name, info in LIVE_METRICS.items()
+        },
     }
 
 

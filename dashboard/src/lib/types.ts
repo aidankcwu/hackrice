@@ -17,4 +17,12 @@ export interface Scores { overall: number; metrics: MetricScore[] }
 export interface PendingCheck { id: string; due_t: number; reason: string; trigger?: string }
 export interface TodaySummary { lines: string[] }
 export interface SeededDay { date: string; sleep_h: number; hrv_ratio: number; steps: number; sri: number; caffeine_last?: string; recovery?: number; resting_hr?: number; run_km?: number; journal?: string; sources?: Record<string, string> }
-export interface Biometrics { metric: string; source: string; points: [number, number][] }
+export type BiometricOrigin = "seed" | "live";
+export interface Biometrics { metric: string; source: string; origin?: BiometricOrigin; points: [number, number][] }
+/** GET /api/biometrics?metrics=a,b,c — one round trip for the whole strip. */
+export interface BiometricSeries { source: string; origin: BiometricOrigin; points: [number, number][] }
+export interface BiometricsMulti { series: Record<string, BiometricSeries> }
+export interface WearableMetricRow { metric: string; source: string; origin: BiometricOrigin; count: number; last_t: number }
+export interface WearableMetricInfo { unit: string; devices: string[]; cadence_s: number; label: string }
+/** GET /api/wearables/status — what is stored, and whether a device is pushing. */
+export interface WearablesStatus { metrics: WearableMetricRow[]; live_connected: boolean; live_devices: string[]; catalogue: Record<string, WearableMetricInfo> }
