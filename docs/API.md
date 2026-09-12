@@ -70,6 +70,9 @@ The `scene` / `activity` / `food_type` / `drink` menus live in `src/longevity/ai
 | `GET /api/biometrics?metric=heart_rate&from=&to=` | `{metric, source, points: [[t, value], ...]}` — seeded wearable series on the tick clock (SPEC §14.2); defaults to the last hour |
 | `GET /api/events` | SSE stream (deferred — dashboard polls at 1 s for the demo) |
 | `GET /frames?refs=` | see seam §2 |
+| `GET /api/questions?limit=20` | `pending_questions` rows, newest first (docs/ASK_DESIGN.md §5) |
+| `POST /api/answer` | `{question_id?, text, heard?=true}` → `{question_id, accepted}`; answers by hand what the phone would have transcribed |
+| `POST /api/ask` | `{text, answer_kind?="yes_no", fills?="confirmed", episode_id?}` → `{question_id, suppressed_reason}`; demo/debug ask |
 
 Decision row shape:
 
@@ -94,6 +97,79 @@ Decision row shape:
 
 `spoke` is what actually reached `speak()` after the rate limiter; a `speak`
 action can be present with `spoke: false`.
+
+## Ask / answer (docs/ASK_DESIGN.md)
+
+The glasses may ask the wearer one short question and listen for the reply. The
+design doc is the contract; this section is only the shapes a client sees.
+
+**`GET /api/questions?limit=20`** — the rows, newest first:
+
+```json
+{
+  "id": "q_3f2a91c4", "created_t": 1757700842.0, "expires_t": 1757700869.0,
+  "decision_id": "d_0007", "episode_id": "e_0003",
+  "question": "Is that drink yours?", "answer_kind": "yes_no", "fills": "confirmed",
+  "status": "answered",
+  "answer_text": "yeah, two", "answer_t": 1757700851.2, "heard": true,
+  "parsed": {"understood": true, "confirmed": true, "count": 2.0,
+             "food_type": null, "note": "two beers", "followup": null},
+  "followup_of": null, "sent_t": 1757700844.0, "suppressed_reason": null
+}
+```
+
+`status` is `open` → `answered` | `expired` | `suppressed`. Both transitions are
+guarded single UPDATEs, so an answer racing an expiry resolves to whichever
+committed first (§8.4). `suppressed_reason` names the guard that said no:
+`ask_unsupported`, `no_transport`, `one_open`, `same_episode`, `ask_min_gap`,
+`ask_max_per_hour`, `speech_gap`, or `send_failed`.
+
+**`POST /api/answer`** `{question_id?, text, heard?}` → `{question_id, accepted}`.
+Omit `question_id` and the currently open question is used; `404` when none is
+open. This is the demo path with no phone in the room, and it goes through the
+same `QuestionManager.on_answer` the socket does. `503 {"error": "questions
+unavailable"}` if the pipeline has no question manager wired.
+
+**`POST /api/ask`** `{text, answer_kind?, fills?, episode_id?}` →
+`{question_id, suppressed_reason}`. Demo/debug, like `/api/speak` — but unlike
+`/api/speak` it still passes the §4 guards, so `question_id` may be `null` with
+a reason. `answer_kind` is `yes_no` | `count` | `free`; `fills` is `confirmed` |
+`count` | `food_type` | `note`; anything else is a `400`.
+
+**`reported` on `GET /api/episodes`** (ASK_DESIGN §8.3). Every episode row gains
+one key, `null` unless the wearer answered a question about that episode:
+
+```json
+{"confirmed": true, "count": 2.0, "food_type": null, "note": "two beers",
+ "question_id": "q_3f2a91c4", "answered_t": 1757700851.2}
+```
+
+The newest `answered` question with a non-empty `parsed` wins, so a follow-up
+("how many?") supersedes its root. It is projected in the route rather than
+stored on the episode because `EpisodeBuilder` recomputes `dominant` every tick
+and would erase it — and because "the wearer reported two" must stay
+distinguishable from "the camera saw two".
+
+**Decisions.** An `ask` action in `decision.actions` carries two extra keys,
+`question_id` and `outcome` (`"sent"` or `"suppressed:<reason>"`). The answer
+itself writes its own decision row with `trigger: "answer:<question_id>"`,
+`interpretation` set to the parsed note, and one `annotate` action; a parse the
+T1 slot had no room for is a `dropped` row with `drop_reason: "t1_busy"` (§8.1).
+
+**Wire messages** (`src/longevity/wire.py`, phone ↔ Mac):
+
+| Type | Direction | Fields |
+|---|---|---|
+| `hello` | phone → Mac | `device`, `caps` (`["ask"]` — the Mac never asks a phone that did not advertise it), `t` |
+| `ask` | Mac → phone | `question_id`, `listen_s`, `answer_kind`, `text` |
+| `answer` | phone → Mac | `question_id`, `text`, `heard`, `t` |
+
+The question's audio still travels as today's `audio`/`speak` message, sent
+immediately before `ask`; the phone opens the microphone only once that playback
+finishes, then for at most `listen_s` seconds. The phone's `t` on an answer is
+metadata — the Mac stamps its own receipt time (§8.4).
+
+Ask/answer request bodies are strictly typed: `question_id` (if present) and `text` must be strings, `heard` (if present) a boolean, `episode_id` (if present) a string; anything else is a 400, never a silent fallback to the open question.
 
 ## Feed line format (dashboard)
 

@@ -199,10 +199,13 @@ is produced by `AnswerParse.followup` (a string) only when
 `parsed.understood and root.answer_kind == "yes_no" and parsed.confirmed`; the
 manager converts it to `AskAction(text=followup, answer_kind="count",
 fills="count")` for sighting episodes and `("free", "note")` otherwise. The
-child is attempted immediately: it skips `ask_min_gap` and the same-episode
-rule (that rule counts roots only) but must pass one-open, the hourly cap and
-`SpeechLimiter.allow`; if denied it is dropped and recorded `suppressed`. A
-child never has a child.
+child is attempted immediately: it skips `ask_min_gap`, the same-episode rule
+(that rule counts roots only) **and the speech minimum gap** — it is the second
+half of one exchange, not a new interruption — but must pass one-open and the
+hourly cap; it records a speech grant via `SpeechLimiter.grant(t)` so the next
+statement still keeps its distance. If denied it is dropped and recorded
+`suppressed`. A child never has a child, and `ask(followup_of=...)` verifies
+the parent is a root that has no child yet.
 
 ### 8.6 Guard order and accounting (`QuestionManager.ask`)
 Evaluate in this order, stop at the first failure, and record the reason:

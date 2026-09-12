@@ -25,6 +25,7 @@ from .models import (
     Episode,
     Insight,
     PendingCheck,
+    PendingQuestion,
     Score,
     SeededRow,
     Tick,
@@ -99,6 +100,30 @@ CREATE TABLE IF NOT EXISTS pending_checks (
     fired       INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS ix_pending_due ON pending_checks(fired, due_t);
+
+CREATE TABLE IF NOT EXISTS pending_questions (
+    id                TEXT PRIMARY KEY,
+    created_t         REAL NOT NULL,
+    -- NULL until the ask has actually been sent: `expires_t = sent_t +
+    -- ask_expire_s` (ASK_DESIGN §8.4), so a row still being sent cannot
+    -- expire out from under the phone.
+    expires_t         REAL,
+    decision_id       TEXT,
+    episode_id        TEXT,
+    question          TEXT NOT NULL,
+    answer_kind       TEXT NOT NULL DEFAULT 'yes_no',
+    fills             TEXT NOT NULL DEFAULT 'confirmed',
+    status            TEXT NOT NULL DEFAULT 'open',
+    answer_text       TEXT,
+    answer_t          REAL,
+    parsed            TEXT NOT NULL DEFAULT '{}',
+    followup_of       TEXT,
+    sent_t            REAL,
+    suppressed_reason TEXT,
+    heard             INTEGER
+);
+CREATE INDEX IF NOT EXISTS ix_questions_status
+    ON pending_questions(status, expires_t);
 
 CREATE TABLE IF NOT EXISTS scores (
     metric     TEXT NOT NULL,
@@ -668,6 +693,153 @@ class Database:
             TodaySummaryLine(t=r["t"], line=r["line"], decision_id=r["decision_id"])
             for r in rows
         ]
+
+    # -- pending questions (`ask`) ---------------------------------------
+    #
+    # The one place an answer is stored. Both terminal transitions -- an answer
+    # claiming a row and the tick loop expiring it -- are single UPDATEs guarded
+    # by ``status = 'open'``, so a late answer racing an expiry resolves to
+    # whichever commits first and the loser is a no-op (ASK_DESIGN §8.4).
+
+    _QUESTION_COLUMNS = (
+        "id, created_t, expires_t, decision_id, episode_id, question,"
+        " answer_kind, fills, status, answer_text, answer_t, parsed,"
+        " followup_of, sent_t, suppressed_reason, heard"
+    )
+
+    @staticmethod
+    def _question_row(q: PendingQuestion) -> tuple[Any, ...]:
+        return (
+            q.id,
+            q.created_t,
+            q.expires_t,
+            q.decision_id,
+            q.episode_id,
+            q.question,
+            q.answer_kind,
+            q.fills,
+            q.status,
+            q.answer_text,
+            q.answer_t,
+            _json(q.parsed),
+            q.followup_of,
+            q.sent_t,
+            q.suppressed_reason,
+            None if q.heard is None else (1 if q.heard else 0),
+        )
+
+    @staticmethod
+    def _question_from_row(r: sqlite3.Row) -> PendingQuestion:
+        return PendingQuestion(
+            id=r["id"],
+            created_t=r["created_t"],
+            expires_t=r["expires_t"],
+            decision_id=r["decision_id"],
+            episode_id=r["episode_id"],
+            question=r["question"],
+            answer_kind=r["answer_kind"],
+            fills=r["fills"],
+            status=r["status"],
+            answer_text=r["answer_text"],
+            answer_t=r["answer_t"],
+            parsed=json.loads(r["parsed"] or "{}"),
+            followup_of=r["followup_of"],
+            sent_t=r["sent_t"],
+            suppressed_reason=r["suppressed_reason"],
+            heard=None if r["heard"] is None else bool(r["heard"]),
+        )
+
+    def _write_question(self, question: PendingQuestion) -> None:
+        placeholders = ",".join("?" * len(self._QUESTION_COLUMNS.split(",")))
+        with self._lock:
+            self.conn.execute(
+                f"INSERT OR REPLACE INTO pending_questions"
+                f" ({self._QUESTION_COLUMNS}) VALUES ({placeholders})",
+                self._question_row(question),
+            )
+            self.conn.commit()
+
+    def insert_question(self, question: PendingQuestion) -> None:
+        self._write_question(question)
+
+    def update_question(self, question: PendingQuestion) -> None:
+        """Replace the whole row. The caller owns the read-modify-write."""
+
+        self._write_question(question)
+
+    def get_question(self, question_id: str) -> PendingQuestion | None:
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT * FROM pending_questions WHERE id = ?", (question_id,)
+            ).fetchone()
+        return None if row is None else self._question_from_row(row)
+
+    def open_question(self) -> PendingQuestion | None:
+        """The one question currently awaiting an answer, if any (§4)."""
+
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT * FROM pending_questions WHERE status = 'open'"
+                " ORDER BY created_t DESC, rowid DESC LIMIT 1"
+            ).fetchone()
+        return None if row is None else self._question_from_row(row)
+
+    def questions_for_episode(self, episode_id: str) -> list[PendingQuestion]:
+        """Every question asked about one episode, newest first."""
+
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT * FROM pending_questions WHERE episode_id = ?"
+                " ORDER BY created_t DESC, rowid DESC",
+                (episode_id,),
+            ).fetchall()
+        return [self._question_from_row(r) for r in rows]
+
+    def list_questions(self, limit: int = 20) -> list[PendingQuestion]:
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT * FROM pending_questions"
+                " ORDER BY created_t DESC, rowid DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [self._question_from_row(r) for r in rows]
+
+    def expire_questions(self, now: float) -> int:
+        """Mark open questions past their deadline ``expired``. Returns the count.
+
+        Only ``open`` rows with a deadline are touched: silence is never a yes,
+        but a row that has not been sent has not been ignored either.
+        """
+
+        with self._lock:
+            cur = self.conn.execute(
+                "UPDATE pending_questions SET status = 'expired'"
+                " WHERE status = 'open' AND expires_t IS NOT NULL"
+                " AND expires_t <= ?",
+                (now,),
+            )
+            self.conn.commit()
+        return cur.rowcount
+
+    def claim_answer(
+        self, question_id: str, text: str, heard: bool, t: float
+    ) -> bool:
+        """Claim an open question for this answer. True iff this call won.
+
+        A duplicate or late answer sees ``False`` and must be discarded --
+        ``parsed`` stays ``{}`` until the parser finishes and the caller writes
+        it back through :meth:`update_question` (ASK_DESIGN §8.1).
+        """
+
+        with self._lock:
+            cur = self.conn.execute(
+                "UPDATE pending_questions SET status = 'answered',"
+                " answer_text = ?, heard = ?, answer_t = ?"
+                " WHERE id = ? AND status = 'open'",
+                (text, 1 if heard else 0, t, question_id),
+            )
+            self.conn.commit()
+        return cur.rowcount == 1
 
     # -- stats -----------------------------------------------------------
 

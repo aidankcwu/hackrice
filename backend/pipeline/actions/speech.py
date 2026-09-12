@@ -109,6 +109,13 @@ class SpeechLimiter:
         self.allowed += 1
         return True
 
+    def grant(self, t: float) -> None:
+        """Record an utterance without applying either speech guard."""
+
+        self._granted = [g for g in self._granted if g > t - 3600.0]
+        self._granted.append(t)
+        self.allowed += 1
+
     # -- dispatch --------------------------------------------------------
 
     def speak(self, text: str, urgency: str = "low", t: float | None = None) -> None:

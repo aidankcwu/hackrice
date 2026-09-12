@@ -10,10 +10,12 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
+from pydantic import ValidationError
 
 from ..actions.speech import get_speak_fn
 from ..db import day_key
 from ..models import PendingCheck
+from ..reasoner.schema import AskAction
 from ..scoring.scorer import rollup
 from ..wearables import LIVE_METRICS
 from ..wearables.adapters import (
@@ -47,11 +49,58 @@ async def recent_ticks(request: Request, n: int = Query(60, ge=1)) -> list[dict]
     return _dump(_pipeline(request).db.recent_ticks(n))
 
 
+#: How many question rows the ``reported`` projection reads in its one query.
+#: Questions are rate-limited to a handful an hour (§8.6), so this is several
+#: days of them; a run long enough to overflow it loses only the oldest
+#: episodes' answers, which are off the dashboard's day view anyway.
+REPORTED_SCAN = 1000
+
+
+def _reported_map(db) -> dict[str, dict]:
+    """``episode_id -> reported`` for every episode, in one query (ASK_DESIGN §8.3).
+
+    Projected rather than stored on the episode because
+    :class:`~pipeline.episodes.builder.EpisodeBuilder` rewrites ``dominant`` on
+    every tick and would erase it -- and because "the wearer reported two" must
+    stay distinguishable from "the camera saw two".
+
+    Built for the whole page at once rather than per episode: the day view asks
+    for every episode it shows, and one query per row turns a dashboard poll
+    into N round trips through the same lock the tick loop writes under.
+
+    The newest answered question with a non-empty parse wins: a follow-up
+    ("how many?") is asked after its root and carries the more specific answer,
+    while a row whose parse is still empty is an answer the reasoner never got
+    to and has nothing to report. ``list_questions`` is newest-first, so the
+    first row that qualifies for an episode is that episode's answer.
+    """
+    reported: dict[str, dict] = {}
+    for question in db.list_questions(limit=REPORTED_SCAN):
+        episode_id = question.episode_id
+        if episode_id is None or episode_id in reported:
+            continue
+        if question.status != "answered" or not question.parsed:
+            continue
+        parsed = question.parsed
+        reported[episode_id] = {
+            "confirmed": parsed.get("confirmed"),
+            "count": parsed.get("count"),
+            "food_type": parsed.get("food_type"),
+            "note": parsed.get("note", ""),
+            "question_id": question.id,
+            "answered_t": question.answer_t,
+        }
+    return reported
+
+
 @router.get("/api/episodes")
 async def episodes(request: Request, day: str | None = None) -> list[dict]:
     pipeline = _pipeline(request)
     selected = day or day_key(pipeline.last_tick.t if pipeline.last_tick else time.time())
-    return _dump(pipeline.db.list_episodes(selected))
+    rows = pipeline.db.list_episodes(selected)
+    reported = _reported_map(pipeline.db)
+    return [{**row.model_dump(), "reported": reported.get(row.id)}
+            for row in rows]
 
 
 @router.get("/api/decisions")
@@ -288,3 +337,117 @@ async def speak_now(body: dict[str, Any]) -> dict[str, Any]:
     get_speak_fn()(text, urgency)
     return {"ok": True, "text": text, "urgency": urgency}
 
+
+
+# -- ask / answer (ASK_DESIGN §8.11) --------------------------------------
+
+
+#: Served when the pipeline has no question manager. The manager is optional
+#: wiring -- a pipeline built without it still serves every other route rather
+#: than failing to start -- so "not wired" is a service state, not a bad request.
+def _no_questions() -> JSONResponse:
+    return JSONResponse(status_code=503, content={"error": "questions unavailable"})
+
+
+def _questions(pipeline):
+    return getattr(pipeline, "questions", None)
+
+
+@router.get("/api/questions")
+async def questions(request: Request, limit: int = Query(20, ge=1)) -> list[dict]:
+    """Every question asked of the wearer, newest first, answers included."""
+
+    return _dump(_pipeline(request).db.list_questions(limit))
+
+
+@router.post("/api/answer")
+async def answer(request: Request, body: dict[str, Any]) -> Any:
+    """Answer a question by hand -- the demo path when no phone is listening.
+
+    ``question_id`` is optional: with one question open at a time (§4) the
+    obvious default is that one, and typing a generated id into curl is friction
+    the demo does not need. 404 rather than a silent no-op when nothing is open,
+    because "my answer went nowhere" is the failure worth seeing.
+
+    *Omitted* and *wrong* are not the same thing, though. A caller that sent
+    ``question_id`` and got the type wrong meant a specific row, and silently
+    answering whatever happens to be open instead would attach a transcript to
+    the wrong question -- the one failure here that is invisible afterwards.
+    Same for ``text`` and ``heard``: ``str(None)`` is the string ``"None"`` and
+    ``bool("no")`` is ``True``, so coercion here manufactures answers the wearer
+    never gave.
+    """
+
+    pipeline = _pipeline(request)
+    manager = _questions(pipeline)
+    if manager is None:
+        return _no_questions()
+    if "question_id" in body:
+        question_id = body["question_id"]
+        if not isinstance(question_id, str) or not question_id:
+            raise HTTPException(400, "question_id must be a non-empty string")
+    else:
+        open_row = pipeline.db.open_question()
+        if open_row is None:
+            raise HTTPException(404, "no open question")
+        question_id = open_row.id
+    text = body.get("text", "")
+    if not isinstance(text, str):
+        raise HTTPException(400, "text must be a string")
+    heard = body.get("heard", True)
+    if not isinstance(heard, bool):
+        raise HTTPException(400, "heard must be a boolean")
+    manager.on_answer(question_id, text, heard, _now(pipeline))
+    return {"question_id": question_id, "accepted": True}
+
+
+@router.post("/api/ask")
+async def ask(request: Request, body: dict[str, Any]) -> Any:
+    """Demo/debug: ask the wearer something right now.
+
+    Unlike ``/api/speak`` this does **not** bypass the guards -- an ask that
+    ignored ``one_open`` would leave two rows waiting for one answer window, and
+    the reply shape (``suppressed_reason``) is how an operator sees which guard
+    said no.
+    """
+
+    raw_text = body.get("text", "")
+    if not isinstance(raw_text, str):
+        # `str(None)` is the string "None" -- a question the glasses would
+        # happily read out loud. A wrong type is a bad request, not an utterance.
+        raise HTTPException(400, "text must be a string")
+    text = raw_text.strip()
+    if not text:
+        raise HTTPException(400, "text required")
+    pipeline = _pipeline(request)
+    manager = _questions(pipeline)
+    if manager is None:
+        return _no_questions()
+    try:
+        action = AskAction(
+            text=text,
+            answer_kind=str(body.get("answer_kind", "yes_no")),
+            fills=str(body.get("fills", "confirmed")),
+            reason="manual",
+        )
+    except ValidationError as exc:
+        # `answer_kind` and `fills` are closed menus (§5); an operator typo is a
+        # 400, not a 500 from deep inside pydantic.
+        raise HTTPException(400, f"bad ask: {exc.error_count()} invalid field(s)") from exc
+    episode_id = None
+    if "episode_id" in body:
+        episode_id = body["episode_id"]
+        if not isinstance(episode_id, str):
+            # Dropping a malformed one would ask the question detached from the
+            # episode it is about, and the answer would never reach `reported`.
+            raise HTTPException(400, "episode_id must be a string")
+    row, suppressed_reason = manager.ask(
+        decision_id="manual",
+        t=_now(pipeline),
+        episode_id=episode_id,
+        action=action,
+    )
+    return {
+        "question_id": None if row is None else row.id,
+        "suppressed_reason": suppressed_reason,
+    }

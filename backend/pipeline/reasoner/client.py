@@ -20,9 +20,13 @@ from datetime import datetime
 from typing import Any, Literal, Protocol, runtime_checkable
 
 from ..config import Settings
-from ..models import FOOD_TYPES
+from ..models import FOOD_TYPES, Episode, PendingQuestion
+from .prompts import ANSWER_OBJECTIVE
 from .schema import (
+    ANSWER_TEXT_FORMAT,
     AnnotateAction,
+    AnswerParse,
+    AskAction,
     LogInsightAction,
     SpeakAction,
     T1_TEXT_FORMAT,
@@ -37,6 +41,10 @@ __all__ = [
     "OpenAIReasonerClient",
     "FakeReasonerClient",
     "make_client",
+    "AnswerParser",
+    "OpenAIAnswerParser",
+    "FakeAnswerParser",
+    "make_answer_parser",
 ]
 
 _FENCE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.MULTILINE)
@@ -316,6 +324,16 @@ class FakeReasonerClient:
                 ],
             )
 
+        if base == "answer":
+            # A wake-up that is itself the wearer's reply. The parse already
+            # happened (`Reasoner.try_answer`); all that is left is the memory
+            # line, and asking again here would loop (ASK_DESIGN §4).
+            return T1Response(
+                interpretation="wearer answered",
+                confidence=0.6,
+                actions=[AnnotateAction(line="wearer answered")],
+            )
+
         if base == "caffeine_seen":
             actions: list[Any] = [
                 AnnotateAction(line=f"caffeine in frame"),
@@ -330,6 +348,18 @@ class FakeReasonerClient:
                         urgency="low",
                     )
                 )
+            else:
+                # Before the cutoff there is nothing to say, so the mouth is
+                # free to ask instead. After it, the fake has a statement to
+                # make and `normalize` would drop it for an ask (§8.6).
+                actions.append(
+                    AskAction(
+                        text="Is that coffee yours?",
+                        answer_kind="yes_no",
+                        fills="confirmed",
+                        reason="a cup in frame is not a cup being drunk",
+                    )
+                )
             return T1Response(
                 interpretation="caffeine in frame",
                 confidence=0.7,
@@ -342,6 +372,12 @@ class FakeReasonerClient:
                 confidence=0.7,
                 actions=[
                     AnnotateAction(line=f"alcohol in frame"),
+                    AskAction(
+                        text="That yours?",
+                        answer_kind="yes_no",
+                        fills="confirmed",
+                        reason="the frames cannot say whose drink it is",
+                    ),
                     LogInsightAction(
                         category="alcohol",
                         text="Alcohol sighting; expect a nightly HRV drop.",
@@ -426,6 +462,240 @@ class FakeReasonerClient:
         )
 
 
+# -- the answer parser (ASK_DESIGN §8.11) ---------------------------------
+
+
+@runtime_checkable
+class AnswerParser(Protocol):
+    """One structured call per spoken answer."""
+
+    async def parse(
+        self,
+        question: PendingQuestion,
+        transcript: str,
+        episode: Episode | None,
+    ) -> AnswerParse:
+        """Turn what the wearer said into the fields of §8.8."""
+        ...
+
+
+def _answer_messages(
+    question: PendingQuestion, transcript: str, episode: Episode | None
+) -> list[dict[str, Any]]:
+    """The whole prompt: what was asked, what was seen, what was heard."""
+
+    lines = [
+        f"Question asked: {question.question}",
+        f"Answer kind: {question.answer_kind}. Field it is for: {question.fills}.",
+    ]
+    if episode is not None:
+        seen = ", ".join(f"{k}={v}" for k, v in sorted(episode.dominant.items()))
+        lines.append(
+            f"What the camera had established: {episode.kind}"
+            f"{', ' + seen if seen else ''}."
+        )
+    heard = transcript.strip()
+    lines.append(f"Transcript: {heard if heard else '(nothing heard)'}")
+    return [
+        {"role": "system", "content": ANSWER_OBJECTIVE},
+        {"role": "user", "content": "\n".join(lines)},
+    ]
+
+
+class OpenAIAnswerParser:
+    """The real parse: Responses API, strict JSON schema, text only.
+
+    No frames. The question already carries what the camera saw; the only new
+    evidence is the sentence, and a second image call would spend the latency
+    budget the wearer is standing there waiting through.
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        timeout: float | None = 10.0,
+        client: Any | None = None,
+        reasoning_effort: str | None = "minimal",
+    ) -> None:
+        if not api_key:
+            raise RuntimeError("OpenAIAnswerParser requires an API key")
+        self.model = model
+        self.reasoning_effort = reasoning_effort
+        if client is not None:
+            self._client = client
+        else:
+            from openai import AsyncOpenAI
+
+            self._client = AsyncOpenAI(api_key=api_key, timeout=timeout)
+
+    async def parse(
+        self,
+        question: PendingQuestion,
+        transcript: str,
+        episode: Episode | None = None,
+    ) -> AnswerParse:
+        kwargs: dict[str, Any] = dict(
+            model=self.model,
+            input=_answer_messages(question, transcript, episode),
+            text=ANSWER_TEXT_FORMAT,
+        )
+        # Same trade as T1: this is comprehension, not a puzzle, and the
+        # wearer is waiting. Retry without it for models that reject it.
+        if self.reasoning_effort:
+            kwargs["reasoning"] = {"effort": self.reasoning_effort}
+        try:
+            response = await self._client.responses.create(**kwargs)
+        except Exception as exc:  # noqa: BLE001
+            if "reasoning" in kwargs and "reasoning" in str(exc).lower():
+                kwargs.pop("reasoning")
+                response = await self._client.responses.create(**kwargs)
+            else:
+                raise
+        return self._parse(getattr(response, "output_text", None) or "")
+
+    @staticmethod
+    def _parse(raw: str) -> AnswerParse:
+        try:
+            return AnswerParse.model_validate(json.loads(raw))
+        except Exception as first:
+            log.warning("answer parse failed (%s); retrying de-fenced", first)
+            return AnswerParse.model_validate(json.loads(_strip_fences(raw)))
+
+
+# -- the fake parser ------------------------------------------------------
+
+#: Every way the wearer says "no" -- refusal, disowning, or owning the item
+#: while declining to consume it. Checked *first* and on its own, because a
+#: denial almost always arrives wrapped in affirmative words: "mine but I am
+#: not drinking it" contains "mine", "no it is not" contains "it is", and
+#: reading either as a yes writes a drink into the day that nobody had.
+#: §8.8 is explicit that ownership without consumption is `confirmed=false`.
+_NEGATION_RE = re.compile(
+    r"\b("
+    r"no|nope|nah|negative|not really|"
+    r"not mine|isn'?t mine|not my|someone else|somebody else|"
+    r"not drinking|not having|not eating|not touching|"
+    r"didn'?t|don'?t|doesn'?t|isn'?t|wasn'?t|won'?t|"
+    r"it is not|it'?s not|that is not|that'?s not|"
+    r"my (?:friend|roommate|colleague|brother|sister)'?s?"
+    r")\b",
+    re.IGNORECASE,
+)
+#: Only consulted when nothing above matched.
+_YES_RE = re.compile(
+    r"\b(yes|yeah|yeh|yep|yup|sure|mine|correct|it is|i am|i did)\b",
+    re.IGNORECASE,
+)
+#: A number about some *other* day is not a count of servings today (§8.8),
+#: and the fake has no calendar to place it on -- so it declines to count.
+_TEMPORAL_RE = re.compile(
+    r"\b(yesterday|last night|last week|last month|last year|"
+    r"tomorrow|earlier this week|the other day)\b",
+    re.IGNORECASE,
+)
+#: A bare non-negative number: not part of a word, not the tail of "-3",
+#: not "3pm". A sign or a suffix means the digits were doing another job.
+_DIGIT_RE = re.compile(r"(?<![\w.\-])(\d+(?:\.\d+)?)(?![\w.])")
+_NUMBER_WORDS = {
+    "zero": 0.0, "one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0,
+    "five": 5.0, "six": 6.0, "seven": 7.0, "eight": 8.0, "nine": 9.0,
+    "ten": 10.0,
+}
+_NUMBER_WORD_RE = re.compile(
+    r"\b(" + "|".join(_NUMBER_WORDS) + r")\b", re.IGNORECASE
+)
+#: ``rice_bowl`` has to match "rice bowl" as spoken, not as enumerated.
+_FOOD_RES = tuple(
+    (value, re.compile(r"\b" + value.replace("_", "[ _-]") + r"s?\b", re.IGNORECASE))
+    for value in FOOD_TYPES
+    if value != "none"
+)
+
+#: What the fake asks when a yes leaves the quantity open (§8.5).
+FAKE_FOLLOWUP = "How many today?"
+
+
+class FakeAnswerParser:
+    """Regex over the transcript. Zero latency, no key, same interface.
+
+    Good enough that a key-less demo run answers "yeah two" correctly, and
+    honest about the rest: anything it cannot place becomes a note, never a
+    guessed field.
+    """
+
+    model = "fake"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def parse(
+        self,
+        question: PendingQuestion,
+        transcript: str,
+        episode: Episode | None = None,
+    ) -> AnswerParse:
+        self.calls += 1
+        text = (transcript or "").strip()
+        if not text:
+            return AnswerParse(understood=False, note="")
+
+        # Speech-to-text hands back typographic apostrophes; "didn\u2019t" has
+        # to read as "didn't" or every contraction below silently misses.
+        # Matching happens on the normalised copy, the note keeps the original.
+        probe = text.replace("\u2019", "'")
+
+        # Negation wins outright, and only a transcript with no negation in
+        # it at all is read for a yes. A sentence holding both is a no.
+        confirmed: bool | None = None
+        if _NEGATION_RE.search(probe):
+            confirmed = False
+        elif _YES_RE.search(probe):
+            confirmed = True
+
+        count = self._count(probe)
+        food_type = self._food_type(probe)
+
+        followup = None
+        if question.answer_kind == "yes_no" and confirmed and count is None:
+            followup = FAKE_FOLLOWUP
+
+        return AnswerParse(
+            understood=True,
+            confirmed=confirmed,
+            count=count,
+            food_type=food_type,
+            note=text,
+            followup=followup,
+        )
+
+    @staticmethod
+    def _count(text: str) -> float | None:
+        """A count of servings *today*, or nothing.
+
+        Conservative on purpose: "two yesterday" is a number, but not a
+        number about today, and the fake would rather record no count than
+        the wrong day's.
+        """
+
+        if _TEMPORAL_RE.search(text):
+            return None
+        digits = _DIGIT_RE.search(text)
+        if digits:
+            return float(digits.group(1))
+        word = _NUMBER_WORD_RE.search(text)
+        if word:
+            return _NUMBER_WORDS[word.group(1).lower()]
+        return None
+
+    @staticmethod
+    def _food_type(text: str) -> str | None:
+        for value, pattern in _FOOD_RES:
+            if pattern.search(text):
+                return value
+        return None
+
+
 # -- factory --------------------------------------------------------------
 
 
@@ -448,3 +718,19 @@ def make_client(
             "OPENAI_API_KEY is not set; use mode='fake' for a key-less run"
         )
     return OpenAIReasonerClient(settings.openai_api_key, settings.t1_model)
+
+
+def make_answer_parser(
+    settings: Settings, mode: Literal["openai", "fake"]
+) -> AnswerParser:
+    """Build an answer parser. ``mode`` is explicit, exactly as for T1."""
+
+    if mode == "fake":
+        return FakeAnswerParser()
+    if mode != "openai":
+        raise ValueError(f"unknown answer parser mode: {mode!r}")
+    if not settings.openai_api_key:
+        raise RuntimeError(
+            "OPENAI_API_KEY is not set; use mode='fake' for a key-less run"
+        )
+    return OpenAIAnswerParser(settings.openai_api_key, settings.t1_model)

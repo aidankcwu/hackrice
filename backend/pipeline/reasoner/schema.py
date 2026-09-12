@@ -14,26 +14,49 @@ from __future__ import annotations
 
 import time
 from datetime import datetime
+import math
 from typing import Annotated, Any, Literal, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from ..models import FOOD_TYPES
 
 __all__ = [
     "SpeakAction",
     "LogInsightAction",
     "AnnotateAction",
     "WatchAction",
+    "AskAction",
     "NothingAction",
     "Action",
     "T1Response",
+    "AnswerParse",
     "T1_JSON_SCHEMA",
     "T1_TEXT_FORMAT",
+    "ANSWER_JSON_SCHEMA",
+    "ANSWER_TEXT_FORMAT",
+    "SPEAK_DROPPED_FOR_ASK",
     "normalize",
 ]
 
 Urgency = Literal["low", "normal", "high"]
 
 ANNOTATE_MAX_CHARS = 80
+
+#: ``AnswerParse.note`` is one line of what the wearer said in effect.
+NOTE_MAX_CHARS = 80
+
+#: ``AnswerParse.followup`` is one more question, spoken aloud.
+FOLLOWUP_MAX_CHARS = 120
+
+#: ``AnswerParse.count`` is servings *today* (docs/ASK_DESIGN.md §8.8).
+COUNT_MAX = 20.0
+
+#: Reason string for the speak that :func:`normalize` drops when the same
+#: response also asks (docs/ASK_DESIGN.md §8.6). The drop happens here, in
+#: code the model cannot argue with; the *logging* of it belongs to the action
+#: handler, which is the only layer that knows the decision id.
+SPEAK_DROPPED_FOR_ASK = "speak_dropped_for_ask"
 
 
 class _ActionBase(BaseModel):
@@ -72,12 +95,34 @@ class WatchAction(_ActionBase):
     reason: str = ""
 
 
+class AskAction(_ActionBase):
+    """A question for the wearer, spoken and then listened for (ASK_DESIGN §5).
+
+    The model proposes; :class:`~pipeline.actions.questions.QuestionManager`
+    disposes, exactly as it does for ``speak``. ``fills`` names the primary
+    field the answer is expected to set.
+    """
+
+    type: Literal["ask"] = "ask"
+    text: str
+    answer_kind: Literal["yes_no", "count", "free"] = "yes_no"
+    fills: Literal["confirmed", "count", "food_type", "note"] = "confirmed"
+    reason: str = ""
+
+
 class NothingAction(_ActionBase):
     type: Literal["nothing"] = "nothing"
 
 
 Action = Annotated[
-    Union[SpeakAction, LogInsightAction, AnnotateAction, WatchAction, NothingAction],
+    Union[
+        SpeakAction,
+        LogInsightAction,
+        AnnotateAction,
+        WatchAction,
+        AskAction,
+        NothingAction,
+    ],
     Field(discriminator="type"),
 ]
 
@@ -155,6 +200,30 @@ _WATCH = _obj(
     }
 )
 
+_ASK = _obj(
+    {
+        "type": {"type": "string", "enum": ["ask"]},
+        "text": {
+            "type": "string",
+            "description": "The question, one sentence, read aloud to the wearer.",
+        },
+        "answer_kind": {
+            "type": "string",
+            "enum": ["yes_no", "count", "free"],
+            "description": "The shape of the answer you expect back.",
+        },
+        "fills": {
+            "type": "string",
+            "enum": ["confirmed", "count", "food_type", "note"],
+            "description": "The field the answer is primarily meant to settle.",
+        },
+        "reason": {
+            "type": "string",
+            "description": "Why the frames cannot settle this on their own.",
+        },
+    }
+)
+
 _NOTHING = _obj({"type": {"type": "string", "enum": ["nothing"]}})
 
 T1_JSON_SCHEMA: dict[str, Any] = _obj(
@@ -171,7 +240,7 @@ T1_JSON_SCHEMA: dict[str, Any] = _obj(
             "type": "array",
             "minItems": 1,
             "items": {
-                "anyOf": [_SPEAK, _LOG_INSIGHT, _ANNOTATE, _WATCH, _NOTHING],
+                "anyOf": [_SPEAK, _LOG_INSIGHT, _ANNOTATE, _WATCH, _ASK, _NOTHING],
             },
         },
     }
@@ -184,6 +253,138 @@ T1_TEXT_FORMAT: dict[str, Any] = {
         "name": "t1_decision",
         "strict": True,
         "schema": T1_JSON_SCHEMA,
+    }
+}
+
+
+# -- the answer parse (ASK_DESIGN §5, §8.8) -------------------------------
+
+
+class AnswerParse(BaseModel):
+    """What the wearer's spoken answer amounts to, in fields code can store.
+
+    The validation here is the contract of §8.8, not a formality: the parser
+    is a language model and this is the only place that decides a "count" of
+    ``-3`` or a ``food_type`` of ``"latte"`` is not a fact about the day. An
+    out-of-range or unknown value becomes ``None`` -- silently dropping a
+    field is right, because the alternative is writing a number nobody said.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    understood: bool = False
+    confirmed: bool | None = None
+    count: float | None = None
+    food_type: str | None = None
+    note: str = ""
+    followup: str | None = None
+
+    @field_validator("count", mode="before")
+    @classmethod
+    def _clean_count(cls, value: Any) -> float | None:
+        """Finite and 0..20 servings today, or nothing at all."""
+
+        if value is None or isinstance(value, bool):
+            return None
+        try:
+            number = float(value)
+        except (TypeError, ValueError, OverflowError):
+            # ``OverflowError`` is not hypothetical: a model that writes
+            # ``10**400`` into the JSON parses to a Python int no float can
+            # hold, and an unhandled raise here would take down the answer.
+            return None
+        if not math.isfinite(number) or number < 0.0 or number > COUNT_MAX:
+            return None
+        return number
+
+    @field_validator("food_type", mode="before")
+    @classmethod
+    def _clean_food_type(cls, value: Any) -> str | None:
+        """One of the §9 menu values, or nothing -- never an invented food."""
+
+        if not isinstance(value, str):
+            return None
+        candidate = value.strip().lower().replace(" ", "_").replace("-", "_")
+        if candidate in ("", "none", "null", "unknown"):
+            return None
+        return candidate if candidate in FOOD_TYPES else None
+
+    @field_validator("note", mode="before")
+    @classmethod
+    def _clean_note(cls, value: Any) -> str:
+        if value is None:
+            return ""
+        text = str(value).strip()
+        return text[:NOTE_MAX_CHARS].rstrip()
+
+    @field_validator("followup", mode="before")
+    @classmethod
+    def _clean_followup(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        return text[:FOLLOWUP_MAX_CHARS].rstrip()
+
+    @model_validator(mode="after")
+    def _not_understood_is_note_only(self) -> "AnswerParse":
+        """``understood=false`` carries a note and nothing else (§8.8).
+
+        A parse that did not understand the answer has no standing to set a
+        field: whatever ``confirmed`` or ``count`` it guessed came from a
+        sentence it just admitted it could not read. The note survives
+        because "what the wearer said in effect" is still worth keeping.
+        """
+
+        if not self.understood:
+            self.confirmed = None
+            self.count = None
+            self.food_type = None
+            self.followup = None
+        return self
+
+
+ANSWER_JSON_SCHEMA: dict[str, Any] = _obj(
+    {
+        "understood": {
+            "type": "boolean",
+            "description": "True when the transcript answers the question at all.",
+        },
+        "confirmed": {
+            "type": ["boolean", "null"],
+            "description": "True when the wearer says the item is theirs AND "
+            "they are having it; false when it is not theirs or they are not "
+            "having it; null when they did not say.",
+        },
+        "count": {
+            "type": ["number", "null"],
+            "description": "Servings of this item today, 0 to 20, or null.",
+        },
+        "food_type": {
+            "type": ["string", "null"],
+            "description": "One of the fixed food_type values, or null. "
+            "Never invent a value: " + ", ".join(FOOD_TYPES) + ".",
+        },
+        "note": {
+            "type": "string",
+            "description": "What the wearer said in effect, 80 characters or less.",
+        },
+        "followup": {
+            "type": ["string", "null"],
+            "description": "One more spoken question, or null. Only when a yes "
+            "still leaves the quantity unknown.",
+        },
+    }
+)
+
+#: Pass as ``text=ANSWER_TEXT_FORMAT`` to ``responses.create``.
+ANSWER_TEXT_FORMAT: dict[str, Any] = {
+    "format": {
+        "type": "json_schema",
+        "name": "answer_parse",
+        "strict": True,
+        "schema": ANSWER_JSON_SCHEMA,
     }
 }
 
@@ -203,6 +404,10 @@ def normalize(resp: T1Response, t: float | None = None) -> T1Response:
     * ``nothing`` is dropped when any other action was chosen -- "no action"
       alongside an action is a contradiction, and the model does emit it.
     * ``confidence`` is clamped to 0..1.
+    * an ``ask`` and a ``speak`` in the same response is a contradiction --
+      the question wins and the statement is dropped (ASK_DESIGN §8.6), so
+      nothing talks over the answer window. The handler logs the drop as
+      ``SPEAK_DROPPED_FOR_ASK``; this function only removes it.
     """
 
     stamp = time.time() if t is None else t
@@ -211,8 +416,10 @@ def normalize(resp: T1Response, t: float | None = None) -> T1Response:
     # A speak whose text is empty, a bare "nothing", or a JSON-looking blob is
     # the model trying to stay silent the wrong way (seen live: ElevenLabs
     # read '{"type":"nothing"}' aloud). Silence means no speak action at all.
-    def _speakable(a: Any) -> bool:
-        if getattr(a, "type", None) != "speak":
+    # An `ask` is spoken by the same mouth, so it is held to the same bar.
+    def _sayable(a: Any) -> bool:
+        kind = getattr(a, "type", None)
+        if kind not in ("speak", "ask"):
             return True
         text = (getattr(a, "text", "") or "").strip()
         if len(text) < 2 or text.lower() in {"nothing", "none", "null", "silent"}:
@@ -221,7 +428,10 @@ def normalize(resp: T1Response, t: float | None = None) -> T1Response:
             return False
         return True
 
-    actions = [a for a in actions if _speakable(a)]
+    actions = [a for a in actions if _sayable(a)]
+
+    if any(a.type == "ask" for a in actions):
+        actions = [a for a in actions if a.type != "speak"]
 
     if any(a.type != "nothing" for a in actions):
         actions = [a for a in actions if a.type != "nothing"]

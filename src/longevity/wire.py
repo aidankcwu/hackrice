@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import base64
 import json
+import time
 from typing import Any
 
 PROTOCOL_VERSION = 1
@@ -26,10 +27,12 @@ PROTOCOL_VERSION = 1
 CAPTURE = "capture"  # one per tick: frame + phone sensors (§11.2)
 HELLO = "hello"      # sent once on connect; identifies the phone, carries clock offset
 PONG = "pong"
+ANSWER = "answer"    # what the wearer said back (ASK_DESIGN §3)
 
 # Mac -> phone
 SPEAK = "speak"      # {"text": ..., "urgency": ...} — AVSpeechSynthesizer path (A16)
 AUDIO = "audio"      # pre-rendered audio bytes — ElevenLabs path (A18)
+ASK = "ask"          # open the mic after the audio just sent (ASK_DESIGN §3)
 
 # both directions
 PING = "ping"        # keepalive; the phone sends one every 10 s so the Mac's
@@ -114,3 +117,86 @@ def decode_image(msg: dict[str, Any]) -> bytes | None:
         return base64.b64decode(img, validate=True)
     except (ValueError, TypeError):
         return None
+
+
+# --- ask / answer (ASK_DESIGN §3) --------------------------------------------
+#
+# One question at a time, spoken first and listened for second. The audio itself
+# still travels as today's `audio`/`speak` message; `ask` is the instruction that
+# follows it, so the phone knows the utterance it just received wants a reply and
+# how long to keep the mic open. Splitting the two keeps the speech path
+# unchanged — a phone that ignores `ask` still speaks the question, it just never
+# hears the answer, which is exactly the degradation `caps` (§8.7) negotiates.
+
+
+def ask_message(
+    question_id: str,
+    listen_s: float,
+    answer_kind: str = "yes_no",
+    text: str = "",
+) -> str:
+    """Mac->phone. Listen for an answer to the question just spoken.
+
+    `question_id` is echoed back on the answer and is how the Mac matches a
+    transcript to the row that asked for it; a phone must never invent one.
+    `listen_s` is a ceiling, not a target — the phone may stop early on a pause,
+    and must start the window only once playback of the preceding audio has
+    finished, or it will transcribe the glasses talking to themselves.
+    `answer_kind` (`yes_no` | `count` | `free`) is a hint for on-device STT;
+    `text` is the question again, for display, because the phone has no other
+    copy of what it just played.
+    """
+    return json.dumps(
+        {
+            "v": PROTOCOL_VERSION,
+            "type": ASK,
+            "question_id": question_id,
+            "listen_s": round(float(listen_s), 3),
+            "answer_kind": answer_kind,
+            "text": text,
+        }
+    )
+
+
+def answer_message(
+    question_id: str, text: str = "", heard: bool = True, t: float | None = None
+) -> str:
+    """phone->Mac. What the wearer said, transcribed on the device.
+
+    `heard` is the phone's own verdict on whether anything was said at all, kept
+    separate from an empty `text` so "the wearer stayed silent" and "STT returned
+    nothing useful" are distinguishable on the Mac. Written here for the tests and
+    `tools/fake_phone.py`; the real producer is Swift.
+
+    `t` is the phone's clock and is metadata only — the Mac stamps the answer with
+    its own receipt time (§8.4), because the phone is not NTP-authoritative and an
+    answer labelled an hour ago would expire the moment it arrived.
+    """
+    return json.dumps(
+        {
+            "v": PROTOCOL_VERSION,
+            "type": ANSWER,
+            "question_id": question_id,
+            "text": text,
+            "heard": bool(heard),
+            "t": round(time.time() if t is None else t, 3),
+        }
+    )
+
+
+def hello_message(device: str = "phone", caps: list[str] | None = None) -> str:
+    """phone->Mac, once on connect. `caps` is what this phone can do (§8.7).
+
+    The Mac never speaks a question to a phone that did not advertise `"ask"` —
+    an older build would play the question and then never open the mic, leaving a
+    row open until it expired and a wearer answering into nothing.
+    """
+    return json.dumps(
+        {
+            "v": PROTOCOL_VERSION,
+            "type": HELLO,
+            "device": device,
+            "caps": list(caps or []),
+            "t": round(time.time(), 3),
+        }
+    )

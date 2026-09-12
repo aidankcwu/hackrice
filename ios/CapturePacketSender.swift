@@ -410,6 +410,7 @@ final class CapturePacketSender {
       "v": protocolVersion,
       "type": "hello",
       "device": "iphone",
+      "caps": ["ask"],
       // We do not measure skew, and claiming a number we did not measure is worse than
       // claiming none. The Mac falls back to arrival time past ±60 s anyway
       // (`ingest.MAX_CLOCK_SKEW_S`), and both machines are NTP-synced in practice.
