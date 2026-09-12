@@ -215,7 +215,7 @@ def normalize(resp: T1Response, t: float | None = None) -> T1Response:
         text = (resp.interpretation or "nothing worth saying").strip()
         if len(text) > ANNOTATE_MAX_CHARS:
             text = text[:ANNOTATE_MAX_CHARS].rstrip()
-        actions.append(AnnotateAction(line=f"{_hhmm(stamp)} {text}"))
+        actions.append(AnnotateAction(line=text))
 
     confidence = min(1.0, max(0.0, float(resp.confidence)))
     return T1Response(

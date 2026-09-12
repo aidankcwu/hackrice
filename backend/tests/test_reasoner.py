@@ -179,7 +179,7 @@ def test_normalize_synthesises_the_missing_annotate():
 def test_normalize_truncates_a_long_interpretation_to_80_chars():
     resp = T1Response(interpretation="x" * 200, confidence=0.5, actions=[])
     line = normalize(resp, t=T0).actions[0].line
-    assert len(line.split(" ", 1)[1]) == 80
+    assert len(line) == 80
 
 
 def test_normalize_keeps_an_existing_annotate():

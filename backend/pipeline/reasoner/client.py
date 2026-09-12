@@ -211,7 +211,8 @@ class FakeReasonerClient:
     # -- rules -----------------------------------------------------------
 
     def _decide(self, trigger: str, hour: int, text: str) -> T1Response:
-        stamp = f"{hour:02d}:00"
+        # Annotate lines carry no time prefix; the store stamps `t` and the
+        # dashboard renders it (a fake HH:00 stamp double-prefixed on screen).
         base = trigger.split(":", 1)[0]
 
         if base == "food_in_frame":
@@ -221,7 +222,7 @@ class FakeReasonerClient:
                 interpretation=interpretation,
                 confidence=0.72,
                 actions=[
-                    AnnotateAction(line=f"{stamp} {interpretation}"),
+                    AnnotateAction(line=f"{interpretation}"),
                     LogInsightAction(
                         category="diet",
                         text=f"Meal logged ({food or 'type unclear'}); "
@@ -232,7 +233,7 @@ class FakeReasonerClient:
 
         if base == "caffeine_seen":
             actions: list[Any] = [
-                AnnotateAction(line=f"{stamp} caffeine in frame"),
+                AnnotateAction(line=f"caffeine in frame"),
             ]
             if hour >= CAFFEINE_HOUR:
                 actions.append(
@@ -255,7 +256,7 @@ class FakeReasonerClient:
                 interpretation="alcohol in frame",
                 confidence=0.7,
                 actions=[
-                    AnnotateAction(line=f"{stamp} alcohol in frame"),
+                    AnnotateAction(line=f"alcohol in frame"),
                     LogInsightAction(
                         category="alcohol",
                         text="Alcohol sighting; expect a nightly HRV drop.",
@@ -268,7 +269,7 @@ class FakeReasonerClient:
                 interpretation="sustained screen time",
                 confidence=0.68,
                 actions=[
-                    AnnotateAction(line=f"{stamp} sustained screen time"),
+                    AnnotateAction(line=f"sustained screen time"),
                     WatchAction(after_s=120, reason="still at screen?"),
                 ],
             )
@@ -278,7 +279,7 @@ class FakeReasonerClient:
                 interpretation="conversation with people present",
                 confidence=0.66,
                 actions=[
-                    AnnotateAction(line=f"{stamp} people present, conversation"),
+                    AnnotateAction(line=f"people present, conversation"),
                     LogInsightAction(
                         category="social",
                         text="Social episode; counts toward daily integration.",
@@ -291,7 +292,7 @@ class FakeReasonerClient:
                 interpretation="outdoors, greenery in frame",
                 confidence=0.66,
                 actions=[
-                    AnnotateAction(line=f"{stamp} outdoors"),
+                    AnnotateAction(line=f"outdoors"),
                     LogInsightAction(
                         category="nature",
                         text="Outdoor block; counts toward the weekly nature dose.",
@@ -303,13 +304,13 @@ class FakeReasonerClient:
             return T1Response(
                 interpretation="scheduled re-check",
                 confidence=0.6,
-                actions=[AnnotateAction(line=f"{stamp} re-check: {trigger}")],
+                actions=[AnnotateAction(line=f"re-check: {trigger}")],
             )
 
         return T1Response(
             interpretation=f"{base.replace('_', ' ')}, nothing worth saying",
             confidence=0.5,
-            actions=[AnnotateAction(line=f"{stamp} {base.replace('_', ' ')}")],
+            actions=[AnnotateAction(line=f"{base.replace('_', ' ')}")],
         )
 
 
