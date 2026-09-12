@@ -1,107 +1,110 @@
-# FITBIT.md — connect the Fitbit (whoever is wearing it)
+# FITBIT.md — connect the Fitbit through the Google Health API (whoever wears it)
 
-The backend already has the Fitbit integration (OAuth with PKCE, token
-refresh, a poller that pulls intraday heart rate, HRV, SpO2, breathing rate,
-skin temperature, sleep stages, steps, and workouts every 5 minutes). What is
-missing is your account's credentials and one approval click. Budget: 15 min.
+The old Fitbit Web API and dev.fitbit.com are shut down (September 2026). Fitbit
+data now comes through the **Google Health API** with **Google OAuth**. The
+backend has a poller for it (intraday heart rate at 1-second resolution, HRV,
+SpO2, resting HR, breathing rate, skin temperature, sleep stages, steps,
+workouts, every 5 minutes). What is missing is a Google Cloud OAuth client and
+one approval click. Budget: 20 min. No app review is needed: a client in
+"Testing" status reads data for up to 100 listed test users.
 
-You need: the Google account the Fitbit is registered to, and access to the
-laptop running the backend (Rishi's Mac, port 8010) for step 4.
+You need: the Google account the Fitbit is linked to (the one the Fitbit app
+signs in with), and access to the laptop running the backend (Rishi's Mac,
+port 8010) for step 4.
 
-## 1. Register a Fitbit developer app (~5 min, any browser)
+## 1. Create the OAuth client in Google Cloud (~10 min, any browser)
 
-1. Go to https://dev.fitbit.com/apps/new and sign in with the account the
-   Fitbit syncs to.
-2. Fill in the form:
-   - Application Name / Description / Organization / Website: anything.
-   - **OAuth 2.0 Application Type: Personal** — this is the setting that
-     allows intraday data for your own account with no approval process.
-     "Client" or "Server" will not return the 1-second heart-rate series.
-   - **Redirect URL, exactly:** `http://localhost:8010/api/wearables/fitbit/callback`
-   - Default Access Type: Read Only.
-3. Agree to the terms and save. Copy the **OAuth 2.0 Client ID** and the
-   **Client Secret** from the app page.
+Sign in to https://console.cloud.google.com with the Fitbit's Google account.
+
+1. **Project.** Create a project (any name, e.g. `hackrice-glasses`).
+2. **Enable the API.** Open
+   https://console.developers.google.com/apis/library/health.googleapis.com
+   and click **Enable** ("Google Health API").
+3. **Consent screen / audience.** Go to https://console.developers.google.com/auth/audience
+   (APIs & Services → OAuth consent / Google Auth Platform):
+   - User type: **External**. Publishing status: leave as **Testing**.
+   - **Test users → Add users:** the Fitbit's Google account email. This is
+     the step that lets it read your data without the verification review.
+   - App name / support email / developer email: anything valid.
+4. **Scopes.** Go to https://console.developers.google.com/auth/scopes → Add
+   or remove scopes → paste these three, one per line, and add them:
+   ```
+   https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly
+   https://www.googleapis.com/auth/googlehealth.sleep.readonly
+   https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly
+   ```
+   They will be listed as restricted. That is fine in Testing status.
+5. **Credentials.** APIs & Services → Credentials → **Create credentials →
+   OAuth client ID** → Application type **Web application**:
+   - Authorized redirect URI, exactly:
+     `http://localhost:8010/api/wearables/google-health/callback`
+   - Create. Copy the **Client ID** and **Client secret**.
 
 ## 2. Put the credentials on the laptop (whoever is at the Mac)
 
-Never paste them into chat, Slack, or a commit. Run this in a terminal on the
-laptop, replacing both `...`:
+Never paste them into chat, Slack, or a commit. On the laptop:
 
 ```bash
-printf 'FITBIT_CLIENT_ID=...\nFITBIT_CLIENT_SECRET=...\n' >> "/Users/rishi/Github Coding /hackrice26/hackrice/backend/.env"
+printf 'GOOGLE_HEALTH_CLIENT_ID=...\nGOOGLE_HEALTH_CLIENT_SECRET=...\n' >> "/Users/rishi/Github Coding /hackrice26/hackrice/backend/.env"
 ```
 
-`backend/.env` is gitignored. Confirm the two lines are there without
-printing the secret:
+Check without printing the secret (should print `2`):
 
 ```bash
-grep -c '^FITBIT_CLIENT_' "/Users/rishi/Github Coding /hackrice26/hackrice/backend/.env"
+grep -c '^GOOGLE_HEALTH_CLIENT_' "/Users/rishi/Github Coding /hackrice26/hackrice/backend/.env"
 ```
-
-Should print `2`.
 
 ## 3. Restart the backend (Rishi / Claude)
 
-The backend reads `.env` at startup. Restart it; the phone will need to tap
-"Connect to Mac" again afterwards.
-
-```bash
-cd "/Users/rishi/Github Coding /hackrice26/hackrice/backend" && uv run python -m pipeline.main --source glasses --vlm gemini --reasoner openai --port 8010
-```
+The backend reads `.env` at startup. After the restart the phone taps
+"Connect to Mac" again.
 
 ## 4. Authorize (you, in a browser ON THE LAPTOP)
 
-The redirect URL says `localhost`, so this step must happen in a browser on
-the machine running the backend.
+The redirect URI is `localhost`, so this must be a browser on the machine
+running the backend.
 
-1. Open `http://localhost:8010/api/wearables/fitbit/authorize`
-2. You are bounced to Fitbit. Sign in as the Fitbit account, tick all the
-   permissions (heart rate, sleep, oxygen, respiratory rate, temperature,
-   cardio fitness, activity, profile), Allow.
-3. You land on a plain "Fitbit connected — you can close this tab" page.
-   The backend has stored the token (in `backend/data/fitbit_token.json`,
-   gitignored) and started polling. The first sync runs immediately.
-4. Open the Fitbit app on your phone once. That forces the tracker to sync
-   so today's data reaches Fitbit's servers now rather than in 15 minutes.
+1. Open `http://localhost:8010/api/wearables/google-health/authorize`
+2. Google's sign-in appears. Use the Fitbit's Google account. Because the app
+   is unverified you will see **"Google hasn't verified this app"** → click
+   **Continue** (it is your own app and you are a listed test user). Tick all
+   three permissions → Continue.
+3. You land on "Google Health connected — you can close this tab". The token
+   is stored in `backend/data/google_health_token.json` (gitignored) and
+   polling starts immediately.
+4. Open the Fitbit app on your phone once so the tracker syncs now.
 
 ## 5. Verify (anyone)
 
 ```bash
-curl -s localhost:8010/api/wearables/fitbit/status
+curl -s localhost:8010/api/wearables/google-health/status
 ```
-Expect `"configured": true, "connected": true, "polling": true` and a
-`last_sync_t`. If `last_error` is set, read it: `paid_plan_required` or
-`insufficient_scope` means the app type or permissions in step 1 are wrong.
+Expect `"configured": true, "connected": true, "polling": true`, a
+`last_sync_t`, and `scopes` listing all three. `last_error` names the problem
+if there is one.
 
 ```bash
 curl -s localhost:8010/api/wearables/status
 ```
 Expect `"live_connected": true` and `fitbit` rows with `"origin": "live"`.
-
-On the dashboard (`http://localhost:3000`): the heart-rate strip header reads
-`live: fitbit`, the tiles show a `LIVE` pill instead of `SEEDED`, and the 7-day
-panel's resting HR, sleep, and HRV rows carry `fitbit` as the device.
+Dashboard: heart-rate strip header `live: fitbit`, `LIVE` pills on the tiles,
+7-day panel rows carrying `fitbit`.
 
 ## What you get, and what you don't
 
-- Intraday heart rate at 1-second resolution, HRV every 5 min during sleep,
-  SpO2 per minute, breathing rate, skin temperature, sleep stages, steps,
-  workouts, VO2 max. All real, all labelled `fitbit`.
-- Data reaches the API only when the tracker syncs to the phone app, roughly
-  every 15 minutes or when you open the app. "Live" means minutes of lag.
-  For the heart-rate-anomaly demo, open the app right after the moment you
-  want captured.
-- Rate limit is 150 requests/hour; the poller uses at most 8 per 5-minute
-  cycle, so there is headroom for the demo.
-- Anything Fitbit does not supply stays seeded and labelled as such.
+- Heart rate at 1-second resolution, HRV, SpO2, resting HR, respiratory rate,
+  skin temperature, sleep stages, steps, workouts. Real, labelled `fitbit`.
+- Data reaches Google only when the tracker syncs to the Fitbit app, roughly
+  every 15 minutes or when you open the app. For the heart-rate demo moment,
+  open the app right after.
+- Anything the API does not supply stays seeded and labelled as such.
 
 ## If something is wrong
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `configured: false` | env lines missing or backend not restarted | steps 2–3 |
-| Authorize page 503s | same | steps 2–3 |
-| Fitbit page says invalid redirect | redirect URL typo in the app registration | step 1, exact string above |
-| `last_error` mentions scope | not all permissions ticked at Allow | re-open the authorize URL |
-| `paid_plan_required` on intraday | app type is not Personal | step 1, recreate the app |
-| `connected: true` but no data | tracker has not synced | open the Fitbit app |
+| `configured: false` / authorize 503 | env lines missing or no restart | steps 2–3 |
+| Google: `redirect_uri_mismatch` | redirect URI typo in the client | step 1.5, exact string |
+| Google: `access_denied` / "app not verified" with no Continue | your email is not a test user | step 1.3 |
+| `403` with `PERMISSION_DENIED` in `last_error` | Google Health API not enabled on the project, or scope missing | steps 1.2, 1.4 |
+| `connected: true`, no data | tracker has not synced | open the Fitbit app |
