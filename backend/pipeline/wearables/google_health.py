@@ -139,7 +139,10 @@ class GoogleHealthClient:
         snake = data_type.replace("-", "_")
         if data_type.startswith("daily-"):
             day = lambda v: fmt(v)[:10]
-            flt = f'{snake}.date >= "{day(start)}" AND {snake}.date <= "{day(end)}"'
+            end_dt = end if isinstance(end, datetime) else datetime.fromisoformat(end.replace("Z", "+00:00"))
+            next_day = (end_dt.astimezone(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%d")
+            # Only >= and < are accepted on date fields (<= is a 400, verified live).
+            flt = f'{snake}.date >= "{day(start)}" AND {snake}.date < "{next_day}"'
         elif data_type in {"steps", "sleep", "exercise", "sedentary-period", "active-minutes"}:
             flt = f'{snake}.interval.start_time >= "{fmt(start)}" AND {snake}.interval.start_time < "{fmt(end)}"'
         else:
@@ -278,18 +281,33 @@ class GoogleHealthSync:
         days_start = datetime.combine(now.date() - timedelta(days=1), datetime.min.time(), timezone.utc)
         payloads: list[dict] = []; before = self.client.requests_last_hour
         try:
+            failures: list[str] = []
+
+            async def pull(kind: str, since: datetime) -> list[dict[str, Any]]:
+                # One data type failing (a filter the API rejects, a scope not
+                # granted) must not abort the whole sync.
+                try:
+                    return [p async for p in self.client.paginate(kind, since, now)]
+                except RateLimitError:
+                    raise
+                except Exception as exc:  # noqa: BLE001
+                    failures.append(f"{kind}: {str(exc)[:160]}")
+                    log.warning("google health: %s failed: %s", kind, str(exc)[:200])
+                    return []
+
             for kind, converter in (("heart-rate", heart_rate_to_payload), ("heart-rate-variability", hrv_to_payload),
                                     ("oxygen-saturation", oxygen_saturation_to_payload), ("steps", steps_to_payload)):
-                payloads.extend([converter(p) async for p in self.client.paginate(kind, start, now)])
+                payloads.extend(converter(p) for p in await pull(kind, start))
             for kind in _DAILY:
-                payloads.extend([daily_to_payload(kind, p) async for p in self.client.paginate(kind, days_start, now)])
-            sleeps = [p async for p in self.client.paginate("sleep", days_start, now)]
-            exercises = [p async for p in self.client.paginate("exercise", days_start, now)]
+                payloads.extend(daily_to_payload(kind, p) for p in await pull(kind, days_start))
+            sleeps = await pull("sleep", days_start)
+            exercises = await pull("exercise", days_start)
             # Longest sleep over the two-night window; exercises retain the last item per day.
             payloads.extend((sleep_to_payload(sleeps), exercise_to_payload(exercises)))
             result = merge(payloads); sent = self.sink(result)
             if inspect.isawaitable(sent): await sent
-            self.last_sync_t, self.last_error, self.connected = now.timestamp(), None, True
+            self.last_sync_t, self.connected = now.timestamp(), True
+            self.last_error = ("partial: " + "; ".join(failures)) if failures else None
             return {"samples": len(result["samples"]), "daily": len(result["daily"]),
                     "requests_used": self.client.requests_last_hour - before}
         except Exception as exc:
