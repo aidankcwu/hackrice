@@ -89,6 +89,24 @@ async def test_dashboard_routes(tmp_path):
         )
         assert jpeg.status_code == 200
         assert jpeg.headers["content-type"] == "image/jpeg"
+
+        # Last on purpose: the route runs off-loop (asyncio.to_thread), and the
+        # frame-expiry check above is sensitive to where the pump has got to.
+        body = (await client.get("/api/healthspan")).json()
+        assert {"day", "overall", "layers", "hours_today", "hours_ci", "years_delta",
+                "years_ci", "factors", "levers", "levers_free", "forecast", "ledger",
+                "insights", "pins", "provenance", "profile", "window"} <= body.keys()
+        assert 0 <= body["overall"] <= 100
+        assert len(body["layers"]) == 7
+        assert body["day"] == day_key(pipeline.last_tick.t)
+        assert body["as_of_hh"] is not None
+        unseeded = (await client.get("/api/healthspan?day=2020-01-01")).json()
+        assert unseeded["day"] == "2020-01-01"
+        assert unseeded["provenance"]["steps"]["source"] == "missing"
+        assert unseeded["as_of_hh"] is None
+        bad = await client.get("/api/healthspan?day=nonsense")
+        assert bad.status_code == 400
+        assert bad.json() == {"detail": "day must be YYYY-MM-DD"}
     await pipeline.stop()
 
 

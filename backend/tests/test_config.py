@@ -15,6 +15,14 @@ def test_defaults() -> None:
     assert s.tick_interval_s == 1.5  # the glasses emit a tick every 1.5 s
 
 
+def test_profile_defaults() -> None:
+    """The healthspan profile (``scoring/brian_score.Profile``) as shipped."""
+
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert (s.profile_age, s.profile_sex, s.profile_goal, s.profile_height_m,
+            s.profile_cyp1a2_slow) == (20, "M", "average", None, False)
+
+
 def test_env_overrides(monkeypatch) -> None:
     monkeypatch.setenv("T1_MODEL", "gpt-5.4")
     monkeypatch.setenv("DEMO_MODE", "0")

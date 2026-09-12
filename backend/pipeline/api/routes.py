@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import os
 import time
@@ -14,6 +15,7 @@ from fastapi.responses import JSONResponse, Response
 from ..actions.speech import get_speak_fn
 from ..db import day_key
 from ..models import PendingCheck
+from ..scoring import healthspan_for_day
 from ..scoring.scorer import rollup
 from ..wearables import LIVE_METRICS
 from ..wearables.adapters import (
@@ -101,6 +103,25 @@ async def seeded(request: Request, days: int = Query(7, ge=1)) -> dict:
         pipeline.last_tick.t if pipeline.last_tick else time.time()))
     start = end - timedelta(days=days - 1)
     return {"rows": _dump(pipeline.db.list_seeded(start.isoformat(), end.isoformat()))}
+
+
+@router.get("/api/healthspan")
+async def healthspan(request: Request, day: str | None = None) -> dict:
+    """Dose-response hazard view for one day (``scoring/healthspan.py``).
+
+    Computed on request, never written. Runs off the event loop like the
+    scoring loop in ``wiring.py``: up to 13 ``list_episodes`` reads under
+    ``db._lock`` must not stall the pipeline's ticks.
+    """
+
+    pipeline = _pipeline(request)
+    selected = day or day_key(pipeline.last_tick.t if pipeline.last_tick else time.time())
+    try:
+        date.fromisoformat(selected)
+    except ValueError:
+        raise HTTPException(400, "day must be YYYY-MM-DD")
+    return await asyncio.to_thread(
+        healthspan_for_day, pipeline.db, pipeline.settings, selected, now_t=_now(pipeline))
 
 
 def _now(pipeline) -> float:

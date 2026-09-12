@@ -1,8 +1,207 @@
 @import "tailwindcss";
-:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#08090b;color:#f4f4f5;font-family:Arial,Helvetica,sans-serif;background-image:radial-gradient(circle at 30% 0%,rgba(30,64,175,.09),transparent 30%),radial-gradient(circle at 90% 25%,rgba(5,150,105,.055),transparent 25%)}
-.panel{border:1px solid rgba(255,255,255,.08);border-radius:.55rem;background:rgba(18,19,23,.88);box-shadow:0 12px 40px rgba(0,0,0,.22)}
-.section-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;font-size:.75rem;font-weight:800;text-transform:uppercase;letter-spacing:.12em;color:#e4e4e7}
-.muted{font-size:.625rem;font-weight:500;letter-spacing:.04em;text-transform:none;color:#71717a}.eyebrow{font-size:.625rem;font-weight:900;letter-spacing:.2em;color:#34d399}.badge{display:inline-flex;border:1px solid rgba(255,255,255,.1);border-radius:999px;padding:.1rem .4rem;font-size:.55rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase;background:rgba(255,255,255,.04);color:#a1a1aa}.stat{display:flex;flex-direction:column}.stat span{font-size:.5rem;font-weight:800;letter-spacing:.14em;color:#52525b}.stat strong{font-size:.75rem}.panel em{font-style:normal;color:#fafafa}
-@keyframes decision-flash{0%{background-color:rgba(56,189,248,.24);box-shadow:inset 3px 0 0 #38bdf8}70%{background-color:rgba(56,189,248,.09);box-shadow:inset 3px 0 0 rgba(56,189,248,.5)}100%{background-color:transparent;box-shadow:inset 3px 0 0 transparent}}
-.decision-flash{animation:decision-flash 1.4s ease-out 1}
-@media (prefers-reduced-motion:reduce){.decision-flash{animation:none}}
+
+/* ---------------------------------------------------------------------------
+   Project Brian tokens (CLAUDE_CODE_INTEGRATION.md §1). The JS copy is
+   src/lib/tokens.ts; design-system/brian/MASTER.md documents both.
+   --------------------------------------------------------------------------- */
+:root {
+  color-scheme: light;
+  --bg: #ffffff;
+  --surface: #f4f4f5;
+  --surface-2: #eaeaec;
+  --ink: #111111;
+  --text: #1f1f23;
+  --muted: #6b6b73;
+  --line: #e2e2e6;
+  --earn: #15803d;
+  --earn-soft: #e8f5ec;
+  --cost: #c62828;
+  --cost-soft: #fbeaea;
+  --header: #000000;
+  --radius-panel: 20px;
+  --radius-pin: 16px;
+  --radius-chip: 9999px;
+}
+
+/* Tailwind v4 theme: `bg-surface`, `text-ink`, `text-muted`, `text-earn`,
+   `bg-earn-soft`, `border-line`, `rounded-panel`, `font-sans` … */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-earn: var(--earn);
+  --color-earn-soft: var(--earn-soft);
+  --color-cost: var(--cost);
+  --color-cost-soft: var(--cost-soft);
+  --color-header: var(--header);
+  --radius-panel: var(--radius-panel);
+  --radius-pin: var(--radius-pin);
+  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.5;
+  min-height: 100dvh;
+}
+
+/* Colour carries data only; everything interactive is ink on white/grey. */
+.brian button,
+.brian a,
+.brian summary,
+.brian select,
+.brian [role="button"] {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.brian .tile {
+  transition: background-color 200ms ease;
+}
+.brian .tile:hover {
+  background-color: var(--surface-2);
+}
+
+.brian :focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+/* Inside the dark Pipeline drawer an ink outline would vanish. */
+.brian .lifeos-dark :focus-visible {
+  outline-color: #f4f4f5;
+}
+
+/* Tabular figures so numbers in tables and tiles do not jitter. */
+.brian .tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hide the scrollbar on the pins strip without removing scrollability. */
+.brian .strip {
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-2) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brian *,
+  .brian *::before,
+  .brian *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Legacy dark pipeline panels. These rules used to be global; they now apply
+   only inside the collapsible Pipeline drawer (`.lifeos-dark`), so the old
+   Capture / Live ticks / Decision feed components render unchanged there.
+   --------------------------------------------------------------------------- */
+.lifeos-dark {
+  color-scheme: dark;
+  background: #08090b;
+  color: #f4f4f5;
+  font-family: Arial, Helvetica, sans-serif;
+  background-image:
+    radial-gradient(circle at 30% 0%, rgba(30, 64, 175, 0.09), transparent 30%),
+    radial-gradient(circle at 90% 25%, rgba(5, 150, 105, 0.055), transparent 25%);
+}
+.lifeos-dark .panel {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.55rem;
+  background: rgba(18, 19, 23, 0.88);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+}
+.lifeos-dark .section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #e4e4e7;
+}
+.lifeos-dark .muted {
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: #71717a;
+}
+.lifeos-dark .eyebrow {
+  font-size: 0.625rem;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  color: #34d399;
+}
+.lifeos-dark .badge {
+  display: inline-flex;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.55rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.04);
+  color: #a1a1aa;
+}
+.lifeos-dark .stat {
+  display: flex;
+  flex-direction: column;
+}
+.lifeos-dark .stat span {
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #52525b;
+}
+.lifeos-dark .stat strong {
+  font-size: 0.75rem;
+}
+.lifeos-dark .panel em {
+  font-style: normal;
+  color: #fafafa;
+}
+@keyframes decision-flash {
+  0% {
+    background-color: rgba(56, 189, 248, 0.24);
+    box-shadow: inset 3px 0 0 #38bdf8;
+  }
+  70% {
+    background-color: rgba(56, 189, 248, 0.09);
+    box-shadow: inset 3px 0 0 rgba(56, 189, 248, 0.5);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: inset 3px 0 0 transparent;
+  }
+}
+.lifeos-dark .decision-flash {
+  animation: decision-flash 1.4s ease-out 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lifeos-dark .decision-flash {
+    animation: none;
+  }
+}

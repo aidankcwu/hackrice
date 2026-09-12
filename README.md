@@ -41,7 +41,10 @@ Env vars (`backend/.env`): `OPENAI_API_KEY` (T1 reasoner), `GEMINI_API_KEY`
 "upgrade" to the `-latest` alias), `TICK_INTERVAL_S=1.5` (glasses cadence),
 plus the optional Fitbit vars (`FITBIT_CLIENT_ID`, `FITBIT_CLIENT_SECRET`,
 `FITBIT_REDIRECT_URI`, `FITBIT_TOKEN_PATH`, `FITBIT_POLL_S`) for live
-wearable data.
+wearable data. The `/api/healthspan` profile comes from `PROFILE_AGE`,
+`PROFILE_SEX`, `PROFILE_GOAL` (`average|athlete|shift|genetic_risk`) and
+`PROFILE_CYP1A2_SLOW`, plus the optional `PROFILE_HEIGHT_M` (reserved; leave
+it commented out rather than empty).
 
 `backend/` now requires **Python 3.11** — it shares a venv with `longevity`
 (Person A's package at the repo root, `requires-python = ">=3.11,<3.12"`).
@@ -53,7 +56,7 @@ keys, rule-based or tag-free), `--camera <n>` (webcam device index),
 emit at 1.5 s). `npm run dev:mock` renders the dashboard with fake data and
 no backend.
 
-Tests: `cd backend && uv run pytest -q` (885). `src/longevity` has its own
+Tests: `cd backend && uv run pytest -q` (1087). `src/longevity` has its own
 suite: `uv run pytest tests -q` from the repo root (46 tests). Dashboard:
 `npm run build`.
 
@@ -66,6 +69,7 @@ suite: `uv run pytest tests -q` from the repo root (46 tests). Dashboard:
 | `backend/pipeline/gate/`, `episodes/` | B | trigger gate, episode builder |
 | `backend/pipeline/reasoner/`, `actions/` | B | T1 GPT call, envelope, evidence, actions, speech limiter |
 | `backend/pipeline/scoring/`, `seed/` | B | SPEC §8 scorer, 7-day seeded integration data |
+| `backend/pipeline/scoring/{brian_score,healthspan}.py` | B | dose-response hazard engine (healthy-life hours, LE delta with CI, levers, tonight forecast, weekly ledger) and its adapter behind `/api/healthspan` |
 | `backend/pipeline/api/` | B | FastAPI app, dashboard routes, wiring |
 | `dashboard/` | B | Next.js dashboard |
 | `backend/pipeline/capture/` | B/A seam | the bridge: mounts A's `T0Loop`, `TickBus`, `FrameRing`, and `/ws/glasses` + `/frames` routes into B's FastAPI app; no edits to A's code |

@@ -45,3 +45,16 @@ export interface WearableMetricRow { metric: string; source: string; origin: Bio
 export interface WearableMetricInfo { unit: string; devices: string[]; cadence_s: number; label: string }
 /** GET /api/wearables/status — what is stored, and whether a device is pushing. */
 export interface WearablesStatus { metrics: WearableMetricRow[]; live_connected: boolean; live_devices: string[]; catalogue: Record<string, WearableMetricInfo> }
+/** Where a healthspan number came from: `live` = episodes summed as-is, `seeded` = integration row as-is, `derived` = a proxy or conversion of either, `missing` = imputed at the population reference and never credited. */
+export type Provenance = "live" | "seeded" | "derived" | "missing";
+export interface HealthspanFactor { key: string; layer: string; label: string; dose: number | null; hr: number | null; hours: number; grade: string; measured: boolean; source: string; provenance: Provenance; basis: string; detail: string }
+export interface HealthspanLever { key: string; label: string; action: string; hours_gain: number; time_min: number; roi_hours_per_min: number; layers: string[]; source: string }
+export interface HealthspanForecast { sleep_hours: number; hrv_change_pct: number; sri_change_pts: number; melatonin_delay_min: number; drivers: string[] }
+export interface HealthspanLedgerLine { key: string; label: string; accrued: number; target: number; projected: number; deficit: number; days_elapsed: number; status: "on_track" | "at_risk" | "behind" }
+export interface HealthspanInsight { kind: "tonight" | "today" | "week" | "lever" | "you"; text: string; source: string }
+export interface HealthspanPin { time: string; img: string | null; grade: string; kind: "credit" | "debit"; seen: string; effect: string }
+export interface HealthspanEffect { exposure: string; outcome: string; beta: number | null; ci: [number | null, number | null]; n: number; blended_beta: number; note: string }
+export interface HealthspanProvenance { source: Provenance; basis: string; detail: string }
+export interface HealthspanProfile { age: number; sex: string; goal: string; cyp1a2_slow: boolean; height_m: number | null; bedtime_hh: number; bedtime_source: Provenance }
+/** GET /api/healthspan — brian_score.to_payload plus adapter fields (backend/pipeline/scoring/healthspan.py). Sits beside, not instead of, Scores. */
+export interface Healthspan { day: string; as_of_hh: number | null; engine: string; overall: number; layers: Record<string, number>; years_delta: number; years_ci: [number, number]; hours_today: number; hours_ci: [number, number]; measured: { count: number; total: number }; factors: HealthspanFactor[]; ledger: HealthspanLedgerLine[]; forecast: HealthspanForecast; levers: HealthspanLever[]; levers_free: HealthspanLever[]; insights: HealthspanInsight[]; pins: HealthspanPin[]; observations: Record<string, number>; provenance: Record<string, HealthspanProvenance>; effects: HealthspanEffect[]; profile: HealthspanProfile; baseline_sleep_h: number; window: { ledger_days: string[]; factor_days: string[]; uncovered_days: string[]; days_elapsed: number }; conventions: string[] }

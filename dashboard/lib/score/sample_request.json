@@ -1,0 +1,241 @@
+{
+ "profile": {
+  "age": 20,
+  "sex": "M",
+  "goal": "average",
+  "bedtime_hh": 23.0
+ },
+ "episodes": [
+  {
+   "type": "outdoor_block",
+   "start_hh": 8.68,
+   "minutes": 44,
+   "scene": "park",
+   "frame_url": null
+  },
+  {
+   "type": "conversation",
+   "start_hh": 12.08,
+   "minutes": 41,
+   "people": 3,
+   "scene": "cafe",
+   "frame_url": null
+  },
+  {
+   "type": "meal",
+   "start_hh": 12.1,
+   "minutes": 35,
+   "label": "rice_bowl",
+   "tags": [
+    "mediterranean",
+    "rice_bowl"
+   ],
+   "frame_url": null
+  },
+  {
+   "type": "alcohol_sighting",
+   "start_hh": 12.13,
+   "minutes": 1,
+   "count": 2,
+   "frame_url": null
+  },
+  {
+   "type": "caffeine_sighting",
+   "start_hh": 16.0,
+   "minutes": 1,
+   "frame_url": null
+  },
+  {
+   "type": "screen_block",
+   "start_hh": 22.2,
+   "minutes": 40,
+   "scene": "living_room",
+   "frame_url": null
+  }
+ ],
+ "wearable_day": {
+  "steps": 9100,
+  "vilpa_min": 2,
+  "sleep_hours": 7.4,
+  "sri": 84,
+  "hrv_ratio": 1.02,
+  "strain": 8.3,
+  "night_db": 45,
+  "night_lux": 2,
+  "baseline_sleep_h": 7.5,
+  "workouts": [
+   {
+    "kind": "strength",
+    "minutes": 40
+   }
+  ]
+ },
+ "week_rows": [
+  {
+   "nature_min": 15,
+   "steps": 9100,
+   "day_light_min": 44,
+   "vilpa_min": 2,
+   "social_index": 58,
+   "workouts": [
+    {
+     "kind": "strength",
+     "minutes": 40
+    }
+   ],
+   "sauna": 0
+  },
+  {
+   "nature_min": 20,
+   "steps": 8500,
+   "day_light_min": 30,
+   "vilpa_min": 1,
+   "social_index": 40,
+   "workouts": [],
+   "sauna": 0
+  },
+  {
+   "nature_min": 0,
+   "steps": 7900,
+   "day_light_min": 20,
+   "vilpa_min": 0,
+   "social_index": 62,
+   "workouts": [],
+   "sauna": 0
+  }
+ ],
+ "history": {
+  "exposure": [
+   30.709,
+   57.028,
+   8.65,
+   56.919,
+   18.71,
+   25.4,
+   49.662,
+   24.552,
+   32.976,
+   1.654,
+   45.211,
+   32.289,
+   19.784,
+   47.306,
+   18.192,
+   27.21,
+   8.043,
+   24.187,
+   12.207,
+   15.739,
+   45.022,
+   16.825,
+   29.111,
+   58.844,
+   57.699,
+   43.487,
+   32.474,
+   16.613,
+   9.639,
+   58.196
+  ],
+  "outcome": [
+   3.7055,
+   3.8692,
+   3.6359,
+   3.7509,
+   3.6082,
+   3.6698,
+   3.8214,
+   3.7071,
+   3.7739,
+   3.5679,
+   3.7794,
+   3.7551,
+   3.655,
+   3.7727,
+   3.6764,
+   3.7206,
+   3.6759,
+   3.6542,
+   3.6099,
+   3.6255,
+   3.7395,
+   3.6774,
+   3.757,
+   3.7236,
+   3.8019,
+   3.86,
+   3.7284,
+   3.5983,
+   3.6009,
+   3.8579
+  ],
+  "covariates": [
+   10.161,
+   6.159,
+   11.235,
+   12.767,
+   11.13,
+   14.173,
+   5.396,
+   10.286,
+   9.593,
+   5.623,
+   11.413,
+   13.526,
+   10.929,
+   7.601,
+   13.399,
+   10.095,
+   10.109,
+   12.53,
+   6.479,
+   13.196,
+   11.833,
+   12.871,
+   6.916,
+   13.024,
+   6.913,
+   5.816,
+   13.552,
+   13.613,
+   13.765,
+   9.719
+  ],
+  "weekday": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   0,
+   1
+  ],
+  "exposure_name": "green-view minutes",
+  "outcome_name": "next-night ln HRV",
+  "prior_beta": 0.002,
+  "prior_se": 0.003
+ }
+}
