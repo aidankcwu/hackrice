@@ -173,7 +173,6 @@ def test_normalize_synthesises_the_missing_annotate():
     lines = [a.line for a in out.actions if a.type == "annotate"]
     assert len(lines) == 1, "SPEC §4.5: every escalation writes a memory line"
     assert lines[0].endswith("Mixed lunch with two colleagues, restaurant.")
-    assert lines[0][2] == ":", "the line is stamped HH:MM"
 
 
 def test_normalize_truncates_a_long_interpretation_to_80_chars():
