@@ -168,3 +168,31 @@ Astra 6 reviewed the plan read-only against the spec. Objections we adopted:
 - **Stage line:** "The wearable gives the number. The glasses give the
   cause. Neither alone can tell you that your heart rate spiked because of a
   three-person stand-up and not a run."
+
+## Sat 12 Sep, ~05:30 — S8: real wearables
+
+- Rishi owns a Fitbit and an Apple Watch, not a WHOOP, and that turned out to
+  be good news: the Fitbit Web API exposes **intraday** data for the account
+  owner (1-second heart rate, 5-minute HRV, per-minute SpO2, breathing rate,
+  skin temperature, sleep stages, workouts), where WHOOP's API is daily only.
+- **S8a (Opus).** One canonical ingest endpoint any device posts to, adapters
+  for Health Auto Export and WHOOP objects, live-over-seed per window, a
+  "wearable now" line on every escalation so T1 can cite HRV or SpO2 next to
+  the frames, seven more seeded metrics for the demo, and dashboard tiles with
+  live/seeded pills. An end-to-end run caught that "latest sample" under an
+  accelerated sim was always in the future; fixed to read a window.
+- **S8b (Sol).** Fitbit OAuth with PKCE, rotating token store, a poller that
+  budgets ≤ 8 requests per 5 minutes against the 150/hour limit. It writes
+  nothing itself; a sink the supervisor wired routes samples to ingest and
+  daily rows to the seeded table under `source = fitbit`.
+- **SPEC §15** written for Aidan: HealthKit types → canonical metrics, anchored
+  queries with background delivery, batch POST every 30 s, and the Health Auto
+  Export fallback. Apple Watch data only leaves the paired iPhone, so it goes
+  through his bridge.
+- **Astra caught** that live samples are stamped in wall time while an
+  accelerated sim runs on tick time, so a real device would be invisible at
+  `--speed 10`, and that first-time OAuth saved a token but started no poller.
+  Both to Terra.
+- **Stage line:** "Same endpoint whether the sample came from a Fitbit, a
+  watch, or the simulator. The pipeline only cares that it's a number with a
+  timestamp and a source."
