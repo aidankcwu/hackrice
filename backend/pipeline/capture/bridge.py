@@ -64,6 +64,7 @@ class LongevityCapture:
         self.converted = 0
         self.dropped = 0
         self._task: asyncio.Task[None] | None = None
+        self._speech_stats = None
 
         def forward(raw: dict) -> None:
             try:
@@ -114,3 +115,6 @@ class LongevityCapture:
             "converted": self.converted,
             "dropped": self.dropped,
         }
+
+    def speech_stats(self) -> dict[str, object]:
+        return self._speech_stats.as_dict() if self._speech_stats is not None else {"mode": "none"}

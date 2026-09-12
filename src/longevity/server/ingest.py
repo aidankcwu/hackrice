@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -43,6 +44,7 @@ INGEST_PATH = "/ws/glasses"
 # would put every frame outside the ring's 90 s window (§12.3) and skew every window
 # Person B evaluates — for a value that only ever matters to ~100 ms.
 MAX_CLOCK_SKEW_S = 60.0
+INGEST_IDLE_TIMEOUT_S = float(os.environ.get("INGEST_IDLE_TIMEOUT_S", "30.0"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,7 +104,12 @@ class GlassesLink:
         self.n_connects = 0
         self.n_disconnects = 0
         self.n_clock_fallback = 0
+        self.n_pings = 0
+        self.n_idle_closes = 0
         self.last_recv_t: float | None = None
+        # When the most recent phone connected. A socket that only pings and never
+        # sends a frame is "connected" but not streaming; health needs to know how long.
+        self.last_connect_t: float | None = None
 
     # --- writing (ingest side) -------------------------------------------------
 
@@ -175,12 +182,16 @@ class GlassesLink:
             "connected": len(self.clients),
             "connects": self.n_connects,
             "disconnects": self.n_disconnects,
+            "pings": self.n_pings,
+            "n_idle_closes": self.n_idle_closes,
             "received": self.n_received,
             "malformed": self.n_malformed,
             "clock_fallback": self.n_clock_fallback,
             "dropped": self.n_dropped,
             "latest_seq": 0 if latest is None else latest.seq,
             "latest_age_s": None if latest is None else round(time.time() - latest.recv_t, 3),
+            "connected_for_s": None if self.last_connect_t is None or not self.clients
+            else round(time.time() - self.last_connect_t, 1),
             "latest_bytes": None if latest is None else len(latest.jpeg),
         }
 
@@ -280,12 +291,21 @@ async def glasses_ws(websocket: WebSocket) -> None:
     await websocket.accept()
     link.clients.add(websocket)
     link.n_connects += 1
+    link.last_connect_t = time.time()
     peer = websocket.client.host if websocket.client else "?"
     log.info("ingest: phone connected from %s (connection #%d)", peer, link.n_connects)
 
     try:
         while True:
-            event = await websocket.receive()
+            try:
+                event = await asyncio.wait_for(
+                    websocket.receive(), timeout=INGEST_IDLE_TIMEOUT_S
+                )
+            except (asyncio.TimeoutError, TimeoutError):
+                link.n_idle_closes += 1
+                log.info("ingest: closing idle phone socket from %s", peer)
+                await websocket.close(code=1001)
+                break
             if event.get("type") == "websocket.disconnect":
                 break
             # Text is the contract (§11.2 via wire.py), but accept a binary frame
@@ -340,6 +360,9 @@ def _handle(link: GlassesLink, raw: str | bytes) -> None:
         log.info("ingest: hello from phone: %s", {k: v for k, v in msg.items() if k != "image"})
     elif mtype in (wire.PONG, wire.ECHO):
         log.info("ingest: %s %s", mtype, msg.get("text", ""))
+    elif mtype == wire.PING:
+        link.n_pings += 1
+        log.debug("ingest: ping")
     else:
         # Unknown types are forward compatibility, not errors — the Swift side may ship
         # a new message before this one knows about it.

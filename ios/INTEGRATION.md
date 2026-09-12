@@ -138,3 +138,60 @@ private func playAudio(_ obj: [String: Any]) {
 // In handle(_:), after decoding obj:
 if type == "audio" { playAudio(obj) }
 ```
+
+## 7 Reconnect and host configuration
+
+`MacLink` now heals itself. Nothing in the public API changed — `connect()`,
+`disconnect()`, `send(_:)`, `sendRaw(_:completion:)`, `connected`, `status`,
+`sentCount`, `spokenCount`, `lastFromMac` all mean what they meant — so the wiring in
+§3 is unchanged.
+
+- **Intent, not state.** `connect()` sets an internal `wantConnected` flag; only
+  `disconnect()` clears it. Any receive or send failure while it is set schedules one
+  reconnect with exponential backoff — 1, 2, 4, 8 s, capped at 10 s, plus <0.3 s of
+  jitter — and `status` reads `closed · reconnecting in 4s (attempt 3)` while it waits.
+  There is never more than one attempt pending, and `disconnect()` cancels it.
+- **`connected` is now confirmed, not assumed.** It flips true when the hello send
+  *completes* with no error, not when `resume()` returns — `resume()` succeeds against a
+  Mac that is switched off. The backoff resets at that same moment. The sample view's
+  existing `.onChange(of: link.connected)` (stop on false, `capture.start(send:)` on
+  true) already does the right thing on a reconnect — `start()` re-emits `hello`, which
+  is per-connection — so no view change is needed. If you keep the sender running across
+  a drop instead, call `sender.announce()` when it comes back.
+- **Keepalive.** While connected the phone sends `{"v":1,"type":"ping"}` every 10 s. The
+  Mac closes sockets idle for 30 s, and this socket is idle for exactly as long as the
+  glasses aren't streaming yet. Pings do not move `sentCount` — that number stays
+  comparable with the Mac's `received`.
+- **Failure statuses keep their prefixes** (`not connected` / `send failed` / `closed`)
+  so `apply(macLinkStatus:)` still reads them as down; that is why the reconnect
+  countdown is prefixed `closed · `. Binding `link.connected` is still the better wire.
+- **Host and port are runtime settings**, persisted in `UserDefaults` under `macHost`
+  and `macPort` and read back in `init`. `MacLink.defaultHost`/`defaultPort` are only
+  the first guess on a fresh install. A venue network change is now a text field, not
+  an Xcode rebuild on someone else's Mac.
+
+```swift
+@State private var hostField = ""      // seed with link.host in .onAppear
+@State private var portField = "8010"
+
+HStack {
+    TextField("Mac IP", text: $hostField)
+        .textInputAutocapitalization(.never)
+        .autocorrectionDisabled()
+        .keyboardType(.decimalPad)
+    TextField("Port", text: $portField).frame(width: 70).keyboardType(.numberPad)
+    Button("Apply") { link.configure(host: hostField, port: Int(portField) ?? 8010) }
+}
+Text(link.status).font(.caption)   // shows "connected 10.0.0.5:8010" or the countdown
+```
+
+`configure` stores both, rebuilds the URL, and reconnects immediately if the link was
+connected (or trying to be); an empty host or an out-of-range port is rejected and
+leaves the current setting *and* `status` alone — the rejection lands on
+`link.configError` (nil when the last apply was valid), so show that next to the field.
+While a socket is being (re)opened `status` reads `not connected · connecting …` until
+the hello is confirmed, which `apply(macLinkStatus:)` correctly treats as down. `ipconfig getifaddr en0` on the Mac gives the value to
+type.
+
+**`ios/xcode-project.patch` is stale** until re-snapshotted per §5 — it predates these
+`MacLink.swift` changes.

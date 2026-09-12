@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from dataclasses import dataclass, asdict
 from collections.abc import Callable
 
 from longevity import wire
@@ -14,6 +15,19 @@ from ..config import Settings
 from .tts import ElevenLabsTTS
 
 log = logging.getLogger(__name__)
+
+
+@dataclass
+class SpeechStats:
+    mode: str
+    sent: int = 0
+    skipped_no_phone: int = 0
+    tts_failures: int = 0
+    last_error: str | None = None
+    last_ms: float | None = None
+
+    def as_dict(self) -> dict[str, object]:
+        return asdict(self)
 
 
 def make_speak_fn(
@@ -30,20 +44,23 @@ def make_speak_fn(
         if use_elevenlabs
         else None
     )
+    stats = SpeechStats("elevenlabs" if tts is not None else "text")
 
     def speak(text: str, urgency: str) -> None:
         try:
             loop = asyncio.get_running_loop()
             if not link.clients:
+                stats.skipped_no_phone += 1
                 log.info("speech skipped: no phone connected")
                 return
             task = loop.create_task(
-                _send(link, tts, text, urgency),
+                _send(link, tts, text, urgency, stats),
                 name="glasses-speak",
             )
             task.add_done_callback(_consume_failure)
         except Exception:
             log.exception("could not schedule speech to phone")
+    speak.stats = stats  # type: ignore[attr-defined]
     return speak
 
 
@@ -52,6 +69,7 @@ async def _send(
     tts: ElevenLabsTTS | None,
     text: str,
     urgency: str,
+    stats: SpeechStats,
 ) -> int:
     started = time.perf_counter()
     mode = "text"
@@ -62,13 +80,19 @@ async def _send(
             audio = await tts.synthesize(text)
             n_bytes = len(audio)
             sent = await link.send_text(wire.audio_message(audio, "mp3"))
-        except Exception:
+        except Exception as exc:
+            stats.tts_failures += 1
+            stats.last_error = f"{type(exc).__name__}: {exc}"
             mode = "text-fallback"
             log.exception("ElevenLabs TTS failed; falling back to phone speech")
             sent = await link.send_text(wire.speak_message(text, urgency))
     else:
         sent = await link.send_text(wire.speak_message(text, urgency))
     elapsed_ms = (time.perf_counter() - started) * 1000
+    stats.sent += sent
+    stats.last_ms = round(elapsed_ms, 1)
+    if mode != "text-fallback":
+        stats.last_error = None
     log.info("speech mode=%s bytes=%d ms=%.0f", mode, n_bytes, elapsed_ms)
     return sent
 

@@ -12,6 +12,7 @@ are elapsed demo time (`t` from backend start), not wall clock.
 
 ## 30-second setup checklist
 
+- [ ] **Preflight first**, from `backend/`: `uv run python scripts/preflight.py` (use `--offline` when deliberately skipping provider calls).
 - [ ] **T-minus**: open the Fitbit app on the phone once, before anything else, to force a sync — the poller reads whatever Fitbit last synced, so a stale phone-side sync means a stale heart-rate number for the whole demo.
 - [ ] **Backend**, from `backend/`, one process for the whole system: `uv run python -m pipeline.main --source glasses --vlm gemini --reasoner openai --port 8010`. Confirms `OPENAI_API_KEY` and `GEMINI_API_KEY` are set (`.env`) — the process exits immediately if `OPENAI_API_KEY` is missing and `--reasoner openai` was requested. The phone connects to `ws://<mac-lan-ip>:8010/ws/glasses`.
 - [ ] **Dashboard**, from `dashboard/`: `npm run dev`, `NEXT_PUBLIC_API_BASE=http://localhost:8010` in `.env.local`. Load `http://localhost:3000`, confirm `/api/status` shows `demo_mode: true` and `tick_count` climbing.

@@ -6,7 +6,7 @@ from conftest import make_tick
 
 from pipeline.bus import TickBus
 from pipeline.db import Database
-from pipeline.main import build_parser, format_tick, tick_store_consumer
+from pipeline.main import build_parser, format_tick, fresh_database, tick_store_consumer
 
 
 def test_parser_defaults() -> None:
@@ -23,6 +23,15 @@ def test_parser_flags() -> None:
     assert args.speed == 20.0
     assert args.demo_mode is False
     assert args.db == "/tmp/y.db"
+
+
+def test_fresh_removes_database_and_sqlite_sidecars(tmp_path) -> None:
+    db = tmp_path / "demo.db"
+    targets = [db, tmp_path / "demo.db-wal", tmp_path / "demo.db-shm"]
+    for target in targets:
+        target.write_bytes(b"old")
+    assert fresh_database(db) == targets
+    assert not any(target.exists() for target in targets)
 
 
 def test_format_tick_with_and_without_ai() -> None:
