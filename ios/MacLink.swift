@@ -30,6 +30,9 @@ final class MacLink {
   var spokenCount = 0
 
   @ObservationIgnored private let synth = AVSpeechSynthesizer()
+  /// Held as a property on purpose: a local AVAudioPlayer is deallocated the
+  /// instant playAudio returns and the sound cuts off mid-word.
+  @ObservationIgnored private var player: AVAudioPlayer?
 
   @ObservationIgnored private var task: URLSessionWebSocketTask?
   @ObservationIgnored let url: URL
@@ -153,9 +156,42 @@ final class MacLink {
       return
     }
     let type = obj["type"] as? String ?? "?"
+    let wireAudio = "audio"  // longevity.wire.AUDIO
     let text = obj["text"] as? String ?? ""
     lastFromMac = "\(type): \(text)"
     if type == "speak", !text.isEmpty { speak(text) }
+    // A18 — pre-rendered ElevenLabs audio. The Mac falls back to a `speak` message
+    // when synthesis fails, so both paths stay live and neither blocks the other.
+    if type == wireAudio { playAudio(obj) }
+  }
+
+  /// Play pre-rendered audio pushed by the Mac (A18, wire.audio_message).
+  private func playAudio(_ obj: [String: Any]) {
+    guard obj["format"] as? String == "mp3",
+      let encoded = obj["data"] as? String,
+      let data = Data(base64Encoded: encoded)
+    else {
+      status = "audio message malformed"
+      return
+    }
+    do {
+      let session = AVAudioSession.sharedInstance()
+      try session.setCategory(.playback, options: [.allowBluetoothA2DP])
+      try session.setActive(true)
+    } catch {
+      // Same -50 trap as speak(): never return here, the existing route is usually fine.
+      print("audio session (non-fatal): \(error)")
+    }
+    do {
+      player = try AVAudioPlayer(data: data)
+      player?.prepareToPlay()
+      player?.play()
+      spokenCount += 1
+      status = "played #\(spokenCount) · \(data.count / 1024) KB mp3"
+    } catch {
+      status = "audio playback failed"
+      print("audio playback failed: \(error)")
+    }
   }
 
   /// hardware_software.md §19 — the exact session config validated on real hardware.
