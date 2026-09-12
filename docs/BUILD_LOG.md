@@ -269,3 +269,24 @@ Astra 6 reviewed the plan read-only against the spec. Objections we adopted:
 - **Stage line:** "Camera on the glasses, small model on every frame, plain
   code deciding when to think, big model thinking twenty times a day, and a
   dashboard that shows you every time it chose to stay quiet."
+
+## Sat 12 Sep, 05:09 — The loop closes: glasses in, ElevenLabs out
+
+- Rishi heard the first ElevenLabs line through the Ray-Bans: rendered on
+  the Mac in River's voice (9 KB of mp3, 1.35 s end to end), sent over the
+  phone's WebSocket, decoded by Person A's new audio handler, played over
+  Bluetooth. Every stage of SPEC §11.1 is now real hardware and real models.
+- The path there was three small, dumb failures in a row, each found by
+  testing the real thing: a label pasted along with the API key; a default
+  voice the free plan can't use; a voice-id line glued onto a key line with
+  no trailing newline. None of them would have shown up in a mock.
+- Also live tonight: Gemini captions and object lists on every tick, the
+  trigger frame sent to GPT at high detail, keyword triggers on the captions
+  (first one: Rice Krispy treats, GPT chooses its own words), a decision feed
+  that shows the trigger and GPT's full output per card, and a rule that
+  memory is context, not evidence — after the reasoner spent a minute echoing
+  a coffee it had seen once.
+- **Stage line:** "The glasses see, a small model tags, plain code decides
+  when to think, a big model thinks, and when it finally has something worth
+  saying, you hear it in your ear. Everything in between chose silence, and
+  the dashboard shows every one of those choices."
