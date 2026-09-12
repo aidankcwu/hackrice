@@ -63,10 +63,10 @@ def test_cooldown_and_global_gap(tmp_path) -> None:
     accepted = []
     triggers = [
         Trigger("a", lambda w: w[-1].seq in {0, 20}, 30, None, "a"),
-        Trigger("b", lambda w: w[-1].seq in {5, 40}, 0, None, "b"),
+        Trigger("b", lambda w: w[-1].seq in {3, 40}, 0, None, "b"),  # 3 s: inside the 5 s global gap
     ]
     gate = TriggerGate(triggers, Timings.demo(), db, episodes, lambda e: accepted.append(e) is None, True)
-    for i in (0, 5, 20, 40):
+    for i in (0, 3, 20, 40):
         gate.on_tick(tick(i))
     assert [e.trigger for e in accepted] == ["a", "b"]
     assert gate.suppressed == {"b": 1, "a": 1}
