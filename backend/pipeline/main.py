@@ -116,6 +116,8 @@ async def run(args: argparse.Namespace) -> int:
         pass
     finally:
         pump_task.cancel()
+        # Capture before close(): close() unsubscribes everyone, zeroing the count.
+        total_dropped = bus.total_dropped
         bus.close()
         for task in consumers:
             task.cancel()
@@ -126,7 +128,7 @@ async def run(args: argparse.Namespace) -> int:
             bus.published,
             stats["tick_count"],
             stats["ai_tick_count"],
-            bus.total_dropped,
+            total_dropped,
             len(frames),
         )
         db.close()
