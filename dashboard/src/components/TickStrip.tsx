@@ -10,10 +10,10 @@ import { usePoll } from "@/lib/usePoll";
 // enum change upstream degrades to a neutral cell instead of a blank one.
 const FALLBACK="bg-sky-600";
 const SCENE_FAMILIES:readonly(readonly[readonly Scene[],string])[]=[
-  [["home","kitchen","bedroom","living_room","bathroom","dorm_room"],"bg-violet-500"],
-  [["park","trail","street","campus_outdoor","backyard","beach","parking_lot","stadium"],"bg-emerald-500"],
-  [["office","classroom","lecture_hall","library","lab","cafe","bar","grocery_store","store","hallway","elevator"],"bg-indigo-500"],
-  [["vehicle","transit"],"bg-slate-500"],
+  [["home"],"bg-violet-500"],
+  [["park","trail","campus","street","parking_lot","beach","nature","sports_venue","construction_site","outdoor_other"],"bg-emerald-500"],
+  [["office","classroom","library","lab","cafe","bar","grocery_store","store","hospital","hotel","indoor_other"],"bg-indigo-500"],
+  [["car","public_transit","airport"],"bg-slate-500"],
   [["restaurant"],"bg-orange-500"],
   [["gym"],"bg-fuchsia-500"],
   [["sauna"],"bg-red-500"],

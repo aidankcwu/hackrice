@@ -115,7 +115,7 @@ def test_ai_tags_follow_the_scenario() -> None:
     assert by_seq[260].vegetation_visible and by_seq[260].scene == "park"  # type: ignore[union-attr]
     # The widened menus reach the demo: a specific room and a specific activity
     # where the old script could only say "home" and "seated".
-    assert by_seq[320].scene == "living_room"  # type: ignore[union-attr]
+    assert by_seq[320].scene == "home"  # type: ignore[union-attr]
     assert by_seq[320].activity == "phone_use"  # type: ignore[union-attr]
     assert by_seq[350].alcohol_visible  # type: ignore[union-attr]
     assert by_seq[350].drink == "alcohol"  # type: ignore[union-attr]

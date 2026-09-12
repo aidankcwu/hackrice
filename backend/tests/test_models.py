@@ -140,6 +140,25 @@ def test_ai_block_defaults() -> None:
     assert ai.people_present is None
 
 
+def test_new_ai_booleans_round_trip_as_tri_state() -> None:
+    names = (
+        "people_interacting",
+        "direct_sunlight_visible",
+        "outdoor_visible",
+        "smoking_or_vaping_visible",
+        "medication_visible",
+    )
+    absent = AiBlock()
+    present = AiBlock(**{name: True for name in names})
+    absent_round_trip = AiBlock.model_validate(absent.model_dump())
+    present_round_trip = AiBlock.model_validate(present.model_dump())
+    for name in names:
+        assert getattr(absent, name) is None
+        assert getattr(absent_round_trip, name) is None
+        assert getattr(present_round_trip, name) is True
+        assert present.model_dump()[name] is True
+
+
 @pytest.mark.parametrize(
     "a,b,expected",
     [
@@ -255,14 +274,14 @@ def test_widened_menus_validate_and_read_back() -> None:
         {
             "as_of": 1.0,
             "age_ms": 0,
-            "scene": "dorm_room",
-            "activity": "phone_use",
+            "scene": "hospital",
+            "activity": "computer_use",
             "food_present": True,
             "food_type": "rice_bowl",
             "drink": "boba",
         }
     )
-    assert tick.enum("scene") == "dorm_room"
-    assert tick.enum("activity") == "phone_use"
+    assert tick.enum("scene") == "hospital"
+    assert tick.enum("activity") == "computer_use"
     assert tick.enum("food_type") == "rice_bowl"
     assert tick.ai is not None and tick.ai.drink == "boba"
