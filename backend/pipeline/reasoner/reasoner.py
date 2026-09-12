@@ -77,7 +77,18 @@ class Reasoner:
         #: forbids.
         self._slot = threading.Lock()
         self._busy = False
+
+        #: Monotonic in-memory decision-id counter. IDs used to be allocated as
+        #: ``COUNT(*)+1`` at call time, which meant a busy-drop arriving while
+        #: an escalation was still awaiting its model call (and had therefore
+        #: taken an id but not yet inserted its row) would compute the SAME
+        #: id -- the drop's row would then be clobbered by the original run's
+        #: ``INSERT OR REPLACE`` (SPEC §5.4 requires drops to be logged, not
+        #: silently lost). Allocating from a counter that advances the instant
+        #: an id is handed out, under this dedicated lock, makes every id
+        #: unique regardless of insert timing.
         self._counter_lock = threading.Lock()
+        self._next_seq = self._initial_decision_seq(db)
 
         self.escalations = 0
         self.completed = 0
@@ -137,13 +148,38 @@ class Reasoner:
                 self._busy = False
                 self._slot.release()
 
+    @staticmethod
+    def _initial_decision_seq(db: Database) -> int:
+        """The first id number to hand out, from existing rows at construction.
+
+        Prefers the max numeric suffix already in use (``d_0042`` -> 42) so a
+        reasoner restarted against a non-empty database keeps allocating
+        strictly-increasing ids; falls back to the row count if no id parses.
+        """
+
+        with db._lock:
+            ids = [r[0] for r in db.conn.execute("SELECT id FROM decisions").fetchall()]
+        max_suffix = 0
+        for raw in ids:
+            try:
+                max_suffix = max(max_suffix, int(str(raw).rsplit("_", 1)[-1]))
+            except (ValueError, IndexError):
+                continue
+        return (max_suffix + 1) if max_suffix else (len(ids) + 1)
+
     def _next_decision_id(self) -> str:
+        """Allocate the next decision id from the in-memory counter.
+
+        Advances the counter under ``_counter_lock`` before returning, so two
+        concurrent callers (a claimed escalation and a contended drop) always
+        get distinct ids even though the claimed one won't INSERT its row
+        until its model call returns.
+        """
+
         with self._counter_lock:
-            with self.db._lock:
-                n = int(
-                    self.db.conn.execute("SELECT COUNT(*) FROM decisions").fetchone()[0]
-                )
-            return f"d_{n + 1:04d}"
+            n = self._next_seq
+            self._next_seq += 1
+            return f"d_{n:04d}"
 
     def _drop(
         self, esc: Escalation, reason: str, decision_id: str | None = None

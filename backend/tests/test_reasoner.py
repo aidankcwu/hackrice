@@ -352,6 +352,44 @@ async def test_try_escalate_claims_the_slot_then_drops_on_contention(
     assert reasoner.stats()["dropped_busy"] == 2
 
 
+async def test_a_busy_drop_does_not_collide_with_the_running_decision_id(
+    db, frame_store, settings
+):
+    """SPEC §5.4: a drop that lands while the original is still in flight must
+    keep its own row.
+
+    IDs used to be allocated as ``COUNT(*)+1`` at call time. The running
+    escalation claims an id before the model returns but only INSERTs its row
+    afterwards, so a busy-drop arriving in between recomputed the identical
+    COUNT(*)-based id; when the original finally inserted, ``INSERT OR
+    REPLACE`` overwrote the drop and it vanished from the decisions table.
+    """
+
+    client = HoldingClient()
+    reasoner = build_reasoner(db, frame_store, settings, client)
+
+    assert reasoner.try_escalate(make_escalation()) is True
+    await client.entered.wait()
+    assert reasoner.busy is True
+
+    assert reasoner.try_escalate(make_escalation("screen_sustained")) is False
+
+    client.release.set()
+    await drain(reasoner)
+
+    decisions = {d.id: d for d in db.list_decisions()}
+    assert len(decisions) == 2, "both the drop and the completed run must survive"
+
+    dropped = [d for d in decisions.values() if d.dropped]
+    completed = [d for d in decisions.values() if not d.dropped]
+    assert len(dropped) == 1
+    assert len(completed) == 1
+    assert dropped[0].drop_reason == "t1_busy"
+    assert dropped[0].actions == []
+    assert completed[0].actions, "the completed decision kept its actions"
+    assert dropped[0].id != completed[0].id
+
+
 async def test_the_slot_is_reusable_after_a_completed_escalation(
     db, frame_store, settings
 ):

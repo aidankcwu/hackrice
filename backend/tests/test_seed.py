@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import pytest
 
@@ -181,6 +181,62 @@ def test_seed_database_is_idempotent(db):
     forced = seed_database(db, END_DAY, force=True)
     assert forced["skipped"] is False
     assert [r.model_dump() for r in db.list_seeded(DAYS[0], DAYS[-1])] == before
+
+
+def test_seed_database_advances_the_window_one_day_at_a_time(db):
+    """Consecutive days overlap the window by six days (SPEC bug D2).
+
+    Seeding day D then day D+1 must insert D+1's rows/episodes without ever
+    touching the six carried-over days -- a same-window-only "any rows
+    present -> skip" check would stall on the overlap and D+1 would never
+    appear.
+    """
+
+    seed_database(db, END_DAY)
+    before_rows = {(r.day, r.metric): r.value for r in db.list_seeded(DAYS[0], DAYS[-1])}
+    metrics = {m for (d, m) in before_rows if d == DAYS[0]}
+    before_episode_counts = {d: len(db.list_episodes(d)) for d in DAYS}
+
+    # DAYS[0] (D-6) drops out of the new window; DAYS[1:] (D-5..D) carry over.
+    carried_over_days = DAYS[1:]
+
+    next_end = (date.fromisoformat(END_DAY) + timedelta(days=1)).isoformat()
+    next_days = days_ending(next_end)
+    assert next_days == carried_over_days + [next_end]
+
+    result = seed_database(db, next_end)
+    assert result["skipped"] is False
+
+    # The new day's rows exist, one per metric.
+    new_day_rows = {r.metric: r.value for r in db.list_seeded(next_end, next_end)}
+    assert set(new_day_rows) == metrics
+
+    after_rows = {
+        (r.day, r.metric): r.value for r in db.list_seeded(DAYS[0], next_end)
+    }
+    for key, value in before_rows.items():
+        assert after_rows[key] == value  # every old (day, metric) pair untouched
+
+    carried_over_before = {
+        k: v for k, v in before_rows.items() if k[0] in carried_over_days
+    }
+    carried_over_after = {
+        k: v for k, v in after_rows.items() if k[0] in carried_over_days
+    }
+    assert carried_over_after == carried_over_before
+    assert len(carried_over_after) == len(carried_over_days) * len(metrics)
+
+    covered_days = {d for (d, _m) in after_rows}
+    assert covered_days == set(DAYS) | {next_end}
+    assert len(covered_days) == 8
+
+    # DAYS[-1] (D) was "today" and had no historical episodes yet; now that
+    # it is no longer the live day it gets them. next_end is the new "today"
+    # and stays empty. The days that already had episodes are untouched.
+    assert len(db.list_episodes(DAYS[-1])) > 0
+    assert db.list_episodes(next_end) == []
+    for day in DAYS[:-1]:
+        assert len(db.list_episodes(day)) == before_episode_counts[day]
 
 
 # -- the T1 stable-prefix summary (SPEC §4.2 part 2) ---------------------

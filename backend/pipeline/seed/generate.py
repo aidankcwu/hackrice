@@ -30,10 +30,43 @@ HRV_FLAG_BELOW = 0.9
 # -- loading -------------------------------------------------------------
 
 
+def _rekey_episodes_by_day(episodes: list[Episode]) -> list[Episode]:
+    """Re-id seeded episodes so the id depends only on the calendar day.
+
+    :func:`seed_live_episodes` numbers ids sequentially within one call
+    (``e_seed_0001``, ...), keyed by the episode's *position in the window*,
+    not by calendar day. Two overlapping windows (the normal case when the
+    end day advances by one) can therefore hand the same id to two different
+    days' episodes -- e.g. whichever day lands last in the window is always
+    id-numbered like the previous call's last day. Since ``upsert_episode``
+    stores episodes keyed by id via ``INSERT OR REPLACE``, seeding a new day
+    under a reused id would silently overwrite an unrelated, already-seeded
+    day. Re-keying by day (and by order within that day) makes the id unique
+    across days and stable across calls for the same day.
+    """
+
+    seen: dict[str, int] = {}
+    rekeyed: list[Episode] = []
+    for episode in episodes:
+        day = day_key(episode.start_t)
+        n = seen.get(day, 0)
+        seen[day] = n + 1
+        rekeyed.append(episode.model_copy(update={"id": f"e_seed_{day}_{n:02d}"}))
+    return rekeyed
+
+
 def seed_database(
     db: Database, end_day: str | None = None, *, force: bool = False
 ) -> dict:
     """Insert the 7-day seeded rows and the 6 days of historical episodes.
+
+    Idempotent per ``(day, metric)`` pair, not per window: consecutive days'
+    windows overlap by six days, so a range is only considered "already
+    seeded" when *every* expected pair for the requested window is present.
+    Otherwise only the missing days are inserted -- existing days (and the
+    values already on them) are left untouched, so the window can advance one
+    day at a time without losing yesterday's data or re-writing it under a
+    different day-of-window index.
 
     Returns ``{"end_day", "days", "seeded_rows", "episodes", "skipped"}``.
     """
@@ -41,7 +74,27 @@ def seed_database(
     end = end_day or day_key(time.time())
     days = days_ending(end)
     existing = db.list_seeded(days[0], days[-1])
-    if existing and not force:
+    existing_pairs = {(r.day, r.metric) for r in existing}
+
+    all_rows = seed_rows(end)
+    if force:
+        rows_to_insert = all_rows
+    else:
+        rows_to_insert = [r for r in all_rows if (r.day, r.metric) not in existing_pairs]
+
+    # Historical episodes cover the 6 days *before* end_day -- end_day itself
+    # is "today" and gets its live episodes from the tick stream, not seeding.
+    historical_days = days[:-1]
+    all_episodes = _rekey_episodes_by_day(seed_live_episodes(end))
+    if force:
+        episodes_to_insert = all_episodes
+    else:
+        needing_episodes = {d for d in historical_days if not db.list_episodes(d)}
+        episodes_to_insert = [
+            e for e in all_episodes if day_key(e.start_t) in needing_episodes
+        ]
+
+    if not force and not rows_to_insert and not episodes_to_insert:
         return {
             "end_day": end,
             "days": days,
@@ -51,16 +104,14 @@ def seed_database(
             "existing_rows": len(existing),
         }
 
-    rows = seed_rows(end)
-    inserted = db.insert_seeded_rows(rows)
-    episodes = seed_live_episodes(end)
-    for episode in episodes:
+    inserted = db.insert_seeded_rows(rows_to_insert)
+    for episode in episodes_to_insert:
         db.upsert_episode(episode)
     return {
         "end_day": end,
         "days": days,
         "seeded_rows": inserted,
-        "episodes": len(episodes),
+        "episodes": len(episodes_to_insert),
         "skipped": False,
         "existing_rows": len(existing),
     }
