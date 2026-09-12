@@ -712,3 +712,22 @@ def test_try_escalate_without_a_running_loop_drops_rather_than_raising(
     assert decision.dropped is True
     assert decision.drop_reason == "t1_no_loop"
     assert reasoner.busy is False
+
+
+def test_normalize_drops_non_speech_speak_text() -> None:
+    """A speak carrying 'nothing' or JSON is silence done wrong; drop it."""
+    from pipeline.reasoner.schema import T1Response, normalize
+
+    for bad in ('{"type":"nothing"}', "nothing", "", "  ", '[{"x":1}]'):
+        resp = T1Response.model_validate({
+            "interpretation": "food on the desk, nobody eating", "confidence": 0.8,
+            "actions": [{"type": "speak", "text": bad, "urgency": "low"}],
+        })
+        norm = normalize(resp, t=1.0)
+        assert not any(a.type == "speak" for a in norm.actions), bad
+        assert any(a.type == "annotate" for a in norm.actions)
+    good = T1Response.model_validate({
+        "interpretation": "x", "confidence": 0.8,
+        "actions": [{"type": "speak", "text": "Cereal at 5am. Bold.", "urgency": "low"}],
+    })
+    assert any(a.type == "speak" for a in normalize(good, t=1.0).actions)

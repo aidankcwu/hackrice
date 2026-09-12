@@ -208,6 +208,21 @@ def normalize(resp: T1Response, t: float | None = None) -> T1Response:
     stamp = time.time() if t is None else t
     actions = list(resp.actions)
 
+    # A speak whose text is empty, a bare "nothing", or a JSON-looking blob is
+    # the model trying to stay silent the wrong way (seen live: ElevenLabs
+    # read '{"type":"nothing"}' aloud). Silence means no speak action at all.
+    def _speakable(a: Any) -> bool:
+        if getattr(a, "type", None) != "speak":
+            return True
+        text = (getattr(a, "text", "") or "").strip()
+        if len(text) < 2 or text.lower() in {"nothing", "none", "null", "silent"}:
+            return False
+        if text[0] in "{[" or '"type"' in text:
+            return False
+        return True
+
+    actions = [a for a in actions if _speakable(a)]
+
     if any(a.type != "nothing" for a in actions):
         actions = [a for a in actions if a.type != "nothing"]
 

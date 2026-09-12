@@ -74,6 +74,9 @@ response may annotate and watch, or speak and log an insight.
                  what happens next.
   speak          A spoken utterance, with urgency low/normal/high. Rate-limited
                  downstream: propose it and code decides whether it is emitted.
+                 To stay silent, OMIT the speak action entirely. Never put
+                 "nothing", an empty string, or JSON inside speak.text -- the
+                 text is read aloud verbatim.
   nothing        No action worth taking.
 
 Rules that matter:
