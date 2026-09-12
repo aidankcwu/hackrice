@@ -173,7 +173,7 @@ class EpisodeBuilder:
         if episode is None:
             return
         for name, counts in state.modes.items():
-            value = tick.enum(name)
+            value = tick.enum(name, self.params.ai_max_age_ms)
             if value is not None:
                 counts[value] += 1
             if counts:

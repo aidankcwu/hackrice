@@ -60,6 +60,12 @@ class Reasoner:
         persona: str | None = None,
         t1_deadline_s: float = 15.0,
     ) -> None:
+        # Cadence-aware AI freshness for the envelope (SPEC §12.2, S9).
+        try:
+            from . import envelope as _envelope
+            _envelope.AI_MAX_AGE_MS = settings.timings.ai_max_age_ms
+        except Exception:  # pragma: no cover - settings without timings in tests
+            pass
         self.db = db
         self.frame_store = frame_store
         self.client = client

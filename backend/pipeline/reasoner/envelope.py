@@ -35,6 +35,11 @@ __all__ = [
 ]
 
 #: Rendered for any field the VLM did not report. Unknown is not False.
+#: Freshness limit for reading ``ai`` fields into the tick table and frame
+#: labels. The Reasoner sets this from ``Timings.ai_max_age_ms`` so a 1.5 s
+#: cadence does not render genuinely fresh blocks as '?'.
+AI_MAX_AGE_MS = 3000
+
 UNKNOWN = "?"
 
 #: One tick-table row per this many seconds of window (SPEC §4.3: compact).
@@ -120,19 +125,19 @@ def _offset(t: float, origin: float) -> str:
 
 
 def _bool_cell(tick: Tick, field: str) -> str:
-    value = tick.flag(field)
+    value = tick.flag(field, AI_MAX_AGE_MS)
     if value is None:
         return UNKNOWN
     return "y" if value else "n"
 
 
 def _food_cell(tick: Tick) -> str:
-    present = tick.flag("food_present")
+    present = tick.flag("food_present", AI_MAX_AGE_MS)
     if present is None:
         return UNKNOWN
     if not present:
         return "n"
-    return tick.enum("food_type") or "y"
+    return tick.enum("food_type", AI_MAX_AGE_MS) or "y"
 
 
 def _num_cell(value: float | None, fmt: str) -> str:
@@ -142,8 +147,8 @@ def _num_cell(value: float | None, fmt: str) -> str:
 def _row(tick: Tick, origin: float) -> list[str]:
     return [
         _offset(tick.t, origin),
-        tick.enum("scene") or UNKNOWN,
-        tick.enum("activity") or UNKNOWN,
+        tick.enum("scene", AI_MAX_AGE_MS) or UNKNOWN,
+        tick.enum("activity", AI_MAX_AGE_MS) or UNKNOWN,
         _food_cell(tick),
         _bool_cell(tick, "screen_present"),
         _bool_cell(tick, "people_present"),
@@ -199,9 +204,9 @@ def frame_label(tick: Tick, origin: float, is_trigger: bool = False) -> str:
     bits: list[str] = [
         f"motion {_num_cell(tick.sensor.frame_delta, '.2f')}",
         f"lux {_num_cell(tick.sensor.lux_proxy, '.0f')}",
-        f"scene {tick.enum('scene') or UNKNOWN}",
+        f"scene {tick.enum('scene', AI_MAX_AGE_MS) or UNKNOWN}",
     ]
-    activity = tick.enum("activity")
+    activity = tick.enum("activity", AI_MAX_AGE_MS)
     if activity:
         bits.append(activity)
     for field, word in (
@@ -212,7 +217,7 @@ def frame_label(tick: Tick, origin: float, is_trigger: bool = False) -> str:
         ("alcohol_visible", "alcohol"),
         ("vegetation_visible", "vegetation"),
     ):
-        if tick.flag(field):
+        if tick.flag(field, AI_MAX_AGE_MS):
             bits.append(word)
     head = _offset(tick.t, origin)
     if is_trigger:
