@@ -13,7 +13,7 @@ Three layers, decoupled clocks.
 
 | Layer | Cadence | Cost | Blocking |
 |---|---|---|---|
-| **T0 — Tick producer** | 1 Hz, always | Free + one small VLM call | Never |
+| **T0 — Tick producer** | every 1.5 s, always | Free + one small VLM call | Never |
 | **Trigger gate** | Every tick | Free (plain code) | Never |
 | **T1 — Reasoner** | On escalation only, ~20×/day | One LLM call | Async |
 
@@ -37,8 +37,12 @@ downstream reads from it and nothing writes back into it.
 
 - Camera streams at 2 fps via the DAT SDK (`StreamConfiguration`, valid frame
   rates are 2/7/15/24/30).
-- T0 samples the most recent frame at 1 Hz. The second frame each second is
-  discarded.
+- T0 samples the most recent frame once per **tick interval** — **1.5 s** as
+  shipped (`TICK_INTERVAL_S`, default 1.5), chosen so the VLM call usually
+  returns inside the interval. Frames captured between samples are discarded.
+  Everything downstream is keyed on `tick.t` seconds; the only cadence-aware
+  values are the hit-count thresholds in §3, which are scaled from their 1 Hz
+  reference values by `Timings.scaled_hits()`.
 - Sampling and encoding happen **on the phone** (§11.3). The selected DAT
   `VideoFrame` is converted to a ~512px JPEG at quality ~70 (~40 KB) immediately
   and the original frame buffer is discarded. The underlying pixel format is an
