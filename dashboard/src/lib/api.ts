@@ -1,5 +1,5 @@
 import { mockBiometrics, mockBiometricsMulti, mockDecisions, mockEpisodes, mockPending, mockScores, mockSeeded, mockStatus, mockSummary, mockTicks, mockWearablesStatus } from "./mock";
-import type { Biometrics, BiometricsMulti, Decision, Episode, Insight, MetricScore, PendingCheck, Scores, SeededDay, Status, Tick, TodaySummary, WearablesStatus } from "./types";
+import type { Biometrics, BiometricsMulti, Decision, Episode, Insight, MetricScore, PendingCheck, Recap, Scores, SeededDay, Session, Status, Tick, TodaySummary, WearablesStatus } from "./types";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8010";
 export const configuredMock = process.env.NEXT_PUBLIC_MOCK === "1";
@@ -14,6 +14,19 @@ async function request<T>(path: string, mock: T): Promise<{data:T; mock:boolean}
   } catch { return {data:mock,mock:true}; }
 }
 const list = <T>(value: T[] | Record<string,T[]>, keys: string[]): T[] => Array.isArray(value)?value:(keys.map(k=>value[k]).find(Boolean)??[]);
+
+/** Actions, unlike polls, must fail loudly: a judge session that silently did not
+ *  start is worse than an error on screen. So no mock fallback and no timeout --
+ *  `POST /api/recap` runs an LLM call and legitimately takes several seconds. */
+async function action<T>(path: string, body?: unknown): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "POST", cache: "no-store",
+    headers: {"content-type": "application/json"},
+    body: JSON.stringify(body ?? {}),
+  });
+  if (!response.ok) throw new Error(`${path} -> ${response.status}`);
+  return await response.json() as T;
+}
 
 const hhmm = (t: number) => new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 // 1 -> a compact tag, in the order the persona cares about (SPEC §14.1).
@@ -99,6 +112,27 @@ export const api = {
       metrics: r.data?.metrics ?? [], live_connected: r.data?.live_connected ?? false,
       live_devices: r.data?.live_devices ?? [], catalogue: r.data?.catalogue ?? {},
     } as WearablesStatus};
+  },
+  // -- judge session + recap. `sessionCurrent` polls; the rest are actions. --
+  sessionCurrent: async (): Promise<Session|null> => {
+    try {
+      const response = await fetch(`${API_BASE}/api/session/current`,{cache:"no-store",signal:AbortSignal.timeout(2500)});
+      if (!response.ok) return null;
+      return await response.json() as Session|null;
+    } catch { return null; }
+  },
+  sessionStart: (name: string) => action<Session>("/api/session/start", {name}),
+  sessionEnd: () => action<Session>("/api/session/end"),
+  /** Omit `sessionId` for the last 15 minutes of the tick clock. `speak` sends it
+   *  out the glasses; the backend defaults it to true, so pass it explicitly. */
+  recap: (sessionId?: string, speak = true) =>
+    action<Recap>("/api/recap", sessionId ? {session_id: sessionId, speak} : {speak}),
+  latestRecap: async (): Promise<Recap|null> => {
+    try {
+      const response = await fetch(`${API_BASE}/api/recap/latest`,{cache:"no-store",signal:AbortSignal.timeout(2500)});
+      if (!response.ok) return null;   // 404 just means nobody has asked for one yet
+      return await response.json() as Recap;
+    } catch { return null; }
   },
 };
 export type ApiResult<T>={data:T;mock:boolean};

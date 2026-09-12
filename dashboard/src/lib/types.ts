@@ -45,3 +45,22 @@ export interface WearableMetricRow { metric: string; source: string; origin: Bio
 export interface WearableMetricInfo { unit: string; devices: string[]; cadence_s: number; label: string }
 /** GET /api/wearables/status — what is stored, and whether a device is pushing. */
 export interface WearablesStatus { metrics: WearableMetricRow[]; live_connected: boolean; live_devices: string[]; catalogue: Record<string, WearableMetricInfo> }
+
+// --- Judge session + recap (POST /api/session/*, POST /api/recap) ---
+/** A named judging window on the pipeline's *tick* clock, not wall time. */
+export interface Session { id: string; name: string; started_t: number; ended_t: number | null }
+/** One key moment: a decision that saved a frame. `frame_url` is server-built — don't assemble it. */
+export interface Moment { decision_id: string; t: number; trigger: string; category: string; severity: string; caption: string; frame_ref: string; frame_url: string; sharpness?: number | null; blurry?: boolean; insight?: string | null }
+export interface Subscore { metric: string; layer: string; label: string; value: string | number | null; unit: string; score: number; target: string; source: "live" | "seeded"; grade: string; note?: string | null }
+export interface RecapNarrative { headline: string; paragraphs: string[]; suggestions: string[]; spoken: string }
+/** `session.id` is null for a bare time-window recap. `spoken` is whether it actually reached the glasses. */
+export interface Recap {
+  id: string;
+  session: { id: string | null; name: string | null; from_t: number; to_t: number; duration_s: number; tick_count: number; ai_coverage: number; decision_count: number };
+  score: { overall: number; subscores: Subscore[] };
+  moments: Moment[];
+  narrative: RecapNarrative;
+  spoken: boolean;
+  generated_at: number;
+  model: string;
+}
