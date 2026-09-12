@@ -49,6 +49,15 @@ class Timings:
     #: Window over which low motion counts as "still".
     stillness_window: float
 
+    # Wearable biometrics (SPEC §14.3) -----------------------------------
+    #: Window the intraday HR series must stay elevated across.
+    biometric_window: float
+    #: Multiple of resting HR above which a sample counts as elevated.
+    biometric_hr_ratio: float
+    #: Cooldown for the `biometric_anomaly` trigger (it has no episode kind,
+    #: so this is the only thing stopping a long spike re-escalating).
+    biometric_cooldown: float
+
     # Speech gating (SPEC §4.6) -----------------------------------------
     speech_min_gap: float
     speech_max_per_hour: int
@@ -73,6 +82,9 @@ class Timings:
             food_window=10.0,
             food_min_hits=3,
             stillness_window=300.0,
+            biometric_window=180.0,
+            biometric_hr_ratio=1.4,
+            biometric_cooldown=1800.0,
             speech_min_gap=600.0,
             speech_max_per_hour=6,
             t1_max_concurrent=1,
@@ -93,6 +105,9 @@ class Timings:
             food_window=10.0,
             food_min_hits=2,
             stillness_window=30.0,
+            biometric_window=20.0,
+            biometric_hr_ratio=1.4,
+            biometric_cooldown=60.0,
             speech_min_gap=30.0,
             speech_max_per_hour=20,
             t1_max_concurrent=1,

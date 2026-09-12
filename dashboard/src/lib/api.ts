@@ -1,5 +1,5 @@
-import { mockDecisions, mockEpisodes, mockPending, mockScores, mockSeeded, mockStatus, mockSummary, mockTicks } from "./mock";
-import type { Decision, Episode, Insight, MetricScore, PendingCheck, Scores, SeededDay, Status, Tick, TodaySummary } from "./types";
+import { mockBiometrics, mockDecisions, mockEpisodes, mockPending, mockScores, mockSeeded, mockStatus, mockSummary, mockTicks } from "./mock";
+import type { Biometrics, Decision, Episode, Insight, MetricScore, PendingCheck, Scores, SeededDay, Status, Tick, TodaySummary } from "./types";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 export const configuredMock = process.env.NEXT_PUBLIC_MOCK === "1";
@@ -16,6 +16,9 @@ async function request<T>(path: string, mock: T): Promise<{data:T; mock:boolean}
 const list = <T>(value: T[] | Record<string,T[]>, keys: string[]): T[] => Array.isArray(value)?value:(keys.map(k=>value[k]).find(Boolean)??[]);
 
 const hhmm = (t: number) => new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+// 1 -> a compact tag, in the order the persona cares about (SPEC §14.1).
+const JOURNAL: Array<[string, string]> = [["journal_caffeine_late","caff"],["journal_alcohol","alc"],["journal_nicotine","nic"],["journal_cannabis","can"]];
+const journalTags = (m: Record<string, number>) => { const tags = JOURNAL.filter(([k])=>m[k]===1).map(([,label])=>label); return tags.length?tags.join("\u00b7"):undefined; };
 const hhmmFromHours = (h: number) => { const hh = Math.floor(h % 24), mm = Math.round((h % 1) * 60); return `${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}`; };
 
 export const api = {
@@ -49,19 +52,34 @@ export const api = {
   },
   seeded: async (days=7)=>{
     // Backend returns long-format rows {day, metric, value, unit, source}; pivot to one row per day.
-    type Row = { day: string; metric: string; value: number };
+    type Row = { day: string; metric: string; value: number; source?: string };
     const r=await request<SeededDay[]|{rows:Row[]}|{seeded:SeededDay[]}>(`/api/seeded?days=${days}`,mockSeeded);
     const d = r.data as unknown;
     if (Array.isArray(d) || (d && typeof d === "object" && "seeded" in d)) return {...r,data:list(r.data as SeededDay[]|{seeded:SeededDay[]},["seeded"])};
     const rows = ((d as {rows?: Row[]}).rows ?? []);
-    const byDay = new Map<string, Record<string, number>>();
-    for (const row of rows) { const m = byDay.get(row.day) ?? {}; m[row.metric] = row.value; byDay.set(row.day, m); }
-    const data: SeededDay[] = [...byDay.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([day, m]) => ({
+    const byDay = new Map<string, {values: Record<string, number>; sources: Record<string, string>}>();
+    for (const row of rows) {
+      const day = byDay.get(row.day) ?? {values:{},sources:{}};
+      day.values[row.metric] = row.value;
+      if (row.source) day.sources[row.metric] = row.source;
+      byDay.set(row.day, day);
+    }
+    const data: SeededDay[] = [...byDay.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([day, {values:m, sources}]) => ({
       date: day.slice(5).replace("-", "/"),
       sleep_h: m.sleep_hours ?? 0, hrv_ratio: m.hrv_rmssd_ratio ?? 0, steps: m.steps ?? 0, sri: m.sleep_regularity_sri ?? 0,
       caffeine_last: m.bed_time !== undefined ? `bed ${hhmmFromHours(m.bed_time)}` : undefined,
+      recovery: m.recovery_score, resting_hr: m.resting_hr, run_km: m.run_km,
+      journal: journalTags(m), sources,
     }));
     return {...r,data};
+  },
+  // SPEC §14.2: the intraday HR series, on the tick clock, for the HR strip.
+  biometrics: async (metric="heart_rate", fromT?: number, toT?: number)=>{
+    const query = new URLSearchParams({metric});
+    if (fromT !== undefined) query.set("from", String(Math.floor(fromT)));
+    if (toT !== undefined) query.set("to", String(Math.ceil(toT)));
+    const r = await request<Biometrics>(`/api/biometrics?${query.toString()}`, mockBiometrics());
+    return {...r, data: {metric: r.data?.metric ?? metric, source: r.data?.source ?? "", points: r.data?.points ?? []}};
   },
 };
 export type ApiResult<T>={data:T;mock:boolean};

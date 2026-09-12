@@ -49,7 +49,11 @@ class TriggerGate:
 
     def on_tick(self, tick: Tick) -> Escalation | None:
         self.window.append(tick)
-        while self.window and self.window[0].t < tick.t - 90.0:
+        # Keep enough history for the widest window any trigger evaluates
+        # (frames live 90 s; the production biometric window is 180 s and must
+        # still see exertion from its first half — Astra review of S6b).
+        keep_s = max(90.0, float(getattr(self.timings, "biometric_window", 0.0)))
+        while self.window and self.window[0].t < tick.t - keep_s:
             self.window.popleft()
 
         for check in self.db.due_pending_checks(tick.t):
@@ -86,10 +90,21 @@ class TriggerGate:
                 self.suppressed[trigger.name] += 1
                 return None
 
+            window = list(self.window)
+            extra_text: list[str] = []
+            if trigger.enrich is None:
+                reason = trigger.reason.format(trigger=trigger.name)
+            else:
+                # Synchronous by contract -- the gate never awaits (SPEC §3).
+                # `biometric_anomaly` uses this to fold the wearable HR series
+                # into the escalation (SPEC §14.3); the frames explain it. Its
+                # own `reason` is a template only `enrich` can fill.
+                reason, extra_text = trigger.enrich(window)
+                reason = reason or trigger.name
             escalation = Escalation(
-                trigger=trigger.name, t=tick.t, tick=tick, window=list(self.window),
+                trigger=trigger.name, t=tick.t, tick=tick, window=window,
                 episode_id=episode.id if episode is not None else None,
-                reason=trigger.reason.format(trigger=trigger.name),
+                reason=reason, extra_text=extra_text,
             )
             if self._submit(escalation):
                 self.fired[trigger.name] += 1

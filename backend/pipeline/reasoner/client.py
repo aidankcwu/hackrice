@@ -145,6 +145,17 @@ _FOOD_WORDS = (
 #: Local hour at or after which caffeine is worth mentioning (bedtime - 9 h).
 CAFFEINE_HOUR = 14
 
+#: The gate's wearable line, e.g.
+#: ``Heart rate (wearable, bpm) over the last 20s, resting 58: t-20s 96, ...``.
+_HR_LINE_RE = re.compile(r"Heart rate \(wearable[^:]*resting\s+(\d+(?:\.\d+)?)\s*:")
+_HR_POINT_RE = re.compile(r"t-\d+s\s+(\d+(?:\.\d+)?)")
+
+#: Columns in the envelope's tick table (envelope._COLUMNS).
+_TABLE_COLS = 10
+_ACTIVITY_COL = 2
+_SCENE_COL = 1
+_PEOPLE_COL = 5
+
 
 class FakeReasonerClient:
     """Deterministic rules over the envelope text. Zero latency, no key.
@@ -199,6 +210,61 @@ class FakeReasonerClient:
             if m:
                 return m.group(1), int(m.group(2))
         return "unknown", datetime.now().hour
+
+    @staticmethod
+    def _clock(text: str) -> str:
+        """``HH:MM`` from the trigger line, for an insight that cites a time."""
+
+        for line in text.splitlines():
+            m = _TRIGGER_RE.match(line)
+            if m:
+                return f"{m.group(2)}:{m.group(3)}"
+        return datetime.now().strftime("%H:%M")
+
+    @staticmethod
+    def _table_rows(text: str) -> list[list[str]]:
+        """The tick-table body, one token list per row.
+
+        Frame labels also start with ``t-`` but carry an em dash and commas;
+        table rows are exactly ten whitespace-separated cells.
+        """
+
+        rows: list[list[str]] = []
+        for line in text.split("Tick table", 1)[-1].splitlines():
+            if "," in line:
+                continue
+            cells = line.split()
+            if len(cells) == _TABLE_COLS and cells[0].startswith("t-"):
+                rows.append(cells)
+        return rows
+
+    @classmethod
+    def _context(cls, text: str) -> tuple[str | None, str, bool]:
+        """Latest known scene, latest known activity, and whether people showed."""
+
+        rows = cls._table_rows(text)
+        scene = next(
+            (r[_SCENE_COL] for r in reversed(rows) if r[_SCENE_COL] != "?"), None
+        )
+        activity = next(
+            (r[_ACTIVITY_COL] for r in reversed(rows) if r[_ACTIVITY_COL] != "?"),
+            "seated",
+        )
+        people = any(r[_PEOPLE_COL] == "y" for r in rows)
+        return scene, activity, people
+
+    @staticmethod
+    def _hr_numbers(text: str) -> tuple[float | None, float | None]:
+        """Peak bpm and resting bpm off the gate's extra line, if it is there."""
+
+        for line in text.splitlines():
+            m = _HR_LINE_RE.search(line)
+            if not m:
+                continue
+            points = [float(v) for v in _HR_POINT_RE.findall(line)]
+            if points:
+                return max(points), float(m.group(1))
+        return None, None
 
     @staticmethod
     def _food_type(text: str) -> str | None:
@@ -296,6 +362,33 @@ class FakeReasonerClient:
                     LogInsightAction(
                         category="nature",
                         text="Outdoor block; counts toward the weekly nature dose.",
+                    ),
+                ],
+            )
+
+        if base == "biometric_anomaly":
+            # The wearable gives the number, the frames give the cause
+            # (SPEC §14.3) -- so read both and cite them together.
+            hr, rest = self._hr_numbers(text)
+            scene, activity, people = self._context(text)
+            seen = ", ".join(
+                bit for bit in (scene, "people present" if people else None) if bit
+            ) or "no clear scene"
+            numbers = (
+                f"HR {hr:.0f} (resting {rest:.0f})"
+                if hr is not None and rest is not None
+                else "HR elevated"
+            )
+            return T1Response(
+                interpretation=f"elevated heart rate while {activity}; "
+                f"frames show {seen}",
+                confidence=0.64,
+                actions=[
+                    AnnotateAction(line=f"{numbers} while {activity}"),
+                    LogInsightAction(
+                        category="stress",
+                        text=f"{self._clock(text)} {numbers}, {activity}, "
+                        f"frames show {seen}",
                     ),
                 ],
             )

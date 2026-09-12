@@ -201,6 +201,11 @@ class Escalation(BaseModel):
     window: list[Tick] = Field(default_factory=list)
     episode_id: str | None = None
     reason: str = ""
+    #: Extra context lines the gate attaches when the frames alone cannot
+    #: explain the trigger -- the wearable HR series behind a
+    #: ``biometric_anomaly`` (SPEC §14.3). Rendered into the envelope right
+    #: after the tick table and before the frames.
+    extra_text: list[str] = Field(default_factory=list)
 
 
 class Episode(BaseModel):

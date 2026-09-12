@@ -1,4 +1,4 @@
-import type { Decision, Episode, PendingCheck, Scores, SeededDay, Status, Tick, TodaySummary } from "./types";
+import type { Biometrics, Decision, Episode, PendingCheck, Scores, SeededDay, Status, Tick, TodaySummary } from "./types";
 const now = Date.now() / 1000;
 const scenes = ["office","office","restaurant","restaurant","street","park","park","gym"];
 export const mockTicks: Tick[] = Array.from({length:30},(_,i) => { const scene=scenes[Math.floor(i/4)%scenes.length]; const missing=i%5===0; return {v:1,tick_id:`t_${1740+i}`,t:now-29+i,seq:1740+i,sensor:{lux_proxy:scene==="park"?510:180,cct:4100,hist_spread:.62,frame_delta:.08+(i%4)*.04,flow_mag:.04,sharpness:88,phash:`e3a91c04b7d2${i.toString().padStart(4,"0")}`},device:{accel_rms:.04,gps_speed:scene==="street"?1.2:.2},...(!missing&&{ai:{as_of:now-29+i-.3,age_ms:300,scene,activity:scene==="gym"?"exercising":"seated",food_present:scene==="restaurant",food_type:scene==="restaurant"?"mixed":"none",caffeine_visible:i===12,alcohol_visible:i===15,screen_present:scene==="office",vegetation_visible:scene==="park",people_present:["restaurant","park"].includes(scene),conf:.86}}),frame_ref:`f_${1740+i}`}; });
@@ -25,9 +25,15 @@ const metricRows: Array<[string,string,"live"|"seeded","A"|"B"|"C",string,string
  ["Diet","Mediterranean pattern","live","A","mostly aligned","mixed",.7],["Diet","Caffeine cutoff","live","B","bedtime −9 h","late",.3],["Diet","Alcohol","live","A","none","1 sighting",.2],["Noise","Night noise","seeded","A","<45 dB","41 dB",.87],["Purpose","Life purpose","seeded","B","weekly check-in","complete",.9]
  ];
 export const mockScores: Scores={overall:.71,metrics:metricRows.map((m,i)=>({id:`m${i}`,layer:m[0],metric:m[1],source:m[2],grade:m[3],target:m[4],value:m[5],score:m[6]}))};
-export const mockSeeded: SeededDay[] = [
- ["Sep 06",7.8,1.08,9210,86,"13:10"],["Sep 07",7.4,1.03,8020,84,"14:05"],["Sep 08",6.1,.82,7140,72,"18:20"],["Sep 09",7.6,1.05,10340,85,"12:45"],["Sep 10",5.9,.76,6320,68,"19:05"],["Sep 11",6.2,.81,8420,71,"17:40"],["Sep 12",7.5,1.02,8840,82,"13:30"]
- ].map(([date,sleep_h,hrv_ratio,steps,sri,caffeine_last])=>({date,sleep_h,hrv_ratio,steps,sri,caffeine_last} as SeededDay));
+const seededSources: Record<string,string> = {sleep_hours:"whoop",hrv_rmssd_ratio:"whoop",recovery_score:"whoop",resting_hr:"oura",run_km:"apple_watch",steps:"apple_watch",sleep_regularity_sri:"oura"};
+const seededSeed: Array<[string,number,number,number,number,string,number,number,number,string]> = [
+ ["Sep 06",7.8,1.08,9210,86,"13:10",78,54,10.2,""],["Sep 07",7.4,1.03,8020,84,"14:05",71,55,0,""],["Sep 08",6.1,.82,7140,72,"18:20",41,61,0,"caff·alc"],
+ ["Sep 09",7.6,1.05,10340,85,"12:45",74,54,16.1,""],["Sep 10",5.9,.76,6320,68,"19:05",34,63,0,"caff"],["Sep 11",6.2,.81,8420,71,"17:40",38,62,5.4,"alc"],["Sep 12",7.5,1.02,8840,82,"13:30",69,56,12.8,""],
+ ];
+export const mockSeeded: SeededDay[] = seededSeed.map(([date,sleep_h,hrv_ratio,steps,sri,caffeine_last,recovery,resting_hr,run_km,journal])=>({date,sleep_h,hrv_ratio,steps,sri,caffeine_last:`bed ${caffeine_last}`,recovery,resting_hr,run_km,journal:journal||undefined,sources:seededSources}));
+
+// A seated HR spike planted mid-window, the way the demo day is seeded (SPEC §14.3).
+export const mockBiometrics = (): Biometrics => ({metric:"heart_rate",source:"apple_watch",points:Array.from({length:120},(_,i)=>{const t=now-600+i*5,spike=i>78&&i<104;return [t,Math.round(spike?96+Math.sin(i/3)*6+(i-78)*0.7:63+Math.sin(i/7)*4)] as [number,number];})});
 export const mockStatus: Status={demo_mode:true,source:"sim",uptime_s:742,tick_count:742,ai_coverage:.77,t1_busy:false,dropped_escalations:1,last_tick_t:now};
 export const mockSummary: TodaySummary={lines:["09:14 — focused screen work began in the office","10:47 — coffee with a colleague; social episode logged","12:31 — mixed lunch with two colleagues","14:08 — 27-minute park walk; vegetation visible","16:42 — late caffeine observed after cutoff"]};
 export const mockPending: PendingCheck[]=[{id:"w1",due_t:now+480,reason:"Check whether screen break happened",trigger:"screen_sustained"},{id:"w2",due_t:now+900,reason:"Check whether meal has ended",trigger:"food_in_frame"}];

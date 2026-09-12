@@ -148,3 +148,23 @@ Astra 6 reviewed the plan read-only against the spec. Objections we adopted:
 - **Stage line:** "The mock dashboard looked perfect. The first minute of real
   data found three lies in it. That's why we wired it tonight and not
   tomorrow."
+
+## Sat 12 Sep, ~04:45 — S6/S7: wearables and the cross-reference
+
+- **S6a (Sol).** WHOOP, Oura, and Apple Watch daily rows with device
+  provenance, a deterministic per-minute heart-rate series on the tick clock
+  with one spike planted in the lunch scene, `GET /api/biometrics`, and a
+  7-day summary that now cites recovery, sleep stages, runs, and journal tags.
+- **S6b (Opus).** The `biometric_anomaly` trigger: HR above resting × 1.4,
+  sustained, while the camera says the wearer is not exercising or walking.
+  The escalation carries one extra text line with the HR series, and T1 is
+  asked what was happening, not whether HR was high. Dashboard gets an HR
+  strip with the threshold line and new 7-day columns.
+- **S7 (Sol).** Caffeine and alcohol sightings this week vs last, scored
+  against the persona's own cut-down goal.
+- **Astra caught** that the gate kept 90 s of ticks while the production HR
+  window is 180 s, so exertion in the first half could age out and a workout
+  would look like an anomaly. Fixed by keeping the widest trigger window.
+- **Stage line:** "The wearable gives the number. The glasses give the
+  cause. Neither alone can tell you that your heart rate spiked because of a
+  three-person stand-up and not a run."

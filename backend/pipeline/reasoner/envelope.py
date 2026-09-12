@@ -275,6 +275,13 @@ def build_envelope(
         },
     ]
 
+    # Extra context the frames cannot supply -- the wearable HR series behind a
+    # `biometric_anomaly` (SPEC §14.3). After the table, before the pixels, so
+    # the numbers are already in hand when the model looks at the frames.
+    content.extend(
+        {"type": "input_text", "text": line} for line in esc.extra_text if line
+    )
+
     selected = select_frames(esc.window, esc.tick, k=k)
     for tick in selected:
         jpeg = frames.get(tick.frame_ref)

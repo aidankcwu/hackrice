@@ -1,10 +1,19 @@
 from __future__ import annotations
 
+import re
+
 from pipeline.config import Timings
 from pipeline.db import Database
 from pipeline.episodes import EpisodeBuilder
-from pipeline.gate import Trigger, TriggerGate, default_triggers
-from pipeline.models import AiBlock, PendingCheck, SensorBlock, Tick
+from pipeline.gate import (
+    BiometricFeed,
+    CallableBiometricFeed,
+    Trigger,
+    TriggerGate,
+    biometric_anomaly_trigger,
+    default_triggers,
+)
+from pipeline.models import AiBlock, Escalation, PendingCheck, SensorBlock, Tick
 from pipeline.sim import DEFAULT_SCENARIO, SimSource
 
 
@@ -104,3 +113,120 @@ def test_suppressed_trigger_does_not_block_others(tmp_path) -> None:
     assert names[0] == "screen_sustained"
     assert "caffeine_seen" in names, names
     db.close()
+
+
+# -- biometric_anomaly (SPEC §14.3) ---------------------------------------
+
+
+class StubFeed:
+    """A flat HR series on the tick clock, one sample per second."""
+
+    def __init__(self, bpm: float, resting: float = 58.0, seconds: float = 40.0) -> None:
+        self.bpm, self.resting, self.seconds = bpm, resting, seconds
+        self.reads = 0
+
+    def hr_series(self, t0: float, t1: float) -> list[tuple[float, float]]:
+        """Samples exist only from t=0 (series start) to ``self.seconds``."""
+
+        self.reads += 1
+        start = max(0.0, t0, t1 - self.seconds)
+        return [(float(t), self.bpm) for t in range(int(start), int(t1) + 1)]
+
+    def resting_hr(self) -> float:
+        return self.resting
+
+
+def bio_gate(tmp_path, name: str, feed: BiometricFeed):
+    db = Database(tmp_path / f"{name}.db").connect().init_schema()
+    episodes = EpisodeBuilder(db, Timings.demo())
+    escalations: list[Escalation] = []
+    gate = TriggerGate(
+        [biometric_anomaly_trigger(Timings.demo(), feed)],
+        Timings.demo(), db, episodes, lambda e: escalations.append(e) is None, True,
+    )
+    return db, gate, escalations
+
+
+def test_biometric_feed_protocol_is_satisfied_by_the_stub() -> None:
+    assert isinstance(StubFeed(60.0), BiometricFeed)
+
+
+def test_resting_heart_rate_never_fires(tmp_path) -> None:
+    db, gate, escalations = bio_gate(tmp_path, "flat", StubFeed(60.0))
+    for i in range(60):
+        gate.on_tick(tick(i, activity="seated"))
+    assert escalations == []
+    db.close()
+
+
+def test_sustained_elevated_hr_while_seated_fires_once_then_cools_down(tmp_path) -> None:
+    db, gate, escalations = bio_gate(tmp_path, "hot", StubFeed(100.0))
+    for i in range(70):  # first fire ~t=16 s, then the 60 s cooldown holds
+        gate.on_tick(tick(i, activity="seated"))
+
+    assert [e.trigger for e in escalations] == ["biometric_anomaly"]
+    assert gate.suppressed["biometric_anomaly"] > 0
+
+    for i in range(70, 140):  # past the cooldown the spike may escalate again
+        gate.on_tick(tick(i, activity="seated"))
+    assert len(escalations) > 1
+    assert escalations[1].t - escalations[0].t >= Timings.demo().biometric_cooldown
+
+    esc = escalations[0]
+    assert "100" in esc.reason and "58" in esc.reason
+    assert len(esc.extra_text) == 1
+    line = esc.extra_text[0]
+    assert "resting 58" in line
+    assert len(re.findall(r"\b\d+(?:\.\d+)?\b", line)) >= 5
+    assert 5 <= line.count("t-") <= 12, "the series is subsampled, not dumped"
+    db.close()
+
+
+def test_walking_explains_the_heart_rate_and_suppresses_the_trigger(tmp_path) -> None:
+    db, gate, escalations = bio_gate(tmp_path, "walk", StubFeed(100.0))
+    for i in range(60):
+        gate.on_tick(tick(i, activity="walking"))
+    assert escalations == []
+    db.close()
+
+
+def test_unknown_activity_still_fires(tmp_path) -> None:
+    """No known activity in the window: the wearable still gets to speak."""
+
+    db, gate, escalations = bio_gate(tmp_path, "unknown", StubFeed(100.0))
+    for i in range(60):
+        gate.on_tick(tick(i))  # no ai block at all
+    assert [e.trigger for e in escalations] == ["biometric_anomaly"]
+    db.close()
+
+
+def test_a_short_series_is_not_enough(tmp_path) -> None:
+    db, gate, escalations = bio_gate(tmp_path, "short", StubFeed(100.0, seconds=3.0))
+    for i in range(60):
+        gate.on_tick(tick(i, activity="seated"))
+    assert escalations == []
+    db.close()
+
+
+def test_default_triggers_appends_the_biometric_trigger_last() -> None:
+    plain = default_triggers(Timings.demo(), True)
+    withfeed = default_triggers(Timings.demo(), True, feed=StubFeed(100.0))
+    assert [t.name for t in plain] == [t.name for t in withfeed[:-1]]
+    assert withfeed[-1].name == "biometric_anomaly"
+    assert withfeed[-1].cooldown_s == Timings.demo().biometric_cooldown
+
+
+def test_callable_feed_adapts_injected_callables_and_swallows_failures() -> None:
+    stub = StubFeed(100.0)
+    feed = CallableBiometricFeed(
+        lambda t0, t1: stub.hr_series(t0, t1), lambda: stub.resting
+    )
+    assert isinstance(feed, BiometricFeed)
+    assert feed.resting_hr() == 58.0
+    assert len(feed.hr_series(0.0, 20.0)) == 21
+
+    def boom(*_: float) -> list[tuple[float, float]]:
+        raise RuntimeError("db is mid-migration")
+
+    broken = CallableBiometricFeed(boom, lambda: 58.0)
+    assert broken.hr_series(0.0, 20.0) == []  # a feed read never breaks a tick

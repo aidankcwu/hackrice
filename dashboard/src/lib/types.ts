@@ -16,4 +16,5 @@ export interface MetricScore { id: string; layer: string; metric: string; source
 export interface Scores { overall: number; metrics: MetricScore[] }
 export interface PendingCheck { id: string; due_t: number; reason: string; trigger?: string }
 export interface TodaySummary { lines: string[] }
-export interface SeededDay { date: string; sleep_h: number; hrv_ratio: number; steps: number; sri: number; caffeine_last?: string }
+export interface SeededDay { date: string; sleep_h: number; hrv_ratio: number; steps: number; sri: number; caffeine_last?: string; recovery?: number; resting_hr?: number; run_km?: number; journal?: string; sources?: Record<string, string> }
+export interface Biometrics { metric: string; source: string; points: [number, number][] }

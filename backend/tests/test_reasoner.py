@@ -244,6 +244,46 @@ async def test_fake_client_screen_trigger_schedules_a_watch():
     assert watch.reason == "still at screen?"
 
 
+async def test_fake_client_biometric_anomaly_logs_a_stress_insight():
+    """SPEC §14.3: the wearable gives the number, the frames give the cause."""
+
+    from pipeline.reasoner.envelope import build_envelope
+
+    window = make_window(people_present=True)
+    esc = make_escalation("biometric_anomaly", window)
+    esc.reason = "Heart rate 118 vs resting 58 while not exercising"
+    esc.extra_text = [
+        "Heart rate (wearable, bpm) over the last 20s, resting 58: "
+        "t-20s 96, t-15s 101, t-10s 104, t-5s 112, t-0s 118"
+    ]
+    messages = build_envelope(
+        esc, {tk.frame_ref: b"jpeg" for tk in esc.window}, [], "7d", "persona"
+    )
+
+    resp, _ = await FakeReasonerClient().complete(messages)
+
+    assert [a.type for a in resp.actions] == ["annotate", "log_insight"]
+    assert "heart rate" in resp.interpretation
+    assert "seated" in resp.interpretation
+    assert "office" in resp.interpretation
+    insight = resp.of_type("log_insight")[0]
+    assert insight.category == "stress"
+    assert "HR 118 (resting 58)" in insight.text
+    assert "seated" in insight.text and "office" in insight.text
+    assert not resp.of_type("speak")
+
+
+async def test_fake_client_biometric_anomaly_without_numbers_still_annotates():
+    resp, _ = await FakeReasonerClient().complete(
+        await envelope_for("biometric_anomaly")
+    )
+    assert [a.type for a in resp.actions] == ["annotate", "log_insight"]
+    insight = resp.of_type("log_insight")[0]
+    assert insight.category == "stress"
+    assert "HR elevated" in insight.text
+    assert "resting" not in insight.text
+
+
 async def test_fake_client_unknown_trigger_annotates_only():
     resp, _ = await FakeReasonerClient().complete(await envelope_for("stillness"))
     assert [a.type for a in resp.actions] == ["annotate"]

@@ -303,3 +303,40 @@ def test_envelope_system_message_carries_persona_and_seven_day():
     assert "PERSONA-MARKER" in system
     assert "SEVEN-DAY-MARKER" in system
     assert "annotate" in system and "log_insight" in system and "watch" in system
+
+
+def test_envelope_renders_extra_text_after_the_table_and_before_the_frames():
+    """SPEC §14.3: the wearable HR line rides along with the tick table."""
+
+    window = stepped_window()
+    esc = escalation(window, trigger="biometric_anomaly")
+    esc.extra_text = [
+        "Heart rate (wearable, bpm) over the last 20s, resting 58: "
+        "t-20s 96, t-15s 101, t-10s 104, t-5s 103, t-0s 105",
+        "",  # empty lines are dropped, not rendered as blank items
+    ]
+
+    content = build_envelope(esc, frames_for(window), [], "7d", "p")[1]["content"]
+    texts = [item["text"] for item in content if item["type"] == "input_text"]
+    assert "" not in texts
+
+    extra_index = next(
+        i for i, item in enumerate(content)
+        if item["type"] == "input_text" and item["text"].startswith("Heart rate")
+    )
+    table_index = next(
+        i for i, item in enumerate(content)
+        if item["type"] == "input_text" and item["text"].startswith("Tick table")
+    )
+    first_image = next(
+        i for i, item in enumerate(content) if item["type"] == "input_image"
+    )
+    assert table_index < extra_index < first_image
+
+
+def test_envelope_without_extra_text_is_unchanged():
+    window = stepped_window()
+    plain = build_envelope(escalation(window), frames_for(window), [], "7d", "p")
+    esc = escalation(window)
+    esc.extra_text = []
+    assert build_envelope(esc, frames_for(window), [], "7d", "p") == plain

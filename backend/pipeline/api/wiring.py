@@ -15,12 +15,12 @@ from ..db import Database, day_key
 from ..episodes.builder import EpisodeBuilder
 from ..frames import InMemoryFrameStore
 from ..gate.gate import TriggerGate
-from ..gate.triggers import default_triggers
+from ..gate.triggers import CallableBiometricFeed, default_triggers
 from ..models import Tick
 from ..reasoner.client import make_client
 from ..reasoner.reasoner import Reasoner
 from ..scoring.scorer import Scorer
-from ..seed.generate import seed_database, seven_day_summary
+from ..seed.generate import resting_hr_for, seed_database, seven_day_summary
 from ..seed.biometrics import seed_biometric_series
 from ..sim.scenario import DEFAULT_SCENARIO, Scenario
 from ..sim.source import SimSource
@@ -163,7 +163,13 @@ def build_pipeline(settings: Settings, *, source: Literal["sim"],
     reasoner = Reasoner(db, frame_store, client, speech, settings,
                         seven_day_summary=lambda: seven_day_summary(db, end_day))
     episodes = EpisodeBuilder(db, timings)
-    gate = TriggerGate(default_triggers(timings, settings.demo_mode), timings, db,
+    # SPEC §14.3: the biometric_anomaly trigger reads the seeded wearable HR
+    # series on the tick clock; the gate never imports the seed modules.
+    feed = CallableBiometricFeed(
+        lambda t0, t1: db.biometric_series("heart_rate", t0, t1),
+        lambda: resting_hr_for(db, end_day),
+    )
+    gate = TriggerGate(default_triggers(timings, settings.demo_mode, feed=feed), timings, db,
                        episodes, reasoner.try_escalate, settings.demo_mode)
     sim_source = SimSource(scenario or DEFAULT_SCENARIO, frame_store, speed=speed)
     if seed_db:
