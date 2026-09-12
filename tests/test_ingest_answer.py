@@ -251,6 +251,30 @@ def test_an_answer_reaches_the_handler_and_is_counted() -> None:
     assert (qid, text, heard) == (QID, "yeah, two", True)
 
 
+async def test_an_answer_from_a_socket_the_question_was_never_sent_to_is_ignored() -> None:
+    """A second connected phone — or a stale one not yet reaped — must not be
+    able to finalize a question `pick` sent to someone else (ASK_DESIGN §8.2:
+    one socket carries the whole exchange; `claim_answer` otherwise accepts by
+    question id alone, so anything with the id could win)."""
+    link = ingest.GlassesLink()
+    client_a, client_b = SendableSocket(), SendableSocket()
+    link.add_client(client_a)
+    link.add_client(client_b)
+    seen = _answers(link)
+
+    assert await link.send_to(client_a, wire.ask_message(QID, 8.0, "yes_no", "Beer?"))
+
+    ingest._handle(link, wire.answer_message(QID, "nope, water", heard=True), client_b)
+    assert seen == [], "client B never got this question and must not be able to answer it"
+    assert link.n_answers == 0
+
+    ingest._handle(link, wire.answer_message(QID, "yeah, one", heard=True), client_a)
+    assert len(seen) == 1
+    qid, text, heard, _t = seen[0]
+    assert (qid, text, heard) == (QID, "yeah, one", True)
+    assert link.n_answers == 1
+
+
 def test_the_answer_is_stamped_on_the_macs_clock_not_the_phones() -> None:
     """§8.4: the phone's `t` is metadata. Expiry is computed on this machine."""
     link = ingest.GlassesLink()

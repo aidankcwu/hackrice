@@ -113,6 +113,15 @@ class GlassesLink:
         self._order: dict[int, int] = {}
         self._order_seq = 0
 
+        # Which socket a sent question actually went to, question_id -> id(websocket)
+        # (ASK_DESIGN §8.2, §8.7). `pick` chooses one socket for the whole exchange,
+        # but with two phones connected any of them can still send an `answer` with
+        # that question's id — this is what lets `_handle_answer` tell the one that
+        # was actually asked from a second or stale one that was not. Recorded in
+        # `send_to` when the outgoing message is an `ask`, popped once the question
+        # is resolved.
+        self._question_socket: dict[str, int] = {}
+
         #: Set by the bridge to `QuestionManager.on_answer` (ASK_DESIGN §8.11).
         #: Called synchronously with (question_id, text, heard, mac_recv_t).
         self.on_answer: Callable[[str, str, bool, float], None] | None = None
@@ -239,11 +248,16 @@ class GlassesLink:
         """
         try:
             await websocket.send_text(message)
-            return True
         except Exception as exc:  # noqa: BLE001
             log.warning("ingest: send to phone failed: %s: %s", type(exc).__name__, exc)
             self.drop_client(websocket)
             return False
+        sent = wire.decode(message)
+        if sent.get("type") == wire.ASK:
+            question_id = sent.get("question_id")
+            if isinstance(question_id, str) and question_id:
+                self._question_socket[question_id] = id(websocket)
+        return True
 
     async def send_text(self, message: str) -> int:
         """Push a `wire` message to every connected phone. Returns how many got it.
@@ -470,7 +484,7 @@ def _handle(link: GlassesLink, raw: str | bytes, websocket: Any = None) -> None:
             ",".join(sorted(caps)) or "none",
         )
     elif mtype == wire.ANSWER:
-        _handle_answer(link, msg)
+        _handle_answer(link, msg, websocket)
     elif mtype in (wire.PONG, wire.ECHO):
         log.info("ingest: %s %s", mtype, msg.get("text", ""))
     elif mtype == wire.PING:
@@ -482,13 +496,19 @@ def _handle(link: GlassesLink, raw: str | bytes, websocket: Any = None) -> None:
         log.info("ingest: ignoring message of type %r", mtype)
 
 
-def _handle_answer(link: GlassesLink, msg: dict[str, Any]) -> None:
+def _handle_answer(link: GlassesLink, msg: dict[str, Any], websocket: Any = None) -> None:
     """One `answer` from the phone: validate, count, hand to the manager.
 
     The timestamp handed on is this Mac's receipt time, not the phone's `t`
     (ASK_DESIGN §8.4). The phone's clock is not authoritative, and an answer
     labelled a minute ago would be compared against an expiry computed on the
     Mac's clock and could resolve as "too late" for a wearer who replied at once.
+
+    `websocket` is the connection this answer arrived on. With one phone
+    connected it is always the one the question was sent to; with two, a second
+    or stale connection could otherwise finalize a question it never received
+    (ASK_DESIGN §8.2 picks one socket for the exchange, but `claim_answer`
+    accepts by question id alone). See the `_question_socket` check below.
 
     The callback runs synchronously — `QuestionManager.on_answer` claims the row
     and schedules the parse, both bounded — and any exception it raises is
@@ -518,6 +538,26 @@ def _handle_answer(link: GlassesLink, msg: dict[str, Any]) -> None:
             "ingest: answer %s carried a non-boolean `heard`: %r", question_id, heard
         )
         return
+
+    sent_to = link._question_socket.get(question_id)
+    if (
+        sent_to is not None
+        and websocket is not None
+        and id(websocket) != sent_to
+        and any(id(ws) == sent_to for ws in link.clients)
+    ):
+        # The socket this question was actually sent to is still connected, so
+        # this is a second (or stale, not-yet-reaped) client trying to finalize
+        # a question it was never asked — never let it win a race with the one
+        # that was. If that original socket has since disconnected, this is
+        # instead the phone finishing an exchange it started before a drop —
+        # "glasses off and on" (XCODE_ASK.md §7) — and must go through as before.
+        log.info(
+            "ingest: ignoring answer to %s from a socket it was never sent to",
+            question_id,
+        )
+        return
+    link._question_socket.pop(question_id, None)
 
     link.n_answers += 1
     recv_t = time.time()
