@@ -178,7 +178,7 @@ class Timings:
             biometric_window=20.0,
             biometric_hr_ratio=1.4,
             biometric_cooldown=60.0,
-            speech_min_gap=30.0,
+            speech_min_gap=20.0,
             speech_max_per_hour=20,
             t1_max_concurrent=1,
             watch_default_after_s=60.0,
