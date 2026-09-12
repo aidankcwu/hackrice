@@ -38,6 +38,7 @@ const ICON: Record<DecisionAction["type"], string> = {
   log_insight: "◆",
   watch: "◷",
   speak: "◖",
+  ask: "?",
   nothing: "·",
 };
 
@@ -82,6 +83,31 @@ function ActionRow({ action, spoke }: { action: DecisionAction; spoke: boolean }
               <span className="text-[10px] font-semibold uppercase tracking-[.08em] text-amber-300/80">
                 proposed, suppressed by limiter
               </span>
+            )}
+          </span>
+        )}
+        {action.type === "ask" && (
+          <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className={`rounded px-1.5 py-[.1rem] ${action.question_id ? "bg-violet-400/15 font-semibold text-violet-100" : "bg-white/[.06] text-zinc-300"}`}>
+              “{action.text}”
+            </span>
+            <span className="rounded-full border border-violet-300/50 bg-violet-400/25 px-1.5 text-[10px] font-black uppercase tracking-[.1em] text-violet-100">
+              asked
+            </span>
+            {action.answer_kind && (
+              <span className="rounded-full border border-white/10 px-1.5 text-[10px] font-bold uppercase tracking-[.08em] text-zinc-400">
+                {action.answer_kind}
+              </span>
+            )}
+            {/* `outcome` is "sent" or "suppressed:<guard>" — the guard name is the
+                whole point of showing it, so print the reason, not just "suppressed". */}
+            {action.outcome && action.outcome !== "sent" && (
+              <span className="text-[10px] font-semibold uppercase tracking-[.08em] text-amber-300/80">
+                {action.outcome.replace(":", " · ")}
+              </span>
+            )}
+            {action.question_id && (
+              <span className="font-mono text-[10px] text-zinc-600">{action.question_id}</span>
             )}
           </span>
         )}
