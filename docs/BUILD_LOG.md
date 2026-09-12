@@ -98,3 +98,32 @@ Astra 6 reviewed the plan read-only against the spec. Objections we adopted:
 - **Stage line:** "Plain code decides *when* to think. Seven conditions, each
   evaluated over a window of seconds, each with its own cooldown, and a rule
   that a sustained condition escalates once — not every second."
+
+## Sat 12 Sep, ~03:35 — S3 reasoner (Opus), S4 scoring (Opus), S5b dashboard (Sol)
+
+- **S3.** One GPT call per escalation, structured JSON out. The envelope
+  interleaves a compact tick table with four JPEGs chosen by perceptual-hash
+  change, each labelled with its timestamp and sensor fields, trigger frame
+  last. Evidence frames are copied to a durable table *before* the call. The
+  single T1 slot is a non-blocking try-lock; a busy reasoner drops and logs.
+  Fake mode is an explicit flag. **Live smoke:** `gpt-5.4-mini`, ~2.3 s,
+  returned "annotate + log_insight + speak(low)" on a late-coffee frame.
+- **Persona.** Rishi wrote the T1 stable prefix in their own voice: short,
+  direct, no cheerleading, say it once when actionable, otherwise write it
+  down and stay quiet.
+- **S4.** Every §8 row is a `MetricSpec` with a 0–1 score function. Live
+  episodes and seeded WHOOP/phone rows go through the same scorer and come
+  out tagged `live` or `seeded`. The seeded week has three late-caffeine days
+  each followed by a short, low-HRV night, and the 7-day summary that feeds
+  T1 is derived from the rows, not hardcoded.
+- **S5b.** Next.js dashboard against the API contract, polling at 1 s.
+  Centrepiece is the decision feed: every escalation, including the silent
+  ones, one line each. Mock mode renders the whole thing with no backend.
+  Sol's sandbox had no network, so the supervisor ran the install and build.
+- **Astra caught two more bugs in review:** decision ids allocated from a row
+  count could collide under contention and silently lose a dropped decision;
+  and seeding on consecutive days never advanced the window. Both to Sonnet.
+- **Stage line:** "Ninety percent of the time the system decides to say
+  nothing. On stage that looks broken, so the dashboard shows every silent
+  decision as a line: what it saw, what it concluded, and that it chose
+  silence."
