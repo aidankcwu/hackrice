@@ -30,9 +30,10 @@ PONG = "pong"
 # Mac -> phone
 SPEAK = "speak"      # {"text": ..., "urgency": ...} — AVSpeechSynthesizer path (A16)
 AUDIO = "audio"      # pre-rendered audio bytes — ElevenLabs path (A18)
-PING = "ping"
 
 # both directions
+PING = "ping"        # keepalive; the phone sends one every 10 s so the Mac's
+                     # INGEST_IDLE_TIMEOUT_S doesn't close an idle-but-live socket
 ECHO = "echo"        # A11 only: prove the socket before adding payload
 
 

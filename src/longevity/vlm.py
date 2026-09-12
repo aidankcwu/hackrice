@@ -30,6 +30,7 @@ Frame time is the honest, conservative number.
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 import json
 import logging
 import os
@@ -132,7 +133,8 @@ class T0Tagger:
         self.errors = 0
         self.ticks_asked = 0
         self.ticks_served = 0
-        self._latencies: list[float] = []
+        self._latencies: deque[float] = deque(maxlen=200)
+        self._outcomes: deque[str] = deque(maxlen=50)
 
     # -- lifecycle --
 
@@ -200,15 +202,18 @@ class T0Tagger:
                 # it lands a millisecond later — by then the tick it belonged to is
                 # written and the next call is more valuable than this one.
                 self.overruns += 1
+                self._outcomes.append("overrun")
                 continue
             except asyncio.CancelledError:
                 return
             except Exception as exc:  # noqa: BLE001 - a bad call must not stop the clock
                 self.errors += 1
+                self._outcomes.append("error")
                 log.warning("T0 VLM call failed: %s", exc)
                 continue
 
             self._latencies.append(time.perf_counter() - started)
+            self._outcomes.append("returned")
             self.returned += 1
             # Overwrite any previous unconsumed result: the newer observation wins.
             self._pending = (coerce(raw), frame_t)
@@ -230,6 +235,25 @@ class T0Tagger:
             f"overrun={self.overruns} err={self.errors} "
             f"p50={p50 * 1000:.0f}ms frames_dropped={self._slot.dropped}"
         )
+
+    def stats(self) -> dict[str, int | float]:
+        """Structured live-demo health for the most recent calls."""
+        lat = sorted(list(self._latencies)[-50:])
+
+        def percentile(fraction: float) -> float:
+            if not lat:
+                return 0.0
+            return lat[min(len(lat) - 1, int((len(lat) - 1) * fraction))] * 1000
+
+        return {
+            "calls": self.calls,
+            "returned": self.returned,
+            "overruns": self.overruns,
+            "errors": sum(outcome == "error" for outcome in self._outcomes),
+            "latency_p50_ms": round(percentile(0.50), 1),
+            "latency_p90_ms": round(percentile(0.90), 1),
+            "budget_s": self._budget,
+        }
 
 
 # --- Clients ------------------------------------------------------------------

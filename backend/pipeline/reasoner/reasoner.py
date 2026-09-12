@@ -102,6 +102,8 @@ class Reasoner:
         self.dropped_timeout = 0
         self.dropped_error = 0
         self.spoke_count = 0
+        self.last_latency_ms: int | None = None
+        self.last_decision_t: float | None = None
 
     # -- admission --------------------------------------------------------
 
@@ -221,6 +223,8 @@ class Reasoner:
         self, esc: Escalation, frames: dict[str, bytes], decision_id: str
     ) -> None:
         started = time.perf_counter()
+        self.last_decision_t = esc.t
+        self.last_latency_ms = None
         try:
             messages = self._envelope(esc, frames)
 
@@ -254,6 +258,8 @@ class Reasoner:
             latency_ms = meta.get("latency_ms")
             if latency_ms is None:
                 latency_ms = int((time.perf_counter() - started) * 1000)
+            self.last_latency_ms = int(latency_ms)
+            self.last_decision_t = esc.t
 
             decision = Decision(
                 id=decision_id,
@@ -287,6 +293,8 @@ class Reasoner:
         except Exception:  # pragma: no cover - defensive
             log.exception("T1 run failed for %s", decision_id)
         finally:
+            if self.last_latency_ms is None:
+                self.last_latency_ms = int((time.perf_counter() - started) * 1000)
             self._busy = False
             try:
                 self._slot.release()
@@ -367,5 +375,7 @@ class Reasoner:
             "frames_missing": self.evidence.missing,
             "model": getattr(self.client, "model", ""),
             "deadline_s": self.t1_deadline_s,
+            "last_latency_ms": self.last_latency_ms,
+            "last_decision_t": self.last_decision_t,
             **{f"speech_{k}": v for k, v in self.speech.stats().items()},
         }

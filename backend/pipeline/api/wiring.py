@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import logging
 import time
+from collections import deque
 from dataclasses import dataclass
 from typing import Literal
 
@@ -79,6 +80,13 @@ class Pipeline:
         self._score_event = asyncio.Event()
         self._last_score_t: float | None = None
         self._stopping = False
+        # Rolling (tick_t, has_ai) samples for the 60 s coverage figure. Bounded so a
+        # burst of out-of-order timestamps cannot grow it; expired on read as well as
+        # on write so it goes stale honestly when ticks stop.
+        self._ai_window: deque[tuple[float, bool]] = deque(maxlen=400)
+        self._last_tick_wall: float | None = None
+        self._t1_error_snapshot = (0, 0)
+        self._t1_snapshot_at = time.monotonic()
 
     async def start(self) -> None:
         if self._tasks:
@@ -95,6 +103,10 @@ class Pipeline:
 
         async def downstream() -> None:
             async for tick in downstream_sub:
+                self._ai_window.append((tick.t, tick.ai is not None))
+                self._last_tick_wall = time.time()
+                while self._ai_window and tick.t - self._ai_window[0][0] > 60.0:
+                    self._ai_window.popleft()
                 self.db.insert_tick(tick)
                 self.episodes.on_tick(tick)
                 self.gate.on_tick(tick)
@@ -173,10 +185,79 @@ class Pipeline:
             "tick_interval_s": self.settings.tick_interval_s,
             "gate": self.gate.stats(),
             "speech_spoken": len(spoken),
+            "health": self._health(),
         }
         if self.capture is not None:
             result["capture"] = self.capture.stats()
         return result
+
+    def _health(self) -> dict[str, object]:
+        phone = self.capture.link.stats() if self.capture is not None else None
+        # Ticks stopped -> the window is history, not "now". Wall clock on purpose:
+        # this is about whether the process is alive, not about the tick clock.
+        # Fall back to start time, not just the last tick: a T0 that never produced a
+        # single tick leaves _last_tick_wall at None, and "dead since boot" is exactly
+        # the case the alarm is for.
+        reference = (self._last_tick_wall if self._last_tick_wall is not None
+                     else self.started_at)
+        ticks_stale = reference is not None and time.time() - reference > 60.0
+        window = [] if ticks_stale else list(self._ai_window)
+        coverage = (sum(has_ai for _, has_ai in window) / len(window)) if window else 0.0
+        tagger = self.capture.tagger.stats() if self.capture is not None else None
+        t0 = {"ai_coverage_60s": coverage, "tagger": tagger}
+        t1 = self.reasoner.stats()
+        if self.capture is None:
+            speech: dict[str, object] = {"mode": "console"}
+        else:
+            speech = self.capture.speech_stats()
+        problems = health_problems(
+            source=self.source_name, phone=phone, ai_coverage=coverage,
+            ai_ticks=len(window), tagger=tagger, t1=t1,
+            t1_error_snapshot=self._t1_error_snapshot, speech=speech,
+            ticks_stale=ticks_stale,
+        )
+        now = time.monotonic()
+        if now - self._t1_snapshot_at >= 300:
+            self._t1_error_snapshot = (int(t1["dropped_error"]), int(t1["dropped_timeout"]))
+            self._t1_snapshot_at = now
+        return {"phone": phone, "t0": t0, "t1": t1, "speech": speech,
+                "ok": not problems, "problems": problems}
+
+
+def health_problems(*, source: str, phone, ai_coverage: float, ai_ticks: int,
+                    tagger, t1, t1_error_snapshot, speech,
+                    ticks_stale: bool = False) -> list[str]:
+    """Apply the documented demo rules; each problem name maps to one visible remedy.
+
+    phone_disconnected  glasses source and no phone socket        -> tap Connect / check IP
+    no_packets_10s      phone socket up but no frame in 10 s      -> glasses not streaming
+    no_ticks_60s        T0 has not produced a tick in 60 s        -> capture source is dead
+    ai_coverage_low     <50% of the last 60 s of ticks carry `ai` -> Gemini slow / key
+    vlm_errors          >5 VLM errors in the last 50 calls        -> Gemini key / quota
+    t1_errors           reasoner errors or timeouts since snapshot -> OpenAI key / network
+    tts_failing         last ElevenLabs call failed               -> key / voice / quota
+    """
+    problems: list[str] = []
+    if source == "glasses" and (phone is None or phone["connected"] == 0):
+        problems.append("phone_disconnected")
+    if source == "glasses" and phone and phone["connected"]:
+        age = phone.get("latest_age_s")
+        since = phone.get("connected_for_s")
+        # Either the last frame is old, or there has never been one and the socket has
+        # been up long enough that pings alone are keeping it "connected".
+        if (age is not None and age > 10) or (age is None and since is not None and since > 10):
+            problems.append("no_packets_10s")
+    if ticks_stale:
+        problems.append("no_ticks_60s")
+    if ai_ticks >= 20 and ai_coverage < 0.5:
+        problems.append("ai_coverage_low")
+    if tagger is not None and tagger["errors"] > 5:
+        problems.append("vlm_errors")
+    if (t1["dropped_error"], t1["dropped_timeout"]) > tuple(t1_error_snapshot):
+        problems.append("t1_errors")
+    if speech.get("last_error"):
+        problems.append("tts_failing")
+    return problems
 
 
 def build_pipeline(settings: Settings, *,
@@ -202,7 +283,9 @@ def build_pipeline(settings: Settings, *,
             camera=camera, vlm=vlm, flow=flow,
         )
         frame_store = RingFrameStore(capture.ring)
-        set_speak_fn(make_speak_fn(capture.link, settings))
+        speak_fn = make_speak_fn(capture.link, settings)
+        capture._speech_stats = speak_fn.stats  # type: ignore[attr-defined]
+        set_speak_fn(speak_fn)
     end_day = day_key(time.time())
     if seed_db:
         seed_database(db, end_day=end_day)

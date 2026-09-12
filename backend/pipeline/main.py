@@ -19,6 +19,15 @@ from .db import Database
 from .models import Tick
 
 
+def fresh_database(path: Path) -> list[Path]:
+    """Remove SQLite's database and sidecars, returning the files that existed."""
+    targets = (path, Path(f"{path}-wal"), Path(f"{path}-shm"))
+    removed = [target for target in targets if target.exists()]
+    for target in targets:
+        target.unlink(missing_ok=True)
+    return removed
+
+
 def format_tick(tick: Tick) -> str:
     """Compact diagnostic representation retained for library callers."""
     if tick.ai is None:
@@ -81,6 +90,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help="seconds between ticks (glasses emit every 1.5 s)")
     parser.add_argument("--reasoner", choices=["openai", "fake"], default="fake")
     parser.add_argument("--db", default=str(defaults.db_path))
+    parser.add_argument("--fresh", action="store_true", help="delete the DB and WAL files before startup")
     parser.add_argument("--port", type=int, default=8010)
     parser.add_argument("--no-seed", action="store_true")
     parser.add_argument("--headless", action="store_true")
@@ -104,6 +114,11 @@ def main(argv: list[str] | None = None) -> int:
             "OPENAI_API_KEY is required for --reasoner openai; "
             "use --reasoner fake otherwise"
         )
+    # After validation on purpose: a start that is about to fail must not have
+    # already destroyed the previous demo's database.
+    if args.fresh:
+        fresh_database(settings.db_path)
+        logging.getLogger(__name__).info("fresh database: %s", settings.db_path)
     if args.headless:
         try:
             return asyncio.run(run_headless(args, settings))
