@@ -99,7 +99,15 @@ async def provider_checks(settings: Settings, offline: bool) -> list[Check]:
     checks: list[Check] = []
     try:
         from longevity.vlm import build_client
-        frame = next(iter(sorted((Path("../data/corpus_smoke")).glob("*.jpg"))))
+        # The recorded corpus at the repo root (gitignored, `frame_<millis>.jpg`).
+        # Bare next() here raised StopIteration on an empty dir, which surfaced as
+        # "Gemini FAIL StopIteration" and read like a broken key.
+        frames = sorted(Path("../corpus").glob("*.jpg"))
+        if not frames:
+            raise FileNotFoundError(
+                "no JPEGs in ../corpus - record some with the app's Record corpus button"
+            )
+        frame = frames[0]
         client = build_client("gemini")
         started = time.perf_counter()
         tagged = await client.tag(frame.read_bytes())

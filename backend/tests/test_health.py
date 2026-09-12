@@ -57,3 +57,28 @@ def test_non_glasses_sources_ignore_phone_rules() -> None:
 def test_t1_and_tts_rules() -> None:
     assert "t1_errors" in _problems(t1={"dropped_error": 1, "dropped_timeout": 0})
     assert "tts_failing" in _problems(speech={"last_error": "boom"})
+
+
+def test_no_ticks_is_measured_from_start_when_none_ever_arrived(tmp_path) -> None:
+    """A T0 that never emitted a tick must still trip no_ticks_60s.
+
+    `_last_tick_wall` stays None in that case, so keying staleness off it alone
+    made "dead since boot" -- the loudest failure there is -- the one state the
+    alarm could not reach.
+    """
+    import time
+
+    from pipeline.api.wiring import build_pipeline
+    from pipeline.config import Settings
+
+    pipeline = build_pipeline(
+        Settings(db_path=tmp_path / "health.db"),
+        source="sim", reasoner_mode="fake", speed=1,
+    )
+    assert pipeline._last_tick_wall is None
+
+    pipeline.started_at = time.time() - 61
+    assert "no_ticks_60s" in pipeline._health()["problems"]
+
+    pipeline.started_at = time.time()
+    assert "no_ticks_60s" not in pipeline._health()["problems"]

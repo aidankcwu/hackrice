@@ -195,8 +195,12 @@ class Pipeline:
         phone = self.capture.link.stats() if self.capture is not None else None
         # Ticks stopped -> the window is history, not "now". Wall clock on purpose:
         # this is about whether the process is alive, not about the tick clock.
-        ticks_stale = (self._last_tick_wall is not None
-                       and time.time() - self._last_tick_wall > 60.0)
+        # Fall back to start time, not just the last tick: a T0 that never produced a
+        # single tick leaves _last_tick_wall at None, and "dead since boot" is exactly
+        # the case the alarm is for.
+        reference = (self._last_tick_wall if self._last_tick_wall is not None
+                     else self.started_at)
+        ticks_stale = reference is not None and time.time() - reference > 60.0
         window = [] if ticks_stale else list(self._ai_window)
         coverage = (sum(has_ai for _, has_ai in window) / len(window)) if window else 0.0
         tagger = self.capture.tagger.stats() if self.capture is not None else None
