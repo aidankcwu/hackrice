@@ -302,6 +302,9 @@ metric is seeded and labelled as such.
 | Night noise | Seeded | Phone mic |
 | Balance, breathwork, purpose | Seeded | User-logged / questionnaire |
 
+The wearable-only subset (WHOOP, Oura, Apple Watch), with device, native
+resolution, and seeded shape, is specified in §14.
+
 ---
 
 ## 8. Reference thresholds
@@ -697,3 +700,78 @@ Neither role covers these, and they are how two-person teams lose:
   against the actual script or the triggers won't fire inside four minutes.
 - **Charging the glasses.** Continuous streaming drains them in well under an
   hour. Whoever holds them owns keeping them charged and off until judging.
+
+---
+
+## 14. Wearable biometrics (seeded)
+
+The metrics in this section can only be collected by a wearable. The camera
+cannot see them and the phone cannot infer them. Per the §7 rule they are all
+**hardcoded** for the demo, labelled `seeded`, with `source` set to the device
+that would actually provide them. Three devices are named because each has a
+public API and each is the strongest source for something the others are not:
+
+| Device | Best at | Integration path |
+|---|---|---|
+| **WHOOP** | Nightly HRV and recovery, strain, journal tags (alcohol, caffeine, nicotine, cannabis) | WHOOP API v2 (REST, OAuth) |
+| **Oura Ring** | Sleep staging, readiness, skin temperature deviation, daytime HR every 5 min | Oura API v2 (REST, OAuth) |
+| **Apple Watch** | Intraday HR at 1 Hz during workouts, workouts with pace and HR zones, VO2 max, walking steadiness, time in daylight | HealthKit on the phone, forwarded by Person A's iOS bridge |
+
+### 14.1 Metric set
+
+| Metric | Device | Native resolution | Seeded shape | Feeds |
+|---|---|---|---|---|
+| Overnight HRV (ln RMSSD) | WHOOP, Oura | one per night | one value per day, plus a `hrv_rmssd_ratio` against a fixed 60-day baseline | §8 recovery adequacy; the alcohol-night HRV dip |
+| Resting heart rate | WHOOP, Oura, Apple Watch | one per night | one value per day | baseline for §14.3 |
+| Respiratory rate | WHOOP, Oura, Apple Watch | one per night | one value per day | recovery context |
+| Skin temperature deviation | Oura, WHOOP | one per night | one value per day, °C from baseline | recovery context |
+| Blood oxygen (SpO2) | all three | nightly average | one value per day | recovery context |
+| Sleep duration, stages, bed and wake time | all three | one per night | `sleep_hours`, `bed_time`, `wake_time`, `deep_min`, `rem_min` per day | §8 sleep duration; SRI derives from bed and wake |
+| Sleep regularity index (SRI) | derived from any | one per night | one value per day | §8 regularity target ≥ 80 |
+| Recovery / readiness score | WHOOP recovery, Oura readiness | one per morning | one value per day, 0–100 | 7-day summary line for T1 |
+| Strain | WHOOP | one per day | one value per day | marathon load context |
+| Intraday heart rate | Apple Watch (1 Hz in workouts, every few min otherwise), WHOOP (per minute), Oura (every 5 min daytime) | per minute or better | **per-minute series for the demo day**, stamped on the tick clock | §14.3 cross-reference with frames |
+| Workouts | Apple Watch, WHOOP | per workout | `run_km`, `run_pace`, `run_avg_hr` per day, zero on rest days | marathon block on track |
+| VO2 max | Apple Watch | periodic estimate | one value, constant across the week | marathon context |
+| Walking steadiness | Apple Watch | daily | one value per day | §8 balance proxy |
+| Time in daylight | Apple Watch (ambient light sensor) | daily minutes | one value per day | §8 daytime light dose — the seeded source §7 defers to |
+| Journal tags | WHOOP Journal, Oura tags | daily yes/no | `journal_alcohol`, `journal_caffeine_late`, `journal_nicotine`, `journal_cannabis` per day | persona cut-down goals; corroborate camera sightings |
+
+Steps, gait speed, and night noise stay on the phone side of §7 and are not
+repeated here.
+
+### 14.2 Seeded shape
+
+- **Daily values** use the existing `seeded` table (`day, metric, value, unit,
+  source`) with `source ∈ {whoop, oura, apple_watch}`. The scorer and the
+  `GET /api/seeded` route need no schema change.
+- **The intraday HR series** is a new table, `biometric_series (t, metric,
+  value, source)`, with `t` on the same clock as `tick.t` so it runs under
+  `--source sim --speed N` without desyncing. Seed the demo day only. Expose it
+  as `GET /api/biometrics?metric=heart_rate&from=&to=`.
+- **Deterministic fixtures, no randomness**, same as the existing 7-day seed.
+  The planted pattern stays the one already in `seed/fixtures.py` (late coffee →
+  late bedtime → short sleep → low HRV) and is extended, not replaced: the
+  low-HRV days also carry a `journal_alcohol` or `journal_caffeine_late` tag, a
+  low recovery score, and a skipped or slow run. The rest days show the
+  opposite. The 7-day summary handed to T1 (§4.2 part 2) is rendered from these
+  rows, so T1 can cite them.
+
+### 14.3 Cross-referencing biometrics against frames
+
+This is the feature only glasses plus a wearable can deliver: a biometric
+anomaly explained by what the wearer was looking at.
+
+- **Trigger.** `biometric_anomaly`: intraday HR above `resting_hr × 1.4` for
+  a sustained window (default 3 min, `DEMO_MODE` 20 s) while `activity` is not
+  `exercising` or `walking`. Evaluated by the trigger gate over the seeded
+  series on the tick clock, with its own cooldown, like every other §3 trigger.
+- **Escalation.** Same envelope as any camera trigger (§4.3): the tick table and
+  four frames from the window, plus one extra text line carrying the HR series
+  for the window. T1 is asked what was happening, not whether HR was high.
+- **Output.** T1 annotates, and logs an insight of the form
+  `14:32 HR 118 (resting 58), seated, frames show a three-person stand-up` —
+  the wearable gives the number, the frames give the cause.
+- **Demo.** One HR spike is planted at a scripted scenario moment so the
+  trigger fires once inside the four-minute demo.
+
