@@ -312,3 +312,24 @@ Astra 6 reviewed the plan read-only against the spec. Objections we adopted:
 - **Stage line:** "Our wearable API died mid-hackathon. Two hours later the
   replacement was live, because nothing downstream of the sink knew or cared
   which API the numbers came from."
+
+## Sat 12 Sep, 15:25 — The Fitbit is live
+
+- First real sync through the Google Health API: 9,440 heart-rate samples
+  at 1-second resolution, HRV, SpO2, steps, resting HR 64, and last night's
+  sleep — 8.7 h, 91 min deep, 107 min REM, in bed 01:14, up 09:56 — all
+  labelled `fitbit`, all from the "Google Fitbit Air" on the wearer's wrist.
+- Four things the reference did not say and the live API did: the time
+  range goes in an AIP-160 `filter`, not `startTime`/`endTime`; date fields
+  accept `>=` and `<` but not `<=`; sleep and exercise accept no time filter
+  at all (list unfiltered, newest first, filter client-side); UTC offsets
+  arrive as Duration strings like `-18000s`. Each one was a 400 or a
+  traceback, each found by calling the real endpoint with the real token,
+  each fixed in under five minutes because the sync reports partial failures
+  instead of dying.
+- The dashboard's heart-rate strip now reads `live: fitbit` with the
+  wearer's actual trace. Nothing in the gate, reasoner, scorer, or dashboard
+  changed for the second wearable API of the night.
+- **Stage line:** "The API we planned for was shut down the week of the
+  hackathon. We read Google's replacement docs at 6 a.m., built against
+  them, and had a real heart-rate trace on screen before breakfast."

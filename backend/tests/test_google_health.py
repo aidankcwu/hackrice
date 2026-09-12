@@ -84,3 +84,15 @@ async def test_routes_authorize_callback_status_and_sync():
         assert (await http.get("/api/wearables/google-health/status")).json()["polling"] is True
         assert (await http.post("/api/wearables/google-health/sync")).status_code == 200
     set_sync(None)
+
+
+def test_offset_parsing_accepts_duration_strings() -> None:
+    from datetime import timedelta
+    from pipeline.wearables.google_health import _offset_dt, _parse_offset
+
+    assert _parse_offset("-18000s") == timedelta(seconds=-18000)
+    assert _parse_offset("3600.5s") == timedelta(seconds=3600.5)
+    assert _parse_offset("-05:00") == timedelta(hours=-5)
+    assert _parse_offset("garbage") is None
+    dt = _offset_dt("2026-09-12T11:04:00Z", "-18000s")
+    assert dt.hour == 6 and dt.utcoffset() == timedelta(hours=-5)

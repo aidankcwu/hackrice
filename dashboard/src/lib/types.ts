@@ -35,6 +35,12 @@ export interface MetricScore { id: string; layer: string; metric: string; source
 export interface Scores { overall: number; metrics: MetricScore[] }
 export interface PendingCheck { id: string; due_t: number; reason: string; trigger?: string }
 export interface TodaySummary { lines: string[] }
+/** One long-format row of `GET /api/seeded` — the shape the backend actually
+ * stores (`pipeline.models.SeededRow`), before `api.seeded` pivots it into a
+ * `SeededDay`. `source` is the device that produced the row: a real wearable
+ * name (`fitbit`) when a connected device backfilled the day, one of the demo
+ * devices (`whoop`, `oura`, `apple_watch`) when it is seeded. */
+export interface SeededMetricRow { day: string; metric: string; value: number; unit?: string; source?: string }
 export interface SeededDay { date: string; sleep_h: number; hrv_ratio: number; steps: number; sri: number; caffeine_last?: string; recovery?: number; resting_hr?: number; run_km?: number; journal?: string; sources?: Record<string, string> }
 export type BiometricOrigin = "seed" | "live";
 export interface Biometrics { metric: string; source: string; origin?: BiometricOrigin; points: [number, number][] }

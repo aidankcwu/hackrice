@@ -143,17 +143,23 @@ class GoogleHealthClient:
             next_day = (end_dt.astimezone(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%d")
             # Only >= and < are accepted on date fields (<= is a 400, verified live).
             flt = f'{snake}.date >= "{day(start)}" AND {snake}.date < "{next_day}"'
-        elif data_type in {"steps", "sleep", "exercise", "sedentary-period", "active-minutes"}:
+        elif data_type in {"sleep", "exercise"}:
+            # These reject every time filter member (verified live); the
+            # unfiltered list returns the most recent records, newest first.
+            # Callers filter by interval.startTime client-side.
+            flt = None
+        elif data_type in {"steps", "sedentary-period", "active-minutes"}:
             flt = f'{snake}.interval.start_time >= "{fmt(start)}" AND {snake}.interval.start_time < "{fmt(end)}"'
         else:
             flt = f'{snake}.sample_time.physical_time >= "{fmt(start)}" AND {snake}.sample_time.physical_time < "{fmt(end)}"'
-        params: dict[str, Any] = {"filter": flt,
-                                  "pageSize": 25 if data_type in {"sleep", "exercise"} else 1000}
+        params: dict[str, Any] = {"pageSize": 25 if data_type in {"sleep", "exercise"} else 1000}
+        if flt:
+            params["filter"] = flt
         while True:
             payload = await self.get(f"/users/me/dataTypes/{data_type}/dataPoints", params)
             for point in payload.get("dataPoints", []): yield point
             token = payload.get("nextPageToken")
-            if not token: break
+            if not token or flt is None: break  # unfiltered kinds: one page (newest 25) is enough
             params["pageToken"] = token
 
 
@@ -207,7 +213,7 @@ _DAILY = {
     "daily-resting-heart-rate": ("dailyRestingHeartRate", "resting_hr", "bpm", ("beatsPerMinute",)),
     "daily-heart-rate-variability": ("dailyHeartRateVariability", "hrv_rmssd_ms", "ms", ("rootMeanSquare", "rmssd")),
     "daily-respiratory-rate": ("dailyRespiratoryRate", "respiratory_rate", "breaths/min", ("breathsPerMinute",)),
-    "daily-sleep-temperature-derivations": ("dailySleepTemperatureDerivations", "skin_temp_dev", "°C", ("nightlyTemperatureCelsius",)),
+    "daily-sleep-temperature-derivations": ("dailySleepTemperatureDerivations", "skin_temp_c", "°C", ("nightlyTemperatureCelsius",)),
     "daily-oxygen-saturation": ("dailyOxygenSaturation", "spo2", "%", ("average", "percentage")),
 }
 def daily_to_payload(data_type: str, point: dict) -> dict:
@@ -216,11 +222,28 @@ def daily_to_payload(data_type: str, point: dict) -> dict:
     return {"device": "fitbit", "samples": [], "daily": [_daily(day, metric, value, unit, _model(point))] if day and value is not None else []}
 
 
+def _parse_offset(offset: str | None) -> timedelta | None:
+    """Google sends utcOffset as a Duration string ("-18000s", "3600.5s");
+    also accept "+HH:MM" / "-HHMM" for safety. None when unparseable."""
+    if not offset:
+        return None
+    text = offset.strip()
+    try:
+        if text.endswith("s"):
+            return timedelta(seconds=float(text[:-1]))
+        sign = -1 if text.startswith("-") else 1
+        digits = text.lstrip("+-").replace(":", "")
+        hh, mm = int(digits[:2]), int(digits[2:4] or 0)
+        return sign * timedelta(hours=hh, minutes=mm)
+    except (ValueError, IndexError):
+        return None
+
+
 def _offset_dt(text: str, offset: str | None) -> datetime:
     dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    if offset:
-        sign = -1 if offset.startswith("-") else 1; hh, mm = map(int, offset[1:].split(":"))
-        dt = dt.astimezone(timezone(sign * timedelta(hours=hh, minutes=mm)))
+    delta = _parse_offset(offset)
+    if delta is not None:
+        dt = dt.astimezone(timezone(delta))
     return dt
 def sleep_to_payload(points: list[dict] | dict) -> dict:
     if isinstance(points, dict): points = [points]
@@ -300,10 +323,26 @@ class GoogleHealthSync:
                 payloads.extend(converter(p) for p in await pull(kind, start))
             for kind in _DAILY:
                 payloads.extend(daily_to_payload(kind, p) for p in await pull(kind, days_start))
-            sleeps = await pull("sleep", days_start)
-            exercises = await pull("exercise", days_start)
+            def _since(points: list[dict[str, Any]], key: str) -> list[dict[str, Any]]:
+                keep = []
+                for p in points:
+                    st = (p.get(key) or {}).get("interval", {}).get("startTime")
+                    try:
+                        if st and _ts(st) >= days_start.timestamp():
+                            keep.append(p)
+                    except Exception:  # noqa: BLE001
+                        continue
+                return keep
+
+            sleeps = _since(await pull("sleep", days_start), "sleep")
+            exercises = _since(await pull("exercise", days_start), "exercise")
             # Longest sleep over the two-night window; exercises retain the last item per day.
-            payloads.extend((sleep_to_payload(sleeps), exercise_to_payload(exercises)))
+            for label, fn, arg in (("sleep", sleep_to_payload, sleeps), ("exercise", exercise_to_payload, exercises)):
+                try:
+                    payloads.append(fn(arg))
+                except Exception as exc:  # noqa: BLE001
+                    failures.append(f"{label} convert: {str(exc)[:160]}")
+                    log.warning("google health: %s conversion failed: %s", label, str(exc)[:200])
             result = merge(payloads); sent = self.sink(result)
             if inspect.isawaitable(sent): await sent
             self.last_sync_t, self.connected = now.timestamp(), True
