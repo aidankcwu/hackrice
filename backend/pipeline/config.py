@@ -132,6 +132,15 @@ class Settings(BaseSettings):
     #: Frame ring-buffer TTL in seconds (SPEC §2.5 / §12.3).
     frame_ttl_s: float = 90.0
 
+    # -- live wearables (SPEC §15). Read by pipeline.wearables via os.environ
+    # too; declared here so .env.example stays in sync with Settings. --------
+    fitbit_client_id: str | None = None
+    fitbit_client_secret: str | None = None
+    fitbit_redirect_uri: str = "http://localhost:8010/api/wearables/fitbit/callback"
+    fitbit_token_path: Path = Path("./data/fitbit_token.json")
+    fitbit_poll_s: int = 300
+    wearable_ingest_token: str | None = None
+
     @cached_property
     def timings(self) -> Timings:
         return Timings.demo() if self.demo_mode else Timings.production()
