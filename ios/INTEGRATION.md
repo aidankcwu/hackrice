@@ -107,3 +107,34 @@ nil would drop `done` on the floor, and MacLink holds no reference back.
 - **Trap:** `AVAudioSession.setCategory` throws OSStatus **−50** when a session already
   exists. Ignore it and speak anyway; returning early there silently kills every
   utterance. `MacLink.speak` already does this — don't "fix" it.
+
+## 6 Audio playback (A18)
+
+`MacLink.swift` does not yet handle inbound `audio` messages. Add an
+`AVAudioPlayer` property and route `audio` from `handle` with this code:
+
+```swift
+@ObservationIgnored private var player: AVAudioPlayer?
+
+private func playAudio(_ obj: [String: Any]) {
+  guard obj["format"] as? String == "mp3",
+    let encoded = obj["data"] as? String,
+    let data = Data(base64Encoded: encoded)
+  else { return }
+  do {
+    let session = AVAudioSession.sharedInstance()
+    try session.setCategory(.playback, options: [.allowBluetoothA2DP])
+    try session.setActive(true)
+  } catch {
+    print("audio session (non-fatal): \(error)")
+  }
+  do {
+    player = try AVAudioPlayer(data: data)
+    player?.prepareToPlay()
+    player?.play()
+  } catch { print("audio playback failed: \(error)") }
+}
+
+// In handle(_:), after decoding obj:
+if type == "audio" { playAudio(obj) }
+```

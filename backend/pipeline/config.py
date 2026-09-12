@@ -19,7 +19,7 @@ import logging
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BeforeValidator, Field
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -198,6 +198,9 @@ class Settings(BaseSettings):
 
     openai_api_key: str | None = None
     t1_model: str = "gpt-5.4-mini"
+    elevenlabs_api_key: str | None = None
+    elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"
+    speech_mode: Literal["auto", "text", "elevenlabs"] = "auto"
     demo_mode: bool = True
     db_path: Path = Path("./data/pipeline.db")
     #: Frame ring-buffer TTL in seconds (SPEC §2.5 / §12.3).

@@ -202,7 +202,7 @@ def build_pipeline(settings: Settings, *,
             camera=camera, vlm=vlm, flow=flow,
         )
         frame_store = RingFrameStore(capture.ring)
-        set_speak_fn(make_speak_fn(capture.link))
+        set_speak_fn(make_speak_fn(capture.link, settings))
     end_day = day_key(time.time())
     if seed_db:
         seed_database(db, end_day=end_day)

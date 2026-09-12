@@ -20,6 +20,10 @@ Person B's. Paths are relative to the integrated FastAPI service (default `:8010
    `pipeline.actions.speech.set_speak_fn(fn)` at startup. **`speak()` is
    fire-and-forget**: it must return immediately (schedule its own task) and
    never raise into B's action handler.
+   With ElevenLabs enabled, the Mac streams the rendered MP3 and sends
+   `{"type":"audio","format":"mp3","data":<base64>}` over the same socket.
+   MacLink must decode and play it with `AVAudioPlayer` using an
+   `.playback`/`.allowBluetoothA2DP` audio session (SPEC §11.4).
 
 Agreed details (from plan review):
 
