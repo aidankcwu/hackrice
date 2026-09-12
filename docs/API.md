@@ -51,6 +51,7 @@ Agreed details (from plan review):
 | `GET /api/pending_checks` | open `watch` rows |
 | `GET /api/summary/today` | annotate lines accumulated today (part 4 of the T1 envelope) |
 | `GET /api/seeded?days=7` | seeded integration rows (for the "7-day" panel) |
+| `GET /api/biometrics?metric=heart_rate&from=&to=` | `{metric, source, points: [[t, value], ...]}` — seeded wearable series on the tick clock (SPEC §14.2); defaults to the last hour |
 | `GET /api/events` | SSE stream (deferred — dashboard polls at 1 s for the demo) |
 | `GET /frames?refs=` | see seam §2 |
 
