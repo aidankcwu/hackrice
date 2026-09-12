@@ -127,3 +127,24 @@ Astra 6 reviewed the plan read-only against the spec. Objections we adopted:
   nothing. On stage that looks broken, so the dashboard shows every silent
   decision as a line: what it saw, what it concluded, and that it chose
   silence."
+
+## Sat 12 Sep, ~04:10 — End to end, for real
+
+- **S5a (Sol)** wired it into one FastAPI process: a single downstream
+  subscriber feeds the tick store, episode builder, and gate in that order,
+  the scorer runs on tick time, and every dashboard route exists. Sol's
+  sandbox couldn't bind a port, so the supervisor ran the HTTP smoke.
+- **First live run** (fake reasoner, 10× simulated time): ticks flowing at
+  ~62% AI coverage, four decisions from four different triggers, four
+  episodes, eighteen daily scores, today's memory populated. Port 8000 was
+  already taken by another service on the laptop; the stack now runs on 8010.
+- **Dashboard against live data** surfaced three contract mismatches that the
+  mock had hidden: summary lines are objects not strings, seeded rows are
+  long-format per metric, scores come as `{overall, scores}`. All fixed in the
+  client normaliser, plus a doubled time prefix on annotate lines.
+- **Sonnet (D2)** fixed Astra's two findings and found a third underneath:
+  seeded episode ids were keyed by window position, so overlapping windows
+  overwrote each other's days.
+- **Stage line:** "The mock dashboard looked perfect. The first minute of real
+  data found three lies in it. That's why we wired it tonight and not
+  tomorrow."
