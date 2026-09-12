@@ -31,6 +31,7 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 from .emit import JSONLWriter, SQLiteMirror, TickBus
 from .loop import T0Loop
 from .ring import FrameRing
+from . import speak
 from .server import ingest
 from .server.app import create_app
 from .sources.base import CaptureSource
@@ -62,6 +63,11 @@ async def run(args: argparse.Namespace) -> int:
     ring = FrameRing()
     link = ingest.GlassesLink()
     app = create_app(link=link, ring=ring)
+
+    # A17 — bind the process-wide speaker to the live socket so B can just call
+    # `from longevity.speak import speak`. Done here rather than inside speak.py so
+    # importing that module never reaches out and grabs global state.
+    speak.default_speaker().bind(link)
 
     bus = TickBus()
     mirror = SQLiteMirror(args.db) if args.db else None

@@ -30,13 +30,28 @@ final class MacLink {
   var spokenCount = 0
 
   @ObservationIgnored private let synth = AVSpeechSynthesizer()
+  /// Held as a property on purpose: a local AVAudioPlayer is deallocated the
+  /// instant playAudio returns and the sound cuts off mid-word.
+  @ObservationIgnored private var player: AVAudioPlayer?
 
   @ObservationIgnored private var task: URLSessionWebSocketTask?
   @ObservationIgnored let url: URL
 
   /// Dial the Mac's LAN IP. Never `localhost` — on the phone that resolves to the phone.
-  init(host: String = "10.135.100.7", port: Int = 8765) {
-    url = URL(string: "ws://\(host):\(port)/")!
+  ///
+  /// EDIT THESE TWO when moving between machines. `path` differs by target: the A11
+  /// echo server (tools/echo_server.py, port 8765) accepts any path, but the real
+  /// ingest server hard-codes `/ws/glasses` in `ingest.INGEST_PATH` and a bare `/`
+  /// 404s at the handshake.
+  static let defaultHost = "10.135.100.6"   // Rishi's Mac. `ipconfig getifaddr en0` to change.
+  static let defaultPort = 8010             // ingest (t0 --port 8010); 8765 = A11 echo server
+
+  init(
+    host: String = MacLink.defaultHost,
+    port: Int = MacLink.defaultPort,
+    path: String = "/ws/glasses"
+  ) {
+    url = URL(string: "ws://\(host):\(port)\(path)")!
   }
 
   func connect() {
@@ -81,6 +96,32 @@ final class MacLink {
     }
   }
 
+  /// A14 — send a pre-built `wire` message verbatim, with no envelope of its own.
+  /// `send(_:)` wraps its argument in {"type":"echo","text":...}, so a capture packet
+  /// pushed through it would arrive as an echo carrying JSON as a string and never
+  /// decode — the Mac would count it as `malformed`, not `received`.
+  /// `completion` is the delivery report CapturePacketSender requires: called exactly
+  /// once, `nil` on success. URLSession fires it on a background queue, hence @Sendable.
+  func sendRaw(_ json: String, completion: @escaping @Sendable (Error?) -> Void = { _ in }) {
+    guard let task else {
+      status = "not connected"
+      completion(URLError(.notConnectedToInternet))
+      return
+    }
+    task.send(.string(json)) { [weak self] error in
+      completion(error)
+      Task { @MainActor in
+        guard let self else { return }
+        if let error {
+          self.connected = false
+          self.status = "send failed: \(error.localizedDescription)"
+        } else {
+          self.sentCount += 1
+        }
+      }
+    }
+  }
+
   /// `receive` is ONE-SHOT. Re-arming it is the classic bug here: the first message
   /// from the Mac arrives and every one after it is silently dropped.
   private func receive() {
@@ -115,9 +156,42 @@ final class MacLink {
       return
     }
     let type = obj["type"] as? String ?? "?"
+    let wireAudio = "audio"  // longevity.wire.AUDIO
     let text = obj["text"] as? String ?? ""
     lastFromMac = "\(type): \(text)"
     if type == "speak", !text.isEmpty { speak(text) }
+    // A18 — pre-rendered ElevenLabs audio. The Mac falls back to a `speak` message
+    // when synthesis fails, so both paths stay live and neither blocks the other.
+    if type == wireAudio { playAudio(obj) }
+  }
+
+  /// Play pre-rendered audio pushed by the Mac (A18, wire.audio_message).
+  private func playAudio(_ obj: [String: Any]) {
+    guard obj["format"] as? String == "mp3",
+      let encoded = obj["data"] as? String,
+      let data = Data(base64Encoded: encoded)
+    else {
+      status = "audio message malformed"
+      return
+    }
+    do {
+      let session = AVAudioSession.sharedInstance()
+      try session.setCategory(.playback, options: [.allowBluetoothA2DP])
+      try session.setActive(true)
+    } catch {
+      // Same -50 trap as speak(): never return here, the existing route is usually fine.
+      print("audio session (non-fatal): \(error)")
+    }
+    do {
+      player = try AVAudioPlayer(data: data)
+      player?.prepareToPlay()
+      player?.play()
+      spokenCount += 1
+      status = "played #\(spokenCount) · \(data.count / 1024) KB mp3"
+    } catch {
+      status = "audio playback failed"
+      print("audio playback failed: \(error)")
+    }
   }
 
   /// hardware_software.md §19 — the exact session config validated on real hardware.
