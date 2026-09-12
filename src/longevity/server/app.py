@@ -22,6 +22,7 @@ from typing import Any
 from fastapi import FastAPI
 
 from . import ingest
+from .. import speak
 
 log = logging.getLogger(__name__)
 
@@ -70,6 +71,10 @@ def create_app(*, link: ingest.GlassesLink | None = None, ring: Any = None) -> F
             "packets": link_stats["received"],
             "last_packet_age_s": link_stats["latest_age_s"],
             "frames_router": frames_mod is not None,
+            # A17's counters. `undelivered` is the one to watch during a demo: it
+            # separates "B never decided to speak" from "B spoke and nobody heard it",
+            # which otherwise look identical from the outside.
+            "speech": speak.default_speaker().stats(),
         }
 
     return app

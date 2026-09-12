@@ -35,8 +35,20 @@ final class MacLink {
   @ObservationIgnored let url: URL
 
   /// Dial the Mac's LAN IP. Never `localhost` — on the phone that resolves to the phone.
-  init(host: String = "10.135.100.7", port: Int = 8765) {
-    url = URL(string: "ws://\(host):\(port)/")!
+  ///
+  /// EDIT THESE TWO when moving between machines. `path` differs by target: the A11
+  /// echo server (tools/echo_server.py, port 8765) accepts any path, but the real
+  /// ingest server hard-codes `/ws/glasses` in `ingest.INGEST_PATH` and a bare `/`
+  /// 404s at the handshake.
+  static let defaultHost = "10.136.156.29"   // Rishi's Mac. `ipconfig getifaddr en0` to change.
+  static let defaultPort = 8010             // ingest (t0 --port 8010); 8765 = A11 echo server
+
+  init(
+    host: String = MacLink.defaultHost,
+    port: Int = MacLink.defaultPort,
+    path: String = "/ws/glasses"
+  ) {
+    url = URL(string: "ws://\(host):\(port)\(path)")!
   }
 
   func connect() {
@@ -76,6 +88,28 @@ final class MacLink {
         } else {
           self.sentCount += 1
           self.status = "sent \(self.sentCount)"
+        }
+      }
+    }
+  }
+
+  /// A14 — send a pre-built `wire` message verbatim, with no envelope of its own.
+  /// `send(_:)` wraps its argument in {"type":"echo","text":...}, so a capture packet
+  /// pushed through it would arrive as an echo carrying JSON as a string and never
+  /// decode — the Mac would count it as `malformed`, not `received`.
+  func sendRaw(_ json: String) {
+    guard let task else {
+      status = "not connected"
+      return
+    }
+    task.send(.string(json)) { [weak self] error in
+      Task { @MainActor in
+        guard let self else { return }
+        if let error {
+          self.connected = false
+          self.status = "send failed: \(error.localizedDescription)"
+        } else {
+          self.sentCount += 1
         }
       }
     }
