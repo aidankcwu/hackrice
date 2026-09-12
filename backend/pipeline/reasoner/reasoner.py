@@ -30,8 +30,8 @@ from ..actions.speech import SpeechLimiter
 from ..config import Settings
 from ..db import Database, day_key
 from ..frames import FrameStore
-from ..models import Decision, Escalation
-from .client import ReasonerClient
+from ..models import Decision, Escalation, PendingQuestion
+from .client import AnswerParser, ReasonerClient
 from .envelope import build_envelope, local_time, select_frames
 from .evidence import EvidenceStore
 from .prompts import DEFAULT_PERSONA, NO_SEVEN_DAY
@@ -59,6 +59,8 @@ class Reasoner:
         seven_day_summary: Callable[[], str] | None = None,
         persona: str | None = None,
         t1_deadline_s: float = 15.0,
+        parser: AnswerParser | None = None,
+        questions: Any | None = None,
     ) -> None:
         # Cadence-aware AI freshness for the envelope (SPEC §12.2, S9).
         try:
@@ -74,9 +76,11 @@ class Reasoner:
         self.seven_day_summary = seven_day_summary
         self.persona = persona if persona is not None else DEFAULT_PERSONA
         self.t1_deadline_s = float(t1_deadline_s)
+        self.parser = parser
+        self._questions = questions
 
         self.evidence = EvidenceStore(db)
-        self.handler = ActionHandler(db, speech, settings.timings)
+        self.handler = ActionHandler(db, speech, settings.timings, questions)
 
         #: The single T1 slot. A plain flag under a non-blocking lock -- an
         #: awaited semaphore would queue, and queueing is the one thing §5.2
@@ -102,6 +106,8 @@ class Reasoner:
         self.dropped_timeout = 0
         self.dropped_error = 0
         self.spoke_count = 0
+        self.answers_completed = 0
+        self.answers_dropped = 0
         self.last_latency_ms: int | None = None
         self.last_decision_t: float | None = None
         #: Bumped by a judge-session start. A call admitted under an older epoch
@@ -116,6 +122,15 @@ class Reasoner:
     @property
     def busy(self) -> bool:
         return self._busy
+
+    @property
+    def questions(self) -> Any | None:
+        return self._questions
+
+    @questions.setter
+    def questions(self, value: Any | None) -> None:
+        self._questions = value
+        self.handler.questions = value
 
     def try_escalate(self, esc: Escalation) -> bool:
         """Claim the T1 slot for ``esc``. Synchronous, non-blocking.
@@ -161,6 +176,97 @@ class Reasoner:
             if not claimed:
                 self._busy = False
                 self._slot.release()
+
+    def try_answer(self, question: PendingQuestion, transcript: str, t: float) -> bool:
+        """Claim the shared T1 slot and schedule an answer parse, never queueing."""
+
+        if not self._slot.acquire(blocking=False):
+            return False
+        claimed = False
+        try:
+            self._busy = True
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                log.error("try_answer called with no running event loop")
+                return False
+            started = [False]
+            task = loop.create_task(self._answer_run(
+                question, transcript, t, started=started
+            ))
+            task.add_done_callback(
+                lambda done: self._release_cancelled_before_start(done, started)
+            )
+            claimed = True
+            return True
+        finally:
+            if not claimed:
+                self._busy = False
+                self._slot.release()
+
+    async def _answer_run(
+        self, question: PendingQuestion, transcript: str, t: float,
+        *, started: list[bool] | None = None,
+    ) -> None:
+        if started is not None:
+            started[0] = True
+        try:
+            if self.parser is None or self.questions is None:
+                raise RuntimeError("answer parser is not configured")
+            episode = next((e for e in self.db.list_episodes()
+                            if e.id == question.episode_id), None)
+            try:
+                parsed = await asyncio.wait_for(
+                    self.parser.parse(question, transcript, episode),
+                    timeout=self.t1_deadline_s,
+                )
+            except (asyncio.TimeoutError, TimeoutError):
+                self.answers_dropped += 1
+                self.questions.finalize_failure(
+                    question, "parse failed: TimeoutError", t, "t1_timeout"
+                )
+                return
+            except asyncio.CancelledError:  # pragma: no cover
+                raise
+            except Exception as exc:
+                self.answers_dropped += 1
+                kind = type(exc).__name__
+                log.exception("answer parse failed: %s", question.id)
+                self.questions.finalize_failure(
+                    question, f"parse failed: {kind}", t, f"t1_error:{kind}"
+                )
+                return
+            self.questions.apply_parse(question, parsed, t)
+            self.answers_completed += 1
+        except asyncio.CancelledError:  # pragma: no cover - shutdown path
+            raise
+        except Exception as exc:
+            self.answers_dropped += 1
+            kind = type(exc).__name__
+            log.exception("answer handling failed: %s", question.id)
+            if self.questions is not None:
+                self.questions.finalize_failure(
+                    question, f"parse failed: {kind}", t, f"t1_error:{kind}"
+                )
+            else:
+                log.error("cannot finalise answer %s: questions not configured",
+                          question.id)
+        finally:
+            self._busy = False
+            try:
+                self._slot.release()
+            except RuntimeError:  # pragma: no cover
+                pass
+
+    def _release_cancelled_before_start(
+        self, task: asyncio.Task[Any], started: list[bool]
+    ) -> None:
+        if task.cancelled() and not started[0] and self._busy:
+            self._busy = False
+            try:
+                self._slot.release()
+            except RuntimeError:  # pragma: no cover - defensive
+                pass
 
     @staticmethod
     def _initial_decision_seq(db: Database) -> int:
@@ -267,6 +373,11 @@ class Reasoner:
                 if len(kept) != len(norm.actions):
                     log.info("watch chain capped for %s", esc.trigger)
                     norm.actions = kept
+            if esc.trigger.startswith("answer:"):
+                kept = [a for a in norm.actions if getattr(a, "type", None) != "ask"]
+                if len(kept) != len(norm.actions):
+                    log.info("ask chain capped for %s", esc.trigger)
+                    norm.actions = kept
             latency_ms = meta.get("latency_ms")
             if latency_ms is None:
                 latency_ms = int((time.perf_counter() - started) * 1000)
@@ -298,11 +409,23 @@ class Reasoner:
                 self.completed += 1
                 return
 
-            outcome = self.handler.apply(decision_id, esc.t, norm)
+            outcome = self.handler.apply(
+                decision_id, esc.t, norm, episode_id=esc.episode_id
+            )
 
             if outcome.get("spoke"):
                 decision.spoke = True
                 self.spoke_count += 1
+                self.db.insert_decision(decision)
+
+            if outcome.get("asks"):
+                asks = iter(outcome["asks"])
+                for action in decision.actions:
+                    if action.get("type") == "ask":
+                        result = next(asks, None)
+                        if result is not None:
+                            action.update({k: result[k] for k in ("question_id", "outcome")
+                                           if k in result})
                 self.db.insert_decision(decision)
 
             self.completed += 1
@@ -390,6 +513,8 @@ class Reasoner:
             "dropped_timeout": self.dropped_timeout,
             "dropped_error": self.dropped_error,
             "spoke": self.spoke_count,
+            "answers_completed": self.answers_completed,
+            "answers_dropped": self.answers_dropped,
             "frames_copied": self.evidence.copied,
             "frames_missing": self.evidence.missing,
             "model": getattr(self.client, "model", ""),

@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from ..actions.speech import SpeechLimiter, default_speak_fn, set_speak_fn, spoken
+from ..actions.questions import QuestionManager
 from ..bus import TickBus
 from ..config import Settings
 from ..db import Database, day_key
@@ -19,7 +20,7 @@ from ..frames import FrameStore, InMemoryFrameStore
 from ..gate.gate import TriggerGate
 from ..gate.triggers import CallableBiometricFeed, default_triggers
 from ..models import Tick
-from ..reasoner.client import make_client
+from ..reasoner.client import make_answer_parser, make_client
 from ..reasoner.reasoner import Reasoner
 from ..scoring.scorer import Scorer
 from ..seed.generate import resting_hr_for, seed_database, seven_day_summary
@@ -53,7 +54,8 @@ class Pipeline:
                  speed: float, db: Database, frame_store: FrameStore,
                  bus: TickBus, scorer: Scorer, speech: SpeechLimiter,
                  reasoner: Reasoner, episodes: EpisodeBuilder, gate: TriggerGate,
-                 source: SimSource | None, capture=None, clock: Clock | None = None) -> None:
+                 questions: QuestionManager, source: SimSource | None,
+                 capture=None, clock: Clock | None = None) -> None:
         self.settings = settings
         self.source_name = source_name
         self.reasoner_mode = reasoner_mode
@@ -66,6 +68,7 @@ class Pipeline:
         self.reasoner = reasoner
         self.episodes = episodes
         self.gate = gate
+        self.questions = questions
         self.source = source
         self.capture = capture
         # Live capture uses wall time unchanged; simulation scales its own clock.
@@ -116,6 +119,7 @@ class Pipeline:
                 self.db.insert_tick(tick)
                 self.episodes.on_tick(tick)
                 self.gate.on_tick(tick)
+                self.questions.expire(tick.t)
                 self.last_tick = tick
                 self._score_event.set()
                 if (tick.seq + 1) % 30 == 0:
@@ -144,6 +148,7 @@ class Pipeline:
             asyncio.create_task(downstream(), name="pipeline-downstream"),
             asyncio.create_task(score_periodically(), name="pipeline-scorer"),
         ]
+        self.questions.start()
         if self.capture is not None:
             await self.capture.start()
         else:
@@ -153,6 +158,7 @@ class Pipeline:
         if not self._tasks:
             return
         self._stopping = True
+        await self.questions.stop()
         self._score_event.set()
         if self.capture is not None:
             await self.capture.stop()
@@ -198,6 +204,7 @@ class Pipeline:
             # without assuming 1 Hz (SPEC §2.1 vs the glasses' 1.5 s).
             "tick_interval_s": self.settings.tick_interval_s,
             "gate": self.gate.stats(),
+            "questions": self.questions.stats(),
             "speech_spoken": len(spoken),
             "health": self._health(),
             "session": session_status,
@@ -297,6 +304,18 @@ def build_pipeline(settings: Settings, *,
             settings, source=source, our_bus=bus, dir=dir, speed=speed, loop=loop,
             camera=camera, vlm=vlm, flow=flow,
         )
+        missing = []
+        if not callable(getattr(capture, "send_question", None)):
+            missing.append("capture.send_question")
+        if not callable(getattr(capture.link, "supports", None)):
+            missing.append("capture.link.supports")
+        if not hasattr(capture.link, "on_answer"):
+            missing.append("capture.link.on_answer")
+        if missing:
+            db.close()
+            raise RuntimeError(
+                "capture bridge lacks the ask/answer interface: " + ", ".join(missing)
+            )
         frame_store = RingFrameStore(capture.ring)
         speak_fn = make_speak_fn(capture.link, settings)
         capture._speech_stats = speak_fn.stats  # type: ignore[attr-defined]
@@ -308,8 +327,35 @@ def build_pipeline(settings: Settings, *,
     timings = settings.timings
     speech = SpeechLimiter(timings.speech_min_gap, timings.speech_max_per_hour)
     client = make_client(settings, reasoner_mode)
+    parser = make_answer_parser(settings, reasoner_mode)
+
+    async def console_send(question) -> bool:
+        log.info("ASK: %s", question.question)
+        return True
+
+    if capture is None:
+        send = console_send
+        supports_ask = lambda: True
+        has_transport = lambda: True
+    else:
+        async def capture_send(question) -> bool:
+            return bool(await capture.send_question(question))
+        send = capture_send
+        supports_ask = lambda: bool(capture.link.supports("ask"))
+        has_transport = lambda: bool(getattr(capture.link, "clients", ()))
+
+    # ``clock`` is assigned below before the manager can be started or queried.
+    questions = QuestionManager(
+        db, speech, timings, send=send, supports_ask=supports_ask,
+        has_transport=has_transport, parser=parser,
+        now_fn=lambda: clock.wall_to_tick(time.time()),
+    )
     reasoner = Reasoner(db, frame_store, client, speech, settings,
-                        seven_day_summary=lambda: seven_day_summary(db, end_day))
+                        seven_day_summary=lambda: seven_day_summary(db, end_day),
+                        parser=parser, questions=questions)
+    questions.reasoner = reasoner
+    if capture is not None:
+        setattr(capture.link, "on_answer", questions.on_answer)
     episodes = EpisodeBuilder(db, timings)
     # SPEC §14.3: the biometric_anomaly trigger reads the seeded wearable HR
     # series on the tick clock; the gate never imports the seed modules.
@@ -340,4 +386,5 @@ def build_pipeline(settings: Settings, *,
                     reasoner_mode=reasoner_mode, speed=speed, db=db,
                     frame_store=frame_store, bus=bus, scorer=scorer, speech=speech,
                     reasoner=reasoner, episodes=episodes, gate=gate,
-                    source=sim_source, capture=capture, clock=clock)
+                    questions=questions, source=sim_source,
+                    capture=capture, clock=clock)

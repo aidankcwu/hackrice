@@ -303,16 +303,31 @@ class GeminiClient:
         return None
 
 
+DEFAULT_FAKE_FIELDS: dict[str, Any] = {"scene": "office", "activity": "seated", "conf": 0.9}
+
+
 class FakeClient:
     """A latency simulator for development and for proving the drop rule.
 
     `latency` may be a constant or a zero-arg callable, which is how the check script
     reproduces §2.4's "typically 300-600 ms, but the p99 tail exceeds 2 s".
+
+    Every tick carries the same constant `fields`. `build_client("fake")` merges
+    ``T0_FAKE_FIELDS`` (a JSON object) over the defaults, which is how a run with
+    no API keys drives the *downstream* pipeline — the gate only wakes on what T0
+    reports, so without an override a fake run can never produce an alcohol
+    sighting, an escalation, or a question (ASK_DESIGN §8.10)::
+
+        T0_FAKE_FIELDS='{"alcohol_visible": true, "scene": "restaurant"}' \
+            uv run t0 --vlm fake
+
+    The values are passed through `ai_fields.coerce` downstream like any other
+    tagger output, so a bogus enum member is dropped there rather than here.
     """
 
     def __init__(self, latency: float | Any = 0.4, fields: dict[str, Any] | None = None) -> None:
         self._latency = latency
-        self._fields = fields or {"scene": "office", "activity": "seated", "conf": 0.9}
+        self._fields = dict(fields) if fields else dict(DEFAULT_FAKE_FIELDS)
         self.calls = 0
         self.cancelled = 0
         # `max_in_flight` is the direct evidence of self-scheduling (§5.3). A fixed
@@ -339,10 +354,35 @@ class FakeClient:
         return None
 
 
+def fake_fields(env: dict[str, str] | None = None) -> dict[str, Any]:
+    """`DEFAULT_FAKE_FIELDS` with ``T0_FAKE_FIELDS`` merged over it (§8.10).
+
+    Invalid JSON, or JSON that is not an object, warns once and yields the
+    defaults: a typo in a demo environment variable must not take down the run it was meant
+    to configure.
+    """
+    raw = (env if env is not None else os.environ).get("T0_FAKE_FIELDS", "").strip()
+    fields = dict(DEFAULT_FAKE_FIELDS)
+    if not raw:
+        return fields
+    try:
+        override = json.loads(raw)
+    except ValueError as exc:
+        log.warning("T0_FAKE_FIELDS is not valid JSON (%s); using the defaults", exc)
+        return fields
+    if not isinstance(override, dict):
+        log.warning("T0_FAKE_FIELDS must be a JSON object, got %s; using the defaults",
+                    type(override).__name__)
+        return fields
+    fields.update(override)
+    log.info("fake tagger fields: %s", fields)
+    return fields
+
+
 def build_client(kind: str = "gemini") -> VLMClient | None:
     """Resolve `--vlm {gemini,fake,off}` into a client."""
     if kind == "off":
         return None
     if kind == "fake":
-        return FakeClient()
+        return FakeClient(fields=fake_fields())
     return GeminiClient()

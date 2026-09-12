@@ -38,6 +38,7 @@ __all__ = [
     "Decision",
     "Insight",
     "PendingCheck",
+    "PendingQuestion",
     "Score",
     "SeededRow",
     "TodaySummaryLine",
@@ -353,6 +354,41 @@ class PendingCheck(BaseModel):
     reason: str = ""
     decision_id: str | None = None
     fired: bool = False
+
+
+class PendingQuestion(BaseModel):
+    """One question asked of the wearer and whatever came back (ASK_DESIGN §5).
+
+    The answer lives here and nowhere else. :class:`~pipeline.episodes.builder.
+    EpisodeBuilder` recomputes ``Episode.dominant`` on every tick, so a field
+    patched onto the episode would be erased within seconds -- and it would
+    also conflate what the camera saw with what the wearer said. The API
+    projects these rows onto episodes as ``reported`` (ASK_DESIGN §8.3).
+    """
+
+    id: str
+    created_t: float
+    #: ``sent_t + ask_expire_s``. ``None`` until the ask actually goes out --
+    #: a row that was never sent cannot have run out of time (ASK_DESIGN §8.4).
+    expires_t: float | None = None
+    decision_id: str | None = None
+    episode_id: str | None = None
+    question: str
+    answer_kind: str = "yes_no"
+    fills: str = "confirmed"
+    status: Literal["open", "answered", "expired", "suppressed"] = "open"
+    answer_text: str | None = None
+    answer_t: float | None = None
+    #: ``AnswerParse.model_dump()``; ``{}`` until the parser finishes.
+    parsed: dict[str, Any] = Field(default_factory=dict)
+    #: The question this one follows up on. At most one level (§8.5).
+    followup_of: str | None = None
+    #: Mac clock when the ask message went out; ``None`` while sending.
+    sent_t: float | None = None
+    #: Why the ask never happened, for a ``suppressed`` row (§8.6).
+    suppressed_reason: str | None = None
+    #: Whether the phone heard anything at all in the answer window.
+    heard: bool | None = None
 
 
 class Score(BaseModel):
