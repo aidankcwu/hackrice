@@ -5,7 +5,7 @@
 //  This is the whole phone-side product: sample, encode, send. No ticks, no VLM, no
 //  logic (SPEC §11.4). The Mac derives everything; the phone computes nothing (§11.2).
 //
-//  Three rules this file exists to enforce:
+//  Four rules this file exists to enforce:
 //
 //  1. **Drop, never queue** (SPEC §5.2). The DAT stream runs at 2 fps; one frame per
 //     `interval` is encoded and every other frame is thrown away *at the door*. There
@@ -17,6 +17,11 @@
 //  3. **The wire shape is `src/longevity/wire.py`, exactly.** Field names, `t` rounded
 //     to 3 dp, base64 with **no line breaks**. `ingest.parse_capture` validates
 //     strictly and a malformed packet is silently counted as `malformed`, not reported.
+//  4. **`sentCount` means *delivered*, not *handed over*.** The transport reports
+//     completion and only a `nil` error moves the counter. Counting at the call site
+//     is how you get a phone proudly reporting "sent 400" against a Mac reporting
+//     `received: 0` — the two numbers must be comparable or neither is worth reading.
+//     `isConnected` is the same idea one step earlier: no socket, no send, one drop.
 //
 //  The encode below is deliberately byte-identical to `CorpusRecorder.encode` — 512 px
 //  longest edge, JPEG q0.7 — so every sensor threshold tuned against the A4 corpus
@@ -44,30 +49,68 @@ final class CapturePacketSender {
 
   /// SPEC §2.2: `TICK_INTERVAL_S`, 1.5 s as shipped — chosen so the Mac's VLM call
   /// usually returns inside one interval. `backend/.env.example` agrees (1.5).
-  /// Note `src/longevity/sources/glasses.py` still defaults its own poll to 1.0 s; that
-  /// mismatch is harmless (it skips empty intervals by design) but is worth fixing on
-  /// the Mac if you see `n_idle` climbing at roughly one third of ticks.
+  /// Note `src/longevity/sources/glasses.py` still defaults its own poll to 1.0 s, and
+  /// `main.py` builds `GlassesSource(link)` with that default. The integrated process
+  /// (Person B's app running T0 in-process) passes 1.5 explicitly, so the two agree
+  /// there. Against a bare `uv run t0 --source glasses` the mismatch is harmless — the
+  /// source skips empty intervals by design — but `n_idle` will climb at roughly one
+  /// third of ticks, which is the expected reading, not a fault.
   nonisolated static var defaultInterval: TimeInterval { 1.5 }
 
   // MARK: - Status line (A14's proof, and the thing to read out during the demo)
 
+  /// Packets the **transport confirmed**. Moved only by `delivered(bytes:failure:)`,
+  /// from the completion handler, never at the call site — a handshake that 404s or a
+  /// socket the Mac already closed otherwise shows a happily rising count here while
+  /// `ingest/stats` sits at `received: 0`, which is an hour of debugging the Mac.
   private(set) var sentCount = 0
-  /// Frames the sampler discarded. At 2 fps into a 1.5 s interval this climbs ~2x as
-  /// fast as `sentCount`. A zero here means frames are not arriving at all.
+  /// Packets the transport reported an error for. `sentCount + failedCount` is the
+  /// number of encodes that reached the socket; `sentCount` alone is the number that
+  /// left it. A climbing `failedCount` with `sentCount` stuck is a dead socket.
+  private(set) var failedCount = 0
+  /// Frames the sampler discarded, plus packets refused because `isConnected` is false.
+  /// At 2 fps into a 1.5 s interval this climbs ~2x as fast as `sentCount`. A zero here
+  /// means frames are not arriving at all.
   private(set) var droppedCount = 0
   private(set) var lastSentAt: Date?
   private(set) var lastPacketBytes = 0
   private(set) var isRunning = false
-  /// Set on encode failure or a missing transport, so a dead path is never silent.
+  /// Set on encode failure, a missing transport, a closed socket, or a send error, so a
+  /// dead path is never silent. Cleared only by a confirmed delivery.
   private(set) var lastError: String?
+
+  /// The socket's state, mirrored in by the app — this class owns no transport and so
+  /// cannot know it. While false every capture packet is refused and counted as
+  /// dropped, because handing a packet to a dead `URLSessionWebSocketTask` succeeds
+  /// loudly and delivers nothing.
+  ///
+  /// Wire it to MacLink, either directly:
+  ///
+  ///     sender.isConnected = link.connected
+  ///
+  /// or from its status string via `apply(macLinkStatus:)` below.
+  var isConnected = false
 
   /// One line for the camera view. `~53 KB` is the expected packet size: a ~40 KB JPEG
   /// plus base64's 33% (wire.py says so explicitly).
   var statusLine: String {
     let kb = lastPacketBytes > 0 ? "\(lastPacketBytes / 1024) KB" : "—"
     let when = lastSentAt.map { String(format: "%.1fs ago", Date().timeIntervalSince($0)) }
-    return "sent \(sentCount) · dropped \(droppedCount) · \(kb) · \(when ?? "never")"
-      + (lastError.map { " · \($0)" } ?? "")
+    return "sent \(sentCount) · failed \(failedCount) · dropped \(droppedCount) · \(kb)"
+      + " · \(when ?? "never")" + (lastError.map { " · \($0)" } ?? "")
+  }
+
+  /// Derive `isConnected` from `MacLink.status`.
+  ///
+  /// Matching `hasPrefix("connected")` alone is a trap: MacLink's own `connect()` sets
+  /// `status = "connected <host>:<port>"` and then immediately sends its A11 echo
+  /// hello, whose completion overwrites it with `"sent 1"` — so a prefix test would
+  /// latch us off milliseconds after connecting and nothing would ever be sent. The
+  /// failure strings are the stable signal, and MacLink only ever writes three of them.
+  func apply(macLinkStatus status: String) {
+    isConnected =
+      !(status.hasPrefix("not connected") || status.hasPrefix("send failed")
+        || status.hasPrefix("closed"))
   }
 
   // MARK: - Wiring
@@ -78,7 +121,13 @@ final class CapturePacketSender {
   /// The transport. Wire it to `MacLink.sendRaw` — **not** `MacLink.send`, which wraps
   /// its argument in an `echo` envelope; a capture packet inside an echo arrives on the
   /// Mac as `{"type":"echo","text":"{…}"}` and is logged, never decoded. See INTEGRATION.md.
-  @ObservationIgnored var send: (@MainActor (String) -> Void)?
+  ///
+  /// The second parameter is the delivery report and it is **not optional**: the
+  /// transport must call it exactly once, with `nil` on success and the error
+  /// otherwise. `URLSessionWebSocketTask.send` fires it on a background queue, so it is
+  /// `@Sendable` and this class hops back to the main actor inside it.
+  @ObservationIgnored
+  var send: (@MainActor (String, @escaping @Sendable (Error?) -> Void) -> Void)?
 
   @ObservationIgnored private var lastSampleAt: TimeInterval = 0
   @ObservationIgnored private var encodeInFlight = false
@@ -97,10 +146,20 @@ final class CapturePacketSender {
 
   // MARK: - Lifecycle
 
-  /// Start sampling and announce ourselves. Call after `MacLink.connect()`.
-  func start(send: @escaping @MainActor (String) -> Void) {
+  /// Start sampling and announce ourselves. Call after `MacLink.connect()`, and set
+  /// `isConnected` *first* — `start()` emits `hello`, which is refused while it is false.
+  func start(
+    send: @escaping @MainActor (String, @escaping @Sendable (Error?) -> Void) -> Void
+  ) {
     self.send = send
     start()
+  }
+
+  /// Re-announce on a reconnect. `hello` is per-connection (wire.py: "sent once on
+  /// connect"), and a new socket is a new connection. Cosmetic — `ingest._handle` only
+  /// logs it and `parse_capture` never looks for it — so skipping this costs a log line.
+  func announce() {
+    emit(Self.helloJSON())
   }
 
   func start() {
@@ -197,9 +256,35 @@ final class CapturePacketSender {
       lastError = "no transport wired — call start(send:)"
       return
     }
-    send(json)
+    guard isConnected else {
+      // Refusing is the honest answer. `task.send` on a socket whose handshake failed
+      // still calls back with `nil` on some paths, so "we handed it over" is not proof
+      // of anything; a drop the operator can see is worth more than a fake success.
+      droppedCount += 1
+      lastError = "not connected"
+      return
+    }
+    let bytes = json.utf8.count
+    send(json) { [weak self] error in
+      // Flatten the error to a String *before* the hop: a bare `Error` existential is
+      // not Sendable, and capturing one in a `Task { @MainActor in … }` is a strict
+      // concurrency error. The message is all `statusLine` ever wanted anyway.
+      let failure = error.map { "send failed: \($0.localizedDescription)" }
+      Task { @MainActor in
+        self?.delivered(bytes: bytes, failure: failure)
+      }
+    }
+  }
+
+  /// The only place `sentCount`, `lastSentAt` and `lastPacketBytes` move.
+  private func delivered(bytes: Int, failure: String?) {
+    if let failure {
+      failedCount += 1
+      lastError = failure
+      return
+    }
     sentCount += 1
-    lastPacketBytes = json.utf8.count
+    lastPacketBytes = bytes
     lastSentAt = Date()
     lastError = nil
   }
@@ -228,9 +313,21 @@ final class CapturePacketSender {
     emit(Self.pongJSON())
   }
 
+  /// Out-of-band messages (`hello`, `pong`). These are not capture packets, so they do
+  /// not move `sentCount` — but a failure still surfaces, because a `hello` that never
+  /// arrives is the first evidence the socket was never really up.
   private func emit(_ json: String?) {
     guard let json, let send else { return }
-    send(json)
+    guard isConnected else {
+      lastError = "not connected"
+      return
+    }
+    send(json) { [weak self] error in
+      guard let failure = error.map({ "send failed: \($0.localizedDescription)" }) else { return }
+      Task { @MainActor in
+        self?.lastError = failure
+      }
+    }
   }
 
   // MARK: - Encoding (nonisolated: runs on capture.encode)
