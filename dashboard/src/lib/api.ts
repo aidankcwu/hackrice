@@ -44,7 +44,7 @@ export const api = {
     type Raw = { day?: string; lines?: Array<string | { t?: number; line: string }> } | string[] | { summary: string[] };
     const r=await request<Raw>("/api/summary/today",mockSummary);
     const raw = Array.isArray(r.data) ? r.data : "summary" in r.data ? r.data.summary : (r.data.lines ?? []);
-    const lines = raw.map((l) => typeof l === "string" ? l : (l.t ? `${hhmm(l.t)} — ${l.line}` : l.line));
+    const lines = raw.map((l) => typeof l === "string" ? l : (l.t && !/^\d{1,2}:\d{2}/.test(l.line) ? `${hhmm(l.t)} — ${l.line}` : l.line));
     return {...r,data:{lines}};
   },
   seeded: async (days=7)=>{
