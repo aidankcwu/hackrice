@@ -15,7 +15,7 @@ The model itself is rough on purpose -- see :mod:`pipeline.scoring.thresholds`.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Iterable
 
 from ..db import Database, day_key
@@ -118,8 +118,11 @@ class Scorer:
         period_key: str,
         value: float | None,
         note: str | None = None,
+        score_override: float | None = None,
     ) -> Score:
         score, base_note = spec.evaluate(value)
+        if score_override is not None:
+            score = score_override
         if value is None:
             final_note = base_note  # "no data" stands alone
         else:
@@ -228,6 +231,41 @@ class Scorer:
 
     # -- weekly ----------------------------------------------------------
 
+    def sightings_summary(self, end_day: str) -> dict:
+        """Counts caffeine and alcohol sightings in two trailing 7-day windows."""
+
+        this_days = self.week_days(end_day)
+        first = date.fromisoformat(this_days[0])
+        last_days = [(first - timedelta(days=i)).isoformat() for i in range(7, 0, -1)]
+
+        def counts(days: list[str]) -> dict[str, int]:
+            episodes = [episode for day in days for episode in self._episodes(day)]
+            return {
+                "caffeine": len(self._of_kind(episodes, "caffeine_sighting")),
+                "alcohol": len(self._of_kind(episodes, "alcohol_sighting")),
+            }
+
+        current = counts(this_days)
+        previous = counts(last_days)
+        return {
+            kind: {"this_week": current[kind], "last_week": previous[kind]}
+            for kind in ("caffeine", "alcohol")
+        }
+
+    @staticmethod
+    def _sightings_comparison(this_week: int, last_week: int) -> tuple[float | None, str]:
+        if last_week == 0:
+            return None, f"{this_week} this week vs 0 last week (no prior data)"
+        change = (this_week - last_week) / last_week
+        percent = round(abs(change) * 100)
+        sign = "−" if change < 0 else "+" if change > 0 else ""
+        note = f"{this_week} this week vs {last_week} last week ({sign}{percent}%)"
+        if this_week < last_week:
+            return 1.0, note
+        if this_week == last_week:
+            return 0.6, note
+        return max(0.2, 0.6 - 0.4 * (this_week / last_week - 1.0)), note
+
     def score_week(self, week_key: str, days: list[str]) -> list[Score]:
         """Score every weekly metric over ``days`` and upsert the rows.
 
@@ -264,6 +302,18 @@ class Scorer:
             if screen_hours_by_day
             else None
         )
+        sightings = self.sightings_summary(days[-1]) if days else {
+            "caffeine": {"this_week": 0, "last_week": 0},
+            "alcohol": {"this_week": 0, "last_week": 0},
+        }
+        sighting_values: dict[str, tuple[float, str, float | None]] = {}
+        for kind in ("caffeine", "alcohol"):
+            current = sightings[kind]["this_week"]
+            previous = sightings[kind]["last_week"]
+            comparison_score, comparison_note = self._sightings_comparison(current, previous)
+            sighting_values[f"{kind}_sightings_weekly"] = (
+                float(current), comparison_note, comparison_score
+            )
 
         live_values: dict[str, tuple[float | None, str | None]] = {
             "nature_minutes_weekly": (nature_minutes, f"over {len(days)} days"),
@@ -284,6 +334,8 @@ class Scorer:
                 else None,
             ),
             "cold_plunge_weekly": (float(len(cold)), None),
+            "caffeine_sightings_weekly": sighting_values["caffeine_sightings_weekly"][:2],
+            "alcohol_sightings_weekly": sighting_values["alcohol_sightings_weekly"][:2],
         }
 
         scores: list[Score] = []
@@ -300,7 +352,12 @@ class Scorer:
                 ] if days else []
                 value = sum(values) / len(values) if values else None
                 note = f"mean of {len(values)} days" if values else None
-            score = self._emit(spec, week_key, value, note)
+            score_override = (
+                sighting_values[spec.metric][2]
+                if spec.metric in sighting_values
+                else None
+            )
+            score = self._emit(spec, week_key, value, note, score_override)
             self.db.upsert_score(score)
             scores.append(score)
         return scores

@@ -78,7 +78,8 @@ def test_source_split_matches_spec_7():
     assert live | seeded == set(THRESHOLDS)
     # SPEC §7: anything the camera can see is live.
     assert {"nature_minutes_weekly", "social_episodes_daily", "diet_pattern_daily",
-            "caffeine_cutoff_daily", "alcohol_daily"} <= live
+            "caffeine_cutoff_daily", "alcohol_daily", "caffeine_sightings_weekly",
+            "alcohol_sightings_weekly"} <= live
     # SPEC §7: light, sleep, HRV and phone sensors are seeded.
     assert {"daytime_light_minutes", "evening_light_ok", "sleep_hours",
             "hrv_rmssd_ratio", "steps", "night_noise_db"} <= seeded
@@ -179,6 +180,22 @@ def test_caffeine_cutoff_is_a_hard_zero():
     fn = THRESHOLDS["caffeine_cutoff_daily"].score_fn
     assert fn(0.0) == 1.0
     assert fn(1.0) == 0.0
+
+
+def test_weekly_sighting_thresholds_are_absolute_fallbacks():
+    caffeine = THRESHOLDS["caffeine_sightings_weekly"]
+    alcohol = THRESHOLDS["alcohol_sightings_weekly"]
+    assert caffeine.score_fn(7.0) == 1.0
+    assert caffeine.score_fn(14.0) == pytest.approx(0.5)
+    assert caffeine.score_fn(21.0) == 0.0
+    assert alcohol.score_fn(0.0) == 1.0
+    assert alcohol.score_fn(1.0) == pytest.approx(0.2)
+    for spec in (caffeine, alcohol):
+        assert spec.layer == "diet"
+        assert spec.grade == "B"
+        assert spec.source == "live"
+        assert spec.period == "weekly"
+        assert spec.target_text == "fewer than last week (persona cut-down goal)"
 
 
 def test_grade_weights_and_spec_weight_property():

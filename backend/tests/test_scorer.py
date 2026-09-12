@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from datetime import datetime
 
 import pytest
 
@@ -190,6 +191,58 @@ def test_sauna_only_counts_sessions_over_19_minutes(seeded):
     assert cold.value == 1.0
     assert cold.score == pytest.approx(0.05)
     assert "no healthspan evidence" in (cold.note or "")
+
+
+def test_weekly_sightings_compare_with_the_previous_week(db):
+    scorer = Scorer(db)
+
+    def add(day: str, kind: str, index: int) -> None:
+        start = datetime.fromisoformat(f"{day}T12:00:00").timestamp() + index
+        db.upsert_episode(Episode(
+            id=f"e_{kind}_{day}_{index}", kind=kind, start_t=start,
+            end_t=start + 1, duration_s=1.0, open=False,
+        ))
+
+    days = scorer.week_days(END_DAY)
+    previous_days = scorer.week_days("2026-09-06")
+    for i in range(5):
+        add(previous_days[i], "caffeine_sighting", i)
+    for i in range(3):
+        add(days[i], "caffeine_sighting", i)
+    for i in range(2):
+        add(previous_days[i], "alcohol_sighting", i)
+    for i in range(4):
+        add(days[i], "alcohol_sighting", i)
+
+    scores = by_metric(scorer.score_week("2026-W37", days))
+    caffeine = scores["caffeine_sightings_weekly"]
+    assert caffeine.value == 3.0
+    assert caffeine.score == 1.0
+    assert "3 this week" in (caffeine.note or "")
+    assert "5 last week" in (caffeine.note or "")
+    alcohol = scores["alcohol_sightings_weekly"]
+    assert alcohol.value == 4.0
+    assert alcohol.score == pytest.approx(0.2)
+
+    assert scorer.sightings_summary(END_DAY) == {
+        "caffeine": {"this_week": 3, "last_week": 5},
+        "alcohol": {"this_week": 4, "last_week": 2},
+    }
+
+
+def test_weekly_sightings_use_absolute_score_without_previous_data(db):
+    scorer = Scorer(db)
+    day = scorer.week_days(END_DAY)[0]
+    for i in range(14):
+        start = datetime.fromisoformat(f"{day}T12:00:00").timestamp() + i
+        db.upsert_episode(Episode(
+            id=f"e_caffeine_current_{i}", kind="caffeine_sighting", start_t=start,
+            end_t=start + 1, duration_s=1.0, open=False,
+        ))
+    scores = by_metric(scorer.score_week("2026-W37", scorer.week_days(END_DAY)))
+    assert scores["caffeine_sightings_weekly"].score == pytest.approx(0.5)
+    assert "no prior data" in (scores["caffeine_sightings_weekly"].note or "")
+    assert scores["alcohol_sightings_weekly"].score == 1.0
 
 
 # -- rollup and persistence ----------------------------------------------
