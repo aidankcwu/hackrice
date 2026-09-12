@@ -41,7 +41,7 @@ Add: `NSMotionUsageDescription`, `NSLocationWhenInUseUsageDescription`.
   `sender.start(send: link.sendRaw)` once the socket reports connected.
 - Where the DAT frame callback delivers a `VideoFrame`: `sender.offer(frame.makeUIImage())`.
 - Set `sender.isConnected` from MacLink's status.
-- Host/port for Rishi's laptop: `MacLink(host: "10.136.156.29", port: 8010)`.
+- Host/port for Rishi's laptop: `MacLink(host: "10.135.100.6", port: 8010)`.
   (Port 8010, not 8000 — 8000 is taken on that Mac, and 8010 is the integrated
   process that runs your T0 inside Person B's app.)
 
