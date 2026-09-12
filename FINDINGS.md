@@ -43,7 +43,21 @@ Untested: whether latency also depends on image content. The runs above used dif
 frames at different times, so content and network are confounded. The clean experiment
 is the same 8 frames twice, back to back.
 
-### The decision to make — two knobs, pick one
+### RESOLVED — ticks moved to 1.5 s (option (b))
+
+Settled by B, who owns the gate and episode builder and therefore the debounce windows
+this shifts. The phone samples every 1.5 s and the tick loop runs at 1.5 s, so the two
+agree and no tick arrives without a fresh frame.
+
+Consequence worth knowing: with calls landing ~800-1100 ms against a 1.5 s interval,
+AI coverage should sit well above the 50-80% band §2.4 expects, and the
+boundary-fragility described above largely goes away. The costs B accepted are in
+option (b) below: every trigger window is now counted in 1.5 s units rather than 1 s,
+and there are a third fewer ticks inside the four-minute demo window §13.5 warns about.
+
+Verified live 2026-09-12: 0.60 packets/s over LAN, malformed 0, dropped 0.
+
+### The two knobs, for the record
 
 Coverage is short because calls land near the budget. Two ways out, and they are not
 equivalent:
