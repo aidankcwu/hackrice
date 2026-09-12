@@ -1,8 +1,8 @@
 diff --git a/samples/CameraAccess/CameraAccess.xcodeproj/project.pbxproj b/samples/CameraAccess/CameraAccess.xcodeproj/project.pbxproj
-index ec6cda6..951ee88 100644
+index ec6cda6..1368350 100644
 --- a/samples/CameraAccess/CameraAccess.xcodeproj/project.pbxproj
 +++ b/samples/CameraAccess/CameraAccess.xcodeproj/project.pbxproj
-@@ -16,28 +16,30 @@
+@@ -16,28 +16,32 @@
  		8FD96B952E6F0F7D00F56AB1 /* MWDATCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8FD96B942E6F0F7D00F56AB1 /* MWDATCore */; };
  		8FD96B952E6F0F7D00F56AB2 /* MWDATCamera in Frameworks */ = {isa = PBXBuildFile; productRef = 8FD96B942E6F0F7D00F56AB2 /* MWDATCamera */; };
  		8FD96B952E6F0F7D00F56AB3 /* MWDATMockDevice in Frameworks */ = {isa = PBXBuildFile; productRef = 8FD96B942E6F0F7D00F56AB3 /* MWDATMockDevice */; };
@@ -37,11 +37,13 @@ index ec6cda6..951ee88 100644
 +		E6DA451F2E79A63100E3F688 /* MockDeviceKitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6DA451A2E79A63100E3F688 /* MockDeviceKitView.swift */; };
 +		F494632330553F1700C1D468 /* CorpusRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = F494632230553F1700C1D468 /* CorpusRecorder.swift */; };
 +		F494632530554B4B00C1D468 /* MacLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = F494632430554B4B00C1D468 /* MacLink.swift */; };
++		F49463273055546700C1D468 /* CapturePacketSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = F49463263055546700C1D468 /* CapturePacketSender.swift */; };
++		F49463293055547400C1D468 /* PhoneSensors.swift in Sources */ = {isa = PBXBuildFile; fileRef = F49463283055547400C1D468 /* PhoneSensors.swift */; };
 +		FACE0000000000000000FA02 /* TipRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0000000000000000FA01 /* TipRow.swift */; };
  /* End PBXBuildFile section */
  
  /* Begin PBXContainerItemProxy section */
-@@ -82,13 +84,18 @@
+@@ -82,13 +86,18 @@
  		8FD96B7B2E6F0A9800F56AB1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
  		8FFD5FF22E8422580035E446 /* CircleButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircleButton.swift; sourceTree = "<group>"; };
  		8FFD5FF32E8422580035E446 /* CustomButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomButton.swift; sourceTree = "<group>"; };
@@ -61,7 +63,7 @@ index ec6cda6..951ee88 100644
  		E66CC00D2F3E05D900B07379 /* CameraAccessUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CameraAccessUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
  		E66CC0182F3E1A9300B07379 /* plant.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = plant.mp4; sourceTree = "<group>"; };
  		E66CC0192F3E1A9300B07379 /* plant.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = plant.png; sourceTree = "<group>"; };
-@@ -97,12 +104,9 @@
+@@ -97,12 +106,11 @@
  		E6DA45172E79A63100E3F688 /* CardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardView.swift; sourceTree = "<group>"; };
  		E6DA45182E79A63100E3F688 /* MockDeviceCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDeviceCardView.swift; sourceTree = "<group>"; };
  		E6DA451A2E79A63100E3F688 /* MockDeviceKitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDeviceKitView.swift; sourceTree = "<group>"; };
@@ -73,20 +75,24 @@ index ec6cda6..951ee88 100644
 -		D7A0000000000000000000B1 /* CameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraView.swift; sourceTree = "<group>"; };
 +		F494632230553F1700C1D468 /* CorpusRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusRecorder.swift; sourceTree = "<group>"; };
 +		F494632430554B4B00C1D468 /* MacLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacLink.swift; sourceTree = "<group>"; };
++		F49463263055546700C1D468 /* CapturePacketSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapturePacketSender.swift; sourceTree = "<group>"; };
++		F49463283055547400C1D468 /* PhoneSensors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSensors.swift; sourceTree = "<group>"; };
 +		FACE0000000000000000FA01 /* TipRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipRow.swift; sourceTree = "<group>"; };
  /* End PBXFileReference section */
  
  /* Begin PBXFileSystemSynchronizedRootGroup section */
-@@ -135,6 +139,8 @@
+@@ -135,6 +143,10 @@
  		5A5A5A5A5A5A5A5A5A5A5A5A = {
  			isa = PBXGroup;
  			children = (
 +				F494632230553F1700C1D468 /* CorpusRecorder.swift */,
 +				F494632430554B4B00C1D468 /* MacLink.swift */,
++				F49463263055546700C1D468 /* CapturePacketSender.swift */,
++				F49463283055547400C1D468 /* PhoneSensors.swift */,
  				8FD96B7D2E6F0A9800F56AB1 /* CameraAccess */,
  				E66CC00E2F3E05D900B07379 /* CameraAccessUITests */,
  				8F2A14F12DDBCEB900D4E5F2 /* Frameworks */,
-@@ -170,18 +176,6 @@
+@@ -170,18 +182,6 @@
  			path = ViewModels;
  			sourceTree = "<group>";
  		};
@@ -105,7 +111,7 @@ index ec6cda6..951ee88 100644
  		8FD96B762E6F0A9800F56AB1 /* Views */ = {
  			isa = PBXGroup;
  			children = (
-@@ -231,6 +225,18 @@
+@@ -231,6 +231,18 @@
  			path = MockDeviceKit;
  			sourceTree = "<group>";
  		};
@@ -124,7 +130,7 @@ index ec6cda6..951ee88 100644
  		E66CC01A2F3E1A9300B07379 /* TestResources */ = {
  			isa = PBXGroup;
  			children = (
-@@ -396,6 +402,7 @@
+@@ -396,6 +408,7 @@
  			isa = PBXSourcesBuildPhase;
  			buildActionMask = 2147483647;
  			files = (
@@ -132,7 +138,20 @@ index ec6cda6..951ee88 100644
  				8FD96B7F2E6F0A9800F56AB1 /* CameraAccessApp.swift in Sources */,
  				8FD96B812E6F0A9800F56AB1 /* HomeScreenView.swift in Sources */,
  				8FFD60542E849D0D0035E446 /* RegistrationView.swift in Sources */,
-@@ -416,6 +423,7 @@
+@@ -403,6 +416,7 @@
+ 				8FFD602C2E8433E20035E446 /* MockDeviceKitViewModel.swift in Sources */,
+ 				8FFD602D2E8433E20035E446 /* MockDeviceCardViewModel.swift in Sources */,
+ 				E6DA451D2E79A63100E3F688 /* MockDeviceCardView.swift in Sources */,
++				F49463293055547400C1D468 /* PhoneSensors.swift in Sources */,
+ 				E6DA451E2E79A63100E3F688 /* CardView.swift in Sources */,
+ 				E6DA451F2E79A63100E3F688 /* MockDeviceKitView.swift in Sources */,
+ 				8FD96B872E6F0A9800F56AB1 /* CameraViewModel.swift in Sources */,
+@@ -412,10 +426,12 @@
+ 				E66D30242E7DA71900470B48 /* MockDeviceKitButton.swift in Sources */,
+ 				8F8F00782E8ACB4600A4BDAF /* WearablesViewModel.swift in Sources */,
+ 				D7A0000000000000000000A4 /* VideoRecorder.swift in Sources */,
++				F49463273055546700C1D468 /* CapturePacketSender.swift in Sources */,
+ 				D7A0000000000000000000A6 /* VideoCaptureHandler.swift in Sources */,
  				D7A0000000000000000000A8 /* VideoFrameDecoder.swift in Sources */,
  				D7A0000000000000000000AA /* AudioInputHandler.swift in Sources */,
  				D7A0000000000000000000AC /* AudioCaptureHandler.swift in Sources */,
@@ -140,7 +159,7 @@ index ec6cda6..951ee88 100644
  				D7A0000000000000000000B2 /* CameraView.swift in Sources */,
  				8FFD5FF52E8422580035E446 /* CircleButton.swift in Sources */,
  				8FFD5FF62E8422580035E446 /* CustomButton.swift in Sources */,
-@@ -460,12 +468,11 @@
+@@ -460,12 +476,11 @@
  				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
  				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
  				CODE_SIGN_ENTITLEMENTS = CameraAccess/CameraAccess.entitlements;
@@ -156,7 +175,7 @@ index ec6cda6..951ee88 100644
  				ENABLE_PREVIEWS = YES;
  				FRAMEWORK_SEARCH_PATHS = "";
  				INFOPLIST_FILE = CameraAccess/Info.plist;
-@@ -475,10 +482,9 @@
+@@ -475,10 +490,9 @@
  					"@executable_path/Frameworks",
  				);
  				MARKETING_VERSION = 1.0;
@@ -168,7 +187,7 @@ index ec6cda6..951ee88 100644
  				SWIFT_VERSION = 5.0;
  				TARGETED_DEVICE_FAMILY = "1,2";
  			};
-@@ -491,12 +497,11 @@
+@@ -491,12 +505,11 @@
  				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
  				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
  				CODE_SIGN_ENTITLEMENTS = CameraAccess/CameraAccess.entitlements;
@@ -184,7 +203,7 @@ index ec6cda6..951ee88 100644
  				ENABLE_PREVIEWS = YES;
  				INFOPLIST_FILE = CameraAccess/Info.plist;
  				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
-@@ -505,10 +510,9 @@
+@@ -505,10 +518,9 @@
  					"@executable_path/Frameworks",
  				);
  				MARKETING_VERSION = 1.0;
@@ -211,10 +230,10 @@ index 278173c..44c3622 100644
  </dict>
  </plist>
 diff --git a/samples/CameraAccess/CameraAccess/Info.plist b/samples/CameraAccess/CameraAccess/Info.plist
-index f0c7623..82d0498 100644
+index f0c7623..3643fcc 100644
 --- a/samples/CameraAccess/CameraAccess/Info.plist
 +++ b/samples/CameraAccess/CameraAccess/Info.plist
-@@ -33,47 +33,40 @@
+@@ -33,47 +33,44 @@
  	</array>
  	<key>CFBundleVersion</key>
  	<string>$(CURRENT_PROJECT_VERSION)</string>
@@ -270,14 +289,18 @@ index f0c7623..82d0498 100644
  	<string>This app needs camera access to stream from your phone's camera as a mock device feed.</string>
 +	<key>NSLocalNetworkUsageDescription</key>
 +	<string>This lets your phone find and connect to your glasses over Wi-Fi.</string>
++	<key>NSLocationWhenInUseUsageDescription</key>
++	<string>Uses your speed to tell walking from sitting.</string>
  	<key>NSMicrophoneUsageDescription</key>
  	<string>This app needs microphone access to record audio together with video from your glasses.</string>
++	<key>NSMotionUsageDescription</key>
++	<string>Uses motion to tell stillness from activity.</string>
 +	<key>NSPhotoLibraryAddUsageDescription</key>
 +	<string>This app needs access to save photos captured from your glasses.</string>
  	<key>UIApplicationSceneManifest</key>
  	<dict>
  		<key>UIApplicationSupportsMultipleScenes</key>
-@@ -81,14 +74,26 @@
+@@ -81,14 +78,26 @@
  	</dict>
  	<key>UIApplicationSupportsIndirectInputEvents</key>
  	<true/>
@@ -307,10 +330,10 @@ index f0c7623..82d0498 100644
  	<array>
  		<string>UIInterfaceOrientationPortrait</string>
 diff --git a/samples/CameraAccess/CameraAccess/ViewModels/CameraViewModel.swift b/samples/CameraAccess/CameraAccess/ViewModels/CameraViewModel.swift
-index 8c7b92a..f2562b4 100644
+index 8c7b92a..eadde34 100644
 --- a/samples/CameraAccess/CameraAccess/ViewModels/CameraViewModel.swift
 +++ b/samples/CameraAccess/CameraAccess/ViewModels/CameraViewModel.swift
-@@ -166,6 +166,10 @@ final class CameraViewModel {
+@@ -166,6 +166,13 @@ final class CameraViewModel {
    // recording — the passthrough writer handles compressed frames directly.
    @ObservationIgnored private let videoFrameDecoder = VideoFrameDecoder()
  
@@ -318,20 +341,25 @@ index 8c7b92a..f2562b4 100644
 +  /// is recorded; `CorpusRecorder.encode` is the part worth keeping for A12.
 +  let corpusRecorder = CorpusRecorder()
 +
++  /// A12-A14 — samples frames, attaches phone sensors, sends capture packets.
++  let capture = CapturePacketSender()
++
    @ObservationIgnored private var deviceMonitorTask: Task<Void, Never>?
    @ObservationIgnored private var appLifecycleTask: Task<Void, Never>?
    @ObservationIgnored private let sessionTokenBag = ListenerTokenBag()
-@@ -496,6 +500,8 @@ final class CameraViewModel {
+@@ -496,6 +503,10 @@ final class CameraViewModel {
  
        Task { @MainActor [weak self] in
          guard let self else { return }
 +        // A4: record regardless of the preview guards below.
 +        if let previewImage { self.corpusRecorder.offer(previewImage) }
++        // A12: the sender throttles to its own interval and drops the rest.
++        if let previewImage { self.capture.offer(previewImage) }
          // Keep the live surface stable while a capture preview is onscreen.
          if UIApplication.shared.applicationState != .background,
            activePreview == nil,
 diff --git a/samples/CameraAccess/CameraAccess/Views/CameraView.swift b/samples/CameraAccess/CameraAccess/Views/CameraView.swift
-index fea2f62..4d78429 100644
+index fea2f62..721f6c6 100644
 --- a/samples/CameraAccess/CameraAccess/Views/CameraView.swift
 +++ b/samples/CameraAccess/CameraAccess/Views/CameraView.swift
 @@ -18,6 +18,7 @@
@@ -380,10 +408,10 @@ index fea2f62..4d78429 100644
 +      let utterance = AVSpeechUtterance(
 +        string: "Hello. This voice is being generated by my custom application."
 +      )
-+
+ 
 +      utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
 +      utterance.rate = 0.48
- 
++
 +      speechSynthesizer.speak(utterance)
 +    }
 +    
@@ -391,7 +419,7 @@ index fea2f62..4d78429 100644
    // MARK: - Preview background
  
    @ViewBuilder
-@@ -278,26 +313,100 @@ struct CameraView: View {
+@@ -278,26 +313,116 @@ struct CameraView: View {
  
    // MARK: - Bottom bar
  
@@ -475,6 +503,7 @@ index fea2f62..4d78429 100644
 +
 +          VStack(spacing: 2) {
 +            Text(link.status)
++            Text(viewModel.capture.statusLine)
 +            Text("Mac says: \(link.lastFromMac)")
 +          }
 +          .font(.system(size: 11))
@@ -493,6 +522,21 @@ index fea2f62..4d78429 100644
 -    .background(
 -      LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .top, endPoint: .bottom)
 +      .frame(maxWidth: .infinity)
++      // A14 lifecycle. `isConnected` must be true before `start()`, which immediately
++      // emits `hello` and would otherwise have it refused.
++      .onChange(of: link.connected) { _, isUp in
++        viewModel.capture.isConnected = isUp
++        if isUp {
++          viewModel.capture.start(send: link.sendRaw)
++        } else {
++          viewModel.capture.stop()
++        }
++      }
++      // MacLink overwrites `status` with "sent N" right after connecting, so the
++      // sender derives its own gate from the failure strings rather than a prefix match.
++      .onChange(of: link.status) { _, newStatus in
++        viewModel.capture.apply(macLinkStatus: newStatus)
++      }
 +      .padding(.horizontal, 24)
 +      .padding(.top, 48)
 +      .padding(.bottom, 28)
@@ -510,6 +554,442 @@ index fea2f62..4d78429 100644
  
    /// In-session toolbar (Preview / Photo / Record / Mic), kept laid out so the
    /// session button below holds a fixed Y. Hidden without a session; Preview leads as
+diff --git a/samples/CameraAccess/CapturePacketSender.swift b/samples/CameraAccess/CapturePacketSender.swift
+new file mode 100644
+index 0000000..6dd0630
+--- /dev/null
++++ b/samples/CameraAccess/CapturePacketSender.swift
+@@ -0,0 +1,430 @@
++//  CapturePacketSender.swift
++//  PERSON_A.md A12 (sample + encode) + A13 (sensors ride along) + A14 (send the packet).
++//  Drop into the CameraAccess target alongside MacLink.swift and PhoneSensors.swift.
++//
++//  This is the whole phone-side product: sample, encode, send. No ticks, no VLM, no
++//  logic (SPEC §11.4). The Mac derives everything; the phone computes nothing (§11.2).
++//
++//  Four rules this file exists to enforce:
++//
++//  1. **Drop, never queue** (SPEC §5.2). The DAT stream runs at 2 fps; one frame per
++//     `interval` is encoded and every other frame is thrown away *at the door*. There
++//     is no buffer here, and `encodeInFlight` makes sure a slow encode drops the next
++//     frame rather than stacking work behind itself.
++//  2. **Encoding is off the main actor.** CorpusRecorder (A4) encodes synchronously on
++//     main because it is a throwaway at 1 Hz; this one is in the live path and shares
++//     the main actor with the DAT preview, so the resize + JPEG runs on `capture.encode`.
++//  3. **The wire shape is `src/longevity/wire.py`, exactly.** Field names, `t` rounded
++//     to 3 dp, base64 with **no line breaks**. `ingest.parse_capture` validates
++//     strictly and a malformed packet is silently counted as `malformed`, not reported.
++//  4. **`sentCount` means *delivered*, not *handed over*.** The transport reports
++//     completion and only a `nil` error moves the counter. Counting at the call site
++//     is how you get a phone proudly reporting "sent 400" against a Mac reporting
++//     `received: 0` — the two numbers must be comparable or neither is worth reading.
++//     `isConnected` is the same idea one step earlier: no socket, no send, one drop.
++//
++//  The encode below is deliberately byte-identical to `CorpusRecorder.encode` — 512 px
++//  longest edge, JPEG q0.7 — so every sensor threshold tuned against the A4 corpus
++//  still means the same thing on the live path (SPEC §2.2). It is duplicated rather
++//  than called so that this file stands alone when CorpusRecorder is deleted; if you
++//  keep CorpusRecorder, delete *its* `encode` and call this one, so there is exactly
++//  one encoder in the target.
++
++import CoreImage
++import CoreVideo
++import Foundation
++import Observation
++import UIKit
++
++/// File-scope so they are reachable from `nonisolated` members without actor hops.
++/// `CIContext` is documented thread-safe; `DispatchQueue` is `Sendable`.
++private enum CaptureEncode {
++  static let queue = DispatchQueue(label: "capture.encode", qos: .userInitiated)
++  static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
++}
++
++@Observable
++@MainActor
++final class CapturePacketSender {
++
++  /// SPEC §2.2: `TICK_INTERVAL_S`, 1.5 s as shipped — chosen so the Mac's VLM call
++  /// usually returns inside one interval. `backend/.env.example` agrees (1.5).
++  /// Note `src/longevity/sources/glasses.py` still defaults its own poll to 1.0 s, and
++  /// `main.py` builds `GlassesSource(link)` with that default. The integrated process
++  /// (Person B's app running T0 in-process) passes 1.5 explicitly, so the two agree
++  /// there. Against a bare `uv run t0 --source glasses` the mismatch is harmless — the
++  /// source skips empty intervals by design — but `n_idle` will climb at roughly one
++  /// third of ticks, which is the expected reading, not a fault.
++  nonisolated static var defaultInterval: TimeInterval { 1.5 }
++
++  // MARK: - Status line (A14's proof, and the thing to read out during the demo)
++
++  /// Packets the **transport confirmed**. Moved only by `delivered(bytes:failure:)`,
++  /// from the completion handler, never at the call site — a handshake that 404s or a
++  /// socket the Mac already closed otherwise shows a happily rising count here while
++  /// `ingest/stats` sits at `received: 0`, which is an hour of debugging the Mac.
++  private(set) var sentCount = 0
++  /// Packets the transport reported an error for. `sentCount + failedCount` is the
++  /// number of encodes that reached the socket; `sentCount` alone is the number that
++  /// left it. A climbing `failedCount` with `sentCount` stuck is a dead socket.
++  private(set) var failedCount = 0
++  /// Frames the sampler discarded, plus packets refused because `isConnected` is false.
++  /// At 2 fps into a 1.5 s interval this climbs ~2x as fast as `sentCount`. A zero here
++  /// means frames are not arriving at all.
++  private(set) var droppedCount = 0
++  private(set) var lastSentAt: Date?
++  private(set) var lastPacketBytes = 0
++  private(set) var isRunning = false
++  /// Set on encode failure, a missing transport, a closed socket, or a send error, so a
++  /// dead path is never silent. Cleared only by a confirmed delivery.
++  private(set) var lastError: String?
++
++  /// The socket's state, mirrored in by the app — this class owns no transport and so
++  /// cannot know it. While false every capture packet is refused and counted as
++  /// dropped, because handing a packet to a dead `URLSessionWebSocketTask` succeeds
++  /// loudly and delivers nothing.
++  ///
++  /// Wire it to MacLink, either directly:
++  ///
++  ///     sender.isConnected = link.connected
++  ///
++  /// or from its status string via `apply(macLinkStatus:)` below.
++  var isConnected = false
++
++  /// One line for the camera view. `~53 KB` is the expected packet size: a ~40 KB JPEG
++  /// plus base64's 33% (wire.py says so explicitly).
++  var statusLine: String {
++    let kb = lastPacketBytes > 0 ? "\(lastPacketBytes / 1024) KB" : "—"
++    let when = lastSentAt.map { String(format: "%.1fs ago", Date().timeIntervalSince($0)) }
++    return "sent \(sentCount) · failed \(failedCount) · dropped \(droppedCount) · \(kb)"
++      + " · \(when ?? "never")" + (lastError.map { " · \($0)" } ?? "")
++  }
++
++  /// Derive `isConnected` from `MacLink.status`.
++  ///
++  /// Matching `hasPrefix("connected")` alone is a trap: MacLink's own `connect()` sets
++  /// `status = "connected <host>:<port>"` and then immediately sends its A11 echo
++  /// hello, whose completion overwrites it with `"sent 1"` — so a prefix test would
++  /// latch us off milliseconds after connecting and nothing would ever be sent. The
++  /// failure strings are the stable signal, and MacLink only ever writes three of them.
++  func apply(macLinkStatus status: String) {
++    isConnected =
++      !(status.hasPrefix("not connected") || status.hasPrefix("send failed")
++        || status.hasPrefix("closed"))
++  }
++
++  // MARK: - Wiring
++
++  @ObservationIgnored let sensors: PhoneSensors
++  @ObservationIgnored let interval: TimeInterval
++
++  /// The transport. Wire it to `MacLink.sendRaw` — **not** `MacLink.send`, which wraps
++  /// its argument in an `echo` envelope; a capture packet inside an echo arrives on the
++  /// Mac as `{"type":"echo","text":"{…}"}` and is logged, never decoded. See INTEGRATION.md.
++  ///
++  /// The second parameter is the delivery report and it is **not optional**: the
++  /// transport must call it exactly once, with `nil` on success and the error
++  /// otherwise. `URLSessionWebSocketTask.send` fires it on a background queue, so it is
++  /// `@Sendable` and this class hops back to the main actor inside it.
++  @ObservationIgnored
++  var send: (@MainActor (String, @escaping @Sendable (Error?) -> Void) -> Void)?
++
++  @ObservationIgnored private var lastSampleAt: TimeInterval = 0
++  @ObservationIgnored private var encodeInFlight = false
++
++  /// `nonisolated` so SwiftUI can build one in a property initializer
++  /// (`@State private var sender = CapturePacketSender()`), which is not a main-actor
++  /// context. Construct it on the main thread anyway: `PhoneSensors` creates a
++  /// `CLLocationManager`, which wants the thread it was made on to have a run loop.
++  nonisolated init(
++    sensors: PhoneSensors = PhoneSensors(),
++    interval: TimeInterval = CapturePacketSender.defaultInterval
++  ) {
++    self.sensors = sensors
++    self.interval = interval
++  }
++
++  // MARK: - Lifecycle
++
++  /// Start sampling and announce ourselves. Call after `MacLink.connect()`, and set
++  /// `isConnected` *first* — `start()` emits `hello`, which is refused while it is false.
++  func start(
++    send: @escaping @MainActor (String, @escaping @Sendable (Error?) -> Void) -> Void
++  ) {
++    self.send = send
++    start()
++  }
++
++  /// Re-announce on a reconnect. `hello` is per-connection (wire.py: "sent once on
++  /// connect"), and a new socket is a new connection. Cosmetic — `ingest._handle` only
++  /// logs it and `parse_capture` never looks for it — so skipping this costs a log line.
++  func announce() {
++    emit(Self.helloJSON())
++  }
++
++  func start() {
++    guard !isRunning else { return }
++    sensors.start()
++    lastSampleAt = 0
++    encodeInFlight = false
++    lastError = nil
++    isRunning = true
++    // wire.py: HELLO is "sent once on connect; identifies the phone, carries clock
++    // offset". `ingest._handle` logs the whole message, so extra keys are free.
++    emit(Self.helloJSON())
++  }
++
++  func stop() {
++    isRunning = false
++    sensors.stop()
++  }
++
++  // MARK: - Frame intake (A12)
++
++  /// The DAT entry point. `hardware_software.md` §12/§32: frames arrive as `VideoFrame`
++  /// and the SDK's own conversion is `frame.makeUIImage()`, so this is the form the
++  /// stream listener actually has in hand:
++  ///
++  ///     stream.videoFramePublisher.listen { frame in
++  ///         guard let image = frame.makeUIImage() else { return }
++  ///         sender.offer(image, at: Date())
++  ///     }
++  ///
++  /// `nonisolated` on purpose: the DAT listener's thread is not documented, and a
++  /// main-actor-only entry point would be a compile error from a background callback
++  /// and a hidden hop from the main one. Sampling happens after the hop, on the main
++  /// actor, where `lastSampleAt` lives — so there is exactly one gate and no lock.
++  nonisolated func offer(_ image: UIImage, at t: Date = Date()) {
++    Task { @MainActor [weak self] in
++      self?.ingest(image, at: t)
++    }
++  }
++
++  /// Alternate intake for a raw buffer. Provided because `VideoFrame`'s underlying
++  /// pixel format is an SDK implementation detail the architecture does not depend on
++  /// (SPEC §2.2) — if a future SDK hands you a `CVPixelBuffer` instead of a `UIImage`,
++  /// nothing above this line changes.
++  ///
++  /// The conversion is **eager and synchronous**, unlike the UIImage path: a buffer
++  /// vended by a capture pipeline is typically recycled the moment the callback
++  /// returns, so deferring the read past the actor hop would sample the next frame's
++  /// pixels, or garbage. At 2 fps a 504×896 `createCGImage` is a few ms.
++  nonisolated func offer(pixelBuffer: CVPixelBuffer, at t: Date = Date()) {
++    guard let image = Self.makeImage(from: pixelBuffer) else { return }
++    offer(image, at: t)
++  }
++
++  /// Main-actor: gate, then hand the survivor to the encode queue.
++  private func ingest(_ image: UIImage, at t: Date) {
++    guard isRunning else { return }
++    let now = t.timeIntervalSince1970
++
++    // Drop, never queue (SPEC §5.2). Both guards discard — neither defers work.
++    guard now - lastSampleAt >= interval else {
++      droppedCount += 1
++      return
++    }
++    guard !encodeInFlight else {
++      droppedCount += 1
++      return
++    }
++    lastSampleAt = now
++    encodeInFlight = true
++
++    // Read the sensors here, on the main actor, so the values in the packet are the
++    // ones that were true when the frame was *taken*, not when the encode finished.
++    let accel = sensors.latest
++    let burst = sensors.burst
++    let speed = sensors.speed
++
++    CaptureEncode.queue.async { [weak self] in
++      let json = CapturePacketSender.capturePacketJSON(
++        t: now, image: image, gpsSpeed: speed, accel: accel, burst: burst)
++      Task { @MainActor in
++        self?.finish(json)
++      }
++    }
++  }
++
++  private func finish(_ json: String?) {
++    encodeInFlight = false
++    guard let json else {
++      lastError = "encode failed"
++      return
++    }
++    guard let send else {
++      lastError = "no transport wired — call start(send:)"
++      return
++    }
++    guard isConnected else {
++      // Refusing is the honest answer. `task.send` on a socket whose handshake failed
++      // still calls back with `nil` on some paths, so "we handed it over" is not proof
++      // of anything; a drop the operator can see is worth more than a fake success.
++      droppedCount += 1
++      lastError = "not connected"
++      return
++    }
++    let bytes = json.utf8.count
++    send(json) { [weak self] error in
++      // Flatten the error to a String *before* the hop: a bare `Error` existential is
++      // not Sendable, and capturing one in a `Task { @MainActor in … }` is a strict
++      // concurrency error. The message is all `statusLine` ever wanted anyway.
++      let failure = error.map { "send failed: \($0.localizedDescription)" }
++      Task { @MainActor in
++        self?.delivered(bytes: bytes, failure: failure)
++      }
++    }
++  }
++
++  /// The only place `sentCount`, `lastSentAt` and `lastPacketBytes` move.
++  private func delivered(bytes: Int, failure: String?) {
++    if let failure {
++      failedCount += 1
++      lastError = failure
++      return
++    }
++    sentCount += 1
++    lastPacketBytes = bytes
++    lastSentAt = Date()
++    lastError = nil
++  }
++
++  // MARK: - Mac -> phone
++
++  /// Answer a `ping` with a `pong` (wire.py). Everything else is ignored here —
++  /// `speak` is MacLink's job (A16) and `audio` is A18's.
++  ///
++  /// MacLink does not surface inbound messages today. One line inside its private
++  /// `handle(_ raw: String)`, right after `lastFromMac` is assigned, wires this up:
++  ///
++  ///     onMessage?(raw)                     // add `var onMessage: ((String) -> Void)?`
++  ///
++  /// then, wherever you build the two objects:
++  ///
++  ///     link.onMessage = { [weak sender] raw in sender?.handleInbound(raw) }
++  ///
++  /// Nothing breaks without it: `ingest` never sends `ping` on its own, so this is
++  /// keep-alive insurance, not part of the capture path.
++  func handleInbound(_ raw: String) {
++    guard let data = raw.data(using: .utf8),
++      let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
++      obj["type"] as? String == "ping"
++    else { return }
++    emit(Self.pongJSON())
++  }
++
++  /// Out-of-band messages (`hello`, `pong`). These are not capture packets, so they do
++  /// not move `sentCount` — but a failure still surfaces, because a `hello` that never
++  /// arrives is the first evidence the socket was never really up.
++  private func emit(_ json: String?) {
++    guard let json, let send else { return }
++    guard isConnected else {
++      lastError = "not connected"
++      return
++    }
++    send(json) { [weak self] error in
++      guard let failure = error.map({ "send failed: \($0.localizedDescription)" }) else { return }
++      Task { @MainActor in
++        self?.lastError = failure
++      }
++    }
++  }
++
++  // MARK: - Encoding (nonisolated: runs on capture.encode)
++
++  /// Resize to `maxEdge` on the longest side and JPEG-encode. Never upscales.
++  /// Byte-identical to `CorpusRecorder.encode` — see the header for why that matters.
++  nonisolated static func encode(
++    _ image: UIImage, maxEdge: CGFloat = 512, quality: CGFloat = 0.7
++  ) -> Data? {
++    let size = image.size
++    guard size.width > 0, size.height > 0 else { return nil }
++    let scale = min(1.0, maxEdge / max(size.width, size.height))
++    let target = CGSize(
++      width: (size.width * scale).rounded(),
++      height: (size.height * scale).rounded())
++
++    let format = UIGraphicsImageRendererFormat.default()
++    format.scale = 1  // points == pixels, or a 3x device triples the file size
++    format.opaque = true  // a JPEG has no alpha channel anyway
++    let resized = UIGraphicsImageRenderer(size: target, format: format).image { _ in
++      image.draw(in: CGRect(origin: .zero, size: target))
++    }
++    return resized.jpegData(compressionQuality: quality)
++  }
++
++  nonisolated static func makeImage(from pixelBuffer: CVPixelBuffer) -> UIImage? {
++    let ci = CIImage(cvPixelBuffer: pixelBuffer)
++    guard let cg = CaptureEncode.ciContext.createCGImage(ci, from: ci.extent) else { return nil }
++    return UIImage(cgImage: cg)
++  }
++
++  // MARK: - The wire (A14) — mirrors src/longevity/wire.py exactly
++
++  nonisolated static var protocolVersion: Int { 1 }
++
++  /// `{"v":1,"type":"capture","t":…,"image":…,"gps_speed":…,"accel":…,"accel_burst":…}`
++  ///
++  /// `gps_speed` and `accel` are **null when unknown, not omitted** — `wire.capture_packet`
++  /// always writes both keys, and `ingest._as_float` / `_as_accel` already return None
++  /// for a null. `accel_burst` is the one optional key: omitted when empty, because
++  /// `ingest._as_burst` treats a non-list as empty anyway and an empty list would just
++  /// cost bytes.
++  nonisolated static func capturePacketJSON(
++    t: TimeInterval,
++    image: UIImage,
++    gpsSpeed: Double?,
++    accel: PhoneSensors.Accel?,
++    burst: [[Double]]
++  ) -> String? {
++    guard let jpeg = encode(image) else { return nil }
++
++    var body: [String: Any] = [
++      "v": protocolVersion,
++      "type": "capture",
++      // round(t, 3) in wire.py. Milliseconds is all anything downstream reads.
++      "t": (t * 1000).rounded() / 1000,
++      // NO options. `.lineLength64Characters` inserts newlines and `wire.decode_image`
++      // validates strictly (`validate=True`) — every frame would be silently rejected.
++      "image": jpeg.base64EncodedString(),
++    ]
++    if let gpsSpeed, gpsSpeed.isFinite {
++      body["gps_speed"] = gpsSpeed
++    } else {
++      body["gps_speed"] = NSNull()
++    }
++    if let accel {
++      let vector: [String: Double] = ["x": accel.x, "y": accel.y, "z": accel.z]
++      body["accel"] = vector
++    } else {
++      body["accel"] = NSNull()
++    }
++    if !burst.isEmpty {
++      body["accel_burst"] = burst
++    }
++    return json(body)
++  }
++
++  nonisolated static func helloJSON() -> String? {
++    json([
++      "v": protocolVersion,
++      "type": "hello",
++      "device": "iphone",
++      // We do not measure skew, and claiming a number we did not measure is worse than
++      // claiming none. The Mac falls back to arrival time past ±60 s anyway
++      // (`ingest.MAX_CLOCK_SKEW_S`), and both machines are NTP-synced in practice.
++      "clock_offset_s": 0,
++    ])
++  }
++
++  nonisolated static func pongJSON() -> String? {
++    json(["v": protocolVersion, "type": "pong", "t": (Date().timeIntervalSince1970 * 1000).rounded() / 1000])
++  }
++
++  private nonisolated static func json(_ body: [String: Any]) -> String? {
++    guard JSONSerialization.isValidJSONObject(body),
++      let data = try? JSONSerialization.data(withJSONObject: body)
++    else { return nil }
++    return String(data: data, encoding: .utf8)
++  }
++}
 diff --git a/samples/CameraAccess/CorpusRecorder.swift b/samples/CameraAccess/CorpusRecorder.swift
 new file mode 100644
 index 0000000..056e046
@@ -601,10 +1081,10 @@ index 0000000..056e046
 +}
 diff --git a/samples/CameraAccess/MacLink.swift b/samples/CameraAccess/MacLink.swift
 new file mode 100644
-index 0000000..d1b16ba
+index 0000000..471fce6
 --- /dev/null
 +++ b/samples/CameraAccess/MacLink.swift
-@@ -0,0 +1,154 @@
+@@ -0,0 +1,192 @@
 +//  MacLink.swift
 +//  PERSON_A.md A11 — prove the phone <-> Mac socket before any payload rides on it.
 +//
@@ -642,8 +1122,20 @@ index 0000000..d1b16ba
 +  @ObservationIgnored let url: URL
 +
 +  /// Dial the Mac's LAN IP. Never `localhost` — on the phone that resolves to the phone.
-+  init(host: String = "10.135.100.7", port: Int = 8765) {
-+    url = URL(string: "ws://\(host):\(port)/")!
++  ///
++  /// EDIT THESE TWO when moving between machines. `path` differs by target: the A11
++  /// echo server (tools/echo_server.py, port 8765) accepts any path, but the real
++  /// ingest server hard-codes `/ws/glasses` in `ingest.INGEST_PATH` and a bare `/`
++  /// 404s at the handshake.
++  static let defaultHost = "10.135.100.6"   // Rishi's Mac. `ipconfig getifaddr en0` to change.
++  static let defaultPort = 8010             // ingest (t0 --port 8010); 8765 = A11 echo server
++
++  init(
++    host: String = MacLink.defaultHost,
++    port: Int = MacLink.defaultPort,
++    path: String = "/ws/glasses"
++  ) {
++    url = URL(string: "ws://\(host):\(port)\(path)")!
 +  }
 +
 +  func connect() {
@@ -683,6 +1175,32 @@ index 0000000..d1b16ba
 +        } else {
 +          self.sentCount += 1
 +          self.status = "sent \(self.sentCount)"
++        }
++      }
++    }
++  }
++
++  /// A14 — send a pre-built `wire` message verbatim, with no envelope of its own.
++  /// `send(_:)` wraps its argument in {"type":"echo","text":...}, so a capture packet
++  /// pushed through it would arrive as an echo carrying JSON as a string and never
++  /// decode — the Mac would count it as `malformed`, not `received`.
++  /// `completion` is the delivery report CapturePacketSender requires: called exactly
++  /// once, `nil` on success. URLSession fires it on a background queue, hence @Sendable.
++  func sendRaw(_ json: String, completion: @escaping @Sendable (Error?) -> Void = { _ in }) {
++    guard let task else {
++      status = "not connected"
++      completion(URLError(.notConnectedToInternet))
++      return
++    }
++    task.send(.string(json)) { [weak self] error in
++      completion(error)
++      Task { @MainActor in
++        guard let self else { return }
++        if let error {
++          self.connected = false
++          self.status = "send failed: \(error.localizedDescription)"
++        } else {
++          self.sentCount += 1
 +        }
 +      }
 +    }
@@ -756,6 +1274,186 @@ index 0000000..d1b16ba
 +
 +    if let out = AVAudioSession.sharedInstance().currentRoute.outputs.first {
 +      print("speaking out: \(out.portName) [\(out.portType.rawValue)]")
++    }
++  }
++}
+diff --git a/samples/CameraAccess/PhoneSensors.swift b/samples/CameraAccess/PhoneSensors.swift
+new file mode 100644
+index 0000000..d88a97b
+--- /dev/null
++++ b/samples/CameraAccess/PhoneSensors.swift
+@@ -0,0 +1,174 @@
++//  PhoneSensors.swift
++//  PERSON_A.md A13. Drop into the CameraAccess target.
++//
++//  Two sensors, no arithmetic. SPEC §11.2 is explicit: "the phone computes nothing
++//  from them" — `accel_rms` is derived on the Mac (`sources/glasses.py: AccelWindow`),
++//  and anything this file smoothed, filtered, or averaged would have to be un-averaged
++//  there. Read, store, hand over. That is the entire contract.
++//
++//  ## The two ways to get this silently wrong
++//
++//  1. **Raw accelerometer, never `deviceMotion.userAcceleration`.** The Mac computes
++//     `|a| - 1g` and assumes gravity is *included*. `userAcceleration` has it removed,
++//     so every magnitude collapses toward 0, and `accel_rms` reads a near-constant ~1.0
++//     for both a sprint and a nap. `AccelWindow._check_units` logs a warning if it
++//     smells this, but the fix is here: `CMAccelerometerData.acceleration`, nothing else.
++//  2. **CoreLocation reports -1 for "speed unknown".** Sent raw that reads on the Mac
++//     as travelling backwards at 1 m/s. `nil` (→ JSON null) is the honest answer.
++//
++//  ## Why a burst and not one sample
++//
++//  One sample per packet cannot distinguish "moving" from "tilted", and forces the
++//  Mac's window to span 8 real seconds just to collect 8 points — so a step or a head
++//  turn shows up seconds late. At 20 Hz, 20 samples cover the last second for ~500
++//  bytes against a ~53 KB packet, and `AccelWindow` switches itself to a 2.5 s window
++//  the first time it sees one. Effectively free; take it.
++
++import CoreLocation
++import CoreMotion
++import Foundation
++
++/// `@unchecked Sendable`: every property read across threads is behind `lock`.
++/// CoreMotion delivers on its own operation queue; CoreLocation delivers on the thread
++/// this object was created on, which is also where `start()`/`stop()` are called, so
++/// `running` alone needs no lock.
++final class PhoneSensors: NSObject, @unchecked Sendable {
++
++  /// One raw accelerometer vector in g, gravity included (`CMAcceleration`).
++  struct Accel: Sendable {
++    let x: Double
++    let y: Double
++    let z: Double
++  }
++
++  /// 20 Hz × 20 samples = the last ~1.0 s, which is what `wire.capture_packet`
++  /// documents `accel_burst` to be.
++  static let sampleHz: Double = 20
++  static let ringCapacity = 20
++
++  private let motion = CMMotionManager()
++  private let locator = CLLocationManager()
++  private let queue: OperationQueue
++  private let lock = NSLock()
++
++  private var _latest: Accel?
++  private var _ring: [Accel] = []
++  private var _speed: Double?
++  private var running = false
++
++  /// The newest sample, or nil before the first one lands / if there is no
++  /// accelerometer (the Simulator). Becomes `"accel": null` on the wire.
++  var latest: Accel? {
++    lock.lock()
++    defer { lock.unlock() }
++    return _latest
++  }
++
++  /// The last ~1 s as `[[x, y, z]]`, oldest first — the shape `ingest._as_burst` parses.
++  ///
++  /// Non-destructive on purpose. Draining would make the burst mean "everything since
++  /// the last packet", which at a 1.5 s interval is 30 samples of which the Mac keeps
++  /// the newest anyway; a fixed trailing window is both smaller and better defined.
++  /// Nothing accumulates either way — the ring is capped, so this is still "drop,
++  /// never queue".
++  var burst: [[Double]] {
++    lock.lock()
++    defer { lock.unlock() }
++    return _ring.map { [$0.x, $0.y, $0.z] }
++  }
++
++  /// Ground speed in m/s, or nil when unknown. Becomes `"gps_speed": null`.
++  var speed: Double? {
++    lock.lock()
++    defer { lock.unlock() }
++    return _speed
++  }
++
++  /// Create on the main thread: `CLLocationManager` delivers its delegate callbacks on
++  /// the run loop of the thread it was initialised on, and a background thread has none.
++  override init() {
++    queue = OperationQueue()
++    queue.name = "phone.sensors.accel"
++    queue.maxConcurrentOperationCount = 1
++    queue.qualityOfService = .userInitiated
++    super.init()
++    locator.delegate = self
++    locator.desiredAccuracy = kCLLocationAccuracyBest
++  }
++
++  // MARK: - Lifecycle
++
++  /// Needs `NSMotionUsageDescription` and `NSLocationWhenInUseUsageDescription` in
++  /// Info.plist. Without the location string the authorization prompt never appears
++  /// and `speed` stays nil forever, with no error anywhere.
++  func start() {
++    guard !running else { return }
++    running = true
++
++    if motion.isAccelerometerAvailable {
++      motion.accelerometerUpdateInterval = 1.0 / Self.sampleHz
++      motion.startAccelerometerUpdates(to: queue) { [weak self] data, _ in
++        // RAW: gravity included. See the header — this is the one line that matters.
++        guard let self, let a = data?.acceleration else { return }
++        self.append(Accel(x: a.x, y: a.y, z: a.z))
++      }
++    }
++
++    locator.requestWhenInUseAuthorization()
++    locator.startUpdatingLocation()
++  }
++
++  func stop() {
++    running = false
++    motion.stopAccelerometerUpdates()
++    locator.stopUpdatingLocation()
++    lock.lock()
++    _ring.removeAll(keepingCapacity: true)
++    lock.unlock()
++  }
++
++  private func append(_ sample: Accel) {
++    lock.lock()
++    _latest = sample
++    _ring.append(sample)
++    if _ring.count > Self.ringCapacity {
++      _ring.removeFirst(_ring.count - Self.ringCapacity)
++    }
++    lock.unlock()
++  }
++}
++
++// MARK: - CoreLocation
++
++extension PhoneSensors: CLLocationManagerDelegate {
++
++  func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
++    guard let location = locations.last else { return }
++    // -1 means "unknown" for both fields; a negative accuracy invalidates the speed
++    // even when the speed itself looks plausible.
++    let usable = location.speed >= 0 && location.speedAccuracy >= 0
++    lock.lock()
++    _speed = usable ? location.speed : nil
++    lock.unlock()
++  }
++
++  func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
++    // Denied, or simply no fix indoors. Neither is fatal: the Mac reads a null
++    // `gps_speed` as "no reading" and every other field still rides.
++    lock.lock()
++    _speed = nil
++    lock.unlock()
++  }
++
++  /// Updates only start flowing once the user answers the prompt, so re-arm here.
++  func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
++    switch manager.authorizationStatus {
++    case .authorizedWhenInUse, .authorizedAlways:
++      if running { manager.startUpdatingLocation() }
++    default:
++      lock.lock()
++      _speed = nil
++      lock.unlock()
 +    }
 +  }
 +}

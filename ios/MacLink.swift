@@ -40,7 +40,7 @@ final class MacLink {
   /// echo server (tools/echo_server.py, port 8765) accepts any path, but the real
   /// ingest server hard-codes `/ws/glasses` in `ingest.INGEST_PATH` and a bare `/`
   /// 404s at the handshake.
-  static let defaultHost = "10.136.156.29"   // Rishi's Mac. `ipconfig getifaddr en0` to change.
+  static let defaultHost = "10.135.100.6"   // Rishi's Mac. `ipconfig getifaddr en0` to change.
   static let defaultPort = 8010             // ingest (t0 --port 8010); 8765 = A11 echo server
 
   init(
@@ -97,12 +97,16 @@ final class MacLink {
   /// `send(_:)` wraps its argument in {"type":"echo","text":...}, so a capture packet
   /// pushed through it would arrive as an echo carrying JSON as a string and never
   /// decode — the Mac would count it as `malformed`, not `received`.
-  func sendRaw(_ json: String) {
+  /// `completion` is the delivery report CapturePacketSender requires: called exactly
+  /// once, `nil` on success. URLSession fires it on a background queue, hence @Sendable.
+  func sendRaw(_ json: String, completion: @escaping @Sendable (Error?) -> Void = { _ in }) {
     guard let task else {
       status = "not connected"
+      completion(URLError(.notConnectedToInternet))
       return
     }
     task.send(.string(json)) { [weak self] error in
+      completion(error)
       Task { @MainActor in
         guard let self else { return }
         if let error {
