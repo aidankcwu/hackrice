@@ -1,0 +1,182 @@
+"""Tick schema round-trip against the literal example in SPEC §12."""
+
+from __future__ import annotations
+
+import json
+
+import pytest
+from pydantic import ValidationError
+
+from pipeline.models import AiBlock, SensorBlock, Tick, phash_distance
+
+# Copied verbatim from SPEC §12. Image bytes are not part of the tick (SPEC §2.5
+# rule 3: ticks contain no pixels), so there is nothing to remove here -- the
+# tick carries only `frame_ref`.
+SPEC_TICK_JSON = """
+{
+  "v": 1,
+  "tick_id": "t_00001742",
+  "t": 1757700842.000,
+  "seq": 1742,
+
+  "sensor": {
+    "lux_proxy": 340,
+    "cct": 4100,
+    "hist_spread": 0.62,
+    "frame_delta": 0.12,
+    "flow_mag": 0.04,
+    "sharpness": 88,
+    "phash": "e3a91c04b7d2f855"
+  },
+
+  "device": {
+    "accel_rms": 0.04,
+    "gps_speed": 0.2
+  },
+
+  "ai": {
+    "as_of": 1757700840.100,
+    "age_ms": 1900,
+    "scene": "office",
+    "activity": "seated",
+    "food_present": false,
+    "food_type": "none",
+    "caffeine_visible": true,
+    "alcohol_visible": false,
+    "screen_present": true,
+    "vegetation_visible": false,
+    "people_present": true,
+    "conf": 0.83
+  },
+
+  "frame_ref": "f_00001742"
+}
+"""
+
+
+def test_spec_tick_round_trips_exactly() -> None:
+    original = json.loads(SPEC_TICK_JSON)
+    tick = Tick.model_validate(original)
+
+    assert tick.tick_id == "t_00001742"
+    assert tick.seq == 1742
+    assert tick.sensor.phash == "e3a91c04b7d2f855"
+    assert tick.device is not None and tick.device.gps_speed == 0.2
+    assert tick.ai is not None and tick.ai.scene == "office"
+    assert tick.ai.caffeine_visible is True
+
+    round_tripped = json.loads(tick.model_dump_json())
+    assert round_tripped == original
+
+
+def test_ai_block_may_be_absent() -> None:
+    """SPEC §12.2 state 2: the tick is still valid, sensor unaffected."""
+
+    data = json.loads(SPEC_TICK_JSON)
+    del data["ai"]
+    tick = Tick.model_validate(data)
+    assert tick.ai is None
+    assert tick.sensor.lux_proxy == 340
+
+
+def test_device_block_may_be_absent() -> None:
+    """SPEC §12.1: absent under webcam / replay adapters."""
+
+    data = json.loads(SPEC_TICK_JSON)
+    del data["device"]
+    assert Tick.model_validate(data).device is None
+
+
+def test_unknown_fields_are_tolerated() -> None:
+    """SPEC §12: A may add fields freely; B must not break on them."""
+
+    data = json.loads(SPEC_TICK_JSON)
+    data["sensor"]["new_stat"] = 1.5
+    data["something_new"] = "hello"
+    tick = Tick.model_validate(data)
+    assert tick.sensor.lux_proxy == 340
+
+
+def test_bad_enum_rejected() -> None:
+    data = json.loads(SPEC_TICK_JSON)
+    data["ai"]["scene"] = "submarine"
+    with pytest.raises(ValidationError):
+        Tick.model_validate(data)
+
+
+def test_phash_must_be_16_hex() -> None:
+    with pytest.raises(ValidationError):
+        SensorBlock(
+            lux_proxy=1,
+            cct=1,
+            hist_spread=0,
+            frame_delta=0,
+            flow_mag=0,
+            sharpness=1,
+            phash="zzzz",
+        )
+
+
+def test_ai_block_defaults() -> None:
+    ai = AiBlock(as_of=1.0, age_ms=0)
+    assert ai.scene == "unknown"
+    # Unreported flags are unknown (None), never False (plan review, SPEC §12).
+    assert ai.food_type is None
+    assert ai.people_present is None
+
+
+@pytest.mark.parametrize(
+    "a,b,expected",
+    [
+        ("0000000000000000", "0000000000000000", 0),
+        ("0000000000000000", "0000000000000001", 1),
+        ("0000000000000000", "ffffffffffffffff", 64),
+        ("e3a91c04b7d2f855", "e3a91c04b7d2f854", 1),
+    ],
+)
+def test_phash_distance(a: str, b: str, expected: int) -> None:
+    assert phash_distance(a, b) == expected
+
+
+def test_phash_distance_length_mismatch() -> None:
+    with pytest.raises(ValueError):
+        phash_distance("abcd", "abcdef")
+
+
+# -- amendments from plan review: tri-state flags and freshness ----------------
+
+
+def _bare_tick(ai: dict | None) -> Tick:
+    return Tick(
+        tick_id="t_1", t=1.0, seq=1, frame_ref="f_1",
+        sensor={"lux_proxy": 1.0, "phash": "e3a91c04b7d2f855"},
+        ai=ai,
+    )
+
+
+def test_missing_boolean_is_unknown_not_false():
+    tick = _bare_tick({"as_of": 1.0, "age_ms": 100, "scene": "office"})
+    assert tick.ai is not None
+    assert tick.ai.food_present is None
+    assert tick.flag("food_present") is None
+    assert tick.enum("scene") == "office"
+    assert tick.enum("activity") is None  # "unknown" reads as None
+
+
+def test_stale_ai_reads_as_unknown():
+    tick = _bare_tick({"as_of": 1.0, "age_ms": 5000, "food_present": True})
+    assert tick.ai_fresh() is False
+    assert tick.flag("food_present") is None
+    assert tick.flag("food_present", max_age_ms=10_000) is True
+
+
+def test_absent_ai_reads_as_unknown():
+    tick = _bare_tick(None)
+    assert tick.ai_fresh() is False
+    assert tick.flag("screen_present") is None
+
+
+def test_sparse_sensor_block_parses():
+    tick = _bare_tick(None)
+    assert tick.sensor.cct is None
+    assert tick.sensor.phash == "e3a91c04b7d2f855"
