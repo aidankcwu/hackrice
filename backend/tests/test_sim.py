@@ -107,11 +107,15 @@ def test_ai_tags_follow_the_scenario() -> None:
     # 0-59 office screen; 60-89 coffee; 150-209 restaurant lunch; 240-299 park
     assert by_seq[10].screen_present and by_seq[10].scene == "office"  # type: ignore[union-attr]
     assert by_seq[70].caffeine_visible  # type: ignore[union-attr]
+    assert by_seq[70].drink == "coffee"  # type: ignore[union-attr]
+    assert by_seq[70].caption == "desk coffee"  # type: ignore[union-attr]
+    assert 2 <= len(by_seq[70].objects) <= 3  # type: ignore[union-attr]
     assert by_seq[170].food_present and by_seq[170].food_type == "mixed"  # type: ignore[union-attr]
     assert by_seq[170].people_present and by_seq[170].scene == "restaurant"  # type: ignore[union-attr]
     assert by_seq[260].vegetation_visible and by_seq[260].scene == "park"  # type: ignore[union-attr]
     assert by_seq[320].scene == "home"  # type: ignore[union-attr]
     assert by_seq[350].alcohol_visible  # type: ignore[union-attr]
+    assert by_seq[350].drink == "alcohol"  # type: ignore[union-attr]
 
 
 def test_phash_stays_near_constant_within_a_segment_and_jumps_between() -> None:

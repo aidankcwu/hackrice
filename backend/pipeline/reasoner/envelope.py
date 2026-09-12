@@ -54,6 +54,7 @@ _COLUMNS = (
     "people",
     "caff",
     "alc",
+    "drink",
     "delta",
     "lux",
 )
@@ -154,6 +155,7 @@ def _row(tick: Tick, origin: float) -> list[str]:
         _bool_cell(tick, "people_present"),
         _bool_cell(tick, "caffeine_visible"),
         _bool_cell(tick, "alcohol_visible"),
+        tick.enum("drink", AI_MAX_AGE_MS) or UNKNOWN,
         _num_cell(tick.sensor.frame_delta, ".2f"),
         _num_cell(tick.sensor.lux_proxy, ".0f"),
     ]
@@ -187,10 +189,17 @@ def tick_table(window: list[Tick], origin: float) -> str:
         return "(no ticks in window)"
     table = [list(_COLUMNS)] + rows
     widths = [max(len(r[i]) for r in table) for i in range(len(_COLUMNS))]
-    return "\n".join(
+    rendered = "\n".join(
         "  ".join(cell.ljust(widths[i]) for i, cell in enumerate(row)).rstrip()
         for row in table
     )
+    trigger_ai = window[-1].ai if window[-1].ai_fresh(AI_MAX_AGE_MS) else None
+    if trigger_ai and trigger_ai.caption:
+        objects = ", ".join(trigger_ai.objects or [])
+        rendered += f"\nTrigger frame: {trigger_ai.caption}"
+        if objects:
+            rendered += f"; objects: {objects}"
+    return rendered
 
 
 def frame_label(tick: Tick, origin: float, is_trigger: bool = False) -> str:
@@ -222,7 +231,11 @@ def frame_label(tick: Tick, origin: float, is_trigger: bool = False) -> str:
     head = _offset(tick.t, origin)
     if is_trigger:
         head += " (trigger frame)"
-    return f"{head} — " + ", ".join(bits)
+    label = f"{head} — " + ", ".join(bits)
+    caption = tick.ai.caption if tick.ai_fresh(AI_MAX_AGE_MS) and tick.ai else None
+    if caption:
+        label += f' — "{caption}"'
+    return label
 
 
 def _today_block(lines: list[TodaySummaryLine]) -> str:
@@ -300,7 +313,9 @@ def build_envelope(
             {
                 "type": "input_image",
                 "image_url": _data_url(jpeg),
-                "detail": "low",
+                # The trigger frame is the moment in question: send it sharp.
+                # Context frames stay cheap (low ≈ 85 tokens each).
+                "detail": "high" if is_trigger else "low",
             }
         )
 

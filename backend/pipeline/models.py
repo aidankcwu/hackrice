@@ -129,6 +129,11 @@ class AiBlock(BaseModel):
     screen_present: bool | None = None
     vegetation_visible: bool | None = None
     people_present: bool | None = None
+    caption: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    objects: list[str] | None = Field(default=None, exclude_if=lambda value: value is None)
+    drink: Literal[
+        "none", "water", "coffee", "tea", "energy_drink", "soda", "alcohol", "unknown"
+    ] | None = Field(default=None, exclude_if=lambda value: value is None)
     conf: float | None = None
 
 

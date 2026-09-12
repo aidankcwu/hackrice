@@ -42,6 +42,8 @@ Agreed details (from plan review):
 
 ## Dashboard REST
 
+The `ai` block may optionally include `caption`, `objects`, and `drink` (`none`, `water`, `coffee`, `tea`, `energy_drink`, `soda`, `alcohol`, or `unknown`).
+
 | Method / path | Returns |
 |---|---|
 | `GET /api/status` | `{demo_mode, source, uptime_s, tick_count, ai_coverage, t1_busy, dropped_escalations, last_tick_t}` |

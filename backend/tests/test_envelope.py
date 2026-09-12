@@ -146,12 +146,13 @@ def test_tick_table_renders_unknown_fields_as_question_marks():
         "people",
         "caff",
         "alc",
+        "drink",
         "delta",
         "lux",
     ]
     cells = row.split()
     # scene, activity, food, screen, people, caff, alc, lux are all unknown.
-    assert cells.count(UNKNOWN) == 8, row
+    assert cells.count(UNKNOWN) == 9, row
 
 
 def test_tick_table_distinguishes_false_from_unknown():
@@ -181,6 +182,26 @@ def test_tick_table_shows_food_type_and_subsamples():
     assert rows[-1].startswith("t-0s"), "the trigger second is always the last row"
 
 
+def test_tick_table_shows_drink_and_trigger_details():
+    window = [
+        tick(
+            0,
+            ai=office_ai(
+                drink="coffee",
+                caption="person holding coffee",
+                objects=["person", "coffee mug"],
+            ),
+        )
+    ]
+
+    table = tick_table(window, origin=T0)
+
+    assert "coffee" in table.splitlines()[1]
+    assert table.splitlines()[-1] == (
+        "Trigger frame: person holding coffee; objects: person, coffee mug"
+    )
+
+
 def test_frame_label_falls_back_to_sensor_fields_with_no_ai_block():
     tk = tick(0, ai=None)
 
@@ -203,6 +224,12 @@ def test_frame_label_names_the_offset_and_the_live_flags():
     assert "seated" in label
     assert "screen" in label
     assert "people" not in label, "False flags are not listed"
+
+
+def test_frame_label_appends_caption():
+    tk = tick(0, ai=office_ai(caption="person holding chips"))
+
+    assert frame_label(tk, origin=T0).endswith('— "person holding chips"')
 
 
 # -- build_envelope -------------------------------------------------------

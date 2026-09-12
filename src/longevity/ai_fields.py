@@ -30,6 +30,11 @@ FOOD_TYPE = [
     "processed", "sweets", "mixed", "none",
 ]
 
+DRINK = [
+    "none", "water", "coffee", "tea", "energy_drink", "soda", "alcohol",
+    "unknown",
+]
+
 BOOL_FIELDS = [
     "food_present",
     "caffeine_visible",
@@ -39,13 +44,18 @@ BOOL_FIELDS = [
     "people_present",
 ]
 
-ENUM_FIELDS = {"scene": SCENE, "activity": ACTIVITY, "food_type": FOOD_TYPE}
+ENUM_FIELDS = {
+    "scene": SCENE,
+    "activity": ACTIVITY,
+    "food_type": FOOD_TYPE,
+    "drink": DRINK,
+}
 
 # Field order as it appears in the §12 example tick, for readable JSON output.
 FIELD_ORDER = [
     "scene", "activity", "food_present", "food_type", "caffeine_visible",
     "alcohol_visible", "screen_present", "vegetation_visible", "people_present",
-    "conf",
+    "caption", "objects", "drink", "conf",
 ]
 
 # `conf` appears in the §12 tick example but is absent from §9's field table. We ask
@@ -55,6 +65,9 @@ DEFAULTS: dict[str, Any] = {
     "scene": "unknown",
     "activity": "unknown",
     "food_type": "none",
+    "caption": "",
+    "objects": [],
+    "drink": "none",
     "conf": 0.0,
     **{f: False for f in BOOL_FIELDS},
 }
@@ -66,7 +79,10 @@ PROMPT = (
     "tracker. Report only what is plainly visible in this frame. Do not infer, "
     "remember, or guess from context. If something is unclear, use the unknown / "
     "false / none value rather than a confident answer.\n\n"
-    "conf is your overall confidence in this whole tagging, from 0.0 to 1.0."
+    "conf is your overall confidence in this whole tagging, from 0.0 to 1.0.\n"
+    "caption is one short phrase of at most 12 words describing what is plainly visible.\n"
+    "objects lists up to 5 lowercase nouns that are plainly visible.\n"
+    "drink identifies the plainly visible drink, or none when no drink is visible."
 )
 
 # --- Structured-output schema -------------------------------------------------
@@ -79,6 +95,9 @@ def response_schema() -> dict[str, Any]:
         "activity": {"type": "STRING", "enum": ACTIVITY},
         "food_present": {"type": "BOOLEAN"},
         "food_type": {"type": "STRING", "enum": FOOD_TYPE},
+        "caption": {"type": "STRING"},
+        "objects": {"type": "ARRAY", "items": {"type": "STRING"}, "maxItems": 5},
+        "drink": {"type": "STRING", "enum": DRINK},
         "conf": {"type": "NUMBER"},
     }
     for f in BOOL_FIELDS:
@@ -110,6 +129,21 @@ def coerce(raw: dict[str, Any] | None) -> dict[str, Any]:
 
     for name in BOOL_FIELDS:
         out[name] = bool(raw.get(name, False))
+
+    caption = raw.get("caption", "")
+    out["caption"] = "" if caption is None else str(caption)[:100]
+
+    objects = raw.get("objects", [])
+    if not isinstance(objects, list):
+        objects = []
+    out["objects"] = [str(item).strip().lower()[:40] for item in objects[:5]]
+
+    if "caffeine_visible" not in raw and out["drink"] in {
+        "coffee", "tea", "energy_drink"
+    }:
+        out["caffeine_visible"] = True
+    if "alcohol_visible" not in raw and out["drink"] == "alcohol":
+        out["alcohol_visible"] = True
 
     try:
         out["conf"] = max(0.0, min(1.0, float(raw.get("conf", 0.0))))

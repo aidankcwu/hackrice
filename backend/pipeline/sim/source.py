@@ -175,6 +175,14 @@ class SimSource:
             return None
         age_ms = 0 if self._last_ai_t is None else int((t - self._last_ai_t) * 1000)
         self._last_ai_t = t
+        objects = [segment.scene, segment.activity]
+        if segment.food_present:
+            objects.append("food")
+        elif segment.screen_present:
+            objects.append("screen")
+        drink = "coffee" if segment.caffeine_visible else (
+            "alcohol" if segment.alcohol_visible else "none"
+        )
         return AiBlock(
             as_of=t,
             age_ms=age_ms,
@@ -187,6 +195,9 @@ class SimSource:
             screen_present=segment.screen_present,
             vegetation_visible=segment.vegetation_visible,
             people_present=segment.people_present,
+            caption=segment.name.replace("_", " "),
+            objects=objects,
+            drink=drink,
             conf=round(self._rng.uniform(0.72, 0.95), 3),
         )
 

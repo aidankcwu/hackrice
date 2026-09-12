@@ -151,7 +151,7 @@ _HR_LINE_RE = re.compile(r"Heart rate \(wearable[^:]*resting\s+(\d+(?:\.\d+)?)\s
 _HR_POINT_RE = re.compile(r"t-\d+s\s+(\d+(?:\.\d+)?)")
 
 #: Columns in the envelope's tick table (envelope._COLUMNS).
-_TABLE_COLS = 10
+_TABLE_COLS = 11
 _ACTIVITY_COL = 2
 _SCENE_COL = 1
 _PEOPLE_COL = 5
