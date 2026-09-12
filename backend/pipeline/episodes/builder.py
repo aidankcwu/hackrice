@@ -23,31 +23,47 @@ class EpisodeParams:
     sighting_window_s: float = 10.0
     sighting_idle_close_s: float = 15.0
     sighting_max_s: float = 60.0
+    #: Freshness budget for an `ai` block, from ``Timings.ai_max_age_ms``.
+    ai_max_age_ms: int = 3000
 
     @classmethod
     def from_timings(cls, timings: Timings, demo_mode: bool) -> "EpisodeParams":
+        """Debounce parameters for one cadence.
+
+        SPEC §10 requires an episode and its escalation to agree on
+        boundaries, so every entry count here goes through the same
+        ``timings.scaled_hits`` the gate's triggers use: a "6 hits in 20 s"
+        threshold is 4 ticks at a 1.5 s cadence, on both sides.
+        """
+
+        hits = timings.scaled_hits
         entry = {
-            "meal": (timings.food_min_hits, timings.food_window),
+            "meal": (hits(timings.food_min_hits), timings.food_window),
             "screen_block": (
-                timings.screen_sustained_min_hits,
+                hits(timings.screen_sustained_min_hits),
                 timings.screen_sustained_window,
             ),
             "conversation": (
-                timings.people_sustained_min_hits,
+                hits(timings.people_sustained_min_hits),
                 timings.people_sustained_window,
             ),
             "outdoor_block": (
-                timings.outdoor_min_hits,
+                hits(timings.outdoor_min_hits),
                 timings.outdoor_sustained_window,
             ),
-            "gym_session": (3, 10.0),
-            "sauna_session": (3, 10.0),
-            "caffeine_sighting": (2, 10.0),
-            "alcohol_sighting": (2, 10.0),
+            "gym_session": (hits(3), 10.0),
+            "sauna_session": (hits(3), 10.0),
+            "caffeine_sighting": (max(1, hits(2)), 10.0),
+            "alcohol_sighting": (max(1, hits(2)), 10.0),
         }
+        common = dict(
+            entry=entry,
+            sighting_min_hits=max(1, hits(2)),
+            ai_max_age_ms=timings.ai_max_age_ms,
+        )
         if demo_mode:
-            return cls(3, 6.0, 4, 6.0, 8.0, entry=entry)
-        return cls(3, 10.0, 4, 10.0, 20.0, entry=entry)
+            return cls(hits(3), 6.0, hits(4), 6.0, 8.0, **common)
+        return cls(hits(3), 10.0, hits(4), 10.0, 20.0, **common)
 
 
 Predicate = Callable[[Tick], bool | None]
@@ -67,48 +83,59 @@ class _State:
     )
 
 
-def _flag(name: str) -> Predicate:
-    return lambda tick: tick.flag(name)
+def _flag(name: str, max_age_ms: int = 3000) -> Predicate:
+    return lambda tick: tick.flag(name, max_age_ms)
 
 
-def _outdoor(tick: Tick) -> bool | None:
-    scene = tick.enum("scene")
-    vegetation = tick.flag("vegetation_visible")
-    if scene in {"park", "trail", "street"} or vegetation is True:
-        return True
-    if scene is None and vegetation is None:
-        return None
-    return False
-
-
-def _scene(expected: str) -> Predicate:
+def _outdoor(max_age_ms: int = 3000) -> Predicate:
     def predicate(tick: Tick) -> bool | None:
-        value = tick.enum("scene")
+        scene = tick.enum("scene", max_age_ms)
+        vegetation = tick.flag("vegetation_visible", max_age_ms)
+        if scene in {"park", "trail", "street"} or vegetation is True:
+            return True
+        if scene is None and vegetation is None:
+            return None
+        return False
+
+    return predicate
+
+
+def _scene(expected: str, max_age_ms: int = 3000) -> Predicate:
+    def predicate(tick: Tick) -> bool | None:
+        value = tick.enum("scene", max_age_ms)
         return None if value is None else value == expected
 
     return predicate
 
 
+def _predicates(max_age_ms: int) -> dict[EpisodeKind, Predicate]:
+    """The per-kind tri-state tag readers, at one freshness budget."""
+
+    return {
+        "meal": _flag("food_present", max_age_ms),
+        "conversation": _flag("people_present", max_age_ms),
+        "outdoor_block": _outdoor(max_age_ms),
+        "screen_block": _flag("screen_present", max_age_ms),
+        "gym_session": _scene("gym", max_age_ms),
+        "sauna_session": _scene("sauna", max_age_ms),
+        "caffeine_sighting": _flag("caffeine_visible", max_age_ms),
+        "alcohol_sighting": _flag("alcohol_visible", max_age_ms),
+    }
+
+
 class EpisodeBuilder:
     """Collapse noisy tick tags into persisted episodes."""
 
-    _PREDICATES: dict[EpisodeKind, Predicate] = {
-        "meal": _flag("food_present"),
-        "conversation": _flag("people_present"),
-        "outdoor_block": _outdoor,
-        "screen_block": _flag("screen_present"),
-        "gym_session": _scene("gym"),
-        "sauna_session": _scene("sauna"),
-        "caffeine_sighting": _flag("caffeine_visible"),
-        "alcohol_sighting": _flag("alcohol_visible"),
-    }
     _SIGHTINGS = {"caffeine_sighting", "alcohol_sighting"}
 
     def __init__(self, db: Database, timings: Timings) -> None:
         self.db = db
         self.timings = timings
-        self.demo_mode = timings == Timings.demo()
+        # Compare against the demo preset *at this cadence* -- a 1.5 s demo is
+        # still a demo, and must keep the shorter debounce windows.
+        self.demo_mode = timings == Timings.demo(timings.tick_interval_s)
         self.params = EpisodeParams.from_timings(timings, self.demo_mode)
+        self._kind_predicates = _predicates(self.params.ai_max_age_ms)
         lock = getattr(db, "_lock", None)
         if lock is None:
             count = db.conn.execute("SELECT COUNT(*) FROM episodes").fetchone()[0]
@@ -116,7 +143,7 @@ class EpisodeBuilder:
             with lock:
                 count = db.conn.execute("SELECT COUNT(*) FROM episodes").fetchone()[0]
         self._counter = int(count)
-        self._states = {kind: _State() for kind in self._PREDICATES}
+        self._states = {kind: _State() for kind in self._kind_predicates}
 
     def open_episodes(self) -> dict[EpisodeKind, Episode]:
         return {
@@ -174,10 +201,10 @@ class EpisodeBuilder:
     def on_tick(self, tick: Tick) -> list[Episode]:
         changed: list[Episode] = []
         p = self.params
-        for kind, predicate in self._PREDICATES.items():
+        for kind, predicate in self._kind_predicates.items():
             state = self._states[kind]
             value = predicate(tick)
-            if tick.ai_fresh():
+            if tick.ai_fresh(p.ai_max_age_ms):
                 state.last_fresh_ai_t = tick.t
             is_sighting = kind in self._SIGHTINGS
             fallback = (

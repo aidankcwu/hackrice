@@ -1,10 +1,15 @@
-"""Synthetic 1 Hz tick source.
+"""Synthetic tick source.
 
 Produces :class:`~pipeline.models.Tick` objects that look enough like Person A's
 output (SPEC §12) to build the whole downstream pipeline against, including the
 awkward part: the ``ai`` block is only present on ~65% of ticks, matching the
 0.5-0.8 Hz coverage SPEC §2.4 predicts. Any consumer that passes against this
 source has been forced to tolerate the gaps.
+
+Cadence is a parameter, not 1 Hz: ``interval_s`` is the gap between ticks, and
+the glasses emit one every 1.5 s. The *scenario* is still scripted in seconds,
+so a 60 s segment is 40 ticks at 1.5 s rather than 60 -- which is exactly the
+pressure every "N hits in W seconds" threshold has to survive.
 
 Timestamps are always real wall clock, even at ``speed > 1`` -- the pipeline sees
 plausible times and we simply sleep less between ticks.
@@ -79,22 +84,31 @@ class SimSource:
         ai_coverage: float = 0.65,
         seed: int = 0,
         max_ticks: int | None = None,
+        interval_s: float = 1.0,
     ) -> None:
         if speed <= 0:
             raise ValueError("speed must be > 0")
         if not 0.0 <= ai_coverage <= 1.0:
             raise ValueError("ai_coverage must be in [0, 1]")
+        if interval_s <= 0:
+            raise ValueError("interval_s must be > 0")
         self.scenario = scenario if scenario is not None else DEFAULT_SCENARIO
         self.frame_store = frame_store
         self.speed = speed
         self.ai_coverage = ai_coverage
         self.seed = seed
         self.max_ticks = max_ticks
+        #: Seconds of scenario time per tick (SPEC §2.1 is 1 Hz; the glasses
+        #: run at 1.5 s). Both ``tick.t`` and the scenario lookup use it, so a
+        #: segment keeps its scripted duration in *seconds* at any cadence.
+        self.interval_s = interval_s
 
         self._rng = random.Random(seed)
         self._seq = 0
-        #: Simulated clock origin. Tick time is ``start_t + seq`` (one clock,
-        #: driven by tick.t, so ``--speed`` never desyncs cooldowns/TTLs).
+        #: Simulated clock origin. Tick time is ``start_t + seq * interval_s``
+        #: (one clock, driven by tick.t, so ``--speed`` never desyncs
+        #: cooldowns/TTLs and the seeded series, keyed on scenario seconds
+        #: from this same origin, lands in the same place at any cadence).
         self.start_t = time.time()
         self._last_ai_t: float | None = None
         self._segment_index: int | None = None
@@ -179,7 +193,7 @@ class SimSource:
     # -- tick production -------------------------------------------------
 
     def next_tick(self, t: float | None = None) -> Tick:
-        """Build one tick for script time ``seq`` seconds in. Synchronous.
+        """Build one tick for script time ``seq * interval_s`` seconds in.
 
         Exposed separately from :meth:`ticks` so tests can drive the source
         without sleeping.
@@ -187,8 +201,9 @@ class SimSource:
 
         seq = self._seq
         self._seq += 1
-        now = (self.start_t + float(seq)) if t is None else t
-        index, segment, _offset = self.scenario.segment_at(float(seq))
+        elapsed = float(seq) * self.interval_s
+        now = (self.start_t + elapsed) if t is None else t
+        index, segment, _offset = self.scenario.segment_at(elapsed)
 
         phash = self._phash(index, segment.name)
         frame_ref = f"f_{seq:08d}"
@@ -208,10 +223,10 @@ class SimSource:
         )
 
     async def ticks(self) -> AsyncIterator[Tick]:
-        """Yield ticks; ``tick.t`` advances exactly 1.0 s per tick while the
-        wall-clock gap between ticks is ``1/speed`` seconds."""
+        """Yield ticks; ``tick.t`` advances exactly ``interval_s`` per tick
+        while the wall-clock gap between ticks is ``interval_s / speed``."""
 
-        interval = 1.0 / self.speed
+        interval = self.interval_s / self.speed
         next_at = time.monotonic()
         while self.max_ticks is None or self._seq < self.max_ticks:
             yield self.next_tick()

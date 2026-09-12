@@ -130,21 +130,36 @@ def _recent(window: list[Tick], seconds: float) -> list[Tick]:
     return [tick for tick in window if tick.t >= cutoff]
 
 
-def _flag_hits(name: str, seconds: float, minimum: int) -> Callable[[list[Tick]], bool]:
+def _flag_hits(
+    name: str, seconds: float, minimum: int, max_age_ms: int = 3000
+) -> Callable[[list[Tick]], bool]:
+    """``minimum`` positive readings of ``name`` inside the last ``seconds``.
+
+    ``minimum`` is a count of *ticks*, so the caller must already have run the
+    1 Hz reference number through :meth:`Timings.scaled_hits`; ``max_age_ms``
+    is the cadence-aware freshness budget (``Timings.ai_max_age_ms``).
+    """
+
     def predicate(window: list[Tick]) -> bool:
         ticks = _recent(window, seconds)
-        known = [tick.flag(name) for tick in ticks if tick.flag(name) is not None]
+        known = [
+            value
+            for value in (tick.flag(name, max_age_ms) for tick in ticks)
+            if value is not None
+        ]
         return bool(known) and known[-1] is True and sum(value is True for value in known) >= minimum
 
     return predicate
 
 
-def _outdoor_hits(seconds: float, minimum: int) -> Callable[[list[Tick]], bool]:
+def _outdoor_hits(
+    seconds: float, minimum: int, max_age_ms: int = 3000
+) -> Callable[[list[Tick]], bool]:
     def predicate(window: list[Tick]) -> bool:
         observations: list[bool] = []
         for tick in _recent(window, seconds):
-            scene = tick.enum("scene")
-            vegetation = tick.flag("vegetation_visible")
+            scene = tick.enum("scene", max_age_ms)
+            vegetation = tick.flag("vegetation_visible", max_age_ms)
             if scene is None and vegetation is None:
                 continue
             observations.append(scene in {"park", "trail", "street"} or vegetation is True)
@@ -331,12 +346,15 @@ def biometric_anomaly_trigger(timings: Timings, feed: BiometricFeed) -> Trigger:
 
     window_s = timings.biometric_window
     ratio = timings.biometric_hr_ratio
+    max_age_ms = timings.ai_max_age_ms
 
     def _exerting(window: list[Tick], t0: float) -> bool:
         # Unknown activity counts neither way; a window with no known activity
         # at all still fires -- the wearable is saying something is up.
         return any(
-            tick.enum("activity") in _EXERTION for tick in window if tick.t >= t0
+            tick.enum("activity", max_age_ms) in _EXERTION
+            for tick in window
+            if tick.t >= t0
         )
 
     def predicate(window: list[Tick]) -> bool:
@@ -388,13 +406,22 @@ def default_triggers(
     # entries while every unspecified trigger uses the configured fallback.
     cooldowns: dict[str, float] = {}
     cooldown = lambda name: cooldowns.get(name, timings.trigger_cooldown_default)
+    # Every `*_min_hits` on Timings is a 1 Hz reference count; the stream runs
+    # at `timings.tick_interval_s`, so a window holds fewer ticks than seconds
+    # and the raw counts must be divided down or they become unreachable.
+    hits = timings.scaled_hits
+    max_age_ms = timings.ai_max_age_ms
+    #: Sightings are point observations, not sustained states: two hits at
+    #: 1 Hz, and at 1.5 s that floors to one, which is the intent -- a cup seen
+    #: once in a 10 s window is a cup. The window itself does not scale.
+    sighting_hits = max(1, hits(2))
     specs = [
-        ("food_in_frame", _flag_hits("food_present", timings.food_window, timings.food_min_hits), "meal", "Food persisted in the recent frame window"),
-        ("screen_sustained", _flag_hits("screen_present", timings.screen_sustained_window, timings.screen_sustained_min_hits), "screen_block", "Screen presence was sustained"),
-        ("people_sustained", _flag_hits("people_present", timings.people_sustained_window, timings.people_sustained_min_hits), "conversation", "People presence was sustained"),
-        ("outdoor_sustained", _outdoor_hits(timings.outdoor_sustained_window, timings.outdoor_min_hits), "outdoor_block", "Outdoor context was sustained"),
-        ("caffeine_seen", _flag_hits("caffeine_visible", 10.0, 2), "caffeine_sighting", "Caffeine was seen repeatedly"),
-        ("alcohol_seen", _flag_hits("alcohol_visible", 10.0, 2), "alcohol_sighting", "Alcohol was seen repeatedly"),
+        ("food_in_frame", _flag_hits("food_present", timings.food_window, hits(timings.food_min_hits), max_age_ms), "meal", "Food persisted in the recent frame window"),
+        ("screen_sustained", _flag_hits("screen_present", timings.screen_sustained_window, hits(timings.screen_sustained_min_hits), max_age_ms), "screen_block", "Screen presence was sustained"),
+        ("people_sustained", _flag_hits("people_present", timings.people_sustained_window, hits(timings.people_sustained_min_hits), max_age_ms), "conversation", "People presence was sustained"),
+        ("outdoor_sustained", _outdoor_hits(timings.outdoor_sustained_window, hits(timings.outdoor_min_hits), max_age_ms), "outdoor_block", "Outdoor context was sustained"),
+        ("caffeine_seen", _flag_hits("caffeine_visible", 10.0, sighting_hits, max_age_ms), "caffeine_sighting", "Caffeine was seen repeatedly"),
+        ("alcohol_seen", _flag_hits("alcohol_visible", 10.0, sighting_hits, max_age_ms), "alcohol_sighting", "Alcohol was seen repeatedly"),
         ("stillness", _stillness(timings.stillness_window), None, "Low frame motion was sustained"),
     ]
     triggers = [Trigger(name, predicate, cooldown(name), kind, reason) for name, predicate, kind, reason in specs]  # type: ignore[arg-type]

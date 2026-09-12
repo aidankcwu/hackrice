@@ -35,11 +35,38 @@ async def test_pipeline_wires_all_components(tmp_path):
         assert pipeline.db.list_scores("weekly")
         expected = {
             "demo_mode", "source", "uptime_s", "tick_count", "ai_coverage",
-            "t1_busy", "dropped_escalations", "last_tick_t",
+            "t1_busy", "dropped_escalations", "last_tick_t", "tick_interval_s",
         }
-        assert expected <= pipeline.status().keys()
+        status = pipeline.status()
+        assert expected <= status.keys()
+        assert status["tick_interval_s"] == 1.5
     finally:
         await pipeline.stop()
+
+
+def test_the_source_runs_at_the_configured_cadence(tmp_path):
+    """SPEC §2.1 says 1 Hz; the glasses emit every 1.5 s and the sim follows."""
+
+    default = build_pipeline(Settings(db_path=tmp_path / "cadence.db"),
+                             source="sim", reasoner_mode="fake", speed=1)
+    try:
+        assert default.settings.tick_interval_s == 1.5
+        assert default.source.interval_s == 1.5
+        assert default.gate.timings.tick_interval_s == 1.5
+        assert default.episodes.params.ai_max_age_ms == 3750
+        a, b = default.source.next_tick(), default.source.next_tick()
+        assert b.t - a.t == 1.5
+    finally:
+        default.db.close()
+
+    fast = build_pipeline(Settings(db_path=tmp_path / "fast_tick.db",
+                                   tick_interval_s=1.0),
+                          source="sim", reasoner_mode="fake", speed=1)
+    try:
+        assert fast.source.interval_s == 1.0
+        assert fast.episodes.params.ai_max_age_ms == 3000
+    finally:
+        fast.db.close()
 
 
 def test_clock_is_identity_at_speed_one_and_scales_at_speed_ten(tmp_path):

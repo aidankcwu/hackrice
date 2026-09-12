@@ -38,6 +38,13 @@ class Timings:
 
     # Sustained-condition windows (SPEC §12.2: evaluate over windows, never
     # a single tick, because the `ai` block is only present 50-80% of ticks).
+    #
+    # Every ``*_min_hits`` below is a **1 Hz reference count**: how many
+    # positive ticks the condition needs when one tick arrives per second.
+    # Person A's glasses emit a tick every ``tick_interval_s`` seconds, so a
+    # window holds fewer ticks than that and the raw number can become
+    # unreachable. Consumers must therefore never read these fields directly --
+    # pass them through :meth:`scaled_hits`, which divides by the cadence.
     screen_sustained_window: float
     screen_sustained_min_hits: int
     people_sustained_window: float
@@ -68,8 +75,39 @@ class Timings:
     # Pending checks (SPEC §4.4 `watch`) ---------------------------------
     watch_default_after_s: float
 
+    # Tick cadence -------------------------------------------------------
+    #: Seconds between ticks on the stream these timings are tuned against.
+    #: Defaults to the 1 Hz SPEC §2.1 baseline so every existing caller and
+    #: fixture keeps its meaning; the running pipeline passes
+    #: ``Settings.tick_interval_s``.
+    tick_interval_s: float = 1.0
+
+    # -- cadence-aware derivations ---------------------------------------
+
+    def scaled_hits(self, n_at_1hz: int) -> int:
+        """Convert a 1 Hz positive-tick count to this cadence.
+
+        A "N hits in W seconds" threshold is really "N/W of the window was
+        positive". At 1.5 s per tick a 20 s window only holds ~13 ticks, so a
+        raw count of 20 can never be reached. Always at least 1 -- a threshold
+        that rounds to zero would fire on nothing at all.
+        """
+
+        return max(1, round(n_at_1hz / self.tick_interval_s))
+
+    @property
+    def ai_max_age_ms(self) -> int:
+        """Freshness budget for an ``ai`` block, in milliseconds (SPEC §12.2).
+
+        A block older than ~2.5 ticks is unknown, not evidence. Never below the
+        3 s the 1 Hz contract assumed, so a slower stream widens the window and
+        a faster one does not narrow it.
+        """
+
+        return max(3000, int(2.5 * self.tick_interval_s * 1000))
+
     @classmethod
-    def production(cls) -> "Timings":
+    def production(cls, tick_interval_s: float = 1.0) -> "Timings":
         return cls(
             trigger_cooldown_default=1200.0,
             global_escalation_min_gap=60.0,
@@ -89,10 +127,11 @@ class Timings:
             speech_max_per_hour=6,
             t1_max_concurrent=1,
             watch_default_after_s=900.0,
+            tick_interval_s=tick_interval_s,
         )
 
     @classmethod
-    def demo(cls) -> "Timings":
+    def demo(cls, tick_interval_s: float = 1.0) -> "Timings":
         return cls(
             trigger_cooldown_default=45.0,
             global_escalation_min_gap=10.0,
@@ -112,6 +151,7 @@ class Timings:
             speech_max_per_hour=20,
             t1_max_concurrent=1,
             watch_default_after_s=60.0,
+            tick_interval_s=tick_interval_s,
         )
 
 
@@ -131,6 +171,10 @@ class Settings(BaseSettings):
     db_path: Path = Path("./data/pipeline.db")
     #: Frame ring-buffer TTL in seconds (SPEC §2.5 / §12.3).
     frame_ttl_s: float = 90.0
+    #: Seconds between ticks off the capture path. SPEC §2.1 describes a 1 Hz
+    #: stream; Person A's glasses actually emit one tick every 1.5 s. Every
+    #: "N hits in W seconds" threshold is scaled by this (``Timings.scaled_hits``).
+    tick_interval_s: float = 1.5
 
     # -- live wearables (SPEC §15). Read by pipeline.wearables via os.environ
     # too; declared here so .env.example stays in sync with Settings. --------
@@ -143,7 +187,8 @@ class Settings(BaseSettings):
 
     @cached_property
     def timings(self) -> Timings:
-        return Timings.demo() if self.demo_mode else Timings.production()
+        factory = Timings.demo if self.demo_mode else Timings.production
+        return factory(tick_interval_s=self.tick_interval_s)
 
 
 def get_settings(**overrides: object) -> Settings:

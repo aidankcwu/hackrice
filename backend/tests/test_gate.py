@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+import pytest
+
 from pipeline.config import Timings
 from pipeline.db import Database
 from pipeline.episodes import EpisodeBuilder
@@ -70,20 +72,34 @@ def test_cooldown_and_global_gap(tmp_path) -> None:
     db.close()
 
 
-def test_default_scenario(tmp_path, capsys) -> None:
+@pytest.mark.parametrize("interval_s", [1.0, 1.5])
+def test_default_scenario(tmp_path, interval_s: float) -> None:
+    """The scripted day escalates identically at 1 Hz and at the glasses' 1.5 s.
+
+    Scenario segments are scripted in *seconds*, so a 1.5 s cadence puts ~13
+    ticks in a 20 s window where 1 Hz put 20. Every ``*_min_hits`` is divided
+    down by :meth:`Timings.scaled_hits`, and the day must still produce the
+    same six triggers and the same episode kinds -- otherwise the gate is
+    silently tuned for a stream that does not exist (SPEC §3, §12.2).
+    """
+
+    timings = Timings.demo(tick_interval_s=interval_s)
     db = Database(tmp_path / "scenario.db").connect().init_schema()
-    episodes = EpisodeBuilder(db, Timings.demo())
+    episodes = EpisodeBuilder(db, timings)
     escalations = []
-    gate = TriggerGate(default_triggers(Timings.demo(), True), Timings.demo(), db, episodes, lambda e: escalations.append(e) is None, True)
-    source = SimSource(DEFAULT_SCENARIO, frame_store=None, speed=1, seed=0)
+    gate = TriggerGate(default_triggers(timings, True), timings, db, episodes, lambda e: escalations.append(e) is None, True)
+    source = SimSource(DEFAULT_SCENARIO, frame_store=None, speed=1, seed=0,
+                       interval_s=interval_s)
     for _ in range(400):
         current = source.next_tick()
         episodes.on_tick(current)
         gate.on_tick(current)
     names = [e.trigger for e in escalations]
-    print("scenario escalations:", names)
-    assert len(set(names)) >= 3
-    assert "caffeine_seen" in names and "alcohol_seen" in names, names
+    print(f"scenario escalations @{interval_s}s:", names)
+    assert set(names) == {
+        "food_in_frame", "screen_sustained", "people_sustained",
+        "outdoor_sustained", "caffeine_seen", "alcohol_seen",
+    }, names
     bound_triggers = {
         "food_in_frame", "screen_sustained", "people_sustained", "outdoor_sustained",
     }
@@ -94,6 +110,31 @@ def test_default_scenario(tmp_path, capsys) -> None:
     )
     kinds = {episode.kind for episode in db.list_episodes()}
     assert {"meal", "screen_block", "outdoor_block", "conversation"} <= kinds
+    db.close()
+
+
+def test_sighting_triggers_stay_reachable_at_the_slow_cadence(tmp_path) -> None:
+    """A cup seen once inside the 10 s window is a cup (S9).
+
+    ``caffeine_seen`` is a point observation, two hits at 1 Hz; scaled to 1.5 s
+    that floors to one. The window does not scale -- only the count does.
+    """
+
+    timings = Timings.demo(tick_interval_s=1.5)
+    db = Database(tmp_path / "sight.db").connect().init_schema()
+    episodes = EpisodeBuilder(db, timings)
+    escalations = []
+    gate = TriggerGate(default_triggers(timings, True), timings, db, episodes,
+                       lambda e: escalations.append(e) is None, True)
+    # One positive tick, on a 1.5 s clock, with nothing else in the window.
+    current = Tick(
+        tick_id="t_0", t=0.0, seq=0,
+        sensor=SensorBlock(frame_delta=0.1, phash=f"{0:016x}"),
+        ai=AiBlock(age_ms=0, caffeine_visible=True), frame_ref="f_0",
+    )
+    episodes.on_tick(current)
+    gate.on_tick(current)
+    assert [e.trigger for e in escalations] == ["caffeine_seen"]
     db.close()
 
 

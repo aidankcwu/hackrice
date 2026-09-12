@@ -66,6 +66,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pipeline", description=__doc__)
     parser.add_argument("--source", choices=["sim"], default="sim")
     parser.add_argument("--speed", type=float, default=1.0)
+    # The capture cadence, not the playback rate: `--speed` compresses wall
+    # time, this changes how many ticks a scenario second produces.
+    parser.add_argument("--tick-interval", dest="tick_interval_s", type=float,
+                        default=defaults.tick_interval_s,
+                        help="seconds between ticks (glasses emit every 1.5 s)")
     parser.add_argument("--reasoner", choices=["openai", "fake"], default="fake")
     parser.add_argument("--db", default=str(defaults.db_path))
     parser.add_argument("--port", type=int, default=8000)
@@ -84,7 +89,8 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-    settings = Settings(demo_mode=args.demo_mode, db_path=Path(args.db))
+    settings = Settings(demo_mode=args.demo_mode, db_path=Path(args.db),
+                        tick_interval_s=args.tick_interval_s)
     if args.reasoner == "openai" and not settings.openai_api_key:
         raise SystemExit(
             "OPENAI_API_KEY is required for --reasoner openai; "

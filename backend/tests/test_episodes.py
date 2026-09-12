@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from pipeline.config import Timings
 from pipeline.db import Database
 from pipeline.episodes import EpisodeBuilder, EpisodeParams
@@ -14,21 +16,29 @@ def tick(seq: int, **ai: object) -> Tick:
     )
 
 
-def test_entry_thresholds_match_demo_trigger_thresholds() -> None:
-    timings = Timings.demo()
-    params = EpisodeParams.from_timings(timings, demo_mode=True)
+@pytest.mark.parametrize("interval_s", [1.0, 1.5, 2.0])
+def test_entry_thresholds_match_demo_trigger_thresholds(interval_s: float) -> None:
+    """SPEC §10: an episode and its escalation must agree on boundaries.
 
-    assert params.entry["meal"] == (timings.food_min_hits, timings.food_window)
+    Both sides read the same ``*_min_hits`` through ``Timings.scaled_hits``,
+    so the alignment has to hold at every cadence, not just at 1 Hz.
+    """
+
+    timings = Timings.demo(tick_interval_s=interval_s)
+    params = EpisodeParams.from_timings(timings, demo_mode=True)
+    hits = timings.scaled_hits
+
+    assert params.entry["meal"] == (hits(timings.food_min_hits), timings.food_window)
     assert params.entry["screen_block"] == (
-        timings.screen_sustained_min_hits,
+        hits(timings.screen_sustained_min_hits),
         timings.screen_sustained_window,
     )
     assert params.entry["conversation"] == (
-        timings.people_sustained_min_hits,
+        hits(timings.people_sustained_min_hits),
         timings.people_sustained_window,
     )
     assert params.entry["outdoor_block"] == (
-        timings.outdoor_min_hits,
+        hits(timings.outdoor_min_hits),
         timings.outdoor_sustained_window,
     )
     assert params.entry["caffeine_sighting"] == (
@@ -39,6 +49,46 @@ def test_entry_thresholds_match_demo_trigger_thresholds() -> None:
         params.sighting_min_hits,
         params.sighting_window_s,
     )
+    assert params.ai_max_age_ms == timings.ai_max_age_ms
+
+
+def test_entry_thresholds_at_the_glasses_cadence() -> None:
+    """The concrete numbers a 1.5 s stream ends up with."""
+
+    params = EpisodeParams.from_timings(Timings.demo(tick_interval_s=1.5), True)
+    assert params.entry["screen_block"] == (5, 20.0)  # was 8 hits at 1 Hz
+    assert params.entry["conversation"] == (4, 20.0)  # was 6
+    assert params.entry["outdoor_block"] == (4, 20.0)  # was 6
+    assert params.entry["meal"] == (1, 10.0)  # was 2
+    assert params.sighting_min_hits == 1  # a point sighting, floored at 1
+    assert (params.entry_min_hits, params.exit_min_misses) == (2, 3)  # 3 / 4 at 1 Hz
+    assert params.ai_max_age_ms == 3750
+
+
+def test_a_slow_demo_is_still_a_demo(tmp_path) -> None:
+    """`Timings.demo(1.5)` must not be mistaken for the production preset."""
+
+    db = Database(tmp_path / "cadence.db").connect().init_schema()
+    builder = EpisodeBuilder(db, Timings.demo(tick_interval_s=1.5))
+    assert builder.demo_mode is True
+    assert builder.params.entry_window_s == 6.0  # demo debounce, not 10.0
+    assert builder.params.unknown_grace_s == 8.0
+    db.close()
+
+
+def test_episodes_open_at_the_slow_cadence(tmp_path) -> None:
+    """Two positive ticks 1.5 s apart are enough to open a meal at 1.5 s."""
+
+    db = Database(tmp_path / "slow.db").connect().init_schema()
+    builder = EpisodeBuilder(db, Timings.demo(tick_interval_s=1.5))
+    for i in (0.0, 1.5, 3.0):
+        builder.on_tick(Tick(
+            tick_id=f"t_{i}", t=i, seq=int(i), frame_ref=f"f_{i}",
+            sensor=SensorBlock(frame_delta=0.1, phash=f"{int(i * 2):016x}"),
+            ai=AiBlock(age_ms=0, scene="restaurant", food_present=True),
+        ))
+    assert "meal" in builder.open_episodes()
+    db.close()
 
 
 def test_episode_debounce_gap_close_and_upsert(tmp_path) -> None:

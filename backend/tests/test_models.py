@@ -170,6 +170,25 @@ def test_stale_ai_reads_as_unknown():
     assert tick.flag("food_present", max_age_ms=10_000) is True
 
 
+def test_freshness_budget_is_the_callers_to_set():
+    """The 3 s default is the 1 Hz contract; a slower stream widens it (S9).
+
+    ``Timings.ai_max_age_ms`` is 3750 at the glasses' 1.5 s cadence -- a block
+    3.5 s old is ~2 ticks and still evidence there, but unknown at 1 Hz. The
+    model keeps the conservative default and the pipeline passes the number.
+    """
+
+    tick = _bare_tick({"as_of": 1.0, "age_ms": 3500, "scene": "office",
+                       "food_present": True})
+    assert tick.ai_fresh() is False
+    assert tick.flag("food_present") is None
+    assert tick.enum("scene") is None
+
+    assert tick.ai_fresh(3750) is True
+    assert tick.flag("food_present", 3750) is True
+    assert tick.enum("scene", 3750) == "office"
+
+
 def test_absent_ai_reads_as_unknown():
     tick = _bare_tick(None)
     assert tick.ai_fresh() is False

@@ -166,6 +166,67 @@ def test_invalid_arguments() -> None:
         SimSource(DEFAULT_SCENARIO, speed=0)
     with pytest.raises(ValueError):
         SimSource(DEFAULT_SCENARIO, ai_coverage=1.5)
+    with pytest.raises(ValueError):
+        SimSource(DEFAULT_SCENARIO, interval_s=0)
+
+
+# -- tick cadence (S9) ---------------------------------------------------
+
+
+def test_interval_s_drives_the_tick_clock() -> None:
+    """Person A's glasses emit every 1.5 s; `tick.t` follows, `seq` does not."""
+
+    src = SimSource(DEFAULT_SCENARIO, frame_store=None, seed=1, interval_s=1.5)
+    ticks = [src.next_tick() for _ in range(10)]
+    assert [t.seq for t in ticks] == list(range(10))
+    assert all(b.t - a.t == pytest.approx(1.5) for a, b in zip(ticks, ticks[1:]))
+    assert ticks[0].t == src.start_t
+    assert ticks[-1].t == pytest.approx(src.start_t + 9 * 1.5)
+
+
+def test_segment_boundaries_land_on_the_right_seq_at_1_5s() -> None:
+    """Segments are scripted in seconds, so a 60 s segment is 40 ticks at 1.5 s."""
+
+    src = SimSource(DEFAULT_SCENARIO, frame_store=None, seed=2, ai_coverage=1.0,
+                    interval_s=1.5)
+    ticks = [src.next_tick() for _ in range(260)]
+    # Cumulative scenario seconds: 60, 90, 135, 195, 225, 285 ...
+    boundaries = {60: 40, 90: 60, 135: 90, 195: 130, 225: 150, 285: 190}
+    for second, seq in boundaries.items():
+        assert seq * 1.5 == second, "boundary must fall on a tick, not between"
+        before = DEFAULT_SCENARIO.segment_at((seq - 1) * 1.5)[0]
+        after = DEFAULT_SCENARIO.segment_at(seq * 1.5)[0]
+        assert after == before + 1, f"seq {seq} did not cross a boundary"
+
+    # And the tags follow: seq 90 (= 135 s) is the restaurant, seq 150 the park.
+    by_seq = {t.seq: t.ai for t in ticks}
+    assert by_seq[95].scene == "restaurant" and by_seq[95].food_present  # type: ignore[union-attr]
+    assert by_seq[160].scene == "park" and by_seq[160].vegetation_visible  # type: ignore[union-attr]
+
+
+@pytest.mark.parametrize("interval_s", [1.0, 1.5])
+def test_the_seeded_hr_spike_still_lands_in_the_lunch_segment(interval_s: float) -> None:
+    """Seeded series are keyed on scenario *seconds*, so cadence cannot move them.
+
+    ``seed_biometric_series`` writes at ``start_t + second`` and ``SimSource``
+    starts its clock at the same ``start_t``, so the spike sits over lunch at
+    any tick rate -- which is what makes `biometric_anomaly` demonstrable.
+    """
+
+    from pipeline.seed.biometrics import LUNCH_END, LUNCH_START, heart_rate_series
+
+    src = SimSource(DEFAULT_SCENARIO, frame_store=None, seed=0, ai_coverage=1.0,
+                    interval_s=interval_s)
+    ticks = [src.next_tick() for _ in range(int(300 / interval_s))]
+
+    series = heart_rate_series(src.start_t, duration_s=600, resting_hr=58.0)
+    peak_t = max(series, key=lambda row: row[2])[0]
+    assert LUNCH_START <= peak_t - src.start_t <= LUNCH_END
+
+    nearest = min(ticks, key=lambda t: abs(t.t - peak_t))
+    assert abs(nearest.t - peak_t) <= interval_s
+    assert nearest.ai is not None
+    assert nearest.ai.scene == "restaurant" and nearest.ai.food_present
 
 
 async def test_async_iteration_respects_speed() -> None:
@@ -221,3 +282,13 @@ def test_tick_time_is_simulated_clock():
     a, b, c = src.next_tick(), src.next_tick(), src.next_tick()
     assert b.t - a.t == 1.0 and c.t - b.t == 1.0
     assert a.t == src.start_t
+
+
+async def test_async_iteration_sleeps_interval_over_speed() -> None:
+    """The wall gap is `interval_s / speed`, so a slow cadence is not slower."""
+
+    src = SimSource(DEFAULT_SCENARIO, speed=100.0, max_ticks=10, interval_s=1.5)
+    started = time.monotonic()
+    seen = [tick.t async for tick in src]
+    assert time.monotonic() - started < 1.0
+    assert all(b - a == pytest.approx(1.5) for a, b in zip(seen, seen[1:]))

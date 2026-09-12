@@ -158,6 +158,9 @@ class Pipeline:
             "last_tick_t": self.last_tick.t if self.last_tick is not None else None,
             "reasoner_mode": self.reasoner_mode,
             "speed": self.speed,
+            # The stream's cadence, so the dashboard can label the tick strip
+            # without assuming 1 Hz (SPEC §2.1 vs the glasses' 1.5 s).
+            "tick_interval_s": self.settings.tick_interval_s,
             "gate": self.gate.stats(),
             "speech_spoken": len(spoken),
         }
@@ -194,7 +197,8 @@ def build_pipeline(settings: Settings, *, source: Literal["sim"],
     )
     gate = TriggerGate(default_triggers(timings, settings.demo_mode, feed=feed), timings, db,
                        episodes, reasoner.try_escalate, settings.demo_mode, feed=feed)
-    sim_source = SimSource(scenario or DEFAULT_SCENARIO, frame_store, speed=speed)
+    sim_source = SimSource(scenario or DEFAULT_SCENARIO, frame_store, speed=speed,
+                           interval_s=settings.tick_interval_s)
     if seed_db:
         seed_biometric_series(db, sim_source.start_t)
     return Pipeline(settings=settings, source_name=source,
