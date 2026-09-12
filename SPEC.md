@@ -1,9 +1,8 @@
 # Architecture spec
 
-Lifestyle tracking on Ray-Ban Meta glasses. §1–§6 cover the processing
-architecture — capture, tiering, storage, and the escalation model. §7–§11 cover
-metric sources, reference thresholds, the T0 field set, scoring, and demo build
-defaults. The dashboard is specified elsewhere.
+Lifestyle tracking on Ray-Ban Meta glasses. This document covers the processing
+architecture only — capture, tiering, storage, and the escalation model. Feature
+list, scoring model, and dashboard are specified elsewhere.
 
 ---
 
@@ -39,9 +38,10 @@ downstream reads from it and nothing writes back into it.
   rates are 2/7/15/24/30).
 - T0 samples the most recent frame at 1 Hz. The second frame each second is
   discarded.
-- Frame is immediately downscaled to ~512px on the longest edge and JPEG-encoded
-  at quality ~70 (~40 KB). **Store JPEG, not raw I420** — escalation then costs a
-  buffer copy instead of a transcode.
+- Sampling and encoding happen **on the phone** (§11.3). The selected DAT
+  `VideoFrame` is converted to a ~512px JPEG at quality ~70 (~40 KB) immediately
+  and the original frame buffer is discarded. The underlying pixel format is an
+  SDK implementation detail the architecture does not depend on.
 
 ### 2.3 Tick fields
 
@@ -78,7 +78,7 @@ exceeds 2 s. The drop rule exists specifically to absorb that tail.
 
 | Artifact | Location | TTL | Size |
 |---|---|---|---|
-| **Frames** | Ring buffer, phone RAM | **90 seconds**, then evicted | ~40 KB each, ~3.5 MB total |
+| **Frames** | Ring buffer, **laptop RAM** | **90 seconds**, then evicted | ~40 KB each, ~3.5 MB total |
 | **Ticks** | In-memory + SQLite mirror | Session (demo) / downsampled after 1 h (production) | ~300 bytes each |
 | **Escalated frames** | Copied out of ring on escalation → durable store | Persistent | 4 frames per escalation |
 | **Insights** | Durable store | Persistent | One row each |
@@ -288,8 +288,8 @@ metric is seeded and labelled as such.
 | Daytime light dose | Live (proxy) | `indoor_outdoor` + time of day. Outdoor daylight is reliably >1,000 lux, so "≥30 min outdoors before 10:00" needs no lux estimate. Absolute lux is **not** recoverable from an auto-exposed JPEG; use exposure metadata (ISO/shutter) only if the SDK exposes it |
 | Evening light | Live (proxy) | Indoor + low luminance + warm colour temperature after sunset → "dim warm evening" flag. Covers worn time only |
 | Nature dose | Live | Outdoor + `vegetation_visible` or `scene ∈ {park, trail}`, summed to weekly minutes |
-| Screen / work hours | Live | `screen_present` sustained across ticks + OCR density, integrated to hours |
-| Social integration | Live | `face_count` sustained over a window → conversation episodes per day |
+| Screen / work hours | Live | `screen_present` sustained across ticks, integrated to hours |
+| Social integration | Live | `people_present` sustained over a window → conversation episodes per day |
 | Diet pattern | Live | `food_present` + `food_type` enum; T1 tags meals against a Mediterranean pattern |
 | Caffeine cutoff | Live | `caffeine_visible` timestamp vs. seeded bedtime − 9 h |
 | Alcohol | Live | `alcohol_visible` timestamp; nightly HRV drop comes from the seeded side |
@@ -349,11 +349,18 @@ metric in §7. Booleans default to false; enums include `unknown`.
 | `alcohol_visible` | bool | |
 | `screen_present` | bool | |
 | `vegetation_visible` | bool | |
-| `people_present` | bool | Cross-checked against on-device `face_count` |
+| `people_present` | bool | |
 
-Non-AI fields remain as in §2.3. Where the platform exposes them, add pedometer
-step delta and ambient light sensor (Android yes, iOS no) — both feed the seeded
-side in the demo regardless.
+Non-AI fields remain as in §2.3, computed in Python from the frame buffer (§11).
+
+**Changed from an earlier draft:** the phone does no image processing under the
+§11 topology, so on-device ML (Vision face detection, OCR) is not used.
+`people_present` is VLM-only with no cross-check, and screen detection relies on
+the `screen_present` tag rather than OCR text density. Both are acceptable; note
+the reduced confidence when tuning triggers.
+
+Phone **sensors** are unaffected — accelerometer and GPS speed ride along in the
+capture packet (§11.3) at no cost and populate the tick's `device` block.
 
 ---
 
@@ -385,13 +392,308 @@ from seeded rows.
 
 ---
 
-## 11. Demo build defaults (proposed, not yet confirmed)
+## 11. Tech stack
 
-| Decision | Default |
+### 11.1 Topology
+
+**The phone is a glasses adapter. The laptop is the system.** Swift does capture
+and playback; Python does all intelligence.
+
+```
+Ray-Ban Meta glasses
+      │  camera stream (DAT)
+      ▼
+iPhone app  (Swift, MWDATCore + MWDATCamera)
+      │  capture packet over Wi-Fi / LAN
+      ▼
+Laptop  (Python — T0, ring buffer, VLM, gate, episodes, T1, SQLite, dashboard)
+      │  utterance audio
+      ▼
+iPhone app
+      │  AVAudioSession → Bluetooth A2DP
+      ▼
+Ray-Ban speakers
+```
+
+**Audio returns through the phone.** The glasses are Bluetooth-bonded to the
+phone — that bond is what the Meta AI app and DAT require — so they are not
+independently available as a laptop audio device. TTS bytes generated in Python
+travel back over the same socket and play through `AVAudioSession`.
+
+This is why the DAT SDK cannot be a Python capture adapter: it is a native mobile
+SDK. Glasses mode requires the iOS bridge. Webcam and replay modes read directly
+on the laptop.
+
+At 1 Hz and ~40 KB per JPEG the uplink carries ~40 KB/s — negligible on LAN.
+
+### 11.2 Capture packet
+
+One message per tick, phone → laptop:
+
+```json
+{
+  "t": 1789200000.25,
+  "image": "<jpeg bytes>",
+  "gps_speed": 0.4,
+  "accel": { "x": 0.01, "y": -0.12, "z": 0.98 }
+}
+```
+
+Sensor fields are cheap on the phone and expensive to reconstruct anywhere else,
+so they ride along. The phone computes nothing from them.
+
+### 11.3 Capture adapters
+
+T0 reads from a `CaptureSource` interface. Three implementations, `--source`:
+
+| Adapter | Use |
 |---|---|
-| Capture source | `--source` flag taking a webcam index or video file. T0 runs on a laptop; the DAT SDK is a swap-in capture adapter later |
-| T0 VLM | Gemini Flash-Lite |
-| T1 reasoner | Claude, structured tool-use response |
-| Pipeline | Python, FastAPI, SQLite |
-| Dashboard | Next.js, reads from the FastAPI service |
-| Episode identity (§4.7) | **(a)** gate-side suppression for the demo; the "already annotated" hint to T1 can be layered on later without changing the gate |
+| `glasses` | WebSocket server receiving capture packets from the iOS bridge. **The demo path.** |
+| `webcam` | Local camera index. No packet, no sensor fields. Development without glasses. |
+| `replay` | Directory of timestamped JPEGs. Deterministic debugging. |
+
+`replay` is not optional — record one scripted walk early (seated → food appears →
+outdoors → screen) and develop against it. It is the only way two people iterate
+in parallel without passing the glasses back and forth.
+
+### 11.4 iPhone bridge (thin)
+
+| Concern | Choice |
+|---|---|
+| Platform | iOS (Swift), deployment target 17.0 |
+| Glasses camera | Meta Wearables DAT SDK via SPM — `MWDATCore`, `MWDATCamera` |
+| Requirements | Meta AI app v254+, glasses firmware v20+, Developer Mode on |
+| Frame rate | `StreamConfiguration` at 2 fps (valid: 2/7/15/24/30) |
+| Encode | Downscale to 512px, JPEG q70 |
+| Sensors | Core Motion accelerometer, Core Location speed |
+| Transport | `URLSessionWebSocketTask`, bidirectional |
+| Audio out | `AVAudioSession` → Bluetooth A2DP → glasses speakers |
+
+Total responsibility: sample, encode, send, play. No ticks, no VLM, no logic.
+
+**Camera and audio use different paths.** Camera comes through DAT; microphone and
+speaker on standard Ray-Ban Meta glasses use the normal iOS Bluetooth audio
+profiles. Don't look for audio APIs in the DAT SDK.
+
+Use `MWDATMockDevice` to develop without the glasses on. The DAT repos ship agent
+skills (`install-skills.sh`) and an MCP docs server at
+`https://mcp.developer.meta.com/wearables` — wire those in before writing SDK code.
+
+**iOS gotchas, in order of time they will cost you:**
+
+1. **You need a Mac with Xcode.** Confirm before committing to this path.
+2. **`NSLocalNetworkUsageDescription`** in Info.plist — without it the WebSocket to
+   the laptop fails silently in a way that looks like a backend bug.
+3. **`NSAllowsLocalNetworking`** under `NSAppTransportSecurity` — plain `ws://` to
+   the laptop is blocked by default.
+4. **`NSCameraUsageDescription`** — app crashes on launch without it.
+5. **`AVAudioSession` category** must be `.playback` with `.allowBluetoothA2DP`, or
+   speech routes to the phone speaker instead of the glasses.
+6. **Free provisioning expires after 7 days.** Fine for the weekend, but a
+   reinstall late Saturday can hit a signing prompt.
+7. **Background suspension** — keep the app foregrounded during the demo.
+
+### 11.5 Laptop
+
+| Concern | Choice |
+|---|---|
+| Runtime | Python 3.11 |
+| Server | FastAPI + uvicorn (WebSocket both directions, REST for dashboard) |
+| Pixel math | numpy; OpenCV only if optical flow is actually needed |
+| Storage | SQLite |
+| HTTP client | httpx (async) |
+| TTS | ElevenLabs call in Python; audio bytes returned over the socket |
+| Dashboard | Next.js, reads the FastAPI service |
+
+### 11.6 Models
+
+| Role | Model | Notes |
+|---|---|---|
+| T0 AI fields | Gemini Flash-Lite | Structured output; 1 s budget, drop on overrun |
+| T1 reasoner | Claude | Structured tool-use response, interleaved multi-image |
+| TTS | ElevenLabs Flash v2.5 | Lowest-latency tier; stream, don't wait for the full file |
+
+### 11.7 Settled decisions
+
+| Decision | Resolution |
+|---|---|
+| Episode identity (§4.7) | **(a)** gate-side suppression. The "already annotated" hint to T1 can be layered on later without changing the gate. |
+| Dropped-VLM ticks | Tick is written with the `ai` block **absent**, not carried forward stale. |
+| Audio routing | Laptop → phone → Bluetooth → glasses. Never laptop → glasses. |
+
+---
+
+## 12. Tick schema
+
+The contract between the two halves of the system. Person A produces these;
+Person B consumes them and touches nothing upstream. A may add fields freely;
+B must tolerate any field being absent.
+
+```json
+{
+  "v": 1,
+  "tick_id": "t_00001742",
+  "t": 1757700842.000,
+  "seq": 1742,
+
+  "sensor": {
+    "lux_proxy": 340,
+    "cct": 4100,
+    "hist_spread": 0.62,
+    "frame_delta": 0.12,
+    "flow_mag": 0.04,
+    "sharpness": 88,
+    "phash": "e3a91c04b7d2f855"
+  },
+
+  "device": {
+    "accel_rms": 0.04,
+    "gps_speed": 0.2
+  },
+
+  "ai": {
+    "as_of": 1757700840.100,
+    "age_ms": 1900,
+    "scene": "office",
+    "activity": "seated",
+    "food_present": false,
+    "food_type": "none",
+    "caffeine_visible": true,
+    "alcohol_visible": false,
+    "screen_present": true,
+    "vegetation_visible": false,
+    "people_present": true,
+    "conf": 0.83
+  },
+
+  "frame_ref": "f_00001742"
+}
+```
+
+### 12.1 Guarantees
+
+| Group | Source | Guarantee |
+|---|---|---|
+| `sensor` | numpy over the frame buffer, laptop-side | **Always present** |
+| `device` | Phone sensors via capture packet (§11.2) | **Absent** under `webcam` / `replay` |
+| `ai` | Gemini Flash-Lite (§9) | **May be absent** — see 12.2 |
+
+`lux_proxy` is a relative luminance figure from an auto-exposed JPEG, **not
+absolute lux**. It is usable for indoor/outdoor and bright/dim discrimination
+and for nothing else. Scoring uses the proxy targets in §7, never a lux threshold.
+
+### 12.2 The `ai` block contract
+
+Two states B must handle:
+
+1. **Present** — `age_ms` tells you how stale. Treat confidence as decaying with
+   age; a 4 s-old `food_present` is weaker evidence than a 200 ms-old one.
+2. **Absent** — the VLM call for this tick overran its 1 s budget and was dropped.
+   The tick is still valid and `sensor` is unaffected.
+
+Expect roughly 50–80% of ticks to carry an `ai` block. **Any trigger or episode
+boundary written against `ai` fields must therefore tolerate gaps** — evaluate
+over windows of ticks, never a single tick. This is the most likely source of
+silent bugs in the gate and the episode builder.
+
+### 12.3 `frame_ref`
+
+An opaque handle into the laptop's ring buffer, valid for **90 seconds** from the
+tick's timestamp. Used at escalation to fetch frames for the T1 call:
+
+```
+GET /frames?refs=f_00001738,f_00001740,f_00001741,f_00001742
+```
+
+An expired ref returns 410. Since escalation happens within seconds of the
+triggering tick this should never occur — log it rather than crash, because it
+means the pipeline has fallen behind.
+
+Frame selection by perceptual-hash distance (§4.3) is computed by B from
+`sensor.phash` in the tick history, keeping selection logic with the rest of the
+consumer code.
+
+---
+
+## 13. Work split
+
+Two people. **The seam is the tick stream.** A produces ticks and owns everything
+upstream of them plus the audio return path; B consumes ticks and owns everything
+downstream. Neither touches the other's side.
+
+### 13.1 Person A — capture and audio (the glasses path)
+
+Owns, exclusively:
+
+- iOS bridge: DAT session, camera stream, JPEG encode, sensor collection,
+  WebSocket both directions, `AVAudioSession` playback to the glasses
+- `CaptureSource` interface and all three adapters (`glasses`, `webcam`, `replay`)
+- WebSocket ingest on the laptop; capture packet decode
+- Frame ring buffer (laptop RAM) and its 90 s TTL
+- `GET /frames` endpoint
+- All `sensor` and `device` field computation
+- T0 VLM call, its structured-output schema, the 1 s budget and drop rule
+- Tick assembly and emission
+- ElevenLabs call and delivery of audio bytes to the phone
+- Recording the `replay` corpus (do this first — B needs it)
+
+Does not touch: triggers, episodes, T1, scoring, dashboard, or what gets said.
+
+### 13.2 Person B — reasoning and product
+
+Owns, exclusively:
+
+- Trigger gate: definitions, debounce, rate limits, contention drops
+- Episode builder
+- T1 reasoner: context envelope assembly, frame subsampling by phash, prompt,
+  structured response handling
+- Action handling: `annotate`, `log_insight`, `watch` (pending-checks table),
+  `nothing`
+- Speech rate limiter — decides *whether* an utterance is emitted
+- Scorer and §8 threshold logic
+- Seeded data: synthetic rows plus the 7-day pattern
+- SQLite schema for episodes, insights, scores
+- Next.js dashboard, including the silent-decision feed
+
+Does not touch: the iOS app, capture, the ring buffer, `sensor`/`device` fields,
+the T0 VLM, TTS, or audio transport.
+
+### 13.3 The two interfaces between them
+
+Everything crossing the seam is one of these. Fix both in the first thirty
+minutes, then work independently.
+
+1. **Tick object (§12)** — A emits, B consumes. Plus `GET /frames?refs=…` for
+   escalation.
+2. **Utterance handoff** — B calls an in-process function A owns,
+   `speak(text, urgency)`. A synthesizes, ships the bytes to the phone, and plays
+   them. B decides *whether* and *what*; A owns *how*. The rate limiter stays on
+   B's side because it is logic, not plumbing.
+
+### 13.4 Unblocking
+
+**A's first deliverable is the `replay` corpus, not the iOS app.** Record a
+scripted sequence with any camera — seated, food appears, go outdoors, sit at a
+screen — and hand B a directory of timestamped JPEGs plus a script that replays
+them as ticks at 1 Hz. B then builds the entire downstream system against
+deterministic input and never touches Swift.
+
+Build the `webcam` adapter before the `glasses` adapter for the same reason: it
+proves the whole Python pipeline end to end while the iOS app is still being
+provisioned.
+
+For audio, A should get **laptop → phone → glasses playback working with a
+hardcoded string** before the reasoner exists. It is the second-riskiest path in
+the system and it is trivially testable in isolation.
+
+### 13.5 Unowned work — assign explicitly
+
+Neither role covers these, and they are how two-person teams lose:
+
+- **Demo video and Devpost writeup.** Assign to B — the dashboard is what gets
+  filmed and B will have working footage first. Record Saturday night regardless
+  of how finished it feels.
+- **Demo script and rehearsal.** Both. `DEMO_MODE` cooldowns (§6) need tuning
+  against the actual script or the triggers won't fire inside four minutes.
+- **Charging the glasses.** Continuous streaming drains them in well under an
+  hour. Whoever holds them owns keeping them charged and off until judging.
