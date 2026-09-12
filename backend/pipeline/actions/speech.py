@@ -116,6 +116,11 @@ class SpeechLimiter:
         self._granted.append(t)
         self.allowed += 1
 
+    def reset(self) -> None:
+        """Forget prior utterance slots while preserving lifetime counters."""
+
+        self._granted.clear()
+
     # -- dispatch --------------------------------------------------------
 
     def speak(self, text: str, urgency: str = "low", t: float | None = None) -> None:

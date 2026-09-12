@@ -95,10 +95,10 @@ def test_named_families_are_subsets_of_their_menus():
 
 def test_new_values_survive_coercion_and_bad_ones_still_fall_back():
     out = coerce({
-        "scene": "dorm_room", "activity": "phone_use",
+        "scene": "hospital", "activity": "phone_use",
         "food_type": "rice_bowl", "drink": "boba", "conf": 0.5,
     })
-    assert out["scene"] == "dorm_room"
+    assert out["scene"] == "hospital"
     assert out["activity"] == "phone_use"
     assert out["food_type"] == "rice_bowl"
     assert out["drink"] == "boba"
@@ -123,6 +123,6 @@ def test_every_named_alcohol_and_caffeine_drink_derives_its_flag():
         assert coerce({"drink": value})["alcohol_visible"] is True, value
     for value in CAFFEINE_DRINKS:
         assert coerce({"drink": value})["caffeine_visible"] is True, value
-    for value in ("water", "juice", "milk", "smoothie", "soda", "sports_drink"):
+    for value in ("water", "juice", "milk", "smoothie", "sports_drink"):
         assert coerce({"drink": value})["caffeine_visible"] is False, value
         assert coerce({"drink": value})["alcohol_visible"] is False, value

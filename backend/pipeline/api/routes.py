@@ -44,6 +44,26 @@ async def status(request: Request) -> dict:
     return _pipeline(request).status()
 
 
+@router.post("/api/session/start")
+async def start_session(request: Request, body: dict[str, Any] | None = None) -> dict:
+    name = str((body or {}).get("name", ""))
+    return _pipeline(request).sessions.start(name).model_dump()
+
+
+@router.post("/api/session/end")
+async def end_session(request: Request) -> dict:
+    session = _pipeline(request).sessions.end()
+    if session is None:
+        raise HTTPException(status_code=404, detail="no open session")
+    return session.model_dump()
+
+
+@router.get("/api/session/current")
+async def current_session(request: Request) -> dict | None:
+    session = _pipeline(request).sessions.current()
+    return session.model_dump() if session is not None else None
+
+
 @router.get("/api/ticks/recent")
 async def recent_ticks(request: Request, n: int = Query(60, ge=1)) -> list[dict]:
     return _dump(_pipeline(request).db.recent_ticks(n))

@@ -8,8 +8,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from ..config import Settings, get_settings
-from ..wearables.connect import attach_fitbit
+from ..recap.routes import router as recap_router
+from ..wearables.connect import attach_fitbit, attach_google_health
 from ..wearables.fitbit_routes import router as fitbit_router, set_sync
+from ..wearables.google_health_routes import router as google_health_router, set_sync as set_google_health_sync
 from .routes import router
 from .wiring import Pipeline, build_pipeline
 
@@ -30,10 +32,13 @@ def create_app(pipeline: Pipeline | None = None, *, settings: Settings | None = 
         await active.start()
         fitbit_sync, fitbit_task = attach_fitbit(active.db, active.clock)
         app.state.fitbit = fitbit_sync
+        google_health_sync, google_health_task = attach_google_health(active.db, active.clock)
+        app.state.google_health = google_health_sync
         try:
             yield
         finally:
             set_sync(None)
+            set_google_health_sync(None)
             await active.stop()
 
     app = FastAPI(lifespan=lifespan)
@@ -49,5 +54,7 @@ def create_app(pipeline: Pipeline | None = None, *, settings: Settings | None = 
         app.include_router(ingest.router)
         app.include_router(capture_frames.router)
     app.include_router(router)
+    app.include_router(recap_router)
     app.include_router(fitbit_router)
+    app.include_router(google_health_router)
     return app

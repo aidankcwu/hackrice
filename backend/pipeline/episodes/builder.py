@@ -152,6 +152,29 @@ class EpisodeBuilder:
             if state.episode is not None and state.episode.open
         }
 
+    def reset(self, t: float) -> None:
+        """Close open episodes and discard all candidate state for a new wearer."""
+
+        for state in self._states.values():
+            if state.episode is not None and state.episode.open:
+                episode = self._close(state, Tick(
+                    tick_id="session_reset", t=t, seq=0,
+                    sensor={}, frame_ref="session_reset",
+                ))
+                self.db.upsert_episode(episode)
+            state.positives.clear()
+            state.negatives.clear()
+            state.candidate_t = None
+            state.candidate_ticks = 0
+            state.episode = None
+            state.last_hit_t = None
+            state.last_fresh_ai_t = None
+            state.modes = {
+                name: Counter() for name in ("scene", "activity", "food_type")
+            }
+        # Rows a previous process left open against this DB file.
+        self.db.close_open_episodes(t)
+
     def _new_episode(self, kind: EpisodeKind, state: _State, tick: Tick) -> Episode:
         self._counter += 1
         start_t = state.candidate_t if state.candidate_t is not None else tick.t

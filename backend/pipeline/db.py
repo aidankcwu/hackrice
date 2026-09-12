@@ -28,6 +28,7 @@ from .models import (
     PendingQuestion,
     Score,
     SeededRow,
+    Session,
     Tick,
     TodaySummaryLine,
 )
@@ -177,6 +178,8 @@ CREATE TABLE IF NOT EXISTS escalated_frames (
     jpeg        BLOB NOT NULL,
     PRIMARY KEY (decision_id, frame_ref)
 );
+
+CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', started_t REAL NOT NULL, ended_t REAL);
 """
 
 
@@ -342,6 +345,21 @@ class Database:
             )
             self.conn.commit()
 
+    def close_open_episodes(self, t: float) -> int:
+        """Close every episode still marked open, at ``t``. Returns how many.
+
+        The builder closes what it holds in memory; this catches rows left open
+        by a previous process against the same database file.
+        """
+        with self._lock:
+            cur = self.conn.execute(
+                "UPDATE episodes SET open = 0, end_t = ?, "
+                "duration_s = MAX(0, ? - start_t) WHERE open = 1",
+                (t, t),
+            )
+            self.conn.commit()
+            return int(cur.rowcount)
+
     def list_episodes(self, day: str | None = None) -> list[Episode]:
         sql = "SELECT * FROM episodes"
         args: tuple[Any, ...] = ()
@@ -351,6 +369,34 @@ class Database:
         sql += " ORDER BY start_t ASC"
         with self._lock:
             rows = self.conn.execute(sql, args).fetchall()
+        return [
+            Episode(
+                id=r["id"],
+                kind=r["kind"],
+                start_t=r["start_t"],
+                end_t=r["end_t"],
+                duration_s=r["duration_s"],
+                dominant=json.loads(r["dominant"]),
+                tick_count=r["tick_count"],
+                open=bool(r["open"]),
+            )
+            for r in rows
+        ]
+
+    def episodes_between(self, t0: float, t1: float) -> list[Episode]:
+        """Episodes *overlapping* ``[t0, t1]``, oldest first.
+
+        Overlap, not start-day: an episode that began yesterday evening and is
+        still open belongs to a window that opens after midnight, and the
+        ``day`` column (keyed on ``start_t``) would hide it.
+        """
+
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT * FROM episodes WHERE start_t < ?"
+                " AND (end_t IS NULL OR end_t > ?) ORDER BY start_t ASC",
+                (t1, t0),
+            ).fetchall()
         return [
             Episode(
                 id=r["id"],
@@ -418,6 +464,38 @@ class Database:
             for r in rows
         ]
 
+    def decisions_between(self, t0: float, t1: float) -> list[Decision]:
+        """Every decision in ``[t0, t1]``, oldest first.
+
+        The window read, as against :meth:`list_decisions`'s newest-first feed:
+        a recap wants what happened inside its window, not the tail of the
+        table, and a long window must not silently lose its oldest rows.
+        """
+
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT * FROM decisions WHERE t >= ? AND t <= ? ORDER BY t ASC",
+                (t0, t1),
+            ).fetchall()
+        return [
+            Decision(
+                id=r["id"],
+                t=r["t"],
+                trigger=r["trigger"],
+                trigger_tick_id=r["trigger_tick_id"],
+                episode_id=r["episode_id"],
+                interpretation=r["interpretation"],
+                confidence=r["confidence"],
+                actions=json.loads(r["actions"]),
+                spoke=bool(r["spoke"]),
+                dropped=bool(r["dropped"]),
+                drop_reason=r["drop_reason"],
+                latency_ms=r["latency_ms"],
+                model=r["model"],
+            )
+            for r in rows
+        ]
+
     # -- insights --------------------------------------------------------
 
     def insert_insight(self, insight: Insight) -> None:
@@ -439,6 +517,25 @@ class Database:
         with self._lock:
             rows = self.conn.execute(
                 "SELECT * FROM insights ORDER BY t DESC LIMIT ?", (limit,)
+            ).fetchall()
+        return [
+            Insight(
+                id=r["id"],
+                t=r["t"],
+                category=r["category"],
+                text=r["text"],
+                decision_id=r["decision_id"],
+            )
+            for r in rows
+        ]
+
+    def insights_between(self, t0: float, t1: float) -> list[Insight]:
+        """Every insight in ``[t0, t1]``, oldest first."""
+
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT * FROM insights WHERE t >= ? AND t <= ? ORDER BY t ASC",
+                (t0, t1),
             ).fetchall()
         return [
             Insight(
@@ -499,6 +596,51 @@ class Database:
                 "UPDATE pending_checks SET fired = 1 WHERE id = ?", (check_id,)
             )
             self.conn.commit()
+
+    def mark_all_pending_fired(self) -> None:
+        with self._lock:
+            self.conn.execute("UPDATE pending_checks SET fired = 1 WHERE fired = 0")
+            self.conn.commit()
+
+    # -- judge sessions --------------------------------------------------
+
+    def insert_session(self, session: Session) -> None:
+        with self._lock:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO sessions (id, name, started_t, ended_t)"
+                " VALUES (?,?,?,?)",
+                (session.id, session.name, session.started_t, session.ended_t),
+            )
+            self.conn.commit()
+
+    def end_session(self, session_id: str, ended_t: float) -> None:
+        with self._lock:
+            self.conn.execute(
+                "UPDATE sessions SET ended_t = ? WHERE id = ?", (ended_t, session_id)
+            )
+            self.conn.commit()
+
+    def get_session(self, session_id: str) -> Session | None:
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT * FROM sessions WHERE id = ?", (session_id,)
+            ).fetchone()
+        return Session(**dict(row)) if row is not None else None
+
+    def current_session(self) -> Session | None:
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT * FROM sessions WHERE ended_t IS NULL"
+                " ORDER BY started_t DESC LIMIT 1"
+            ).fetchone()
+        return Session(**dict(row)) if row is not None else None
+
+    def list_sessions(self, limit: int = 50) -> list[Session]:
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT * FROM sessions ORDER BY started_t DESC LIMIT ?", (limit,)
+            ).fetchall()
+        return [Session(**dict(row)) for row in rows]
 
     # -- scores ----------------------------------------------------------
 

@@ -25,6 +25,7 @@ from ..reasoner.reasoner import Reasoner
 from ..scoring.scorer import Scorer
 from ..seed.generate import resting_hr_for, seed_database, seven_day_summary
 from ..seed.biometrics import seed_biometric_series
+from ..session import SessionManager
 from ..sim.scenario import DEFAULT_SCENARIO, Scenario
 from ..sim.source import SimSource
 
@@ -79,6 +80,11 @@ class Pipeline:
         self.biometrics_start_t = clock.sim_start_t
         self.started_at: float | None = None
         self.last_tick: Tick | None = None
+        self.sessions = SessionManager(
+            db, gate, speech, episodes,
+            lambda: self.last_tick.t if self.last_tick is not None else time.time(),
+            reasoner=reasoner,
+        )
         self._tasks: list[asyncio.Task[None]] = []
         self._score_event = asyncio.Event()
         self._last_score_t: float | None = None
@@ -174,6 +180,14 @@ class Pipeline:
     def status(self) -> dict[str, object]:
         stats = self.db.stats()
         tick_count = stats["tick_count"]
+        session = self.sessions.current()
+        session_status = None
+        if session is not None:
+            now = self.last_tick.t if self.last_tick is not None else time.time()
+            session_status = {
+                **session.model_dump(),
+                "elapsed_s": max(0.0, now - session.started_t),
+            }
         result: dict[str, object] = {
             "demo_mode": self.settings.demo_mode,
             "source": self.source_name,
@@ -193,6 +207,7 @@ class Pipeline:
             "questions": self.questions.stats(),
             "speech_spoken": len(spoken),
             "health": self._health(),
+            "session": session_status,
         }
         if self.capture is not None:
             result["capture"] = self.capture.stats()

@@ -250,6 +250,11 @@ class Settings(BaseSettings):
     fitbit_redirect_uri: str = "http://localhost:8010/api/wearables/fitbit/callback"
     fitbit_token_path: Path = Path("./data/fitbit_token.json")
     fitbit_poll_s: int = 300
+    google_health_client_id: str | None = None
+    google_health_client_secret: str | None = None
+    google_health_redirect_uri: str = "http://localhost:8010/api/wearables/google-health/callback"
+    google_health_token_path: Path = Path("./data/google_health_token.json")
+    google_health_poll_s: int = 300
     wearable_ingest_token: str | None = None
     #: T0 VLM budget in seconds (SPEC §2.4). None = tick_interval_s - 0.1.
     vlm_budget_s: float | None = None

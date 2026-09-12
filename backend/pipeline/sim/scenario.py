@@ -165,7 +165,7 @@ DEFAULT_SCENARIO = Scenario(
         Segment(
             name="home_screen",
             duration_s=45,
-            scene="living_room",
+            scene="home",
             activity="phone_use",
             flags={"screen_present": True},
             bg_color=(58, 48, 56),

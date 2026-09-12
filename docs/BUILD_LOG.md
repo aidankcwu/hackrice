@@ -290,3 +290,46 @@ Astra 6 reviewed the plan read-only against the spec. Objections we adopted:
   when to think, a big model thinks, and when it finally has something worth
   saying, you hear it in your ear. Everything in between chose silence, and
   the dashboard shows every one of those choices."
+
+## Sat 12 Sep, ~06:10 — Fitbit, take two: the API we built against was dead
+
+- The wearer went to register a Fitbit developer app and found dev.fitbit.com
+  shut down: the Fitbit Web API was turned off this month in favour of the
+  **Google Health API** (GA May 2026, Google OAuth, all Fitbit devices).
+  Rishi pushed back on "not possible tonight" and was right to: a
+  Testing-status OAuth client with the wearer as a test user reads their own
+  data with no verification review.
+- Verified the endpoints from Google's reference before writing a line:
+  `health.googleapis.com/v4/users/me/dataTypes/{heart-rate,…}/dataPoints`,
+  1-second heart rate, HRV, SpO2, sleep stages, steps, workouts, and the three
+  restricted read scopes. Sol rebuilt the poller against that shape in one
+  pass; the sink and dashboard did not change. FITBIT.md now walks the wearer
+  through Google Cloud Console instead.
+- Also merged tonight: Person A restructured the T0 menus (scene, activity,
+  food, drink) and added five tri-state booleans; the B-side mirror and tests
+  followed in the same hour. Open risk: 18 required VLM fields against a
+  budget Gemini already sits on. Being measured live.
+- **Stage line:** "Our wearable API died mid-hackathon. Two hours later the
+  replacement was live, because nothing downstream of the sink knew or cared
+  which API the numbers came from."
+
+## Sat 12 Sep, 15:25 — The Fitbit is live
+
+- First real sync through the Google Health API: 9,440 heart-rate samples
+  at 1-second resolution, HRV, SpO2, steps, resting HR 64, and last night's
+  sleep — 8.7 h, 91 min deep, 107 min REM, in bed 01:14, up 09:56 — all
+  labelled `fitbit`, all from the "Google Fitbit Air" on the wearer's wrist.
+- Four things the reference did not say and the live API did: the time
+  range goes in an AIP-160 `filter`, not `startTime`/`endTime`; date fields
+  accept `>=` and `<` but not `<=`; sleep and exercise accept no time filter
+  at all (list unfiltered, newest first, filter client-side); UTC offsets
+  arrive as Duration strings like `-18000s`. Each one was a 400 or a
+  traceback, each found by calling the real endpoint with the real token,
+  each fixed in under five minutes because the sync reports partial failures
+  instead of dying.
+- The dashboard's heart-rate strip now reads `live: fitbit` with the
+  wearer's actual trace. Nothing in the gate, reasoner, scorer, or dashboard
+  changed for the second wearable API of the night.
+- **Stage line:** "The API we planned for was shut down the week of the
+  hackathon. We read Google's replacement docs at 6 a.m., built against
+  them, and had a real heart-rate trace on screen before breakfast."

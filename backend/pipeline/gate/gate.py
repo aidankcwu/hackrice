@@ -45,6 +45,15 @@ class TriggerGate:
         self._escalated_episode_ids: set[str] = set()
         self._unbound_episode_kinds: set[str] = set()
 
+    def reset(self) -> None:
+        """Forget wearer-specific gating state while preserving lifetime stats."""
+
+        self._last_trigger_t.clear()
+        self.last_escalation_t = None
+        self._escalated_episode_ids.clear()
+        self._unbound_episode_kinds.clear()
+        self.window.clear()
+
     def _wearable_lines(self, t: float) -> list[str]:
         """The "wearable now" line for one escalation, or nothing.
 

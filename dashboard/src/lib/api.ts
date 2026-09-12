@@ -1,5 +1,5 @@
-import { mockBiometrics, mockBiometricsMulti, mockDecisions, mockEpisodes, mockPending, mockScores, mockSeeded, mockStatus, mockSummary, mockTicks, mockWearablesStatus } from "./mock";
-import type { Biometrics, BiometricsMulti, Decision, Episode, Insight, MetricScore, PendingCheck, Scores, SeededDay, Status, Tick, TodaySummary, WearablesStatus } from "./types";
+import { mockBiometrics, mockBiometricsMulti, mockDecisions, mockEpisodes, mockPending, mockScores, mockSeeded, mockSeededRows, mockStatus, mockSummary, mockTicks, mockWearablesStatus } from "./mock";
+import type { Biometrics, BiometricsMulti, Decision, Episode, Insight, MetricScore, PendingCheck, Scores, SeededDay, SeededMetricRow, Status, Tick, TodaySummary, WearablesStatus } from "./types";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8010";
 export const configuredMock = process.env.NEXT_PUBLIC_MOCK === "1";
@@ -72,6 +72,14 @@ export const api = {
       journal: journalTags(m), sources,
     }));
     return {...r,data};
+  },
+  // The same rows, unpivoted. `api.seeded` flattens a day into one `SeededDay`
+  // and drops every metric the 7-day table does not print; the wearable strip
+  // needs the long form, because it has to ask *which device* wrote each
+  // metric before it may call the number live (docs/WEARABLES.md).
+  seededRows: async (days=2)=>{
+    const r=await request<SeededMetricRow[]|{rows:SeededMetricRow[]}>(`/api/seeded?days=${days}`,mockSeededRows);
+    return {...r,data:list(r.data,["rows"])};
   },
   // SPEC §14.2: the intraday HR series, on the tick clock, for the HR strip.
   biometrics: async (metric="heart_rate", fromT?: number, toT?: number)=>{

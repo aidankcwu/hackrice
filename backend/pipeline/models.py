@@ -9,6 +9,7 @@ tolerate any optional field being absent, in particular the whole ``ai`` block
 
 from __future__ import annotations
 
+import time
 from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -41,6 +42,7 @@ __all__ = [
     "Score",
     "SeededRow",
     "TodaySummaryLine",
+    "Session",
     "phash_distance",
 ]
 
@@ -51,92 +53,37 @@ __all__ = [
 # than silently coercing a new value to ``unknown``.
 
 Scene = Literal[
-    "home",
-    "office",
-    "restaurant",
-    "gym",
-    "sauna",
-    "cold_plunge",
-    "park",
-    "trail",
-    "vehicle",
-    "street",
-    "kitchen",
-    "bedroom",
-    "living_room",
-    "bathroom",
-    "dorm_room",
-    "classroom",
-    "lecture_hall",
-    "library",
-    "lab",
-    "cafe",
-    "bar",
-    "grocery_store",
-    "store",
-    "campus_outdoor",
-    "backyard",
-    "beach",
-    "parking_lot",
-    "stadium",
-    "hallway",
-    "elevator",
-    "transit",
+    "home", "office", "classroom", "library", "lab",
+    "restaurant", "cafe", "bar", "gym", "store", "grocery_store",
+    "hospital", "hotel",
+    "park", "trail", "campus", "street", "parking_lot", "beach",
+    "nature", "sports_venue", "construction_site",
+    "car", "public_transit", "airport",
+    "sauna", "cold_plunge",
+    "indoor_other", "outdoor_other",
     "unknown",
 ]
 
 Activity = Literal[
-    "seated",
-    "standing",
-    "walking",
-    "exercising",
-    "eating",
-    "lying_down",
-    "cooking",
-    "reading",
-    "typing",
-    "phone_use",
-    "talking",
-    "driving",
-    "running",
-    "lifting_weights",
-    "stretching",
-    "cycling",
-    "cleaning",
-    "shopping",
-    "drinking",
+    "seated", "standing", "walking", "running", "cycling", "driving",
+    "exercising", "lifting_weights", "stretching",
+    "eating", "drinking", "cooking",
+    "reading", "computer_use", "phone_use",
+    "talking", "shopping", "cleaning",
+    "lying_down", "sleeping",
+    "personal_care", "commuting", "other",
     "unknown",
 ]
 
 FoodType = Literal[
-    "vegetables",
-    "fruit",
-    "grains",
-    "fish",
-    "poultry",
-    "red_meat",
-    "processed",
-    "sweets",
-    "mixed",
-    "salad",
-    "sandwich",
-    "burger",
-    "pizza",
-    "pasta",
-    "rice_bowl",
-    "noodles",
-    "soup",
-    "eggs",
-    "dairy",
-    "nuts",
-    "chips",
-    "candy",
-    "baked_goods",
-    "cereal",
-    "protein_bar",
-    "fast_food",
-    "dessert",
-    "none",
+    "vegetables", "fruit", "grains", "beans_legumes", "fish", "seafood",
+    "poultry", "red_meat", "eggs", "dairy", "nuts",
+    "salad", "sandwich", "burger", "pizza", "pasta", "rice_bowl", "noodles",
+    "soup", "wrap_taco", "breakfast",
+    "processed", "fried_food", "fast_food", "snack", "chips", "candy",
+    "baked_goods", "cereal", "protein_bar", "sweets", "dessert",
+    "bread", "potatoes",
+    "mixed", "none",
 ]
 
 Drink = Literal[
@@ -174,25 +121,12 @@ DRINKS: tuple[str, ...] = get_args(Drink)
 
 #: Scenes that count as being outside.
 OUTDOOR_SCENES: frozenset[str] = frozenset({
-    "park",
-    "trail",
-    "street",
-    "campus_outdoor",
-    "backyard",
-    "beach",
-    "parking_lot",
-    "stadium",
+    "park", "trail", "campus", "street", "parking_lot", "beach",
+    "nature", "sports_venue", "construction_site", "outdoor_other",
 })
 
 #: Scenes that count as being at home -- every room of one.
-HOME_SCENES: frozenset[str] = frozenset({
-    "home",
-    "kitchen",
-    "bedroom",
-    "living_room",
-    "bathroom",
-    "dorm_room",
-})
+HOME_SCENES: frozenset[str] = frozenset({"home"})
 
 #: Activities that explain an elevated heart rate on their own (SPEC §14.3).
 EXERTION_ACTIVITIES: frozenset[str] = frozenset({
@@ -206,32 +140,16 @@ EXERTION_ACTIVITIES: frozenset[str] = frozenset({
 
 #: ``food_type`` values counted as on-pattern for PREDIMED-style diet scoring.
 HEALTHY_FOOD_TYPES: frozenset[str] = frozenset({
-    "vegetables",
-    "fruit",
-    "grains",
-    "fish",
-    "poultry",
-    "salad",
-    "rice_bowl",
-    "soup",
-    "eggs",
-    "nuts",
-    "mixed",
+    "vegetables", "fruit", "grains", "beans_legumes", "fish", "seafood",
+    "poultry", "salad", "rice_bowl", "soup", "eggs", "nuts", "mixed",
 })
 
 #: Explicitly off-pattern. Everything in neither set (``sandwich``, ``pasta``,
 #: ``red_meat``, ``dairy``, ``cereal``, ``noodles``, ``protein_bar``, ``none``)
 #: is neutral and counts towards neither share.
 UNHEALTHY_FOOD_TYPES: frozenset[str] = frozenset({
-    "processed",
-    "sweets",
-    "chips",
-    "candy",
-    "baked_goods",
-    "fast_food",
-    "dessert",
-    "burger",
-    "pizza",
+    "processed", "fried_food", "sweets", "chips", "candy", "baked_goods",
+    "fast_food", "dessert", "burger", "pizza",
 })
 
 EpisodeKind = Literal[
@@ -294,6 +212,12 @@ class AiBlock(BaseModel):
     screen_present: bool | None = None
     vegetation_visible: bool | None = None
     people_present: bool | None = None
+    #: Booleans are tri-state: ``None`` means the VLM did not report it.
+    people_interacting: bool | None = Field(default=None, exclude_if=lambda value: value is None)
+    direct_sunlight_visible: bool | None = Field(default=None, exclude_if=lambda value: value is None)
+    outdoor_visible: bool | None = Field(default=None, exclude_if=lambda value: value is None)
+    smoking_or_vaping_visible: bool | None = Field(default=None, exclude_if=lambda value: value is None)
+    medication_visible: bool | None = Field(default=None, exclude_if=lambda value: value is None)
     caption: str | None = Field(default=None, exclude_if=lambda value: value is None)
     objects: list[str] | None = Field(default=None, exclude_if=lambda value: value is None)
     drink: Drink | None = Field(default=None, exclude_if=lambda value: value is None)
@@ -501,6 +425,21 @@ class TodaySummaryLine(BaseModel):
     t: float
     line: str
     decision_id: str | None = None
+
+
+class Session(BaseModel):
+    """A named judging window on the pipeline's tick clock."""
+
+    id: str
+    name: str = ""
+    started_t: float
+    ended_t: float | None = None
+
+    def duration_s(self, now: float | None = None) -> float:
+        """Length on the caller's clock: pass the tick clock under ``--speed N``."""
+        end = self.ended_t if self.ended_t is not None else (
+            now if now is not None else time.time())
+        return max(0.0, end - self.started_t)
 
 
 def phash_distance(a: str, b: str) -> int:
