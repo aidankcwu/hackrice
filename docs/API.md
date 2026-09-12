@@ -65,7 +65,8 @@ The `scene` / `activity` / `food_type` / `drink` menus live in `src/longevity/ai
 | `POST /api/wearables/ingest/health-auto-export` | Health Auto Export JSON → canonical |
 | `POST /api/wearables/ingest/whoop` | WHOOP v2 objects → canonical |
 | `GET /api/wearables/status` | metrics present with source/origin/count, `live_connected` |
-| `GET /api/wearables/fitbit/{authorize,callback,status,sync}` | Fitbit OAuth (PKCE) and poller control (SPEC §15.2) |
+| `GET /api/wearables/fitbit/{authorize,callback,status,sync}` | Legacy Fitbit OAuth (PKCE) and poller control (SPEC §15.2) |
+| `GET/POST /api/wearables/google-health/{authorize,callback,status,sync}` | Google Health OAuth (PKCE), status, and poller control |
 | `GET /api/biometrics?metrics=heart_rate,spo2&from=&to=` | multi-metric: `{series: {metric: {source, origin, points}}}` |
 | `GET /api/biometrics?metric=heart_rate&from=&to=` | `{metric, source, points: [[t, value], ...]}` — seeded wearable series on the tick clock (SPEC §14.2); defaults to the last hour |
 | `GET /api/events` | SSE stream (deferred — dashboard polls at 1 s for the demo) |

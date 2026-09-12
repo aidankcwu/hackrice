@@ -70,3 +70,18 @@ def attach_fitbit(db: Database, clock: Any | None = None) -> tuple[FitbitSync | 
     else:
         log.info("fitbit: configured but not authorised — open /api/wearables/fitbit/authorize")
     return sync, task
+
+
+def attach_google_health(db: Database, clock: Any | None = None) -> tuple[Any | None, asyncio.Task | None]:
+    """Register Google Health routes and start polling when already authorised."""
+    from .google_health import GoogleHealthClient, GoogleHealthConfig, GoogleHealthSync, TokenStore
+    from .google_health_routes import set_sync, start_polling
+    config = GoogleHealthConfig.from_env()
+    if not config.client_id:
+        set_sync(None); return None, None
+    client = GoogleHealthClient(config, TokenStore(config.token_path))
+    sync = GoogleHealthSync(client, make_sink(db, clock), interval_s=config.poll_s)
+    set_sync(sync); task = start_polling(sync) if client.store.is_configured() else None
+    if task: log.info("google-health: poller started (every %ss)", config.poll_s)
+    else: log.info("google-health: configured but not authorised — open /api/wearables/google-health/authorize")
+    return sync, task
