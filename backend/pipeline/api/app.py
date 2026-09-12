@@ -18,7 +18,11 @@ def create_app(pipeline: Pipeline | None = None, *, settings: Settings | None = 
     async def lifespan(app: FastAPI):
         active = pipeline
         if active is None:
-            active = build_pipeline(settings or get_settings(), **build_kwargs)
+            # CLI-equivalent defaults so `uvicorn pipeline.api.app:create_app
+            # --factory` works with no arguments (Astra review of S5a).
+            kwargs = {"source": "sim", "reasoner_mode": "fake", "speed": 1.0}
+            kwargs.update(build_kwargs)
+            active = build_pipeline(settings or get_settings(), **kwargs)
         app.state.pipeline = active
         await active.start()
         try:
