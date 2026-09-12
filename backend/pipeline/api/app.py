@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from ..config import Settings, get_settings
+from ..recap.routes import router as recap_router
 from ..wearables.connect import attach_fitbit
 from ..wearables.fitbit_routes import router as fitbit_router, set_sync
 from .routes import router
@@ -49,5 +50,6 @@ def create_app(pipeline: Pipeline | None = None, *, settings: Settings | None = 
         app.include_router(ingest.router)
         app.include_router(capture_frames.router)
     app.include_router(router)
+    app.include_router(recap_router)
     app.include_router(fitbit_router)
     return app

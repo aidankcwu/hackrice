@@ -9,6 +9,7 @@ tolerate any optional field being absent, in particular the whole ``ai`` block
 
 from __future__ import annotations
 
+import time
 from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -40,6 +41,7 @@ __all__ = [
     "Score",
     "SeededRow",
     "TodaySummaryLine",
+    "Session",
     "phash_distance",
 ]
 
@@ -465,6 +467,21 @@ class TodaySummaryLine(BaseModel):
     t: float
     line: str
     decision_id: str | None = None
+
+
+class Session(BaseModel):
+    """A named judging window on the pipeline's tick clock."""
+
+    id: str
+    name: str = ""
+    started_t: float
+    ended_t: float | None = None
+
+    def duration_s(self, now: float | None = None) -> float:
+        """Length on the caller's clock: pass the tick clock under ``--speed N``."""
+        end = self.ended_t if self.ended_t is not None else (
+            now if now is not None else time.time())
+        return max(0.0, end - self.started_t)
 
 
 def phash_distance(a: str, b: str) -> int:

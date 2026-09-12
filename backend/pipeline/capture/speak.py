@@ -32,7 +32,7 @@ class SpeechStats:
 
 def make_speak_fn(
     link: GlassesLink, settings: Settings | None = None
-) -> Callable[[str, str], None]:
+) -> Callable[[str, str], bool]:
     # Preserve the historical direct-call behaviour. Runtime wiring always passes
     # its Settings instance; callers that omit it explicitly get phone-side speech.
     settings = settings or Settings(speech_mode="text")
@@ -46,20 +46,31 @@ def make_speak_fn(
     )
     stats = SpeechStats("elevenlabs" if tts is not None else "text")
 
-    def speak(text: str, urgency: str) -> None:
+    def speak(text: str, urgency: str) -> bool:
+        """``True`` when the utterance was accepted for delivery.
+
+        Still fire-and-forget -- ``True`` means a send was *scheduled*, not that
+        the phone played it. ``False`` means nothing was, so callers that log
+        "spoken" (the recap does) do not claim an utterance nobody could hear.
+        The return value widens ``SpeakFn``'s ``None`` rather than replacing it:
+        a hook that returns ``None`` still counts as accepted.
+        """
+
         try:
             loop = asyncio.get_running_loop()
             if not link.clients:
                 stats.skipped_no_phone += 1
                 log.info("speech skipped: no phone connected")
-                return
+                return False
             task = loop.create_task(
                 _send(link, tts, text, urgency, stats),
                 name="glasses-speak",
             )
             task.add_done_callback(_consume_failure)
+            return True
         except Exception:
             log.exception("could not schedule speech to phone")
+            return False
     speak.stats = stats  # type: ignore[attr-defined]
     return speak
 

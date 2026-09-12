@@ -34,6 +34,9 @@ __all__ = ["Scorer", "rollup"]
 SAUNA_MIN_SECONDS = 19 * 60
 #: SPEC §8 HRV: flag a 7d/60d ln RMSSD ratio below this.
 HRV_FLAG_BELOW = 0.9
+#: Hours awake in a day. Rate-type metrics observed over a short session are
+#: extrapolated onto this, not onto 24 h -- nobody stares at a screen while asleep.
+WAKING_HOURS = 16.0
 
 
 def _hour_of_day(t: float) -> float:
@@ -226,6 +229,118 @@ class Scorer:
             score = self._emit(spec, day, value, note)
             self.db.upsert_score(score)
             scores.append(score)
+        return scores
+
+    # -- session window --------------------------------------------------
+
+    @staticmethod
+    def _clip(episodes: Iterable[Episode], t0: float, t1: float) -> list[Episode]:
+        """Episodes overlapping ``[t0, t1]``, with their durations clipped to it.
+
+        An open episode has no ``end_t``; it is still running at ``t1``, so the
+        window's right edge is its end for scoring purposes. Clipping rather
+        than filtering is what makes a 2-minute session honest: a screen block
+        that started an hour ago contributes the seconds that happened inside
+        the window and not one more.
+        """
+
+        clipped: list[Episode] = []
+        for episode in episodes:
+            end = episode.end_t if episode.end_t is not None else t1
+            if end <= t0 or episode.start_t >= t1:
+                continue
+            start = max(episode.start_t, t0)
+            stop = min(end, t1)
+            clipped.append(episode.model_copy(update={
+                "start_t": start,
+                "end_t": stop,
+                "duration_s": max(0.0, stop - start),
+            }))
+        return clipped
+
+    def _window_episodes(self, t0: float, t1: float) -> list[Episode]:
+        """Everything overlapping the window, clipped to it.
+
+        Read by time overlap rather than by the two ``day`` keys the window
+        touches: an episode that started before midnight and is still open at
+        01:00 belongs to a 01:00 window, and its ``day`` column says yesterday.
+        """
+
+        return self._clip(self.db.episodes_between(t0, t1), t0, t1)
+
+    def score_window(self, t0: float, t1: float) -> list[Score]:
+        """Score one ``[t0, t1]`` window -- a judging session, not a day.
+
+        Returned, never upserted: a two-minute window is not a day and must not
+        overwrite the day's rows. The shape is the ordinary :class:`Score` row
+        with ``period="session"``, so the dashboard renders it with the
+        component it already has.
+
+        Two kinds of live metric need different treatment over a short window.
+        A **rate** (screen hours) is meaningless raw -- two minutes of screen is
+        0.03 h, which would score as a flawless low-risk day -- so it is
+        extrapolated to a 16-hour waking day and the note says so out loud. A
+        **count** (meals, conversations, sightings) is reported raw: three
+        coffees in two minutes is three coffees, and multiplying it up would be
+        a lie. Seeded metrics come from ``day_key(t1)`` exactly as
+        :meth:`score_day` reads them and stay labelled ``seeded``, so nobody
+        mistakes last night's sleep for something the glasses saw. Weekly specs
+        are skipped: a week cannot be observed in a session.
+        """
+
+        t0, t1 = (t0, t1) if t1 >= t0 else (t1, t0)
+        window_s = max(0.0, t1 - t0)
+        window_h = window_s / 3600.0
+        minutes = max(1, int(round(window_s / 60.0)))
+        day = day_key(t1)
+        period_key = f"{int(t0)}-{int(t1)}"
+
+        episodes = self._window_episodes(t0, t1)
+        seeded = self._seeded(day)
+        meals = self._of_kind(episodes, "meal")
+        diet_value, diet_note = self._diet_pattern(meals)
+        late_caffeine, caffeine_note = self._caffeine(episodes, seeded)
+        observed = f"observed in a {minutes}-minute session"
+
+        screen_h = self._screen_hours(episodes)
+        if window_h > 0:
+            projected: float | None = screen_h * WAKING_HOURS / window_h
+            screen_note = (
+                f"at this rate: {projected:.1f} h/day over a {minutes}-minute session"
+            )
+        else:  # pragma: no cover - a zero-length window has nothing to project
+            projected, screen_note = None, "zero-length session"
+
+        live_values: dict[str, tuple[float | None, str | None]] = {
+            "social_episodes_daily": (
+                float(len(self._of_kind(episodes, "conversation"))), observed),
+            "screen_hours_daily": (projected, screen_note),
+            "meals_logged_daily": (float(len(meals)), observed),
+            "diet_pattern_daily": (diet_value, diet_note),
+            "caffeine_cutoff_daily": (late_caffeine, caffeine_note),
+            "alcohol_daily": (
+                float(len(self._of_kind(episodes, "alcohol_sighting"))), observed),
+        }
+
+        scores: list[Score] = []
+        for spec in by_period("daily"):
+            if spec.source == "live":
+                value, note = live_values.get(spec.metric, (None, None))
+            else:
+                raw = seeded.get(spec.metric)
+                value = None if raw is None else float(raw)
+                note = None
+                if (
+                    spec.metric == "hrv_rmssd_ratio"
+                    and value is not None
+                    and value < HRV_FLAG_BELOW
+                ):
+                    note = "below baseline (<0.90) — recovery flag"
+            row = self._emit(spec, period_key, value, note)
+            # ``Score.period`` is a Literal["daily", "weekly"] owned by
+            # ``pipeline.models``; ``model_copy`` re-labels the row without
+            # widening that contract or re-validating it.
+            scores.append(row.model_copy(update={"period": "session"}))
         return scores
 
     # -- weekly ----------------------------------------------------------

@@ -104,6 +104,12 @@ class Reasoner:
         self.spoke_count = 0
         self.last_latency_ms: int | None = None
         self.last_decision_t: float | None = None
+        #: Bumped by a judge-session start. A call admitted under an older epoch
+        #: still writes its decision row (SPEC §6) but applies no actions: the
+        #: previous wearer's coffee must not speak into, or schedule a watch
+        #: for, the next wearer's window.
+        self.epoch = 0
+        self.skipped_stale = 0
 
     # -- admission --------------------------------------------------------
 
@@ -148,7 +154,7 @@ class Reasoner:
                 self._drop(esc, "t1_no_loop", decision_id=decision_id)
                 return False
 
-            loop.create_task(self._run(esc, frames, decision_id))
+            loop.create_task(self._run(esc, frames, decision_id, self.epoch))
             claimed = True
             return True
         finally:
@@ -219,8 +225,14 @@ class Reasoner:
 
     # -- inference --------------------------------------------------------
 
+    def bump_epoch(self) -> int:
+        """Invalidate in-flight work from the previous wearer."""
+        self.epoch += 1
+        return self.epoch
+
     async def _run(
-        self, esc: Escalation, frames: dict[str, bytes], decision_id: str
+        self, esc: Escalation, frames: dict[str, bytes], decision_id: str,
+        epoch: int | None = None,
     ) -> None:
         started = time.perf_counter()
         self.last_decision_t = esc.t
@@ -278,6 +290,13 @@ class Reasoner:
             # Written before the actions apply: a handler that throws must not
             # cost us the decision row (SPEC §6).
             self.db.insert_decision(decision)
+
+            if epoch is not None and epoch != self.epoch:
+                self.skipped_stale += 1
+                log.info("%s: session changed while reasoning; actions skipped",
+                         decision_id)
+                self.completed += 1
+                return
 
             outcome = self.handler.apply(decision_id, esc.t, norm)
 
