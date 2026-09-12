@@ -164,8 +164,8 @@ class Timings:
     @classmethod
     def demo(cls, tick_interval_s: float = 1.0) -> "Timings":
         return cls(
-            trigger_cooldown_default=45.0,
-            global_escalation_min_gap=10.0,
+            trigger_cooldown_default=20.0,
+            global_escalation_min_gap=5.0,
             screen_sustained_window=20.0,
             screen_sustained_min_hits=8,
             people_sustained_window=20.0,
