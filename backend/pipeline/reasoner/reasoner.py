@@ -243,6 +243,14 @@ class Reasoner:
                 return
 
             norm = normalize(resp, t=esc.t)
+            # A watch-triggered decision may not schedule another watch: the
+            # model otherwise re-arms itself every cooldown forever (seen live:
+            # eight chained "track the caffeine pattern" escalations).
+            if esc.trigger.startswith("watch:"):
+                kept = [a for a in norm.actions if getattr(a, "type", None) != "watch"]
+                if len(kept) != len(norm.actions):
+                    log.info("watch chain capped for %s", esc.trigger)
+                    norm.actions = kept
             latency_ms = meta.get("latency_ms")
             if latency_ms is None:
                 latency_ms = int((time.perf_counter() - started) * 1000)

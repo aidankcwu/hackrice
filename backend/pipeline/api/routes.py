@@ -11,6 +11,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
 
+from ..actions.speech import get_speak_fn
 from ..db import day_key
 from ..models import PendingCheck
 from ..scoring.scorer import rollup
@@ -269,3 +270,21 @@ async def evidence_jpeg(request: Request, decision_id: str, ref: str) -> Respons
     if jpeg is None:
         raise HTTPException(status_code=404, detail="evidence frame not found")
     return Response(jpeg, media_type="image/jpeg")
+
+
+@router.post("/api/speak")
+async def speak_now(body: dict[str, Any]) -> dict[str, Any]:
+    """Demo/debug: say something through the glasses right now.
+
+    Bypasses the rate limiter on purpose (SPEC §4.6 governs the model's speech,
+    not an operator's). Goes through the same hook T1 uses, so it exercises the
+    real Mac -> phone -> Bluetooth path.
+    """
+
+    text = str(body.get("text", "")).strip()
+    if not text:
+        raise HTTPException(400, "text required")
+    urgency = str(body.get("urgency", "normal"))
+    get_speak_fn()(text, urgency)
+    return {"ok": True, "text": text, "urgency": urgency}
+
