@@ -1,7 +1,7 @@
 import { mockBiometrics, mockBiometricsMulti, mockDecisions, mockEpisodes, mockPending, mockScores, mockSeeded, mockStatus, mockSummary, mockTicks, mockWearablesStatus } from "./mock";
 import type { Biometrics, BiometricsMulti, Decision, Episode, Insight, MetricScore, PendingCheck, Scores, SeededDay, Status, Tick, TodaySummary, WearablesStatus } from "./types";
 
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8010";
 export const configuredMock = process.env.NEXT_PUBLIC_MOCK === "1";
 export class ApiOfflineError extends Error { constructor() { super("API offline"); this.name="ApiOfflineError"; } }
 
