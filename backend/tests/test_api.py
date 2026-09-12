@@ -79,7 +79,11 @@ async def test_dashboard_routes(tmp_path):
         assert frame_response.status_code == 200
         assert base64.b64decode(frame_response.json()[live]).startswith(b"\xff\xd8")
         pipeline.frame_store.put("expired", b"jpeg", pipeline.last_tick.t)
-        pipeline.frame_store.expire(pipeline.last_tick.t + 91)
+        # Far past every live frame on purpose: the pump may already hold frame
+        # N+1 while last_tick is still N, and the store's expiry stops at the
+        # first entry newer than the cutoff -- with a cutoff of +91 it would
+        # stop at N+1 and never reach the stale entry appended behind it.
+        pipeline.frame_store.expire(pipeline.last_tick.t + 10_000)
         assert (await client.get("/frames?refs=expired")).status_code == 410
 
         evidence = (await client.get(f"/api/evidence/{decisions[0]['id']}")).json()

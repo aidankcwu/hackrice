@@ -12,6 +12,8 @@ construction.
     uv run python tools/fake_phone.py --hz 10 --count 30     # backpressure
     uv run python tools/fake_phone.py --profile walking
     uv run python tools/fake_phone.py --url ws://10.135.100.7:8765/ --hz 0.5
+    uv run python tools/fake_phone.py --answer "yeah two"     # answers the first ask
+    uv run python tools/fake_phone.py --caps ""               # a phone that cannot listen
 
 It also prints anything the Mac sends back, so it doubles as a receiver for the `speak`
 path while the iOS audio handler is being written.
@@ -97,17 +99,65 @@ def sensors(profile: str, seq: int) -> tuple[dict[str, float] | None, float | No
     return accel, round(abs(rng.gauss(0.05, 0.05)), 3)
 
 
-async def _print_incoming(ws: Any, quiet: bool) -> None:
-    """Drain the Mac->phone direction. On the real phone this is AVSpeechSynthesizer."""
+async def _print_incoming(
+    ws: Any,
+    quiet: bool,
+    *,
+    answer: str | None = None,
+    answer_delay: float = 2.0,
+    answer_heard: bool = True,
+) -> None:
+    """Drain the Mac->phone direction. On the real phone this is AVSpeechSynthesizer.
+
+    With `--answer` it also plays the second half of ASK_DESIGN §2: the first
+    `ask` message gets a reply after `answer_delay` seconds, standing in for
+    playback plus on-device transcription. Only the first — the real wearer
+    answers one question at a time, and a fake phone that replied to every ask
+    would make the follow-up rules untestable.
+    """
+    answered = False
     try:
         async for raw in ws:
             msg = wire.decode(raw)
-            if msg.get("type") == wire.SPEAK and not quiet:
+            mtype = msg.get("type")
+            if mtype == wire.SPEAK and not quiet:
                 print(f"  [phone speaks] {msg.get('text')!r}", flush=True)
+            elif mtype == wire.ASK:
+                if not quiet:
+                    print(
+                        f"  [phone listens] {msg.get('text')!r} "
+                        f"({msg.get('answer_kind')}, {msg.get('listen_s')}s, "
+                        f"{msg.get('question_id')})",
+                        flush=True,
+                    )
+                if answer is not None and not answered:
+                    answered = True
+                    asyncio.create_task(
+                        _reply(
+                            ws, str(msg.get("question_id", "")), answer,
+                            delay=answer_delay, heard=answer_heard, quiet=quiet,
+                        )
+                    )
             elif not quiet:
                 print(f"  [phone recv] {str(raw)[:120]}", flush=True)
     except Exception:  # noqa: BLE001 — the socket closing is how this ends
         pass
+
+
+async def _reply(
+    ws: Any, question_id: str, text: str, *, delay: float, heard: bool, quiet: bool
+) -> None:
+    """Send one `answer` back after a pause. Never raises into the reader task."""
+    try:
+        await asyncio.sleep(delay)
+        await ws.send(wire.answer_message(question_id, text, heard=heard, t=time.time()))
+        if not quiet:
+            print(
+                f"  [phone answers] {question_id} heard={heard} {text!r}", flush=True
+            )
+    except Exception as exc:  # noqa: BLE001
+        if not quiet:
+            print(f"  [phone answer failed] {exc}", flush=True)
 
 
 async def run(
@@ -120,6 +170,10 @@ async def run(
     malformed_at: tuple[int, ...] = (),
     start_seq: int = 0,
     quiet: bool = False,
+    caps: tuple[str, ...] = ("ask",),
+    answer: str | None = None,
+    answer_delay: float = 2.0,
+    answer_heard: bool = True,
     on_sent: Callable[[int, dict[str, Any]], None] | None = None,
 ) -> int:
     """Send capture packets until `count` or `duration` runs out. Returns packets sent.
@@ -136,8 +190,21 @@ async def run(
 
     async with connect(url, max_size=8 * 1024 * 1024, open_timeout=10) as ws:
         if not quiet:
-            print(f"fake_phone: connected to {url} at {hz} Hz, profile={profile}", flush=True)
-        reader = asyncio.create_task(_print_incoming(ws, quiet))
+            print(
+                f"fake_phone: connected to {url} at {hz} Hz, profile={profile}, "
+                f"caps={','.join(caps) or 'none'}",
+                flush=True,
+            )
+        # The hello is what tells the Mac this phone can open its microphone
+        # (ASK_DESIGN §8.7). Without it the Mac suppresses every ask, which is
+        # the correct behaviour and a confusing way to find out about a flag.
+        await ws.send(wire.hello_message(device="fake_phone", caps=list(caps)))
+        reader = asyncio.create_task(
+            _print_incoming(
+                ws, quiet, answer=answer, answer_delay=answer_delay,
+                answer_heard=answer_heard,
+            )
+        )
         next_at = loop.time()
         try:
             while True:
@@ -190,9 +257,24 @@ def main() -> None:
         help="comma-separated packet numbers to send as garbage instead",
     )
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument(
+        "--caps",
+        default="ask",
+        help='comma-separated capabilities for the hello (default "ask"; "" for none)',
+    )
+    ap.add_argument(
+        "--answer",
+        default=None,
+        help="reply to the first `ask` with this transcript, e.g. --answer 'yeah two'",
+    )
+    ap.add_argument("--answer-delay", type=float, default=2.0,
+                    help="seconds to wait before answering (default 2)")
+    ap.add_argument("--answer-heard", type=int, default=1,
+                    help="0 sends heard=false — the wearer said nothing")
     args = ap.parse_args()
 
     bad = tuple(int(x) for x in args.malformed_at.split(",") if x.strip())
+    caps = tuple(c.strip() for c in args.caps.split(",") if c.strip())
     try:
         n = asyncio.run(
             run(
@@ -203,6 +285,10 @@ def main() -> None:
                 profile=args.profile,
                 malformed_at=bad,
                 quiet=args.quiet,
+                caps=caps,
+                answer=args.answer,
+                answer_delay=args.answer_delay,
+                answer_heard=bool(args.answer_heard),
             )
         )
         print(f"fake_phone: sent {n} packets", flush=True)

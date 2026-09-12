@@ -30,6 +30,7 @@ from .speech import SpeechLimiter
 
 if TYPE_CHECKING:  # `pipeline.reasoner` imports this module: keep it one-way.
     from ..reasoner.schema import T1Response
+    from .questions import QuestionManager
 
 log = logging.getLogger(__name__)
 
@@ -44,14 +45,17 @@ class ActionHandler:
     """Applies a normalised :class:`T1Response` to the database and the speaker."""
 
     def __init__(
-        self, db: Database, speech: SpeechLimiter, timings: Timings
+        self, db: Database, speech: SpeechLimiter, timings: Timings,
+        questions: "QuestionManager | None" = None,
     ) -> None:
         self.db = db
         self.speech = speech
         self.timings = timings
+        self.questions = questions
 
     def apply(
-        self, decision_id: str, t: float, resp: "T1Response"
+        self, decision_id: str, t: float, resp: "T1Response", *,
+        episode_id: str | None = None,
     ) -> dict[str, Any]:
         """Run every action. Returns a small summary for the decision row."""
 
@@ -62,9 +66,11 @@ class ActionHandler:
             "annotated": False,
         }
 
+        has_ask = any(action.type == "ask" for action in resp.actions)
+
         for action in resp.actions:
             try:
-                self._one(decision_id, t, action, result)
+                self._one(decision_id, t, action, result, episode_id, has_ask)
             except Exception:
                 log.exception(
                     "action %s failed for decision %s", action.type, decision_id
@@ -75,7 +81,8 @@ class ActionHandler:
     # -- per-action ------------------------------------------------------
 
     def _one(
-        self, decision_id: str, t: float, action: Any, result: dict[str, Any]
+        self, decision_id: str, t: float, action: Any, result: dict[str, Any],
+        episode_id: str | None, has_ask: bool,
     ) -> None:
         kind = action.type
 
@@ -117,7 +124,11 @@ class ActionHandler:
             result["watches"] += 1
 
         elif kind == "speak":
-            if self.speech.allow(t):
+            if has_ask:
+                log.info("speak_dropped_for_ask (decision %s)", decision_id)
+            elif self.questions is not None and self.questions.listening():
+                log.info("speak_dropped_listening (decision %s)", decision_id)
+            elif self.speech.allow(t):
                 self.speech.speak(action.text, action.urgency, t=t)
                 result["spoke"] = True
             else:
@@ -125,6 +136,19 @@ class ActionHandler:
                     "speak proposed but suppressed by the limiter (decision %s)",
                     decision_id,
                 )
+
+        elif kind == "ask":
+            if self.questions is None:
+                log.info("ask skipped: no question manager (decision %s)", decision_id)
+                return
+            row, reason = self.questions.ask(
+                decision_id=decision_id, t=t, episode_id=episode_id, action=action
+            )
+            payload = action.model_dump()
+            if row is not None:
+                payload["question_id"] = row.id
+            payload["outcome"] = "sent" if reason is None else f"suppressed:{reason}"
+            result.setdefault("asks", []).append(payload)
 
         elif kind == "nothing":
             pass

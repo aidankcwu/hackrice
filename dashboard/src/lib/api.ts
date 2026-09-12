@@ -1,5 +1,5 @@
-import { mockBiometrics, mockBiometricsMulti, mockDecisions, mockEpisodes, mockPending, mockScores, mockSeeded, mockSeededRows, mockStatus, mockSummary, mockTicks, mockWearablesStatus } from "./mock";
-import type { Biometrics, BiometricsMulti, Decision, Episode, Insight, MetricScore, PendingCheck, Recap, Scores, SeededDay, SeededMetricRow, Session, Status, Tick, TodaySummary, WearablesStatus } from "./types";
+import { mockBiometrics, mockBiometricsMulti, mockDecisions, mockEpisodes, mockPending, mockQuestions, mockScores, mockSeeded, mockSeededRows, mockStatus, mockSummary, mockTicks, mockWearablesStatus } from "./mock";
+import type { AnswerResult, AskResult, Biometrics, BiometricsMulti, Decision, Episode, Insight, MetricScore, PendingCheck, Question, Recap, Scores, SeededDay, SeededMetricRow, Session, Status, Tick, TodaySummary, WearablesStatus } from "./types";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8010";
 export const configuredMock = process.env.NEXT_PUBLIC_MOCK === "1";
@@ -39,6 +39,15 @@ export const api = {
   ticks: async (n=60)=>{const r=await request<Tick[]|{ticks:Tick[]}>(`/api/ticks/recent?n=${n}`,mockTicks);return {...r,data:list(r.data,["ticks"])};},
   episodes: async (day?:string)=>{const r=await request<Episode[]|{episodes:Episode[]}>(`/api/episodes${day?`?day=${encodeURIComponent(day)}`:""}`,mockEpisodes);return {...r,data:list(r.data,["episodes"])};},
   decisions: async (limit=50)=>{const r=await request<Decision[]|{decisions:Decision[]}>(`/api/decisions?limit=${limit}`,mockDecisions);return {...r,data:list(r.data,["decisions"])};},
+  // -- ask / answer (docs/API.md "Ask / answer"). The poll falls back to mock
+  // data like every other read; the two POSTs are actions, so they fail loudly
+  // -- an answer that silently went nowhere is the one failure a demo cannot see.
+  questions: async (limit=20)=>{const r=await request<Question[]|{questions:Question[]}>(`/api/questions?limit=${limit}`,mockQuestions);return {...r,data:list(r.data,["questions"])};},
+  /** Omit `questionId` to answer whichever question is open (404 when none is). */
+  answer: (questionId: string | null | undefined, text: string) =>
+    action<AnswerResult>("/api/answer", questionId ? {question_id: questionId, text} : {text}),
+  /** Demo/debug ask. Still passes the §4 guards, so `question_id` may be null. */
+  ask: (text: string) => action<AskResult>("/api/ask", {text}),
   insights: async (limit=50)=>{const r=await request<Insight[]|{insights:Insight[]}>(`/api/insights?limit=${limit}`,[]);return {...r,data:list(r.data,["insights"])};},
   scores: async (period:"daily"|"weekly"="daily")=>{
     // Backend: {period, overall, scores:[{metric, layer, value, target, score, source, grade, note}]}

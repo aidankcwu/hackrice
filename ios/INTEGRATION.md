@@ -195,3 +195,35 @@ type.
 
 **`ios/xcode-project.patch` is stale** until re-snapshotted per §5 — it predates these
 `MacLink.swift` changes.
+
+## 8 Ask and answer
+
+Add `QuestionListener.swift` to the `CameraAccess` target. `NSMicrophoneUsageDescription`
+already exists; also add `NSSpeechRecognitionUsageDescription` (for example, `Transcribes
+short answers to questions asked through the glasses.`). iOS will terminate or deny the
+request if either purpose string is absent.
+
+The listener exposes the explicit state machine `idle → awaitingPlayback(question) →
+listening(question) → sending → idle`. `MacLink` moves it past awaiting only after the
+preceding AVSpeechSynthesizer or AVAudioPlayer completion callback; with no playback in
+flight it keeps a 300 ms beat between the wire message and the microphone.
+
+Show it in the existing view with one line:
+
+```swift
+Text(link.listener.statusLine)
+```
+
+Listening temporarily changes the audio session from output-only A2DP to
+`.playAndRecord` with both `.allowBluetooth` and `.allowBluetoothA2DP`. That permits iOS
+to select the glasses microphone using the Bluetooth hands-free profile, which can make
+the output route audibly switch away from high-quality A2DP. The microphone is open only
+for the answer window because that profile switch costs quality, battery, and privacy;
+every result, timeout, interruption, route change, cancellation, stop, and socket failure
+tears down recognition and restores `.playback` / `.spokenAudio` / A2DP.
+
+The checked-in Xcode patch is stale until the working target is re-snapshotted using the
+§5 commands. On a physical device, confirm the logged input is the Ray-Ban hands-free
+route, note how long the profile switch takes, and check whether DAT video frames pause
+while that microphone route is active; the existing hardware validation did not cover
+simultaneous DAT camera input and a custom Bluetooth microphone pipeline.

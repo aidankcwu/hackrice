@@ -37,6 +37,26 @@ import AVFoundation
 import Foundation
 import Observation
 
+private final class SpeechCompletionDelegate: NSObject, AVSpeechSynthesizerDelegate {
+  var didFinish: ((AVSpeechUtterance) -> Void)?
+  func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+    didFinish?(utterance)
+  }
+  func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+    didFinish?(utterance)
+  }
+}
+
+private final class AudioCompletionDelegate: NSObject, AVAudioPlayerDelegate {
+  var didFinish: ((AVAudioPlayer) -> Void)?
+  func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+    didFinish?(player)
+  }
+  func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
+    didFinish?(player)
+  }
+}
+
 @Observable
 @MainActor
 final class MacLink {
@@ -60,9 +80,19 @@ final class MacLink {
   private(set) var port: Int
 
   @ObservationIgnored private let synth = AVSpeechSynthesizer()
-  /// Held as a property on purpose: a local AVAudioPlayer is deallocated the
-  /// instant playAudio returns and the sound cuts off mid-word.
-  @ObservationIgnored private var player: AVAudioPlayer?
+  @ObservationIgnored private let speechDelegate = SpeechCompletionDelegate()
+  @ObservationIgnored private let audioDelegate = AudioCompletionDelegate()
+  /// Retain every playback object until its own completion callback arrives. The order
+  /// lets an ask bind to exactly the most recently-started playback, not whichever one
+  /// happens to finish next.
+  @ObservationIgnored private var playbackIDs: [ObjectIdentifier] = []
+  @ObservationIgnored private var speechUtterances: [ObjectIdentifier: AVSpeechUtterance] = [:]
+  @ObservationIgnored private var audioPlayers: [ObjectIdentifier: AVAudioPlayer] = [:]
+
+  /// Public for the one-line SwiftUI status hookup documented in INTEGRATION.md.
+  @ObservationIgnored lazy var listener = QuestionListener { [weak self] json in
+    self?.sendRaw(json)
+  }
 
   @ObservationIgnored private var task: URLSessionWebSocketTask?
   /// `var` since A19: `configure(host:port:)` can move the Mac out from under us.
@@ -125,6 +155,13 @@ final class MacLink {
     url =
       URL(string: "ws://\(resolvedHost):\(resolvedPort)\(path)")
       ?? URL(string: "ws://\(MacLink.defaultHost):\(MacLink.defaultPort)\(path)")!
+    speechDelegate.didFinish = { [weak self] utterance in
+      Task { @MainActor in self?.playbackFinished(utterance) }
+    }
+    audioDelegate.didFinish = { [weak self] player in
+      Task { @MainActor in self?.playbackFinished(player) }
+    }
+    synth.delegate = speechDelegate
   }
 
   // MARK: - Intent
@@ -143,6 +180,7 @@ final class MacLink {
     wantConnected = false
     reconnectAttempt = 0
     cancelReconnect()
+    listener.cancel()
     teardownSocket()
     connected = false
     status = "not connected"
@@ -209,6 +247,7 @@ final class MacLink {
   /// Drop the current socket without touching `wantConnected`, `connected` or `status`.
   private func teardownSocket() {
     stopKeepalive()
+    listener.cancel()
     generation &+= 1
     task?.cancel(with: .goingAway, reason: nil)
     task = nil
@@ -325,6 +364,7 @@ final class MacLink {
     guard gen == generation else { return }
     print("MacLink failure: \(reason)")
     connected = false
+    listener.cancel()
     status = reason
     teardownSocket()
     scheduleReconnect()
@@ -403,8 +443,8 @@ final class MacLink {
 
   // MARK: - A16 · speak
 
-  /// Route an inbound message by `type`. A14 adds nothing here; the Mac only ever
-  /// pushes `speak` (A16) and later `audio` (A18) down this socket.
+  /// Route all Mac -> phone messages. `ask` follows its question audio on the wire;
+  /// completion tracking below preserves that order at the hardware boundary too.
   private func handle(_ raw: String) {
     guard let data = raw.data(using: .utf8),
       let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -420,6 +460,62 @@ final class MacLink {
     // A18 — pre-rendered ElevenLabs audio. The Mac falls back to a `speak` message
     // when synthesis fails, so both paths stay live and neither blocks the other.
     if type == wireAudio { playAudio(obj) }
+    if type == "ask" {
+      let awaitedPlaybackID = playbackIDs.last
+      let connectionGeneration = generation
+      let listenS = obj["listen_s"] as? Double ?? 8
+      listener.receive(obj, afterPlayback: { [weak self] in
+        guard let self else { return false }
+        return await self.waitForPlayback(
+          id: awaitedPlaybackID, timeout: listenS + 10)
+      }, send: { [weak self] json in
+        guard let self else { return }
+        guard self.generation == connectionGeneration else {
+          print("dropping answer from stale connection generation \(connectionGeneration)")
+          return
+        }
+        self.sendRaw(json)
+      })
+    }
+  }
+
+  private func playbackStarted(_ utterance: AVSpeechUtterance) {
+    let id = ObjectIdentifier(utterance)
+    speechUtterances[id] = utterance
+    playbackIDs.append(id)
+  }
+
+  private func playbackStarted(_ player: AVAudioPlayer) {
+    let id = ObjectIdentifier(player)
+    audioPlayers[id] = player
+    playbackIDs.append(id)
+  }
+
+  private func playbackFinished(_ utterance: AVSpeechUtterance) {
+    playbackFinished(id: ObjectIdentifier(utterance))
+  }
+
+  private func playbackFinished(_ player: AVAudioPlayer) {
+    playbackFinished(id: ObjectIdentifier(player))
+  }
+
+  private func playbackFinished(id: ObjectIdentifier) {
+    speechUtterances[id] = nil
+    audioPlayers[id] = nil
+    playbackIDs.removeAll { $0 == id }
+  }
+
+  private func waitForPlayback(id: ObjectIdentifier?, timeout: TimeInterval) async -> Bool {
+    guard let id else {
+      try? await Task.sleep(for: .milliseconds(300))
+      return !Task.isCancelled
+    }
+    let deadline = Date().addingTimeInterval(timeout)
+    while playbackIDs.contains(id) && Date() < deadline {
+      try? await Task.sleep(for: .milliseconds(50))
+      if Task.isCancelled { return false }
+    }
+    return !playbackIDs.contains(id)
   }
 
   /// Play pre-rendered audio pushed by the Mac (A18, wire.audio_message).
@@ -440,9 +536,15 @@ final class MacLink {
       print("audio session (non-fatal): \(error)")
     }
     do {
-      player = try AVAudioPlayer(data: data)
-      player?.prepareToPlay()
-      player?.play()
+      let player = try AVAudioPlayer(data: data)
+      player.delegate = audioDelegate
+      player.prepareToPlay()
+      playbackStarted(player)
+      guard player.play() else {
+        playbackFinished(player)
+        status = "audio playback failed"
+        return
+      }
       spokenCount += 1
       status = "played #\(spokenCount) · \(data.count / 1024) KB mp3"
     } catch {
@@ -474,6 +576,7 @@ final class MacLink {
     let utterance = AVSpeechUtterance(string: text)
     utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
     utterance.rate = 0.48  // matches the validated speakTest()
+    playbackStarted(utterance)
     synth.speak(utterance)
     spokenCount += 1
     status = "spoke #\(spokenCount): \(text.prefix(28))"

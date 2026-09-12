@@ -10,11 +10,18 @@ export type FoodType = "vegetables" | "fruit" | "grains" | "beans_legumes" | "fi
 export type Drink = "none" | "water" | "coffee" | "tea" | "energy_drink" | "soda" | "alcohol" | "juice" | "smoothie" | "milk" | "sports_drink" | "boba" | "beer" | "wine" | "cocktail" | "unknown";
 export interface TickAI { as_of: number; age_ms: number; scene: string; activity: string; food_present: boolean; food_type: string; caffeine_visible: boolean; alcohol_visible: boolean; screen_present: boolean; vegetation_visible: boolean; people_present: boolean; people_interacting?: boolean; direct_sunlight_visible?: boolean; outdoor_visible?: boolean; smoking_or_vaping_visible?: boolean; medication_visible?: boolean; caption?: string; objects?: string[]; drink?: Drink; conf: number }
 export interface Tick { v: number; tick_id: string; t: number; seq: number; sensor: Sensor; device?: Device; ai?: TickAI; frame_ref?: string }
+export type AnswerKind = "yes_no" | "count" | "free";
+export type AnswerFills = "confirmed" | "count" | "food_type" | "note";
 export type DecisionAction =
   | { type: "annotate"; line: string }
   | { type: "log_insight"; category: string; text: string }
   | { type: "watch"; after_s: number; reason: string }
   | { type: "speak"; text: string; urgency: "low" | "normal" | "high" }
+  /** A question for the wearer (docs/ASK_DESIGN.md §5). The reasoner proposes
+   *  `text`/`answer_kind`/`fills`/`reason`; the QuestionManager stamps
+   *  `question_id` and `outcome` ("sent" | "suppressed:<reason>") onto the row
+   *  it stores, so a decision card can say what actually happened to the ask. */
+  | { type: "ask"; text: string; answer_kind?: AnswerKind; fills?: AnswerFills; reason?: string; question_id?: string | null; outcome?: string | null }
   | { type: "nothing" };
 export interface Decision { id: string; t: number; trigger: string; trigger_tick_id: string; episode_id: string | null; interpretation: string; confidence: number; actions: DecisionAction[]; spoke: boolean; dropped: boolean; drop_reason: string | null; latency_ms: number; model: string }
 export type CaptureStats = Record<string, unknown> & {
@@ -70,3 +77,41 @@ export interface Recap {
   generated_at: number;
   model: string;
 }
+
+// --- Ask / answer (GET /api/questions, POST /api/answer, POST /api/ask) ---
+/** What `QuestionManager` made of the transcript. Every field is optional: the
+ *  backend stores `{}` for a question nobody answered, and only fills the keys
+ *  the answer actually settled. */
+export interface ParsedAnswer {
+  understood?: boolean | null;
+  confirmed?: boolean | null;
+  count?: number | null;
+  food_type?: string | null;
+  note?: string | null;
+  followup?: string | null;
+}
+export type QuestionStatus = "open" | "answered" | "expired" | "suppressed";
+/** One `pending_questions` row (docs/API.md "Ask / answer"). `suppressed_reason`
+ *  names the guard that said no: `ask_unsupported`, `no_transport`, `one_open`,
+ *  `same_episode`, `ask_min_gap`, `ask_max_per_hour`, `speech_gap`, `send_failed`. */
+export interface Question {
+  id: string;
+  created_t: number;
+  expires_t: number | null;
+  decision_id: string | null;
+  episode_id: string | null;
+  question: string;
+  answer_kind: AnswerKind;
+  fills: AnswerFills;
+  status: QuestionStatus;
+  answer_text: string | null;
+  answer_t: number | null;
+  heard: boolean | null;
+  parsed: ParsedAnswer | null;
+  followup_of: string | null;
+  sent_t: number | null;
+  suppressed_reason: string | null;
+}
+export interface AnswerResult { question_id: string; accepted: boolean }
+/** `question_id` is null when a guard suppressed the ask; `suppressed_reason` says which. */
+export interface AskResult { question_id: string | null; suppressed_reason: string | null }

@@ -25,6 +25,7 @@ import asyncio
 import logging
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -96,6 +97,35 @@ class GlassesLink:
         self._event = asyncio.Event()
         self.clients: set[WebSocket] = set()
 
+        # What each connected phone said it could do in its `hello` (ASK_DESIGN
+        # §8.7), keyed by `id(websocket)` because a WebSocket is not reliably
+        # hashable across Starlette versions and the key only has to outlive the
+        # socket itself. Cleared on disconnect: capabilities describe a
+        # connection, not a phone, and a stale "ask" here would have the Mac
+        # speak a question into a socket that closed.
+        self.caps: dict[int, set[str]] = {}
+
+        # Connect order, keyed the same way. `pick` prefers the newest socket:
+        # when a phone reconnects without its old socket having been reaped yet,
+        # the live one is the one that just said hello. A socket registered
+        # without going through `add_client` (a test dropping one straight into
+        # `clients`) sorts as oldest rather than being invisible.
+        self._order: dict[int, int] = {}
+        self._order_seq = 0
+
+        # Which socket a sent question actually went to, question_id -> id(websocket)
+        # (ASK_DESIGN §8.2, §8.7). `pick` chooses one socket for the whole exchange,
+        # but with two phones connected any of them can still send an `answer` with
+        # that question's id — this is what lets `_handle_answer` tell the one that
+        # was actually asked from a second or stale one that was not. Recorded in
+        # `send_to` when the outgoing message is an `ask`, popped once the question
+        # is resolved.
+        self._question_socket: dict[str, int] = {}
+
+        #: Set by the bridge to `QuestionManager.on_answer` (ASK_DESIGN §8.11).
+        #: Called synchronously with (question_id, text, heard, mac_recv_t).
+        self.on_answer: Callable[[str, str, bool, float], None] | None = None
+
         # Health counters. `dropped` is the interesting one — it is invariant 2 doing
         # its job, and a nonzero value under a 1 Hz phone means T0 is falling behind.
         self.n_received = 0
@@ -106,6 +136,7 @@ class GlassesLink:
         self.n_clock_fallback = 0
         self.n_pings = 0
         self.n_idle_closes = 0
+        self.n_answers = 0
         self.last_recv_t: float | None = None
         # When the most recent phone connected. A socket that only pings and never
         # sends a frame is "connected" but not streaming; health needs to know how long.
@@ -158,7 +189,75 @@ class GlassesLink:
             except (TimeoutError, asyncio.TimeoutError):
                 return None
 
+    # --- capabilities ----------------------------------------------------------
+
+    def add_client(self, websocket: Any) -> None:
+        """Register a freshly accepted socket, newest-last."""
+        self.clients.add(websocket)
+        self._order_seq += 1
+        self._order[id(websocket)] = self._order_seq
+
+    def drop_client(self, websocket: Any) -> None:
+        """Forget a socket and everything recorded about that connection."""
+        self.clients.discard(websocket)
+        self.caps.pop(id(websocket), None)
+        self._order.pop(id(websocket), None)
+
+    def pick(self, cap: str | None = None) -> Any | None:
+        """One connected socket that advertises `cap`, or None.
+
+        The ask path needs a *connection*, not a broadcast: the audio, the `ask`
+        and the answer that comes back are one exchange, and splitting them
+        across two phones would open a microphone on a device that never heard
+        the question. So the caller picks once, up front, and sends everything
+        to what it picked.
+
+        Newest wins. Two live sockets means a phone reconnected and the old one
+        has not been reaped yet; the one that just said hello is the one holding
+        the wearer's ears. `cap=None` means any connected socket.
+        """
+        best: Any | None = None
+        best_order = -1
+        for ws in self.clients:
+            if cap is not None and cap not in self.caps.get(id(ws), ()):
+                continue
+            order = self._order.get(id(ws), 0)
+            if best is None or order > best_order:
+                best, best_order = ws, order
+        return best
+
+    def supports(self, cap: str) -> bool:
+        """Does any phone on this link advertise `cap`?
+
+        "Any", not "all", because there is one phone in practice. This is the
+        admission question ("could we ask at all?"); `pick` is the delivery one
+        ("which socket gets this exchange?"), and they must agree — hence one
+        implementation.
+        """
+        return self.pick(cap) is not None
+
     # --- Mac -> phone (A16/A17 use this) ---------------------------------------
+
+    async def send_to(self, websocket: Any, message: str) -> bool:
+        """Push one `wire` message to one socket. True iff it went out.
+
+        The single-socket counterpart of `send_text`, with the same rule: a send
+        failure drops the connection and is reported, never raised. A socket
+        that just failed is a socket that is gone, so it is discarded here
+        rather than left to be picked again for the next half of the exchange.
+        """
+        try:
+            await websocket.send_text(message)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("ingest: send to phone failed: %s: %s", type(exc).__name__, exc)
+            self.drop_client(websocket)
+            return False
+        sent = wire.decode(message)
+        if sent.get("type") == wire.ASK:
+            question_id = sent.get("question_id")
+            if isinstance(question_id, str) and question_id:
+                self._question_socket[question_id] = id(websocket)
+        return True
 
     async def send_text(self, message: str) -> int:
         """Push a `wire` message to every connected phone. Returns how many got it.
@@ -173,7 +272,7 @@ class GlassesLink:
                 sent += 1
             except Exception as exc:  # noqa: BLE001
                 log.warning("ingest: send to phone failed: %s: %s", type(exc).__name__, exc)
-                self.clients.discard(ws)
+                self.drop_client(ws)
         return sent
 
     def stats(self) -> dict[str, Any]:
@@ -184,6 +283,7 @@ class GlassesLink:
             "disconnects": self.n_disconnects,
             "pings": self.n_pings,
             "n_idle_closes": self.n_idle_closes,
+            "answers": self.n_answers,
             "received": self.n_received,
             "malformed": self.n_malformed,
             "clock_fallback": self.n_clock_fallback,
@@ -193,6 +293,7 @@ class GlassesLink:
             "connected_for_s": None if self.last_connect_t is None or not self.clients
             else round(time.time() - self.last_connect_t, 1),
             "latest_bytes": None if latest is None else len(latest.jpeg),
+            "caps": sorted({c for ws in self.clients for c in self.caps.get(id(ws), ())}),
         }
 
 
@@ -289,7 +390,7 @@ async def glasses_ws(websocket: WebSocket) -> None:
     """Receive capture packets from the iOS bridge (A14) until the phone goes away."""
     link = link_of(websocket.app)
     await websocket.accept()
-    link.clients.add(websocket)
+    link.add_client(websocket)
     link.n_connects += 1
     link.last_connect_t = time.time()
     peer = websocket.client.host if websocket.client else "?"
@@ -317,7 +418,7 @@ async def glasses_ws(websocket: WebSocket) -> None:
             if raw is None:
                 continue
             try:
-                _handle(link, raw)
+                _handle(link, raw, websocket)
             except Exception as exc:  # noqa: BLE001
                 # One bad packet must never cost the connection.
                 link.n_malformed += 1
@@ -327,7 +428,7 @@ async def glasses_ws(websocket: WebSocket) -> None:
     except Exception as exc:  # noqa: BLE001
         log.warning("ingest: socket error from %s: %s: %s", peer, type(exc).__name__, exc)
     finally:
-        link.clients.discard(websocket)
+        link.drop_client(websocket)
         link.n_disconnects += 1
         log.info(
             "ingest: phone disconnected from %s (%d received, %d malformed, %d dropped)",
@@ -338,8 +439,25 @@ async def glasses_ws(websocket: WebSocket) -> None:
         )
 
 
-def _handle(link: GlassesLink, raw: str | bytes) -> None:
-    """Dispatch one inbound message. Synchronous and bounded — invariant 1."""
+def _as_caps(value: Any) -> set[str]:
+    """The `caps` list out of a `hello`, strings only (ASK_DESIGN §8.7).
+
+    Anything that is not a list of strings contributes nothing. A phone
+    advertising garbage is a phone whose capabilities are unknown, and unknown
+    means "do not send it a question" — never an exception on the connect path.
+    """
+    if not isinstance(value, list):
+        return set()
+    return {item for item in value[:32] if isinstance(item, str) and item}
+
+
+def _handle(link: GlassesLink, raw: str | bytes, websocket: Any = None) -> None:
+    """Dispatch one inbound message. Synchronous and bounded — invariant 1.
+
+    `websocket` is the connection the message arrived on, needed only to record
+    per-connection capabilities; it is optional so the dispatcher stays callable
+    with nothing but a link.
+    """
     msg = wire.decode(raw)
     if not msg:
         link.n_malformed += 1
@@ -357,7 +475,16 @@ def _handle(link: GlassesLink, raw: str | bytes) -> None:
         link.last_recv_t = packet.recv_t
         link.put(packet)
     elif mtype == wire.HELLO:
-        log.info("ingest: hello from phone: %s", {k: v for k, v in msg.items() if k != "image"})
+        caps = _as_caps(msg.get("caps"))
+        if websocket is not None:
+            link.caps[id(websocket)] = caps
+        log.info(
+            "ingest: hello from phone: %s (caps: %s)",
+            {k: v for k, v in msg.items() if k != "image"},
+            ",".join(sorted(caps)) or "none",
+        )
+    elif mtype == wire.ANSWER:
+        _handle_answer(link, msg, websocket)
     elif mtype in (wire.PONG, wire.ECHO):
         log.info("ingest: %s %s", mtype, msg.get("text", ""))
     elif mtype == wire.PING:
@@ -367,6 +494,90 @@ def _handle(link: GlassesLink, raw: str | bytes) -> None:
         # Unknown types are forward compatibility, not errors — the Swift side may ship
         # a new message before this one knows about it.
         log.info("ingest: ignoring message of type %r", mtype)
+
+
+def _handle_answer(link: GlassesLink, msg: dict[str, Any], websocket: Any = None) -> None:
+    """One `answer` from the phone: validate, count, hand to the manager.
+
+    The timestamp handed on is this Mac's receipt time, not the phone's `t`
+    (ASK_DESIGN §8.4). The phone's clock is not authoritative, and an answer
+    labelled a minute ago would be compared against an expiry computed on the
+    Mac's clock and could resolve as "too late" for a wearer who replied at once.
+
+    `websocket` is the connection this answer arrived on. With one phone
+    connected it is always the one the question was sent to; with two, a second
+    or stale connection could otherwise finalize a question it never received
+    (ASK_DESIGN §8.2 picks one socket for the exchange, but `claim_answer`
+    accepts by question id alone). See the `_question_socket` check below.
+
+    The callback runs synchronously — `QuestionManager.on_answer` claims the row
+    and schedules the parse, both bounded — and any exception it raises is
+    swallowed here. A bug downstream must not cost the capture socket; the
+    glasses reconnecting is expensive (hardware_software.md §24).
+    """
+    question_id = msg.get("question_id")
+    if not isinstance(question_id, str) or not question_id:
+        link.n_malformed += 1
+        log.warning("ingest: answer with no usable question_id: %r", question_id)
+        return
+    text = msg.get("text", "")
+    if not isinstance(text, str):
+        link.n_malformed += 1
+        log.warning("ingest: answer %s carried a non-string transcript", question_id)
+        return
+    heard = msg.get("heard", True)
+    if not isinstance(heard, bool):
+        # Absent means True — an older phone build sends no `heard` at all and a
+        # transcript is evidence enough that the mic worked. *Present but not a
+        # bool* is a different animal: the phone tried to say something about the
+        # microphone and this Mac cannot tell what. Coercing it to True would
+        # feed an empty transcript to the parser as "the wearer said nothing",
+        # which §8.8 turns into a real answer. Malformed, and no callback.
+        link.n_malformed += 1
+        log.warning(
+            "ingest: answer %s carried a non-boolean `heard`: %r", question_id, heard
+        )
+        return
+
+    sent_to = link._question_socket.get(question_id)
+    if (
+        sent_to is not None
+        and websocket is not None
+        and id(websocket) != sent_to
+        and any(id(ws) == sent_to for ws in link.clients)
+    ):
+        # The socket this question was actually sent to is still connected, so
+        # this is a second (or stale, not-yet-reaped) client trying to finalize
+        # a question it was never asked — never let it win a race with the one
+        # that was. If that original socket has since disconnected, this is
+        # instead the phone finishing an exchange it started before a drop —
+        # "glasses off and on" (XCODE_ASK.md §7) — and must go through as before.
+        log.info(
+            "ingest: ignoring answer to %s from a socket it was never sent to",
+            question_id,
+        )
+        return
+    link._question_socket.pop(question_id, None)
+
+    link.n_answers += 1
+    recv_t = time.time()
+    log.info(
+        "ingest: answer to %s: heard=%s %r (phone t=%s)",
+        question_id, heard, text[:80], msg.get("t"),
+    )
+    log.debug("ingest: answer %s phone clock %s vs mac %.3f", question_id, msg.get("t"), recv_t)
+
+    callback = link.on_answer
+    if callback is None:
+        log.warning("ingest: no answer handler bound; dropping answer to %s", question_id)
+        return
+    try:
+        callback(question_id, text, heard, recv_t)
+    except Exception as exc:  # noqa: BLE001
+        log.warning(
+            "ingest: answer handler failed for %s: %s: %s",
+            question_id, type(exc).__name__, exc,
+        )
 
 
 @router.get("/ingest/stats")

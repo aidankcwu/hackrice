@@ -100,6 +100,20 @@ class Timings:
     speech_min_gap: float
     speech_max_per_hour: int
 
+    # Asking the wearer (docs/ASK_DESIGN.md §4) --------------------------
+    #: Seconds after an ask fires before another root question may.
+    ask_min_gap: float
+    #: Hourly cap on questions, counted like utterances.
+    ask_max_per_hour: int
+    #: Answer window the phone is told to open, in seconds.
+    ask_listen_s: float
+    #: Seconds after the ask went out before an unanswered row expires.
+    #: Measured from ``sent_t``, not from the escalation, and sized for
+    #: synthesis (<= 8 s) + playback (~5 s) + ``ask_listen_s`` + slack (§8.4).
+    ask_expire_s: float
+    #: Follow-up questions allowed per root question (§8.5).
+    ask_followup_max: int
+
     # T1 reasoner (SPEC §5.4: drop on contention, never queue) -----------
     t1_max_concurrent: int
 
@@ -156,6 +170,11 @@ class Timings:
             biometric_cooldown=1800.0,
             speech_min_gap=600.0,
             speech_max_per_hour=6,
+            ask_min_gap=300.0,
+            ask_max_per_hour=6,
+            ask_listen_s=8.0,
+            ask_expire_s=25.0,
+            ask_followup_max=1,
             t1_max_concurrent=1,
             watch_default_after_s=900.0,
             tick_interval_s=tick_interval_s,
@@ -180,6 +199,11 @@ class Timings:
             biometric_cooldown=60.0,
             speech_min_gap=20.0,
             speech_max_per_hour=20,
+            ask_min_gap=30.0,
+            ask_max_per_hour=10,
+            ask_listen_s=8.0,
+            ask_expire_s=25.0,
+            ask_followup_max=1,
             t1_max_concurrent=1,
             watch_default_after_s=60.0,
             tick_interval_s=tick_interval_s,

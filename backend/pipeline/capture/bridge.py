@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Literal
 
 from dotenv import load_dotenv
+from longevity import wire
 from longevity.emit import TickBus as T0TickBus
 from longevity.loop import T0Loop
 from longevity.ring import FrameRing
@@ -18,7 +19,8 @@ from longevity.vlm import T0Tagger, build_client
 
 from ..bus import TickBus
 from ..config import Settings
-from ..models import Tick
+from ..models import PendingQuestion, Tick
+from .speak import current_speech, speech_for
 
 log = logging.getLogger(__name__)
 
@@ -43,6 +45,12 @@ class LongevityCapture:
         # as GEMINI_API_KEY. T0's client reads os.environ when it is constructed.
         load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
+        self.settings = settings
+        #: How long the phone is told to keep the microphone open (§4). The
+        #: bridge is handed the same number ``make_speak_fn`` gets its Settings
+        #: from, so the window the phone opens and the deadline the manager
+        #: computes come from one config object.
+        self.ask_listen_s = settings.timings.ask_listen_s
         self.ring = FrameRing(ttl_s=settings.frame_ttl_s)
         self.link = GlassesLink()
         # The VLM budget follows the tick interval: a call that would return at
@@ -108,6 +116,55 @@ class LongevityCapture:
                 await task
         await self.source.aclose()
 
+    # --- ask / answer (ASK_DESIGN §8.2) ----------------------------------------
+
+    def supports_ask(self) -> bool:
+        """Did the connected phone advertise that it can open the mic (§8.7)?"""
+        return self.link.supports("ask")
+
+    async def send_question(self, q: PendingQuestion) -> bool:
+        """Speak one question, then tell the phone to listen. True iff both landed.
+
+        One coroutine, in order, because the order is the contract: the phone must
+        not open the microphone until the audio it is answering has finished
+        playing, and the only thing that guarantees the `ask` arrives after the
+        audio is sending it after the audio. Synthesis is awaited here rather than
+        fired like `speak` — a question whose audio never rendered must not leave
+        an open row waiting for an answer to a sentence nobody heard.
+
+        One *connection*, not a broadcast: the socket that carries the audio is
+        pinned up front and carries the `ask` too. Broadcasting would let the two
+        halves land on different phones when one reconnects mid-exchange — the
+        mic opening on a device that never heard the question, and the row left
+        waiting for an answer from a wearer who was never asked (§8.7).
+
+        Returns False if the pick found nothing or either send failed on the
+        pinned socket; the manager then finalises the row `suppressed` with
+        `send_failed` (§8.2). Failure is reported, never raised: this runs as a
+        task the manager owns.
+        """
+        ws = self.link.pick("ask")
+        if ws is None:
+            log.warning("question %s: no connected phone can open the mic", q.id)
+            return False
+        spoken = await speech_for(self.link, self.settings).send_to(
+            ws, q.question, "normal"
+        )
+        if not spoken:
+            log.warning("question %s: nobody heard the audio; not opening the mic", q.id)
+            return False
+        sent = await self.link.send_to(
+            ws, wire.ask_message(q.id, self.ask_listen_s, q.answer_kind, q.question)
+        )
+        if not sent:
+            log.warning("question %s: audio went out but the ask did not", q.id)
+            return False
+        log.info(
+            "question %s sent: %r (%s, listening %.1fs)",
+            q.id, q.question, q.answer_kind, self.ask_listen_s,
+        )
+        return True
+
     def stats(self) -> dict[str, object]:
         return {
             "loop": self.loop.stats.line(),
@@ -117,4 +174,11 @@ class LongevityCapture:
         }
 
     def speech_stats(self) -> dict[str, object]:
-        return self._speech_stats.as_dict() if self._speech_stats is not None else {"mode": "none"}
+        stats = self._speech_stats
+        if stats is None:
+            # `send_question` may have built the synthesiser before wiring handed
+            # one over (or instead of it, in a test); its counters are still the
+            # honest answer to "did anything reach the glasses".
+            speech = current_speech(self.link)
+            stats = speech.stats if speech is not None else None
+        return stats.as_dict() if stats is not None else {"mode": "none"}
