@@ -222,11 +222,28 @@ def daily_to_payload(data_type: str, point: dict) -> dict:
     return {"device": "fitbit", "samples": [], "daily": [_daily(day, metric, value, unit, _model(point))] if day and value is not None else []}
 
 
+def _parse_offset(offset: str | None) -> timedelta | None:
+    """Google sends utcOffset as a Duration string ("-18000s", "3600.5s");
+    also accept "+HH:MM" / "-HHMM" for safety. None when unparseable."""
+    if not offset:
+        return None
+    text = offset.strip()
+    try:
+        if text.endswith("s"):
+            return timedelta(seconds=float(text[:-1]))
+        sign = -1 if text.startswith("-") else 1
+        digits = text.lstrip("+-").replace(":", "")
+        hh, mm = int(digits[:2]), int(digits[2:4] or 0)
+        return sign * timedelta(hours=hh, minutes=mm)
+    except (ValueError, IndexError):
+        return None
+
+
 def _offset_dt(text: str, offset: str | None) -> datetime:
     dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    if offset:
-        sign = -1 if offset.startswith("-") else 1; hh, mm = map(int, offset[1:].split(":"))
-        dt = dt.astimezone(timezone(sign * timedelta(hours=hh, minutes=mm)))
+    delta = _parse_offset(offset)
+    if delta is not None:
+        dt = dt.astimezone(timezone(delta))
     return dt
 def sleep_to_payload(points: list[dict] | dict) -> dict:
     if isinstance(points, dict): points = [points]
@@ -320,7 +337,12 @@ class GoogleHealthSync:
             sleeps = _since(await pull("sleep", days_start), "sleep")
             exercises = _since(await pull("exercise", days_start), "exercise")
             # Longest sleep over the two-night window; exercises retain the last item per day.
-            payloads.extend((sleep_to_payload(sleeps), exercise_to_payload(exercises)))
+            for label, fn, arg in (("sleep", sleep_to_payload, sleeps), ("exercise", exercise_to_payload, exercises)):
+                try:
+                    payloads.append(fn(arg))
+                except Exception as exc:  # noqa: BLE001
+                    failures.append(f"{label} convert: {str(exc)[:160]}")
+                    log.warning("google health: %s conversion failed: %s", label, str(exc)[:200])
             result = merge(payloads); sent = self.sink(result)
             if inspect.isawaitable(sent): await sent
             self.last_sync_t, self.connected = now.timestamp(), True
