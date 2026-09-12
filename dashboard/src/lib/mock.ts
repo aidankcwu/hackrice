@@ -1,4 +1,4 @@
-import type { Biometrics, BiometricsMulti, Decision, DecisionAction, Episode, PendingCheck, Scores, SeededDay, Status, Tick, TodaySummary, WearablesStatus } from "./types";
+import type { BiometricOrigin, Biometrics, BiometricsMulti, Decision, DecisionAction, Episode, PendingCheck, Scores, SeededDay, SeededMetricRow, Status, Tick, TodaySummary, WearablesStatus } from "./types";
 const now = Date.now() / 1000;
 const scenes = ["office","office","restaurant","restaurant","street","park","park","gym"];
 export const mockTicks: Tick[] = Array.from({length:30},(_,i) => { const scene=scenes[Math.floor(i/4)%scenes.length]; const missing=i%5===0; const caption=`person in ${scene}`; return {v:1,tick_id:`t_${1740+i}`,t:now-29+i,seq:1740+i,sensor:{lux_proxy:scene==="park"?510:180,cct:4100,hist_spread:.62,frame_delta:.08+(i%4)*.04,flow_mag:.04,sharpness:88,phash:`e3a91c04b7d2${i.toString().padStart(4,"0")}`},device:{accel_rms:.04,gps_speed:scene==="street"?1.2:.2},...(!missing&&{ai:{as_of:now-29+i-.3,age_ms:300,scene,activity:scene==="gym"?"exercising":"seated",food_present:scene==="restaurant",food_type:scene==="restaurant"?"mixed":"none",caffeine_visible:i===12,alcohol_visible:i===15,screen_present:scene==="office",vegetation_visible:scene==="park",people_present:["restaurant","park"].includes(scene),caption,objects:["person",scene==="office"?"laptop":"chair"],drink:i===12?"coffee":i===15?"alcohol":"none",conf:.86}}),frame_ref:`f_${1740+i}`}; });
@@ -38,35 +38,64 @@ const seededSeed: Array<[string,number,number,number,number,string,number,number
  ];
 export const mockSeeded: SeededDay[] = seededSeed.map(([date,sleep_h,hrv_ratio,steps,sri,caffeine_last,recovery,resting_hr,run_km,journal])=>({date,sleep_h,hrv_ratio,steps,sri,caffeine_last:`bed ${caffeine_last}`,recovery,resting_hr,run_km,journal:journal||undefined,sources:seededSources}));
 
+/** `GET /api/seeded?days=2`, long format — what `api.seededRows` reads.
+ *
+ * Shaped like a real connected Fitbit: the day-scoped numbers land under
+ * today, and last night's sleep block lands under **yesterday**, which is the
+ * fallback the wearable strip has to cover. The non-fitbit rows are there on
+ * purpose — the strip must refuse to call an `apple_watch` row live while the
+ * only connected device is a Fitbit.
+ */
+const isoDay = (back: number) => { const d = new Date((now - back * 86400) * 1000);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
+const fitbitToday: Array<[string, number, string]> = [
+  ["hrv_rmssd_ms",41,"ms"],["spo2",96,"%"],["respiratory_rate",15.4,"brpm"],["skin_temp_c",33.3,"degC"],["resting_hr",58,"bpm"],
+];
+const fitbitLastNight: Array<[string, number, string]> = [
+  ...fitbitToday,
+  ["sleep_hours",6.4,"h"],["deep_min",54,"min"],["rem_min",81,"min"],["bed_time",23.75,"h"],["wake_time",6.4,"h"],
+];
+export const mockSeededRows: SeededMetricRow[] = [
+  ...fitbitToday.map(([metric,value,unit])=>({day:isoDay(0),metric,value,unit,source:"fitbit"})),
+  ...fitbitLastNight.map(([metric,value,unit])=>({day:isoDay(1),metric,value,unit,source:"fitbit"})),
+  {day:isoDay(0),metric:"steps",value:8840,unit:"count",source:"apple_watch"},
+  {day:isoDay(0),metric:"sleep_regularity_sri",value:82,unit:"",source:"oura"},
+  {day:isoDay(1),metric:"steps",value:8420,unit:"count",source:"apple_watch"},
+];
+
 // A seated HR spike planted mid-window, the way the demo day is seeded (SPEC §14.3).
-export const mockBiometrics = (): Biometrics => ({metric:"heart_rate",source:"apple_watch",points:Array.from({length:120},(_,i)=>{const t=now-600+i*5,spike=i>78&&i<104;return [t,Math.round(spike?96+Math.sin(i/3)*6+(i-78)*0.7:63+Math.sin(i/7)*4)] as [number,number];})});
+export const mockBiometrics = (): Biometrics => ({metric:"heart_rate",source:"fitbit",origin:"live",points:Array.from({length:120},(_,i)=>{const t=now-600+i*5,spike=i>78&&i<104;return [t,Math.round(spike?96+Math.sin(i/3)*6+(i-78)*0.7:63+Math.sin(i/7)*4)] as [number,number];})});
 // The rest of the SPEC §14.1 metric set, on the same 10-minute window as the
 // HR strip, so mock mode renders every tile rather than a row of dashes.
 const ramp = (n: number, step: number, at: (i: number) => number): [number, number][] =>
   Array.from({length: n}, (_, i) => [now - (n - 1 - i) * step, at(i)] as [number, number]);
-const MOCK_SERIES: Record<string, {source: string; at: (i: number) => number; n: number; step: number}> = {
+// `live: true` is what a connected Fitbit streams intraday. The rest stay
+// seeded so mock mode walks every branch of the strip's tile resolution:
+// intraday live (steps), live daily row (HRV/SpO2/RR/temp), and
+// "the device does not measure this at all" (strain, sound).
+const MOCK_SERIES: Record<string, {source: string; at: (i: number) => number; n: number; step: number; live?: boolean}> = {
   hrv_rmssd: {source:"whoop", n:11, step:60, at:i=>Math.round(52-11*Math.min(1,Math.max(0,(i-4)/3))+Math.sin(i)*1.5)},
   spo2: {source:"apple_watch", n:11, step:60, at:i=>i===3?95:97+(i%3===1?1:0)},
   respiratory_rate: {source:"apple_watch", n:11, step:60, at:i=>i>5?17:14},
   wrist_temp_dev: {source:"whoop", n:11, step:60, at:i=>Math.round((0.12+0.05*Math.sin(i/3))*100)/100},
   strain: {source:"whoop", n:11, step:60, at:i=>Math.round((6.0+i*0.04)*10)/10},
-  steps_delta: {source:"apple_watch", n:11, step:60, at:i=>i>7?88:0},
+  steps_delta: {source:"fitbit", n:11, step:60, at:i=>i>7?88:0, live:true},
   env_sound_db: {source:"apple_watch", n:11, step:60, at:i=>i>4&&i<9?62:45},
 };
 export const mockBiometricsMulti = (metrics: string[]): BiometricsMulti => ({
   series: Object.fromEntries(metrics.map(metric => {
-    if (metric === "heart_rate") { const hr = mockBiometrics(); return [metric, {source:hr.source, origin:"seed" as const, points:hr.points}]; }
+    if (metric === "heart_rate") { const hr = mockBiometrics(); return [metric, {source:hr.source, origin:"live" as const, points:hr.points}]; }
     const spec = MOCK_SERIES[metric];
     return [metric, spec
-      ? {source:spec.source, origin:"seed" as const, points:ramp(spec.n, spec.step, spec.at)}
-      : {source:"", origin:"seed" as const, points:[] as [number, number][]}];
+      ? {source:spec.source, origin:(spec.live?"live":"seed") as BiometricOrigin, points:ramp(spec.n, spec.step, spec.at)}
+      : {source:"", origin:"seed" as BiometricOrigin, points:[] as [number, number][]}];
   })),
 });
 export const mockWearablesStatus: WearablesStatus = {
-  metrics: [["heart_rate","apple_watch"],...Object.entries(MOCK_SERIES).map(([m,s])=>[m,s.source] as [string,string])]
-    .map(([metric, source])=>({metric,source,origin:"seed" as const,count:120,last_t:now})),
-  live_connected: false,
-  live_devices: [],
+  metrics: ([["heart_rate","fitbit",true],...Object.entries(MOCK_SERIES).map(([m,spec])=>[m,spec.source,!!spec.live] as [string,string,boolean])] as Array<[string,string,boolean]>)
+    .map(([metric, source, isLive])=>({metric,source,origin:(isLive?"live":"seed") as BiometricOrigin,count:120,last_t:now})),
+  live_connected: true,
+  live_devices: ["fitbit"],
   catalogue: {},
 };
 export const mockStatus: Status={demo_mode:true,source:"glasses",uptime_s:742,tick_count:742,ai_coverage:.77,t1_busy:false,dropped_escalations:1,last_tick_t:now,tick_interval_s:1.5,capture:{
