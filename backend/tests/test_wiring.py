@@ -1,4 +1,8 @@
 import asyncio
+import io
+import time
+
+from PIL import Image
 
 from pipeline.api.wiring import build_pipeline
 from pipeline.config import Settings
@@ -40,6 +44,29 @@ async def test_pipeline_wires_all_components(tmp_path):
         status = pipeline.status()
         assert expected <= status.keys()
         assert status["tick_interval_s"] == 1.5
+    finally:
+        await pipeline.stop()
+
+
+async def test_pipeline_wires_replay_capture_end_to_end(tmp_path):
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    base = int(time.time() * 1000)
+    for i in range(6):
+        buf = io.BytesIO()
+        Image.new("RGB", (64, 48), (i * 30, 60, 100)).save(buf, "JPEG")
+        (corpus / f"frame_{base + i * 1000}.jpg").write_bytes(buf.getvalue())
+
+    pipeline = build_pipeline(
+        Settings(db_path=tmp_path / "replay.db", tick_interval_s=1.0),
+        source="replay", dir=str(corpus), loop=True, vlm="fake",
+        reasoner_mode="fake", speed=50,
+    )
+    await _run_to(pipeline, 20)
+    try:
+        assert pipeline.db.stats()["tick_count"] >= 15
+        assert pipeline.status()["source"] == "replay"
+        assert "capture" in pipeline.status()
     finally:
         await pipeline.stop()
 

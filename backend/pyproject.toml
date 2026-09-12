@@ -5,6 +5,7 @@ description = "Lifestyle tracking pipeline backend (T0 consumer, gate, reasoner,
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "longevity",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "pydantic>=2",
@@ -15,6 +16,9 @@ dependencies = [
     "pillow>=10.3",
     "python-dotenv>=1.0",
 ]
+
+[tool.uv.sources]
+longevity = { path = "..", editable = true }
 
 [dependency-groups]
 dev = [

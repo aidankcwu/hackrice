@@ -1,13 +1,15 @@
 # Backend API and seam contract
 
 Everything the dashboard reads, and the two places Person A's code touches
-Person B's. Paths are relative to the FastAPI service (default `:8000`).
+Person B's. Paths are relative to the integrated FastAPI service (default `:8010`).
 
 ## The seam (SPEC §13.3)
 
-1. **Ticks in.** A's T0 publishes one `pipeline.models.Tick` per second to the
-   in-process `pipeline.bus.TickBus` (`bus.publish(tick)`). Non-blocking; never
-   queues. B's gate, episode builder, and tick store are subscribers.
+1. **Ticks in.** A's T0 publishes dicts to its `longevity.emit.TickBus`. A
+   synchronous callback validates each as a `pipeline.models.Tick` and immediately
+   publishes it to B's in-process `pipeline.bus.TickBus`. Invalid ticks are logged
+   and dropped; the callback never raises into T0. B's gate, episode builder, and
+   tick store are subscribers.
 2. **Frames.** A owns the ring buffer and `GET /frames?refs=f_1,f_2` (JSON
    `{ref: base64_jpeg}`, expired refs omitted, all-expired → 410). B's reasoner
    calls `pipeline.frames.FrameStore.get(refs)` in-process; the HTTP route is
@@ -32,11 +34,11 @@ Agreed details (from plan review):
   from the capture packet. This is what lets `--source sim --speed 10` run
   the whole pipeline faster without desyncing anything.
 - **One FastAPI app.** `pipeline.api.app:create_app()` is the single server.
-  A adds a router (WebSocket ingest, `/frames`) to it; B's `/frames` is
-  simulation-only and is replaced, not duplicated, when A's router mounts.
-- **TickBus is B's choice, not the contract.** The contract is the Tick
-  object. If A prefers to hand B a callback instead, `bus.publish` is that
-  callback.
+  A's WebSocket ingest and `/frames` routers mount first for non-simulation sources;
+  B's later `/frames` route is therefore shadowed and remains simulation-only. The
+  phone connects to `ws://<laptop>:8010/ws/glasses` in this integrated process.
+- **No-key integration test.** `--vlm fake` runs capture and the whole downstream
+  pipeline without a Gemini API key (`--vlm off` emits ticks without AI blocks).
 
 ## Dashboard REST
 

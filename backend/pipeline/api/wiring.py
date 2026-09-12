@@ -9,12 +9,12 @@ import time
 from dataclasses import dataclass
 from typing import Literal
 
-from ..actions.speech import SpeechLimiter, spoken
+from ..actions.speech import SpeechLimiter, default_speak_fn, set_speak_fn, spoken
 from ..bus import TickBus
 from ..config import Settings
 from ..db import Database, day_key
 from ..episodes.builder import EpisodeBuilder
-from ..frames import InMemoryFrameStore
+from ..frames import FrameStore, InMemoryFrameStore
 from ..gate.gate import TriggerGate
 from ..gate.triggers import CallableBiometricFeed, default_triggers
 from ..models import Tick
@@ -48,10 +48,10 @@ class Pipeline:
     """The live objects and lifecycle of one pipeline instance."""
 
     def __init__(self, *, settings: Settings, source_name: str, reasoner_mode: str,
-                 speed: float, db: Database, frame_store: InMemoryFrameStore,
+                 speed: float, db: Database, frame_store: FrameStore,
                  bus: TickBus, scorer: Scorer, speech: SpeechLimiter,
                  reasoner: Reasoner, episodes: EpisodeBuilder, gate: TriggerGate,
-                 source: SimSource) -> None:
+                 source: SimSource | None, capture=None, clock: Clock | None = None) -> None:
         self.settings = settings
         self.source_name = source_name
         self.reasoner_mode = reasoner_mode
@@ -65,10 +65,14 @@ class Pipeline:
         self.episodes = episodes
         self.gate = gate
         self.source = source
-        # SimSource records its start on the wall clock before any ticks exist.
-        self.clock = Clock(wall_start=source.start_t, sim_start_t=source.start_t,
-                           speed=speed)
-        self.biometrics_start_t = source.start_t
+        self.capture = capture
+        # Live capture uses wall time unchanged; simulation scales its own clock.
+        if clock is None:
+            assert source is not None
+            clock = Clock(wall_start=source.start_t, sim_start_t=source.start_t,
+                          speed=speed)
+        self.clock = clock
+        self.biometrics_start_t = clock.sim_start_t
         self.started_at: float | None = None
         self.last_tick: Tick | None = None
         self._tasks: list[asyncio.Task[None]] = []
@@ -84,6 +88,7 @@ class Pipeline:
         downstream_sub = self.bus.subscribe("downstream")
 
         async def pump() -> None:
+            assert self.source is not None
             async for tick in self.source:
                 self.bus.publish(tick)
                 self.frame_store.expire(tick.t)
@@ -118,16 +123,21 @@ class Pipeline:
                                             self.scorer.week_days(today))
 
         self._tasks = [
-            asyncio.create_task(pump(), name="pipeline-pump"),
             asyncio.create_task(downstream(), name="pipeline-downstream"),
             asyncio.create_task(score_periodically(), name="pipeline-scorer"),
         ]
+        if self.capture is not None:
+            await self.capture.start()
+        else:
+            self._tasks.insert(0, asyncio.create_task(pump(), name="pipeline-pump"))
 
     async def stop(self) -> None:
         if not self._tasks:
             return
         self._stopping = True
         self._score_event.set()
+        if self.capture is not None:
+            await self.capture.stop()
         self.bus.close()
         for task in self._tasks:
             task.cancel()
@@ -146,7 +156,7 @@ class Pipeline:
     def status(self) -> dict[str, object]:
         stats = self.db.stats()
         tick_count = stats["tick_count"]
-        return {
+        result: dict[str, object] = {
             "demo_mode": self.settings.demo_mode,
             "source": self.source_name,
             "uptime_s": max(0.0, time.time() - self.started_at)
@@ -164,17 +174,35 @@ class Pipeline:
             "gate": self.gate.stats(),
             "speech_spoken": len(spoken),
         }
+        if self.capture is not None:
+            result["capture"] = self.capture.stats()
+        return result
 
 
-def build_pipeline(settings: Settings, *, source: Literal["sim"],
+def build_pipeline(settings: Settings, *,
+                   source: Literal["sim", "glasses", "webcam", "replay"],
                    reasoner_mode: Literal["openai", "fake"], speed: float,
-                   seed_db: bool = True, scenario: Scenario | None = None) -> Pipeline:
+                   seed_db: bool = True, scenario: Scenario | None = None,
+                   dir: str | None = None, loop: bool = False, camera: int = 0,
+                   vlm: Literal["gemini", "fake", "off"] = "gemini",
+                   flow: str | None = None) -> Pipeline:
     """Build the graph in dependency order without starting any tasks."""
-    if source != "sim":
-        raise ValueError(f"unknown source: {source!r}")
     db = Database(settings.db_path).connect().init_schema()
-    frame_store = InMemoryFrameStore(ttl_s=settings.frame_ttl_s)
     bus = TickBus()
+    capture = None
+    sim_source = None
+    if source == "sim":
+        frame_store: FrameStore = InMemoryFrameStore(ttl_s=settings.frame_ttl_s)
+    else:
+        from ..capture.bridge import LongevityCapture
+        from ..capture.frames import RingFrameStore
+        from ..capture.speak import make_speak_fn
+        capture = LongevityCapture(
+            settings, source=source, our_bus=bus, dir=dir, speed=speed, loop=loop,
+            camera=camera, vlm=vlm, flow=flow,
+        )
+        frame_store = RingFrameStore(capture.ring)
+        set_speak_fn(make_speak_fn(capture.link))
     end_day = day_key(time.time())
     if seed_db:
         seed_database(db, end_day=end_day)
@@ -197,12 +225,20 @@ def build_pipeline(settings: Settings, *, source: Literal["sim"],
     )
     gate = TriggerGate(default_triggers(timings, settings.demo_mode, feed=feed), timings, db,
                        episodes, reasoner.try_escalate, settings.demo_mode, feed=feed)
-    sim_source = SimSource(scenario or DEFAULT_SCENARIO, frame_store, speed=speed,
-                           interval_s=settings.tick_interval_s)
+    if source == "sim":
+        set_speak_fn(default_speak_fn)
+        sim_source = SimSource(scenario or DEFAULT_SCENARIO, frame_store, speed=speed,
+                               interval_s=settings.tick_interval_s)
+        clock = Clock(sim_source.start_t, sim_source.start_t, speed)
+        biometric_start = sim_source.start_t
+    else:
+        now = time.time()
+        clock = Clock(now, now, 1.0)
+        biometric_start = now
     if seed_db:
-        seed_biometric_series(db, sim_source.start_t)
+        seed_biometric_series(db, biometric_start)
     return Pipeline(settings=settings, source_name=source,
                     reasoner_mode=reasoner_mode, speed=speed, db=db,
                     frame_store=frame_store, bus=bus, scorer=scorer, speech=speech,
                     reasoner=reasoner, episodes=episodes, gate=gate,
-                    source=sim_source)
+                    source=sim_source, capture=capture, clock=clock)

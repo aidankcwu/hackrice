@@ -46,7 +46,8 @@ async def tick_store_consumer(sub: Subscription, db: Database) -> None:
 async def run_headless(args: argparse.Namespace, settings: Settings) -> int:
     pipeline = build_pipeline(
         settings, source=args.source, reasoner_mode=args.reasoner,
-        speed=args.speed, seed_db=not args.no_seed,
+        speed=args.speed, seed_db=not args.no_seed, dir=args.dir, loop=args.loop,
+        camera=args.camera, vlm=args.vlm, flow=args.flow,
     )
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -64,7 +65,14 @@ async def run_headless(args: argparse.Namespace, settings: Settings) -> int:
 def build_parser() -> argparse.ArgumentParser:
     defaults = Settings()
     parser = argparse.ArgumentParser(prog="pipeline", description=__doc__)
-    parser.add_argument("--source", choices=["sim"], default="sim")
+    parser.add_argument("--source", choices=["sim", "glasses", "webcam", "replay"],
+                        default="sim")
+    parser.add_argument("--dir", help="frame corpus directory for replay")
+    parser.add_argument("--loop", action="store_true", help="loop a replay corpus")
+    parser.add_argument("--camera", type=int, default=0, help="webcam device index")
+    parser.add_argument("--vlm", choices=["gemini", "fake", "off"], default="gemini",
+                        help="T0 tagger; fake/off need no Gemini key")
+    parser.add_argument("--flow", choices=["numpy", "opencv", "off"], default=None)
     parser.add_argument("--speed", type=float, default=1.0)
     # The capture cadence, not the playback rate: `--speed` compresses wall
     # time, this changes how many ticks a scenario second produces.
@@ -73,7 +81,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help="seconds between ticks (glasses emit every 1.5 s)")
     parser.add_argument("--reasoner", choices=["openai", "fake"], default="fake")
     parser.add_argument("--db", default=str(defaults.db_path))
-    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--port", type=int, default=8010)
     parser.add_argument("--no-seed", action="store_true")
     parser.add_argument("--headless", action="store_true")
     parser.add_argument("--demo-mode", dest="demo_mode", action="store_true",
@@ -103,7 +111,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
     app = create_app(
         settings=settings, source=args.source, reasoner_mode=args.reasoner,
-        speed=args.speed, seed_db=not args.no_seed,
+        speed=args.speed, seed_db=not args.no_seed, dir=args.dir, loop=args.loop,
+        camera=args.camera, vlm=args.vlm, flow=args.flow,
     )
     uvicorn.run(app, host="0.0.0.0", port=args.port, log_level="info")
     return 0

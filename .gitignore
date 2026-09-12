@@ -7,3 +7,4 @@ corpus/
 *.sqlite3
 ticks.jsonl
 .DS_Store
+data/
