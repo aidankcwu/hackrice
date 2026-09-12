@@ -252,3 +252,20 @@ Astra 6 reviewed the plan read-only against the spec. Objections we adopted:
 - **Stage line:** "Two services became one process tonight, but one wire is
   still missing on the other side of it — the phone doesn't send real frames
   yet. We handed over a draft rather than a TODO."
+
+## Sat 12 Sep, 04:39 — Glasses to dashboard, live
+
+- First real packets from the Ray-Bans reached the Mac at 04:38: one phone
+  connected, zero malformed, ~32 KB per frame. Gemini tagged the first ten
+  ticks at 90% coverage, zero overruns, median 930 ms: `home / seated /
+  screen_present`. The gate escalated `screen_sustained` and GPT's first
+  decision on real frames was "user is seated at home with sustained screen
+  presence" — annotate and log_insight, silent. Correct, and correctly quiet.
+- The Swift sender that made it possible was drafted by the fleet, typechecked
+  with `swiftc` for iOS 17, and reviewed adversarially before Person A pasted
+  it in. The review caught that the sender would have reported packets as sent
+  before the socket delivered them, and that MacLink overwrote its own
+  "connected" status milliseconds after connecting.
+- **Stage line:** "Camera on the glasses, small model on every frame, plain
+  code deciding when to think, big model thinking twenty times a day, and a
+  dashboard that shows you every time it chose to stay quiet."
