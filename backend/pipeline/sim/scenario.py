@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterator
 
-from ..models import Activity, FoodType, Scene
+from ..models import OUTDOOR_SCENES, Activity, FoodType, Scene
 
 __all__ = ["Segment", "Scenario", "DEFAULT_SCENARIO"]
 
@@ -63,7 +63,7 @@ class Segment:
 
     @property
     def outdoor(self) -> bool:
-        return self.scene in ("park", "trail", "street")
+        return self.scene in OUTDOOR_SCENES
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,13 +132,13 @@ DEFAULT_SCENARIO = Scenario(
             motion_level=0.04,
         ),
         Segment(
-            name="lunch_restaurant",
+            name="lunch_cafe",
             duration_s=60,
-            scene="restaurant",
+            scene="cafe",
             activity="eating",
             flags={
                 "food_present": True,
-                "food_type": "mixed",
+                "food_type": "rice_bowl",
                 "people_present": True,
             },
             bg_color=(120, 92, 64),
@@ -165,8 +165,8 @@ DEFAULT_SCENARIO = Scenario(
         Segment(
             name="home_screen",
             duration_s=45,
-            scene="home",
-            activity="seated",
+            scene="living_room",
+            activity="phone_use",
             flags={"screen_present": True},
             bg_color=(58, 48, 56),
             motion_level=0.05,

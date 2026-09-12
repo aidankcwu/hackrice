@@ -19,11 +19,10 @@ from datetime import date, datetime, timedelta
 from typing import Iterable
 
 from ..db import Database, day_key
-from ..models import Episode, Score
+from ..models import HEALTHY_FOOD_TYPES, Episode, Score
 from .thresholds import (
     CAFFEINE_CUTOFF_LEAD_H,
     DEFAULT_BEDTIME_H,
-    MEDITERRANEAN_FOOD_TYPES,
     MetricSpec,
     THRESHOLDS,
     by_period,
@@ -180,7 +179,7 @@ class Scorer:
         if not meals:
             return None, None
         on_pattern = sum(
-            1 for m in meals if m.dominant.get("food_type") in MEDITERRANEAN_FOOD_TYPES
+            1 for m in meals if m.dominant.get("food_type") in HEALTHY_FOOD_TYPES
         )
         return on_pattern / len(meals), f"{on_pattern}/{len(meals)} meals on-pattern"
 

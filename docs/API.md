@@ -46,7 +46,9 @@ Agreed details (from plan review):
 
 ## Dashboard REST
 
-The `ai` block may optionally include `caption`, `objects`, and `drink` (`none`, `water`, `coffee`, `tea`, `energy_drink`, `soda`, `alcohol`, or `unknown`).
+The `ai` block may optionally include `caption`, `objects`, and `drink`.
+
+The `scene` / `activity` / `food_type` / `drink` menus live in `src/longevity/ai_fields.py` (Person A's single source of truth, and what goes into the Gemini `response_schema`) and are mirrored value-for-value in `backend/pipeline/models.py`, along with the named families (`OUTDOOR_SCENES`, `HOME_SCENES`, `EXERTION_ACTIVITIES`, `HEALTHY_FOOD_TYPES`, `UNHEALTHY_FOOD_TYPES`) the gate, episode builder and scorer switch on; `backend/tests/test_models.py` asserts the two sides agree.
 
 | Method / path | Returns |
 |---|---|

@@ -9,7 +9,7 @@ tolerate any optional field being absent, in particular the whole ``ai`` block
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -17,6 +17,16 @@ __all__ = [
     "Scene",
     "Activity",
     "FoodType",
+    "Drink",
+    "SCENES",
+    "ACTIVITIES",
+    "FOOD_TYPES",
+    "DRINKS",
+    "OUTDOOR_SCENES",
+    "HOME_SCENES",
+    "EXERTION_ACTIVITIES",
+    "HEALTHY_FOOD_TYPES",
+    "UNHEALTHY_FOOD_TYPES",
     "EpisodeKind",
     "SensorBlock",
     "DeviceBlock",
@@ -33,6 +43,12 @@ __all__ = [
     "phash_distance",
 ]
 
+# The four ``ai`` enums mirror Person A's ``longevity.ai_fields`` exactly -- his
+# module is the single source of truth, these Literals are the validating copy on
+# this side of the seam. ``tests/test_models.py`` imports his lists and asserts the
+# two agree member for member, so a menu change upstream fails here loudly rather
+# than silently coercing a new value to ``unknown``.
+
 Scene = Literal[
     "home",
     "office",
@@ -44,6 +60,27 @@ Scene = Literal[
     "trail",
     "vehicle",
     "street",
+    "kitchen",
+    "bedroom",
+    "living_room",
+    "bathroom",
+    "dorm_room",
+    "classroom",
+    "lecture_hall",
+    "library",
+    "lab",
+    "cafe",
+    "bar",
+    "grocery_store",
+    "store",
+    "campus_outdoor",
+    "backyard",
+    "beach",
+    "parking_lot",
+    "stadium",
+    "hallway",
+    "elevator",
+    "transit",
     "unknown",
 ]
 
@@ -53,6 +90,20 @@ Activity = Literal[
     "walking",
     "exercising",
     "eating",
+    "lying_down",
+    "cooking",
+    "reading",
+    "typing",
+    "phone_use",
+    "talking",
+    "driving",
+    "running",
+    "lifting_weights",
+    "stretching",
+    "cycling",
+    "cleaning",
+    "shopping",
+    "drinking",
     "unknown",
 ]
 
@@ -66,8 +117,121 @@ FoodType = Literal[
     "processed",
     "sweets",
     "mixed",
+    "salad",
+    "sandwich",
+    "burger",
+    "pizza",
+    "pasta",
+    "rice_bowl",
+    "noodles",
+    "soup",
+    "eggs",
+    "dairy",
+    "nuts",
+    "chips",
+    "candy",
+    "baked_goods",
+    "cereal",
+    "protein_bar",
+    "fast_food",
+    "dessert",
     "none",
 ]
+
+Drink = Literal[
+    "none",
+    "water",
+    "coffee",
+    "tea",
+    "energy_drink",
+    "soda",
+    "alcohol",
+    "juice",
+    "smoothie",
+    "milk",
+    "sports_drink",
+    "boba",
+    "beer",
+    "wine",
+    "cocktail",
+    "unknown",
+]
+
+#: The enum menus as tuples, for anything that needs to iterate rather than validate.
+SCENES: tuple[str, ...] = get_args(Scene)
+ACTIVITIES: tuple[str, ...] = get_args(Activity)
+FOOD_TYPES: tuple[str, ...] = get_args(FoodType)
+DRINKS: tuple[str, ...] = get_args(Drink)
+
+# -- named families ------------------------------------------------------
+#
+# Consumers switch on these enums by family, never by a single literal: the gate
+# and the episode builder must agree on what "outdoors" means (SPEC §10 requires
+# an episode and its escalation to share boundaries), and both must keep agreeing
+# when one more outdoor scene joins the menu. Defined here, once, and mirrored
+# from ``longevity.ai_fields``.
+
+#: Scenes that count as being outside.
+OUTDOOR_SCENES: frozenset[str] = frozenset({
+    "park",
+    "trail",
+    "street",
+    "campus_outdoor",
+    "backyard",
+    "beach",
+    "parking_lot",
+    "stadium",
+})
+
+#: Scenes that count as being at home -- every room of one.
+HOME_SCENES: frozenset[str] = frozenset({
+    "home",
+    "kitchen",
+    "bedroom",
+    "living_room",
+    "bathroom",
+    "dorm_room",
+})
+
+#: Activities that explain an elevated heart rate on their own (SPEC §14.3).
+EXERTION_ACTIVITIES: frozenset[str] = frozenset({
+    "exercising",
+    "walking",
+    "running",
+    "lifting_weights",
+    "cycling",
+    "stretching",
+})
+
+#: ``food_type`` values counted as on-pattern for PREDIMED-style diet scoring.
+HEALTHY_FOOD_TYPES: frozenset[str] = frozenset({
+    "vegetables",
+    "fruit",
+    "grains",
+    "fish",
+    "poultry",
+    "salad",
+    "rice_bowl",
+    "soup",
+    "eggs",
+    "nuts",
+    "mixed",
+})
+
+#: Explicitly off-pattern. Everything in neither set (``sandwich``, ``pasta``,
+#: ``red_meat``, ``dairy``, ``cereal``, ``noodles``, ``protein_bar``, ``none``)
+#: is neutral and counts towards neither share.
+UNHEALTHY_FOOD_TYPES: frozenset[str] = frozenset({
+    "processed",
+    "sweets",
+    "chips",
+    "candy",
+    "baked_goods",
+    "fast_food",
+    "dessert",
+    "burger",
+    "pizza",
+})
 
 EpisodeKind = Literal[
     "meal",
@@ -131,9 +295,7 @@ class AiBlock(BaseModel):
     people_present: bool | None = None
     caption: str | None = Field(default=None, exclude_if=lambda value: value is None)
     objects: list[str] | None = Field(default=None, exclude_if=lambda value: value is None)
-    drink: Literal[
-        "none", "water", "coffee", "tea", "energy_drink", "soda", "alcohol", "unknown"
-    ] | None = Field(default=None, exclude_if=lambda value: value is None)
+    drink: Drink | None = Field(default=None, exclude_if=lambda value: value is None)
     conf: float | None = None
 
 

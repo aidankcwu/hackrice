@@ -8,7 +8,7 @@ from typing import Callable
 
 from ..config import Timings
 from ..db import Database
-from ..models import Episode, EpisodeKind, Tick
+from ..models import OUTDOOR_SCENES, Episode, EpisodeKind, Tick
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,7 +91,7 @@ def _outdoor(max_age_ms: int = 3000) -> Predicate:
     def predicate(tick: Tick) -> bool | None:
         scene = tick.enum("scene", max_age_ms)
         vegetation = tick.flag("vegetation_visible", max_age_ms)
-        if scene in {"park", "trail", "street"} or vegetation is True:
+        if scene in OUTDOOR_SCENES or vegetation is True:
             return True
         if scene is None and vegetation is None:
             return None

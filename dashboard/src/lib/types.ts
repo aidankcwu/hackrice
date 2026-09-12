@@ -1,6 +1,13 @@
 export interface Sensor { lux_proxy: number; cct: number; hist_spread: number; frame_delta: number; flow_mag: number; sharpness: number; phash: string }
 export interface Device { accel_rms: number; gps_speed: number }
-export type Drink = "none" | "water" | "coffee" | "tea" | "energy_drink" | "soda" | "alcohol" | "unknown";
+/** The four `ai` enums, mirroring `longevity/ai_fields.py` (and `pipeline/models.py`).
+ * They are menus, not free text: long on purpose so the VLM can be specific, and
+ * still one short value per field. `TickAI` keeps `string` on the wire fields so a
+ * backend that has grown a value this build has not seen still renders. */
+export type Scene = "home" | "office" | "restaurant" | "gym" | "sauna" | "cold_plunge" | "park" | "trail" | "vehicle" | "street" | "kitchen" | "bedroom" | "living_room" | "bathroom" | "dorm_room" | "classroom" | "lecture_hall" | "library" | "lab" | "cafe" | "bar" | "grocery_store" | "store" | "campus_outdoor" | "backyard" | "beach" | "parking_lot" | "stadium" | "hallway" | "elevator" | "transit" | "unknown";
+export type Activity = "seated" | "standing" | "walking" | "exercising" | "eating" | "lying_down" | "cooking" | "reading" | "typing" | "phone_use" | "talking" | "driving" | "running" | "lifting_weights" | "stretching" | "cycling" | "cleaning" | "shopping" | "drinking" | "unknown";
+export type FoodType = "vegetables" | "fruit" | "grains" | "fish" | "poultry" | "red_meat" | "processed" | "sweets" | "mixed" | "salad" | "sandwich" | "burger" | "pizza" | "pasta" | "rice_bowl" | "noodles" | "soup" | "eggs" | "dairy" | "nuts" | "chips" | "candy" | "baked_goods" | "cereal" | "protein_bar" | "fast_food" | "dessert" | "none";
+export type Drink = "none" | "water" | "coffee" | "tea" | "energy_drink" | "soda" | "alcohol" | "juice" | "smoothie" | "milk" | "sports_drink" | "boba" | "beer" | "wine" | "cocktail" | "unknown";
 export interface TickAI { as_of: number; age_ms: number; scene: string; activity: string; food_present: boolean; food_type: string; caffeine_visible: boolean; alcohol_visible: boolean; screen_present: boolean; vegetation_visible: boolean; people_present: boolean; caption?: string; objects?: string[]; drink?: Drink; conf: number }
 export interface Tick { v: number; tick_id: string; t: number; seq: number; sensor: Sensor; device?: Device; ai?: TickAI; frame_ref?: string }
 export type DecisionAction =

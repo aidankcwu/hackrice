@@ -20,6 +20,7 @@ from datetime import datetime
 from typing import Any, Literal, Protocol, runtime_checkable
 
 from ..config import Settings
+from ..models import FOOD_TYPES
 from .schema import (
     AnnotateAction,
     LogInsightAction,
@@ -142,17 +143,10 @@ class OpenAIReasonerClient:
 # -- the fake -------------------------------------------------------------
 
 _TRIGGER_RE = re.compile(r"^Trigger:\s*(\S+)\s+at\s+(\d{2}):(\d{2}):(\d{2})")
-_FOOD_WORDS = (
-    "vegetables",
-    "fruit",
-    "grains",
-    "fish",
-    "poultry",
-    "red_meat",
-    "processed",
-    "sweets",
-    "mixed",
-)
+#: Every `food_type` the VLM can report, in menu order, minus the null value.
+#: Derived rather than retyped: the fake has to recognise `rice_bowl` the day
+#: the menu grows one, or a key-less demo silently stops naming the meal.
+_FOOD_WORDS = tuple(value for value in FOOD_TYPES if value != "none")
 
 #: Local hour at or after which caffeine is worth mentioning (bedtime - 9 h).
 CAFFEINE_HOUR = 14

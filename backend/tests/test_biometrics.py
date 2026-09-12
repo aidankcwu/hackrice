@@ -27,9 +27,9 @@ def test_heart_rate_series_is_deterministic_and_spike_matches_lunch():
     assert all(value < 58.0 * 1.4 for t, value in points if not 135 <= t <= 235)
 
     _, segment, _ = DEFAULT_SCENARIO.segment_at(150)
-    assert segment.name == "lunch_restaurant"
+    assert segment.name == "lunch_cafe"
     assert segment.activity == "eating"
-    assert segment.scene == "restaurant"
+    assert segment.scene == "cafe"
 
 
 def test_minute_resolution_outside_spike_and_idempotent_seed():
@@ -134,7 +134,7 @@ def test_sound_is_loud_over_lunch_and_quiet_at_the_desk() -> None:
     assert sound[0] == 45.0
     lunch = [v for t, v in sound.items() if 135 <= t < 195]
     assert lunch and all(v == 62.0 for v in lunch)
-    assert DEFAULT_SCENARIO.segment_at(150)[1].scene == "restaurant"
+    assert DEFAULT_SCENARIO.segment_at(150)[1].scene == "cafe"
 
 
 def test_seeding_stores_every_metric_with_origin_seed() -> None:

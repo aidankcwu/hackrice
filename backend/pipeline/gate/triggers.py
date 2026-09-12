@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Callable, Protocol, runtime_checkable
 
 from ..config import DEFAULT_KEYWORD_TRIGGERS, Timings
-from ..models import EpisodeKind, Tick
+from ..models import EXERTION_ACTIVITIES, OUTDOOR_SCENES, EpisodeKind, Tick
 
 __all__ = [
     "BiometricFeed",
@@ -17,9 +17,6 @@ __all__ = [
     "keyword_trigger",
     "wearable_now_line",
 ]
-
-#: Activities that explain a high heart rate on their own (SPEC §14.3).
-_EXERTION = {"exercising", "walking"}
 
 #: Fraction of the window the HR series must actually cover.
 _MIN_SPAN_FRACTION = 0.8
@@ -207,7 +204,7 @@ def _outdoor_hits(
             vegetation = tick.flag("vegetation_visible", max_age_ms)
             if scene is None and vegetation is None:
                 continue
-            observations.append(scene in {"park", "trail", "street"} or vegetation is True)
+            observations.append(scene in OUTDOOR_SCENES or vegetation is True)
         return bool(observations) and observations[-1] and sum(observations) >= minimum
 
     return predicate
@@ -397,7 +394,7 @@ def biometric_anomaly_trigger(timings: Timings, feed: BiometricFeed) -> Trigger:
         # Unknown activity counts neither way; a window with no known activity
         # at all still fires -- the wearable is saying something is up.
         return any(
-            tick.enum("activity", max_age_ms) in _EXERTION
+            tick.enum("activity", max_age_ms) in EXERTION_ACTIVITIES
             for tick in window
             if tick.t >= t0
         )

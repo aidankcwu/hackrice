@@ -198,7 +198,7 @@ def _strain(duration_s: int) -> list[tuple[int, float, str]]:
 
 
 def _sound(duration_s: int) -> list[tuple[int, float, str]]:
-    """Ambient dBA: quiet office, loud restaurant over lunch, street between.
+    """Ambient dBA: quiet office, loud cafe over lunch, street between.
 
     Minute samples are added across the lunch window for the same reason the
     respiratory rate gets them -- a five-minute cadence would miss a 60 s

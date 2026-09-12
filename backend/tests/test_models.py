@@ -7,7 +7,22 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from pipeline.models import AiBlock, SensorBlock, Tick, phash_distance
+from longevity import ai_fields
+from pipeline.models import (
+    ACTIVITIES,
+    DRINKS,
+    EXERTION_ACTIVITIES,
+    FOOD_TYPES,
+    HEALTHY_FOOD_TYPES,
+    HOME_SCENES,
+    OUTDOOR_SCENES,
+    SCENES,
+    UNHEALTHY_FOOD_TYPES,
+    AiBlock,
+    SensorBlock,
+    Tick,
+    phash_distance,
+)
 
 # Copied verbatim from SPEC §12. Image bytes are not part of the tick (SPEC §2.5
 # rule 3: ticks contain no pixels), so there is nothing to remove here -- the
@@ -199,3 +214,55 @@ def test_sparse_sensor_block_parses():
     tick = _bare_tick(None)
     assert tick.sensor.cct is None
     assert tick.sensor.phash == "e3a91c04b7d2f855"
+
+
+# -- the seam on the enums themselves ------------------------------------
+
+
+def test_enum_menus_mirror_person_as_source_of_truth() -> None:
+    """A's ``longevity.ai_fields`` owns the §9 menus; these Literals are a copy.
+
+    A copy that drifts is worse than no copy: a value A's coercion happily emits
+    but this side does not list fails tick validation, and the whole tick is
+    dropped at the seam. Order is asserted too -- the lists are what goes into
+    the Gemini ``response_schema``, and a diff should read as one appended value.
+    """
+
+    assert list(SCENES) == ai_fields.SCENE
+    assert list(ACTIVITIES) == ai_fields.ACTIVITY
+    assert list(FOOD_TYPES) == ai_fields.FOOD_TYPE
+    assert list(DRINKS) == ai_fields.DRINK
+
+
+def test_named_families_mirror_and_stay_inside_their_menus() -> None:
+    assert OUTDOOR_SCENES == ai_fields.OUTDOOR_SCENES
+    assert HOME_SCENES == ai_fields.HOME_SCENES
+    assert EXERTION_ACTIVITIES == ai_fields.EXERTION_ACTIVITIES
+    assert HEALTHY_FOOD_TYPES == ai_fields.HEALTHY_FOOD_TYPES
+    assert UNHEALTHY_FOOD_TYPES == ai_fields.UNHEALTHY_FOOD_TYPES
+
+    assert OUTDOOR_SCENES <= set(SCENES)
+    assert HOME_SCENES <= set(SCENES)
+    assert not OUTDOOR_SCENES & HOME_SCENES
+    assert EXERTION_ACTIVITIES <= set(ACTIVITIES)
+    assert HEALTHY_FOOD_TYPES <= set(FOOD_TYPES)
+    assert UNHEALTHY_FOOD_TYPES <= set(FOOD_TYPES)
+    assert not HEALTHY_FOOD_TYPES & UNHEALTHY_FOOD_TYPES
+
+
+def test_widened_menus_validate_and_read_back() -> None:
+    tick = _bare_tick(
+        {
+            "as_of": 1.0,
+            "age_ms": 0,
+            "scene": "dorm_room",
+            "activity": "phone_use",
+            "food_present": True,
+            "food_type": "rice_bowl",
+            "drink": "boba",
+        }
+    )
+    assert tick.enum("scene") == "dorm_room"
+    assert tick.enum("activity") == "phone_use"
+    assert tick.enum("food_type") == "rice_bowl"
+    assert tick.ai is not None and tick.ai.drink == "boba"

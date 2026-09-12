@@ -26,7 +26,7 @@ def test_default_scenario_covers_the_demo_metric_set() -> None:
     assert any(s.vegetation_visible for s in segs)
     assert any(s.people_present for s in segs)
     assert any(s.screen_present for s in segs)
-    assert any(s.food_present and s.food_type == "mixed" for s in segs)
+    assert any(s.food_present and s.food_type == "rice_bowl" for s in segs)
     assert any(s.caffeine_visible for s in segs)
     assert any(s.alcohol_visible for s in segs)
 
@@ -104,16 +104,19 @@ def test_age_ms_measures_gap_since_last_ai_block() -> None:
 def test_ai_tags_follow_the_scenario() -> None:
     ticks = collect(400, ai_coverage=1.0, seed=2)
     by_seq = {t.seq: t.ai for t in ticks}
-    # 0-59 office screen; 60-89 coffee; 150-209 restaurant lunch; 240-299 park
+    # 0-59 office screen; 60-89 coffee; 150-209 cafe lunch; 240-299 park
     assert by_seq[10].screen_present and by_seq[10].scene == "office"  # type: ignore[union-attr]
     assert by_seq[70].caffeine_visible  # type: ignore[union-attr]
     assert by_seq[70].drink == "coffee"  # type: ignore[union-attr]
     assert by_seq[70].caption == "desk coffee"  # type: ignore[union-attr]
     assert 2 <= len(by_seq[70].objects) <= 3  # type: ignore[union-attr]
-    assert by_seq[170].food_present and by_seq[170].food_type == "mixed"  # type: ignore[union-attr]
-    assert by_seq[170].people_present and by_seq[170].scene == "restaurant"  # type: ignore[union-attr]
+    assert by_seq[170].food_present and by_seq[170].food_type == "rice_bowl"  # type: ignore[union-attr]
+    assert by_seq[170].people_present and by_seq[170].scene == "cafe"  # type: ignore[union-attr]
     assert by_seq[260].vegetation_visible and by_seq[260].scene == "park"  # type: ignore[union-attr]
-    assert by_seq[320].scene == "home"  # type: ignore[union-attr]
+    # The widened menus reach the demo: a specific room and a specific activity
+    # where the old script could only say "home" and "seated".
+    assert by_seq[320].scene == "living_room"  # type: ignore[union-attr]
+    assert by_seq[320].activity == "phone_use"  # type: ignore[union-attr]
     assert by_seq[350].alcohol_visible  # type: ignore[union-attr]
     assert by_seq[350].drink == "alcohol"  # type: ignore[union-attr]
 
@@ -202,9 +205,9 @@ def test_segment_boundaries_land_on_the_right_seq_at_1_5s() -> None:
         after = DEFAULT_SCENARIO.segment_at(seq * 1.5)[0]
         assert after == before + 1, f"seq {seq} did not cross a boundary"
 
-    # And the tags follow: seq 90 (= 135 s) is the restaurant, seq 150 the park.
+    # And the tags follow: seq 90 (= 135 s) is the cafe, seq 150 the park.
     by_seq = {t.seq: t.ai for t in ticks}
-    assert by_seq[95].scene == "restaurant" and by_seq[95].food_present  # type: ignore[union-attr]
+    assert by_seq[95].scene == "cafe" and by_seq[95].food_present  # type: ignore[union-attr]
     assert by_seq[160].scene == "park" and by_seq[160].vegetation_visible  # type: ignore[union-attr]
 
 
@@ -230,7 +233,7 @@ def test_the_seeded_hr_spike_still_lands_in_the_lunch_segment(interval_s: float)
     nearest = min(ticks, key=lambda t: abs(t.t - peak_t))
     assert abs(nearest.t - peak_t) <= interval_s
     assert nearest.ai is not None
-    assert nearest.ai.scene == "restaurant" and nearest.ai.food_present
+    assert nearest.ai.scene == "cafe" and nearest.ai.food_present
 
 
 async def test_async_iteration_respects_speed() -> None:

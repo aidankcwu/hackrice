@@ -28,8 +28,12 @@ from typing import AsyncIterator
 from PIL import Image, ImageDraw
 
 from ..frames import FrameStore
-from ..models import AiBlock, DeviceBlock, SensorBlock, Tick
+from ..models import HOME_SCENES, AiBlock, DeviceBlock, SensorBlock, Tick
 from .scenario import DEFAULT_SCENARIO, Scenario, Segment
+
+#: Places lit like a room you eat in: dimmer and warmer than an office, brighter
+#: than a living room. A lighting family, not a semantic one, so it is local.
+_WARM_INDOOR_SCENES = frozenset({"restaurant", "cafe", "bar"})
 
 log = logging.getLogger(__name__)
 
@@ -135,10 +139,10 @@ class SimSource:
         if segment.outdoor:
             lux = 2200.0 * (1.0 + jitter)
             cct = 6200.0 + rng.uniform(-250, 250)
-        elif segment.scene == "home":
+        elif segment.scene in HOME_SCENES:
             lux = 180.0 * (1.0 + jitter)
             cct = 2900.0 + rng.uniform(-150, 150)
-        elif segment.scene == "restaurant":
+        elif segment.scene in _WARM_INDOOR_SCENES:
             lux = 320.0 * (1.0 + jitter)
             cct = 3300.0 + rng.uniform(-200, 200)
         else:  # office and everything else indoor

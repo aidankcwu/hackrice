@@ -25,12 +25,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Literal
 
+from ..models import HEALTHY_FOOD_TYPES
+
 __all__ = [
     "ScoreFn",
     "MetricSpec",
     "THRESHOLDS",
     "GRADE_WEIGHTS",
     "MEDITERRANEAN_FOOD_TYPES",
+    "HEALTHY_FOOD_TYPES",
     "DEFAULT_BEDTIME_H",
     "CAFFEINE_CUTOFF_LEAD_H",
     "by_period",
@@ -43,11 +46,11 @@ ScoreFn = Callable[[float | None], float]
 GRADE_WEIGHTS: dict[str, float] = {"A": 1.0, "B": 0.7, "C": 0.3}
 
 #: ``food_type`` values counted as "on-pattern" for PREDIMED-style scoring.
-#: Everything else in the §9 enum (``red_meat``, ``processed``, ``sweets``,
-#: ``none``) is off-pattern.
-MEDITERRANEAN_FOOD_TYPES = frozenset(
-    {"vegetables", "fruit", "grains", "fish", "poultry", "mixed"}
-)
+#: One name for one idea: the family itself lives in ``models`` next to the
+#: enum it partitions (mirrored from A's ``longevity.ai_fields``), and this is
+#: the §8-facing alias. Everything outside it -- ``red_meat``, ``processed``,
+#: ``sweets``, ``burger``, ``none`` -- is off-pattern.
+MEDITERRANEAN_FOOD_TYPES = HEALTHY_FOOD_TYPES
 
 #: Bedtime assumed when no seeded ``bed_time`` row exists for the day, in hours
 #: after local midnight. 23:00 - 9 h = a 14:00 caffeine cutoff.

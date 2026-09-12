@@ -18,22 +18,95 @@ from typing import Any
 # "Booleans default to false; enums include `unknown`."  Note `food_type` is the one
 # exception: it has no `unknown`, its null value is `none`.
 
+# The menus are deliberately long. A VLM picking from a closed list costs the same
+# whether the list has 11 entries or 32 -- one short token either way -- but a wearer
+# in a dorm room tagged `home` and a wearer in a lecture hall tagged `unknown` are
+# both information we threw away. More options, no free text, same latency.
+#
+# `unknown` stays last in every list that has it (`food_type`'s null value is `none`).
+
 SCENE = [
     "home", "office", "restaurant", "gym", "sauna", "cold_plunge",
-    "park", "trail", "vehicle", "street", "unknown",
+    "park", "trail", "vehicle", "street",
+    # Rooms of a home, all of which used to collapse into `home`.
+    "kitchen", "bedroom", "living_room", "bathroom", "dorm_room",
+    # Indoor public / study / work places that used to collapse into `office`.
+    "classroom", "lecture_hall", "library", "lab", "cafe", "bar",
+    "grocery_store", "store",
+    # Outdoors beyond `park`/`trail`/`street`.
+    "campus_outdoor", "backyard", "beach", "parking_lot", "stadium",
+    # Transitional spaces -- short, and never a meaningful episode on their own.
+    "hallway", "elevator", "transit",
+    "unknown",
 ]
 
-ACTIVITY = ["seated", "standing", "walking", "exercising", "eating", "unknown"]
+ACTIVITY = [
+    "seated", "standing", "walking", "exercising", "eating",
+    "lying_down", "cooking", "reading", "typing", "phone_use", "talking",
+    "driving", "running", "lifting_weights", "stretching", "cycling",
+    "cleaning", "shopping", "drinking",
+    "unknown",
+]
 
 FOOD_TYPE = [
     "vegetables", "fruit", "grains", "fish", "poultry", "red_meat",
-    "processed", "sweets", "mixed", "none",
+    "processed", "sweets", "mixed",
+    # Dish-shaped options: what a plate actually looks like in a frame, which a
+    # VLM can see directly and does not have to reason its way back to a food group.
+    "salad", "sandwich", "burger", "pizza", "pasta", "rice_bowl", "noodles",
+    "soup", "eggs", "dairy", "nuts", "chips", "candy", "baked_goods",
+    "cereal", "protein_bar", "fast_food", "dessert",
+    "none",
 ]
 
 DRINK = [
     "none", "water", "coffee", "tea", "energy_drink", "soda", "alcohol",
+    "juice", "smoothie", "milk", "sports_drink", "boba",
+    # Named alcohols, so the caption does not have to carry the distinction.
+    "beer", "wine", "cocktail",
     "unknown",
 ]
+
+# --- Named groupings ----------------------------------------------------------
+# Downstream (the trigger gate, the episode builder, the scorer) switches on these
+# enums by *family*, never by a single literal. The families live here so that
+# adding one more scene is one edit, not a grep across two codebases. Person B's
+# `pipeline.models` mirrors these exactly and a test asserts the two agree.
+
+#: Scenes that count as being outside (the `outdoor_sustained` trigger, §7 nature).
+OUTDOOR_SCENES = frozenset({
+    "park", "trail", "street", "campus_outdoor", "backyard", "beach",
+    "parking_lot", "stadium",
+})
+
+#: Scenes that count as being at home -- every room of one.
+HOME_SCENES = frozenset({
+    "home", "kitchen", "bedroom", "living_room", "bathroom", "dorm_room",
+})
+
+#: Activities that explain an elevated heart rate on their own (SPEC §14.3).
+EXERTION_ACTIVITIES = frozenset({
+    "exercising", "walking", "running", "lifting_weights", "cycling", "stretching",
+})
+
+#: `food_type` values counted as on-pattern for PREDIMED-style diet scoring.
+HEALTHY_FOOD_TYPES = frozenset({
+    "vegetables", "fruit", "grains", "fish", "poultry", "salad", "rice_bowl",
+    "soup", "eggs", "nuts", "mixed",
+})
+
+#: Explicitly off-pattern. Everything in neither set (`sandwich`, `pasta`,
+#: `red_meat`, `dairy`, `cereal`, `noodles`, `protein_bar`, `none`) is neutral.
+UNHEALTHY_FOOD_TYPES = frozenset({
+    "processed", "sweets", "chips", "candy", "baked_goods", "fast_food",
+    "dessert", "burger", "pizza",
+})
+
+#: Drinks that set `caffeine_visible` when the model did not report the flag.
+CAFFEINE_DRINKS = frozenset({"coffee", "tea", "energy_drink", "boba"})
+
+#: Drinks that set `alcohol_visible` the same way.
+ALCOHOL_DRINKS = frozenset({"alcohol", "beer", "wine", "cocktail"})
 
 BOOL_FIELDS = [
     "food_present",
@@ -82,6 +155,9 @@ PROMPT = (
     "conf is your overall confidence in this whole tagging, from 0.0 to 1.0.\n"
     "caption is one short phrase of at most 12 words describing what is plainly visible.\n"
     "objects lists up to 5 lowercase nouns that are plainly visible.\n"
+    "scene is the most specific matching location from this list.\n"
+    "activity is the most specific matching thing the wearer is doing from this list.\n"
+    "food_type is the most specific matching food visible from this list, or none.\n"
     "drink identifies the plainly visible drink, or none when no drink is visible."
 )
 
@@ -138,11 +214,9 @@ def coerce(raw: dict[str, Any] | None) -> dict[str, Any]:
         objects = []
     out["objects"] = [str(item).strip().lower()[:40] for item in objects[:5]]
 
-    if "caffeine_visible" not in raw and out["drink"] in {
-        "coffee", "tea", "energy_drink"
-    }:
+    if "caffeine_visible" not in raw and out["drink"] in CAFFEINE_DRINKS:
         out["caffeine_visible"] = True
-    if "alcohol_visible" not in raw and out["drink"] == "alcohol":
+    if "alcohol_visible" not in raw and out["drink"] in ALCOHOL_DRINKS:
         out["alcohol_visible"] = True
 
     try:
