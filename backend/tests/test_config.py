@@ -70,14 +70,14 @@ def test_scaled_hits_divides_the_1hz_reference_counts() -> None:
     for n in (1, 2, 3, 6, 8, 15, 20):
         assert one.scaled_hits(n) == n
 
-    assert slow.scaled_hits(slow.screen_sustained_min_hits) == 5  # 8 / 1.5
-    assert slow.scaled_hits(slow.people_sustained_min_hits) == 4  # 6 / 1.5
-    assert slow.scaled_hits(slow.outdoor_min_hits) == 4  # 6 / 1.5
-    assert slow.scaled_hits(slow.food_min_hits) == 1  # 2 / 1.5 -> 1
+    assert slow.scaled_hits(slow.screen_sustained_min_hits) == 2  # 3 / 1.5
+    assert slow.scaled_hits(slow.people_sustained_min_hits) == 1  # 2 / 1.5 -> 1
+    assert slow.scaled_hits(slow.outdoor_min_hits) == 1  # 2 / 1.5 -> 1
+    assert slow.scaled_hits(slow.food_min_hits) == 1  # 1 / 1.5 -> 1
 
-    assert slower.scaled_hits(slower.screen_sustained_min_hits) == 4
-    assert slower.scaled_hits(slower.people_sustained_min_hits) == 3
-    assert slower.scaled_hits(slower.outdoor_min_hits) == 3
+    assert slower.scaled_hits(slower.screen_sustained_min_hits) == 2  # 3 / 2
+    assert slower.scaled_hits(slower.people_sustained_min_hits) == 1  # 2 / 2
+    assert slower.scaled_hits(slower.outdoor_min_hits) == 1
     assert slower.scaled_hits(slower.food_min_hits) == 1
 
     # Never zero: a threshold that rounds away would fire on nothing.

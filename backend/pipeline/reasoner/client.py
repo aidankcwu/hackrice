@@ -65,10 +65,12 @@ class OpenAIReasonerClient:
         model: str,
         timeout: float | None = None,
         client: Any | None = None,
+        reasoning_effort: str | None = "minimal",
     ) -> None:
         if not api_key:
             raise RuntimeError("OpenAIReasonerClient requires an API key")
         self.model = model
+        self.reasoning_effort = reasoning_effort
         if client is not None:
             self._client = client
         else:
@@ -80,11 +82,21 @@ class OpenAIReasonerClient:
         self, input_messages: list[dict[str, Any]]
     ) -> tuple[T1Response, dict[str, Any]]:
         started = time.perf_counter()
-        response = await self._client.responses.create(
-            model=self.model,
-            input=input_messages,
-            text=T1_TEXT_FORMAT,
+        kwargs: dict[str, Any] = dict(
+            model=self.model, input=input_messages, text=T1_TEXT_FORMAT
         )
+        # T1 is a perception + decision call, not a puzzle: low reasoning
+        # effort cuts latency. Retry without it for models that reject it.
+        if self.reasoning_effort:
+            kwargs["reasoning"] = {"effort": self.reasoning_effort}
+        try:
+            response = await self._client.responses.create(**kwargs)
+        except Exception as exc:  # noqa: BLE001
+            if "reasoning" in kwargs and "reasoning" in str(exc).lower():
+                kwargs.pop("reasoning")
+                response = await self._client.responses.create(**kwargs)
+            else:
+                raise
         latency_ms = int((time.perf_counter() - started) * 1000)
         raw = getattr(response, "output_text", None) or ""
 

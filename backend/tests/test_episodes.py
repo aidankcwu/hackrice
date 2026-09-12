@@ -56,10 +56,10 @@ def test_entry_thresholds_at_the_glasses_cadence() -> None:
     """The concrete numbers a 1.5 s stream ends up with."""
 
     params = EpisodeParams.from_timings(Timings.demo(tick_interval_s=1.5), True)
-    assert params.entry["screen_block"] == (5, 20.0)  # was 8 hits at 1 Hz
-    assert params.entry["conversation"] == (4, 20.0)  # was 6
-    assert params.entry["outdoor_block"] == (4, 20.0)  # was 6
-    assert params.entry["meal"] == (1, 10.0)  # was 2
+    assert params.entry["screen_block"] == (2, 20.0)  # 3 hits at 1 Hz, demo
+    assert params.entry["conversation"] == (1, 20.0)  # 2 at 1 Hz
+    assert params.entry["outdoor_block"] == (1, 20.0)  # 2 at 1 Hz
+    assert params.entry["meal"] == (1, 10.0)  # 1 at 1 Hz
     assert params.sighting_min_hits == 1  # a point sighting, floored at 1
     assert (params.entry_min_hits, params.exit_min_misses) == (2, 3)  # 3 / 4 at 1 Hz
     assert params.ai_max_age_ms == 3750
