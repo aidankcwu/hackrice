@@ -45,16 +45,26 @@ downstream reads from it and nothing writes back into it.
 
 ### 2.3 Tick fields
 
-Two groups, populated by different mechanisms:
+Three groups, populated by different mechanisms:
 
-**Non-AI fields** — computed locally from the frame buffer and phone sensors.
-Always present, ~5 ms, zero cost. Includes pixel statistics (luminance, colour
-temperature, histogram spread, frame delta, optical flow, sharpness, perceptual
-hash), on-device ML outputs (face count, OCR text density), and phone sensors
-(accelerometer, GPS speed, indoor/outdoor).
+**Sensor fields** — pixel statistics computed on the laptop from the decoded
+frame: luminance proxy, colour temperature, histogram spread, frame delta,
+optical flow, sharpness, perceptual hash. Always present, ~5 ms, zero cost.
 
-**AI fields** — populated by a small VLM (Gemini Flash-Lite class) returning a
-fixed set of booleans and enums. Carries `as_of` and `age_ms`.
+**Device fields** — accelerometer and GPS speed, forwarded by the phone in the
+capture packet (§11.2). Present under the `glasses` adapter only; absent under
+`webcam` and `replay`.
+
+**AI fields** — populated by a small VLM (Gemini Flash-Lite class) returning the
+fixed set of booleans and enums in §9. Carries `as_of` and `age_ms`, and may be
+absent entirely (§2.4).
+
+No on-device ML runs anywhere in the pipeline. Face presence comes from the VLM's
+`people_present` tag and screen presence from `screen_present`, neither of which
+has an independent cross-check. Indoor/outdoor is derived from the `scene` enum,
+not from a sensor.
+
+Full schema and availability guarantees: §12.
 
 ### 2.4 The AI field timing rule
 

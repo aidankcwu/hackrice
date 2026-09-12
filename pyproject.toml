@@ -1,0 +1,40 @@
+[project]
+name = "longevity"
+version = "0.1.0"
+description = "Longevity tracker on Ray-Ban Meta glasses — capture and audio (Person A)"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "numpy>=2.1",
+    "pillow>=11.0",
+    "httpx>=0.27",
+    "google-genai>=0.3",
+    "python-dotenv>=1.0",
+    # Camera capture for the `webcam` adapter (A9), and optical flow for `flow_mag`
+    # if A5 keeps it. SPEC 11.5 says "OpenCV only if optical flow is actually
+    # needed" -- but A9 needs a capture backend regardless, so it is a base dep.
+    # headless: no GUI/highgui, VideoCapture works. Do not also install
+    # opencv-python; the two packages conflict.
+    "opencv-python-headless>=4.10",
+]
+
+[project.scripts]
+t0 = "longevity.main:cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/longevity"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
