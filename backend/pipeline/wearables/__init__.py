@@ -26,7 +26,7 @@ __all__ = [
 
 #: Devices this backend accepts samples from. ``sim`` is the seeded fallback
 #: used when nothing real is connected.
-DEVICES: tuple[str, ...] = ("apple_watch", "whoop", "oura", "sim")
+DEVICES: tuple[str, ...] = ("apple_watch", "whoop", "oura", "sim", "fitbit",)
 
 
 @dataclass(frozen=True, slots=True)

@@ -31,7 +31,7 @@ def db(tmp_path):
 
 
 def test_catalogue_is_internally_consistent() -> None:
-    assert set(DEVICES) == {"apple_watch", "whoop", "oura", "sim"}
+    assert set(DEVICES) == {"apple_watch", "whoop", "oura", "sim", "fitbit"}
     for metric, info in LIVE_METRICS.items():
         assert info.devices, metric
         assert set(info.devices) <= set(DEVICES), metric
