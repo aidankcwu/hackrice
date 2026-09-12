@@ -51,6 +51,12 @@ Agreed details (from plan review):
 | `GET /api/pending_checks` | open `watch` rows |
 | `GET /api/summary/today` | annotate lines accumulated today (part 4 of the T1 envelope) |
 | `GET /api/seeded?days=7` | seeded integration rows (for the "7-day" panel) |
+| `POST /api/wearables/ingest` | canonical live samples `{device, samples:[{t, metric, value, unit}]}` → `{accepted, rejected, reasons}`; header `X-Ingest-Token` when `WEARABLE_INGEST_TOKEN` is set (SPEC §15) |
+| `POST /api/wearables/ingest/health-auto-export` | Health Auto Export JSON → canonical |
+| `POST /api/wearables/ingest/whoop` | WHOOP v2 objects → canonical |
+| `GET /api/wearables/status` | metrics present with source/origin/count, `live_connected` |
+| `GET /api/wearables/fitbit/{authorize,callback,status,sync}` | Fitbit OAuth (PKCE) and poller control (SPEC §15.2) |
+| `GET /api/biometrics?metrics=heart_rate,spo2&from=&to=` | multi-metric: `{series: {metric: {source, origin, points}}}` |
 | `GET /api/biometrics?metric=heart_rate&from=&to=` | `{metric, source, points: [[t, value], ...]}` — seeded wearable series on the tick clock (SPEC §14.2); defaults to the last hour |
 | `GET /api/events` | SSE stream (deferred — dashboard polls at 1 s for the demo) |
 | `GET /frames?refs=` | see seam §2 |

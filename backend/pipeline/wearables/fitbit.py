@@ -40,7 +40,8 @@ class FitbitConfig:
 
     @classmethod
     def from_env(cls) -> "FitbitConfig":
-        load_dotenv("backend/.env")
+        # Works from the repo root or from backend/ (Settings reads ./.env).
+        load_dotenv(".env"); load_dotenv("backend/.env")
         defaults = cls()
         return cls(os.getenv("FITBIT_CLIENT_ID", ""), os.getenv("FITBIT_CLIENT_SECRET", ""),
                    os.getenv("FITBIT_REDIRECT_URI", defaults.redirect_uri),
