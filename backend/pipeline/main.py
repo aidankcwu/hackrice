@@ -1,12 +1,4 @@
-"""Smoke harness: wire a tick source to the bus, the store and SQLite.
-
-This is scaffolding, not the demo path. Later subtasks replace it with FastAPI
-startup wiring; for now it proves the foundation end to end:
-
-    uv run python -m pipeline.main --source sim --speed 20
-
-Runs until Ctrl-C.
-"""
+"""Command-line entry point for the pipeline and dashboard API."""
 
 from __future__ import annotations
 
@@ -15,141 +7,75 @@ import asyncio
 import contextlib
 import logging
 import signal
-import sys
 from pathlib import Path
 
-from .bus import Subscription, TickBus
+import uvicorn
+
+from .api.app import create_app
+from .api.wiring import build_pipeline
+from .bus import Subscription
 from .config import Settings
 from .db import Database
-from .frames import InMemoryFrameStore
 from .models import Tick
-from .sim import DEFAULT_SCENARIO, SimSource
-
-log = logging.getLogger("pipeline.main")
 
 
 def format_tick(tick: Tick) -> str:
-    """One compact line per tick, for watching the stream go by."""
-
+    """Compact diagnostic representation retained for library callers."""
     if tick.ai is None:
-        tags = "ai:-"
-        flags = ""
+        tags, flags = "ai:-", ""
     else:
-        ai = tick.ai
-        tags = f"{ai.scene}/{ai.activity}"
-        on = [
-            name
-            for name, value in (
-                ("food", ai.food_present),
-                ("screen", ai.screen_present),
-                ("people", ai.people_present),
-                ("caffeine", ai.caffeine_visible),
-                ("alcohol", ai.alcohol_visible),
-                ("green", ai.vegetation_visible),
-            )
-            if value
-        ]
-        flags = " " + ",".join(on) if on else ""
-    return (
-        f"#{tick.seq:05d} {tick.tick_id} lux={tick.sensor.lux_proxy:7.1f} "
-        f"d={tick.sensor.frame_delta:.3f} {tags}{flags}"
-    )
+        tags = f"{tick.ai.scene}/{tick.ai.activity}"
+        names = [name for name, value in (
+            ("food", tick.ai.food_present), ("screen", tick.ai.screen_present),
+            ("people", tick.ai.people_present),
+            ("caffeine", tick.ai.caffeine_visible),
+            ("alcohol", tick.ai.alcohol_visible),
+            ("green", tick.ai.vegetation_visible),
+        ) if value]
+        flags = " " + ",".join(names) if names else ""
+    return (f"#{tick.seq:05d} {tick.tick_id} lux={tick.sensor.lux_proxy:7.1f} "
+            f"d={tick.sensor.frame_delta:.3f} {tags}{flags}")
 
 
 async def tick_store_consumer(sub: Subscription, db: Database) -> None:
-    """Write every tick it manages to consume to SQLite (SPEC §2.5: no pixels)."""
-
+    """Compatibility helper; production wiring uses its combined consumer."""
     async for tick in sub:
-        await asyncio.to_thread(db.insert_tick, tick)
+        db.insert_tick(tick)
 
 
-async def printer_consumer(sub: Subscription) -> None:
-    async for tick in sub:
-        sys.stdout.write(format_tick(tick) + "\n")
-        sys.stdout.flush()
-
-
-async def run(args: argparse.Namespace) -> int:
-    settings = Settings(demo_mode=args.demo_mode, db_path=Path(args.db))
-    log.info(
-        "starting: source=%s speed=%s demo_mode=%s db=%s",
-        args.source,
-        args.speed,
-        settings.demo_mode,
-        settings.db_path,
+async def run_headless(args: argparse.Namespace, settings: Settings) -> int:
+    pipeline = build_pipeline(
+        settings, source=args.source, reasoner_mode=args.reasoner,
+        speed=args.speed, seed_db=not args.no_seed,
     )
-
-    db = Database(settings.db_path).connect().init_schema()
-    frames = InMemoryFrameStore(ttl_s=settings.frame_ttl_s)
-    bus = TickBus()
-
-    if args.source != "sim":  # argparse already constrains this
-        raise SystemExit(f"unknown source: {args.source}")
-    source = SimSource(DEFAULT_SCENARIO, frames, speed=args.speed)
-
-    store_sub = bus.subscribe("tick_store")
-    print_sub = bus.subscribe("printer")
-    consumers = [
-        asyncio.create_task(tick_store_consumer(store_sub, db)),
-        asyncio.create_task(printer_consumer(print_sub)),
-    ]
-
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         with contextlib.suppress(NotImplementedError):
             loop.add_signal_handler(sig, stop.set)
-
-    async def pump() -> None:
-        async for tick in source:
-            bus.publish(tick)
-            if stop.is_set():
-                break
-
-    pump_task = asyncio.create_task(pump())
+    await pipeline.start()
     try:
-        await asyncio.wait(
-            [pump_task, asyncio.create_task(stop.wait())],
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-    except asyncio.CancelledError:  # pragma: no cover - signal path
-        pass
+        await stop.wait()
     finally:
-        pump_task.cancel()
-        # Capture before close(): close() unsubscribes everyone, zeroing the count.
-        total_dropped = bus.total_dropped
-        bus.close()
-        for task in consumers:
-            task.cancel()
-        await asyncio.gather(pump_task, *consumers, return_exceptions=True)
-        stats = db.stats()
-        log.info(
-            "stopped: published=%d stored=%d ai=%d dropped=%d frames_held=%d",
-            bus.published,
-            stats["tick_count"],
-            stats["ai_tick_count"],
-            total_dropped,
-            len(frames),
-        )
-        db.close()
+        await pipeline.stop()
     return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="pipeline", description=__doc__)
-    p.add_argument("--source", choices=["sim"], default="sim")
-    p.add_argument("--speed", type=float, default=1.0, help="tick rate multiplier")
-    p.add_argument("--db", default="./data/pipeline.db")
-    p.add_argument(
-        "--demo-mode",
-        dest="demo_mode",
-        action="store_true",
-        default=True,
-        help="short cooldowns and rate limits (SPEC §6)",
-    )
-    p.add_argument("--no-demo-mode", dest="demo_mode", action="store_false")
-    p.add_argument("-v", "--verbose", action="store_true")
-    return p
+    defaults = Settings()
+    parser = argparse.ArgumentParser(prog="pipeline", description=__doc__)
+    parser.add_argument("--source", choices=["sim"], default="sim")
+    parser.add_argument("--speed", type=float, default=1.0)
+    parser.add_argument("--reasoner", choices=["openai", "fake"], default="fake")
+    parser.add_argument("--db", default=str(defaults.db_path))
+    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--no-seed", action="store_true")
+    parser.add_argument("--headless", action="store_true")
+    parser.add_argument("--demo-mode", dest="demo_mode", action="store_true",
+                        default=defaults.demo_mode)
+    parser.add_argument("--no-demo-mode", dest="demo_mode", action="store_false")
+    parser.add_argument("-v", "--verbose", action="store_true")
+    return parser
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -158,10 +84,23 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-    try:
-        return asyncio.run(run(args))
-    except KeyboardInterrupt:  # pragma: no cover
-        return 0
+    settings = Settings(demo_mode=args.demo_mode, db_path=Path(args.db))
+    if args.reasoner == "openai" and not settings.openai_api_key:
+        raise SystemExit(
+            "OPENAI_API_KEY is required for --reasoner openai; "
+            "use --reasoner fake otherwise"
+        )
+    if args.headless:
+        try:
+            return asyncio.run(run_headless(args, settings))
+        except KeyboardInterrupt:
+            return 0
+    app = create_app(
+        settings=settings, source=args.source, reasoner_mode=args.reasoner,
+        speed=args.speed, seed_db=not args.no_seed,
+    )
+    uvicorn.run(app, host="0.0.0.0", port=args.port, log_level="info")
+    return 0
 
 
 if __name__ == "__main__":

@@ -131,6 +131,14 @@ CREATE TABLE IF NOT EXISTS today_summary (
     decision_id TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_summary_day ON today_summary(day, t);
+
+CREATE TABLE IF NOT EXISTS escalated_frames (
+    decision_id TEXT NOT NULL,
+    frame_ref   TEXT NOT NULL,
+    t           REAL NOT NULL,
+    jpeg        BLOB NOT NULL,
+    PRIMARY KEY (decision_id, frame_ref)
+);
 """
 
 
