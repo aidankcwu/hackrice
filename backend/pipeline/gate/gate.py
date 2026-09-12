@@ -1,0 +1,111 @@
+"""Non-blocking synchronous escalation gate."""
+
+from __future__ import annotations
+
+import logging
+from collections import Counter, deque
+from collections.abc import Callable, Iterable
+
+from ..config import Timings
+from ..db import Database
+from ..episodes import EpisodeBuilder
+from ..models import Escalation, Tick
+from .triggers import Trigger
+
+log = logging.getLogger(__name__)
+
+
+class TriggerGate:
+    def __init__(
+        self,
+        triggers: Iterable[Trigger],
+        timings: Timings,
+        db: Database,
+        episodes: EpisodeBuilder,
+        try_escalate: Callable[[Escalation], bool],
+        demo_mode: bool,
+    ) -> None:
+        self.triggers = list(triggers)
+        self.timings = timings
+        self.db = db
+        self.episodes = episodes
+        self.try_escalate = try_escalate
+        self.demo_mode = demo_mode
+        self.window: deque[Tick] = deque()
+        self.fired: Counter[str] = Counter()
+        self.dropped = 0
+        self.suppressed: Counter[str] = Counter()
+        self.last_escalation_t: float | None = None
+        self._last_trigger_t: dict[str, float] = {}
+        self._escalated_episode_ids: set[str] = set()
+        self._unbound_episode_kinds: set[str] = set()
+
+    def _submit(self, escalation: Escalation) -> bool:
+        accepted = self.try_escalate(escalation)
+        if not accepted:
+            self.dropped += 1
+            log.info("gate dropped escalation %s on contention", escalation.trigger)
+        return accepted
+
+    def on_tick(self, tick: Tick) -> Escalation | None:
+        self.window.append(tick)
+        while self.window and self.window[0].t < tick.t - 90.0:
+            self.window.popleft()
+
+        for check in self.db.due_pending_checks(tick.t):
+            escalation = Escalation(
+                trigger=f"watch:{check.reason}", t=tick.t, tick=tick,
+                window=list(self.window), reason=check.reason,
+            )
+            accepted = self._submit(escalation)
+            self.db.mark_pending_fired(check.id)
+            if accepted:
+                self.fired[escalation.trigger] += 1
+                self.last_escalation_t = tick.t
+
+        open_episodes = self.episodes.open_episodes()
+        for kind in tuple(self._unbound_episode_kinds):
+            episode = open_episodes.get(kind)  # type: ignore[arg-type]
+            if episode is not None:
+                self._escalated_episode_ids.add(episode.id)
+                self._unbound_episode_kinds.remove(kind)
+        for trigger in self.triggers:
+            if not trigger.predicate(list(self.window)):
+                continue
+            episode = open_episodes.get(trigger.episode_kind) if trigger.episode_kind else None
+            # Per-trigger suppression must not block other triggers this tick
+            # (e.g. caffeine seen while a screen_block is already escalated).
+            if episode is not None and episode.id in self._escalated_episode_ids:
+                self.suppressed[trigger.name] += 1
+                continue
+            last = self._last_trigger_t.get(trigger.name)
+            if last is not None and tick.t - last < trigger.cooldown_s:
+                self.suppressed[trigger.name] += 1
+                continue
+            if self.last_escalation_t is not None and tick.t - self.last_escalation_t < self.timings.global_escalation_min_gap:
+                self.suppressed[trigger.name] += 1
+                return None
+
+            escalation = Escalation(
+                trigger=trigger.name, t=tick.t, tick=tick, window=list(self.window),
+                episode_id=episode.id if episode is not None else None,
+                reason=trigger.reason.format(trigger=trigger.name),
+            )
+            if self._submit(escalation):
+                self.fired[trigger.name] += 1
+                self._last_trigger_t[trigger.name] = tick.t
+                self.last_escalation_t = tick.t
+                if episode is not None:
+                    self._escalated_episode_ids.add(episode.id)
+                elif trigger.episode_kind is not None:
+                    self._unbound_episode_kinds.add(trigger.episode_kind)
+            return escalation
+        return None
+
+    def stats(self) -> dict[str, object]:
+        return {
+            "fired": dict(self.fired),
+            "dropped": self.dropped,
+            "suppressed": dict(self.suppressed),
+            "last_escalation_t": self.last_escalation_t,
+        }
