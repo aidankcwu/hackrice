@@ -1,8 +1,9 @@
 # Architecture spec
 
-Lifestyle tracking on Ray-Ban Meta glasses. This document covers the processing
-architecture only — capture, tiering, storage, and the escalation model. Feature
-list, scoring model, and dashboard are specified elsewhere.
+Lifestyle tracking on Ray-Ban Meta glasses. §1–§6 cover the processing
+architecture — capture, tiering, storage, and the escalation model. §7–§13 cover
+metric sources, reference thresholds, the T0 field set, scoring, tech stack, the
+tick schema, and the two-person work split.
 
 ---
 
@@ -50,8 +51,7 @@ Two groups, populated by different mechanisms:
 **Non-AI fields** — computed locally from the frame buffer and phone sensors.
 Always present, ~5 ms, zero cost. Includes pixel statistics (luminance, colour
 temperature, histogram spread, frame delta, optical flow, sharpness, perceptual
-hash), on-device ML outputs (face count, OCR text density), and phone sensors
-(accelerometer, GPS speed, indoor/outdoor).
+hash) and phone sensors (accelerometer, GPS speed). No on-device ML — see §9.
 
 **AI fields** — populated by a small VLM (Gemini Flash-Lite class) returning a
 fixed set of booleans and enums. Carries `as_of` and `age_ms`.
@@ -285,8 +285,8 @@ metric is seeded and labelled as such.
 
 | Metric | Source | Derivation |
 |---|---|---|
-| Daytime light dose | Live (proxy) | `indoor_outdoor` + time of day. Outdoor daylight is reliably >1,000 lux, so "≥30 min outdoors before 10:00" needs no lux estimate. Absolute lux is **not** recoverable from an auto-exposed JPEG; use exposure metadata (ISO/shutter) only if the SDK exposes it |
-| Evening light | Live (proxy) | Indoor + low luminance + warm colour temperature after sunset → "dim warm evening" flag. Covers worn time only |
+| Daytime light dose | Seeded | **Not derived from camera in the demo.** Absolute lux is not recoverable from an auto-exposed JPEG; treat as a wearable/phone integration metric |
+| Evening light | Seeded | Same — out of demo scope on the live side |
 | Nature dose | Live | Outdoor + `vegetation_visible` or `scene ∈ {park, trail}`, summed to weekly minutes |
 | Screen / work hours | Live | `screen_present` sustained across ticks, integrated to hours |
 | Social integration | Live | `people_present` sustained over a window → conversation episodes per day |
@@ -386,9 +386,9 @@ T1's `log_insight` output feeds the same reports but is not a scoring input;
 scores are deterministic from episodes and seeded rows.
 
 **Demo metric set.** Five live metrics that a camera can visibly trigger inside
-a four-minute demo: morning outdoor light, nature minutes, social episodes,
-screen hours, and meal tagging with the caffeine cutoff. Everything else scores
-from seeded rows.
+a four-minute demo: nature minutes, social episodes, screen hours, meal tagging
+with the caffeine cutoff, and alcohol sightings. Everything else scores from
+seeded rows.
 
 ---
 
@@ -510,7 +510,7 @@ skills (`install-skills.sh`) and an MCP docs server at
 | Role | Model | Notes |
 |---|---|---|
 | T0 AI fields | Gemini Flash-Lite | Structured output; 1 s budget, drop on overrun |
-| T1 reasoner | Claude | Structured tool-use response, interleaved multi-image |
+| T1 reasoner | OpenAI GPT (Responses API) | Structured JSON output, interleaved multi-image input |
 | TTS | ElevenLabs Flash v2.5 | Lowest-latency tier; stream, don't wait for the full file |
 
 ### 11.7 Settled decisions
