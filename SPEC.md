@@ -638,6 +638,8 @@ Owns, exclusively:
 - T0 VLM call, its structured-output schema, the 1 s budget and drop rule
 - Tick assembly and emission
 - ElevenLabs call and delivery of audio bytes to the phone
+- **HealthKit forwarding** from the iOS bridge (§15.1) — Apple Watch samples
+  posted to B's wearable ingest endpoint
 - Recording the `replay` corpus (do this first — B needs it)
 
 Does not touch: triggers, episodes, T1, scoring, dashboard, or what gets said.
@@ -706,9 +708,12 @@ Neither role covers these, and they are how two-person teams lose:
 ## 14. Wearable biometrics (seeded)
 
 The metrics in this section can only be collected by a wearable. The camera
-cannot see them and the phone cannot infer them. Per the §7 rule they are all
+cannot see them and the phone cannot infer them. Per the §7 rule they are
 **hardcoded** for the demo, labelled `seeded`, with `source` set to the device
-that would actually provide them. Three devices are named because each has a
+that would actually provide them — **except where §15 connects a real device.**
+The two devices we actually own and connect are an Apple Watch and a Fitbit;
+§15 defines those live paths. Seeded rows remain the fallback for any metric
+no connected device supplies. Three devices are named because each has a
 public API and each is the strongest source for something the others are not:
 
 | Device | Best at | Integration path |
@@ -774,4 +779,144 @@ anomaly explained by what the wearer was looking at.
   the wearable gives the number, the frames give the cause.
 - **Demo.** One HR spike is planted at a scripted scenario moment so the
   trigger fires once inside the four-minute demo.
+
+---
+
+## 15. Live wearable integrations
+
+§14 seeds every wearable metric. This section replaces the seed for the two
+devices we own. Both feed the same laptop-side path, so the gate, the
+reasoner, the scorer, and the dashboard never know which device a sample came
+from — only its `source` label and whether its `origin` is `live` or `seed`.
+
+### 15.1 Apple Watch via HealthKit (Person A, iOS bridge)
+
+HealthKit is the Health database **on the iPhone paired to the watch**. It is
+not a cloud account; the only way out is an app on that phone. The bridge
+(§11.4) already runs there, so it reads HealthKit and forwards samples.
+
+**Entitlement and permissions.** Add the HealthKit capability in Xcode and
+`NSHealthShareUsageDescription` to Info.plist. Request read authorization for:
+
+| HK type | Canonical metric | Unit | Cadence from the watch |
+|---|---|---|---|
+| `heartRate` | `heart_rate` | bpm | every few minutes at rest; ~1 Hz only inside an `HKWorkoutSession` (watchOS, out of scope) |
+| `heartRateVariabilitySDNN` | `hrv_rmssd` | ms (SDNN — label it) | a few times a day, mostly during sleep |
+| `oxygenSaturation` | `spo2` | % (×100) | periodic, mostly sleep |
+| `respiratoryRate` | `respiratory_rate` | brpm | sleep |
+| `appleSleepingWristTemperature` | `wrist_temp_dev` | °C relative to baseline | nightly |
+| `stepCount` | `steps_delta` | steps per sample | continuous |
+| `activeEnergyBurned` | `active_energy` | kcal per sample | continuous |
+| `walkingHeartRateAverage` | `walking_hr_avg` | bpm | daily |
+| `environmentalAudioExposure` | `env_sound_db` | dBA | periodic |
+
+**Delivery.** One `HKAnchoredObjectQuery` per type with an `updateHandler`,
+plus `enableBackgroundDelivery(for:frequency:.immediate)` and an
+`HKObserverQuery` so the app is woken when new samples land. Persist the
+anchors so a relaunch does not replay history. Batch samples and POST every
+30 s; do not send one request per sample.
+
+**Payload** — the canonical wearable payload, `t` = `sample.startDate` as
+epoch seconds:
+
+```json
+POST http://<laptop>:8010/api/wearables/ingest
+X-Ingest-Token: <WEARABLE_INGEST_TOKEN, if set>
+
+{"device": "apple_watch",
+ "samples": [
+   {"t": 1789200842.0, "metric": "heart_rate", "value": 96, "unit": "bpm"},
+   {"t": 1789200780.0, "metric": "spo2", "value": 97, "unit": "%"}
+ ]}
+```
+
+Response `{accepted, rejected, reasons}`. Unknown metrics and timestamps more
+than 48 h from now are rejected, not stored. The endpoint is idempotent on
+`(t, metric)`, so re-sending a batch after a dropped connection is safe.
+
+**Gotchas.** The simulator has no HealthKit data from a real watch — test on
+the phone. Foreground the app during the demo; background delivery is
+best-effort. HealthKit reports HRV as SDNN, not RMSSD; the dashboard labels
+it, and no score compares it to the seeded RMSSD baseline.
+
+**Fallback if the bridge slips: Health Auto Export.** A third-party iPhone app
+that reads the same Health store and POSTs on a schedule. Point a REST
+automation at `POST /api/wearables/ingest/health-auto-export` every 1–5 min
+with the metrics above selected; the backend maps its JSON to the canonical
+payload. Same data, same endpoint family, no Swift.
+
+### 15.2 Fitbit via the Fitbit Web API (Person B, laptop)
+
+The Fitbit Web API exposes **intraday** data for the account owner, which is
+why it replaces WHOOP in the plan: WHOOP's API returns only daily and
+per-event records.
+
+**Registration** (once, by the account owner): dev.fitbit.com → new app,
+application type **Personal** (this is what unlocks intraday access without
+an approval process), redirect URL exactly
+`http://localhost:8010/api/wearables/fitbit/callback`. Put the OAuth 2.0
+client ID and secret in `backend/.env` as `FITBIT_CLIENT_ID` /
+`FITBIT_CLIENT_SECRET`. Never commit them.
+
+**Authorization.** OAuth 2.0 with PKCE. Open
+`GET /api/wearables/fitbit/authorize` on the laptop, approve on Fitbit's page,
+and the callback stores the token at `FITBIT_TOKEN_PATH` (gitignored). Access
+tokens last 8 h; refresh tokens rotate and are persisted on every refresh.
+Scopes: `heartrate sleep oxygen_saturation respiratory_rate temperature
+cardio_fitness activity profile settings`.
+
+**Poller.** `FitbitSync` runs every `FITBIT_POLL_S` (default 300 s), budgets
+≤ 8 requests per cycle against the 150 requests/hour limit, honours
+`Retry-After` on 429, and backs off ×2 up to 30 min on repeated failure.
+
+| Endpoint | Canonical output |
+|---|---|
+| `/1/user/-/activities/heart/date/{d}/1d/1sec/time/{from}/{to}.json` | `heart_rate` samples (1 s), daily `resting_hr` |
+| `/1/user/-/hrv/date/{d}/all.json`, `/hrv/date/{d}.json` | `hrv_rmssd` samples (5 min, sleep), daily `hrv_rmssd_ms` |
+| `/1/user/-/spo2/date/{d}/all.json`, `/spo2/date/{d}.json` | `spo2` samples (1 min), daily `spo2` |
+| `/1/user/-/br/date/{d}/all.json` | daily `respiratory_rate` |
+| `/1/user/-/temp/skin/date/{d}.json` | daily `skin_temp_dev` |
+| `/1/user/-/activities/steps/date/{d}/1d/1min/time/{from}/{to}.json` | `steps_delta` samples |
+| `/1.2/user/-/sleep/date/{d}.json` | daily `sleep_hours`, `deep_min`, `rem_min`, `light_min`, `awake_min`, `sleep_efficiency`, `bed_time`, `wake_time` |
+| `/1/user/-/activities/list.json?afterDate={d}` | daily `workout_km`, `workout_avg_hr`, `workout_minutes` |
+| `/1/user/-/cardioscore/date/{d}.json` | daily `vo2_max` |
+
+Timestamps in Fitbit responses are local to the profile timezone
+(`/1/user/-/profile.json`); the poller converts them to epoch seconds.
+Nightly metrics (sleep, HRV, SpO2, temperature) are fetched for yesterday as
+well as today.
+
+**Latency.** Data reaches Fitbit's servers only when the tracker syncs to the
+Fitbit phone app — roughly every 15 min, or immediately when the app is
+opened. Opening the app once before the demo forces a sync. "Live" from
+Fitbit means minutes of lag; the Apple Watch path is the one that gets
+within a minute.
+
+### 15.3 Laptop side, shared by both
+
+- **Storage.** Intraday samples go to `biometric_series (t, metric, value,
+  source, origin)` with `origin = live`. Daily rows go to the existing
+  `seeded` table with `source` set to the real device. When both live and
+  seeded rows exist for a metric in a window, **live wins** and the seeded
+  rows are ignored for that window.
+- **Metric catalogue.** `heart_rate`, `hrv_rmssd`, `spo2`,
+  `respiratory_rate`, `wrist_temp_dev`, `steps_delta`, `active_energy`,
+  `strain`, `walking_hr_avg`, `env_sound_db`. Devices: `apple_watch`,
+  `fitbit`, `whoop`, `oura`, `sim`.
+- **Routes.** `POST /api/wearables/ingest` (canonical),
+  `POST /api/wearables/ingest/health-auto-export`, `GET /api/wearables/status`
+  (`live_connected` = any live sample in the last 15 min),
+  `GET /api/biometrics?metrics=heart_rate,spo2,...` (multi-metric),
+  `GET /api/wearables/fitbit/{authorize,callback,status,sync}`.
+- **Every escalation** carries a "wearable now" context line (latest value
+  of each metric seen in the last 30 min) in addition to the tick table, so
+  T1 can cite HRV, SpO2, or breathing rate alongside the frames. The
+  `biometric_anomaly` trigger (§14.3) reads the same feed and therefore fires
+  on real heart rate as soon as a device is connected.
+- **Dashboard.** The heart-rate strip gains tiles for the other metrics, each
+  with a `live` / `seeded` pill and the device name, and the header says
+  which device is connected.
+- **Optional shared secret.** If `WEARABLE_INGEST_TOKEN` is set, ingest
+  routes require the `X-Ingest-Token` header. Use it when the laptop is on a
+  shared network.
 
