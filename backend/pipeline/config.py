@@ -184,6 +184,8 @@ class Settings(BaseSettings):
     fitbit_token_path: Path = Path("./data/fitbit_token.json")
     fitbit_poll_s: int = 300
     wearable_ingest_token: str | None = None
+    #: T0 VLM budget in seconds (SPEC §2.4). None = tick_interval_s - 0.1.
+    vlm_budget_s: float | None = None
 
     @cached_property
     def timings(self) -> Timings:

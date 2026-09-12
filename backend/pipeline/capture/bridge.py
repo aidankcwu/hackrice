@@ -45,7 +45,13 @@ class LongevityCapture:
 
         self.ring = FrameRing(ttl_s=settings.frame_ttl_s)
         self.link = GlassesLink()
-        self.tagger = T0Tagger(build_client(vlm))
+        # The VLM budget follows the tick interval: a call that would return at
+        # 1.2 s is worth keeping when the next frame is not due until 1.5 s.
+        # Person A's default (1.0 s) dates from 1 Hz ticks and cut coverage to
+        # ~70-80% at a ~840 ms median. Override with VLM_BUDGET_S.
+        budget_s = settings.vlm_budget_s or max(0.5, settings.tick_interval_s - 0.1)
+        self.vlm_budget_s = budget_s
+        self.tagger = T0Tagger(build_client(vlm), budget_s=budget_s)
         self.his_bus = T0TickBus()
         self.source = self._build_source(
             source, dir=dir, speed=speed, loop=loop, camera=camera,

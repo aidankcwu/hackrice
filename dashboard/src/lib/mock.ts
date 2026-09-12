@@ -63,6 +63,11 @@ export const mockWearablesStatus: WearablesStatus = {
   live_devices: [],
   catalogue: {},
 };
-export const mockStatus: Status={demo_mode:true,source:"sim",uptime_s:742,tick_count:742,ai_coverage:.77,t1_busy:false,dropped_escalations:1,last_tick_t:now};
+export const mockStatus: Status={demo_mode:true,source:"glasses",uptime_s:742,tick_count:742,ai_coverage:.77,t1_busy:false,dropped_escalations:1,last_tick_t:now,tick_interval_s:1.5,capture:{
+  phone:{connected:1,received:748,latest_age_s:.4,latest_transit_ms:83},
+  loop:"ticks=742 rate=0.667Hz ai=77% device=739/742 sync_mean=4.12ms sync_p50=3.86ms sync_p99=8.20ms slow=17",
+  tagger:{model:"gemini-2.5-flash-lite",calls:581,p50_ms:842,p95_ms:1288,overruns:9,last_error:""},
+  converted:742,dropped:2,ring:{count:58,bytes:4829341},
+}};
 export const mockSummary: TodaySummary={lines:["09:14 — focused screen work began in the office","10:47 — coffee with a colleague; social episode logged","12:31 — mixed lunch with two colleagues","14:08 — 27-minute park walk; vegetation visible","16:42 — late caffeine observed after cutoff"]};
 export const mockPending: PendingCheck[]=[{id:"w1",due_t:now+480,reason:"Check whether screen break happened",trigger:"screen_sustained"},{id:"w2",due_t:now+900,reason:"Check whether meal has ended",trigger:"food_in_frame"}];

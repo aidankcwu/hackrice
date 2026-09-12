@@ -196,3 +196,59 @@ Astra 6 reviewed the plan read-only against the spec. Objections we adopted:
 - **Stage line:** "Same endpoint whether the sample came from a Fitbit, a
   watch, or the simulator. The pipeline only cares that it's a number with a
   timestamp and a source."
+
+## Sat 12 Sep, ~05:50 — Merge: Person A's branch lands
+
+- Aidan's `person-a/capture-pipeline` branch merged in: `src/longevity`, a
+  separate package at the repo root (not inside `backend/`), plus its own
+  tests, tools, and the `ios/` Swift files. 46 tests passing on his side, one
+  skipped.
+- **Only `SPEC.md` conflicted**, and only because both sides had edited it —
+  main kept its §7–§15, and took Person A's §2.3 rewrite (the sensor/device/AI
+  field-group split) on top. Every other file was additive on one side or the
+  other; nothing under `backend/` or `dashboard/` touched anything under
+  `src/longevity` or `ios/`.
+- **The seam held.** Two people worked the whole weekend on the same repo
+  without a shared file, and it showed at merge time: not one file overlapped
+  outside the one doc both sides needed to keep current.
+- **Stage line:** "We drew the seam on a whiteboard at 2am and didn't touch
+  it again all weekend. At merge time that showed up as one conflicted file —
+  the spec — and zero conflicted code."
+
+## Sat 12 Sep, ~06:05 — S9: tick cadence, for real ticks this time
+
+- **Opus (S9).** The merged capture pipeline emits at 1.5 s, not the 1 Hz
+  every trigger and episode threshold was tuned against. `Timings.scaled_hits()`
+  derives every hit count from its 1 Hz reference so thresholds stay aligned
+  by construction instead of being retuned by hand; the sim source and the
+  dashboard's rate readout both switched to the same configured interval.
+- **Measured:** worst-case `screen_sustained` first-fire at the old,
+  unscaled thresholds would have been 78 s at 1.5 s cadence — nearly a third
+  of the four-minute demo gone before the first decision lands. Scaled, it's
+  22 s, matching what the 1 Hz design always intended.
+- **Astra's review** added cadence-aware AI freshness (an `ai` block's age is
+  judged against the real tick interval, not a hardcoded 1 s) and fixed
+  episode dominant-tag selection to match.
+- **Stage line:** "The cadence changed out from under every threshold we'd
+  tuned. We didn't retune them one by one — we derived them all from the same
+  number, so changing the number was the whole fix."
+
+## Sat 12 Sep, ~06:25 — S10: one process, for real
+
+- **Sol (S10).** `--source glasses|webcam|replay` now runs Person A's
+  `T0Loop` inside Person B's FastAPI process instead of two services talking
+  over a wire: his `TickBus` feeds ours, his `FrameRing` backs the reasoner's
+  `FrameStore`, his `/ws/glasses` and `/frames` routes mount alongside ours on
+  port 8010, and `speak()` sends over his phone link. Tick cadence passes
+  through from `Settings.tick_interval_s`. **No edits to his code** — the
+  bridge lives entirely in `backend/pipeline/capture/`. Backend moved to
+  Python 3.11 to satisfy both projects' `pyproject.toml`.
+- **Honest note.** The phone-side packet sender — A12 (sample and encode),
+  A13 (phone sensors), A14 (assemble and send) — was still unwritten at merge
+  time; `ios/MacLink.swift` only proves the socket and speech path (A11 +
+  A16) both ways, with a comment marking where A14 replaces the placeholder
+  payload with a real capture packet. A drafted Swift sender for A12–A14 was
+  handed to Aidan rather than left as a gap.
+- **Stage line:** "Two services became one process tonight, but one wire is
+  still missing on the other side of it — the phone doesn't send real frames
+  yet. We handed over a draft rather than a TODO."

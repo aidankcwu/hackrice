@@ -9,8 +9,18 @@ export type DecisionAction =
   | { type: "speak"; text: string; urgency: "low" | "normal" | "high" }
   | { type: "nothing" };
 export interface Decision { id: string; t: number; trigger: string; trigger_tick_id: string; episode_id: string | null; interpretation: string; confidence: number; actions: DecisionAction[]; spoke: boolean; dropped: boolean; drop_reason: string | null; latency_ms: number; model: string }
-/** `tick_interval_s` is the capture cadence in seconds (1.5 off the glasses); absent on older backends, treat as 1. */
-export interface Status { demo_mode: boolean; source: string; uptime_s: number; tick_count: number; ai_coverage: number; t1_busy: boolean; dropped_escalations: number; last_tick_t: number; tick_interval_s?: number }
+export type CaptureStats = Record<string, unknown> & {
+  loop?: string | Record<string, unknown>;
+  tagger?: string | Record<string, unknown>;
+  phone?: Record<string, unknown>;
+  link?: Record<string, unknown>;
+  frames?: Record<string, unknown>;
+  ring?: Record<string, unknown>;
+  converted?: number;
+  dropped?: number;
+};
+/** `tick_interval_s` is the capture cadence in seconds (1.5 off the glasses); absent on older backends. */
+export interface Status { demo_mode: boolean; source: string; uptime_s: number; tick_count: number; ai_coverage: number; t1_busy: boolean; dropped_escalations: number; last_tick_t: number; tick_interval_s?: number; capture?: CaptureStats }
 export interface Episode { id: string; kind: string; start_t: number; end_t: number | null; duration_s: number; open: boolean; label?: string }
 export interface Insight { id: string; t: number; category: string; text: string }
 export interface MetricScore { id: string; layer: string; metric: string; source: "live" | "seeded"; grade: "A" | "B" | "C"; target: string; value: string | number; score: number }

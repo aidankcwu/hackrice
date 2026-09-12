@@ -3,15 +3,20 @@
 Architecture and contracts: [SPEC.md](SPEC.md). API and seam: [docs/API.md](docs/API.md).
 Build narrative for the stage script: [docs/BUILD_LOG.md](docs/BUILD_LOG.md).
 
-## Run the Person B stack (laptop only, no glasses needed)
+## Run the whole system (one process)
+
+As of S10, Person A's capture pipeline (`src/longevity`) runs inside Person B's
+FastAPI process — one backend, one port, no separate capture service.
 
 ```bash
-# backend — simulated glasses, live GPT reasoner, 5x simulated time
+# backend — real glasses, live Gemini tagger, live GPT reasoner
 cd backend
-cp .env.example .env          # then set OPENAI_API_KEY
+cp .env.example .env          # then set OPENAI_API_KEY and GEMINI_API_KEY
 uv sync
-uv run python -m pipeline.main --reasoner openai --speed 5 --port 8010
+uv run python -m pipeline.main --source glasses --vlm gemini --reasoner openai --port 8010
 ```
+
+The phone connects to `ws://<mac-lan-ip>:8010/ws/glasses`.
 
 ```bash
 # dashboard
@@ -21,12 +26,36 @@ echo 'NEXT_PUBLIC_API_BASE=http://localhost:8010' > .env.local
 npm run dev                   # http://localhost:3000
 ```
 
-Useful flags: `--reasoner fake` (no API key, rule-based decisions),
-`--headless` (print the decision feed, no HTTP), `--no-demo-mode`
-(production cooldowns), `--speed 1` (real time). `npm run dev:mock` renders the
-dashboard with fake data and no backend.
+No hardware ever leaves you stuck — fall back in this order:
 
-Tests: `cd backend && uv run pytest -q` (885). Dashboard: `npm run build`.
+1. `--source webcam` — uses the Mac's own camera. Needs camera permission for
+   the terminal app: System Settings → Privacy & Security → Camera.
+2. `--source replay --dir <corpus> --loop` — replays a directory of
+   timestamped JPEGs at 1 Hz. Use Aidan's 143-frame glasses corpus, or
+   `data/corpus_smoke` for a quick smoke test.
+3. `--source sim --speed 5` — fully synthetic scripted scenario, no hardware
+   or corpus at all.
+
+Env vars (`backend/.env`): `OPENAI_API_KEY` (T1 reasoner), `GEMINI_API_KEY`
+(T0 tagger — pinned to `gemini-2.5-flash-lite`, see FINDINGS.md; do not
+"upgrade" to the `-latest` alias), `TICK_INTERVAL_S=1.5` (glasses cadence),
+plus the optional Fitbit vars (`FITBIT_CLIENT_ID`, `FITBIT_CLIENT_SECRET`,
+`FITBIT_REDIRECT_URI`, `FITBIT_TOKEN_PATH`, `FITBIT_POLL_S`) for live
+wearable data.
+
+`backend/` now requires **Python 3.11** — it shares a venv with `longevity`
+(Person A's package at the repo root, `requires-python = ">=3.11,<3.12"`).
+
+Other useful flags: `--reasoner fake` / `--vlm fake` / `--vlm off` (no API
+keys, rule-based or tag-free), `--camera <n>` (webcam device index),
+`--headless` (print the decision feed, no HTTP), `--no-demo-mode`
+(production cooldowns), `--tick-interval` (seconds between ticks; glasses
+emit at 1.5 s). `npm run dev:mock` renders the dashboard with fake data and
+no backend.
+
+Tests: `cd backend && uv run pytest -q` (885). `src/longevity` has its own
+suite: `uv run pytest tests -q` from the repo root (46 tests). Dashboard:
+`npm run build`.
 
 ## Layout
 
@@ -39,4 +68,6 @@ Tests: `cd backend && uv run pytest -q` (885). Dashboard: `npm run build`.
 | `backend/pipeline/scoring/`, `seed/` | B | SPEC §8 scorer, 7-day seeded integration data |
 | `backend/pipeline/api/` | B | FastAPI app, dashboard routes, wiring |
 | `dashboard/` | B | Next.js dashboard |
-| `backend/pipeline/capture/` (to come) | A | iOS bridge ingest, real ring buffer, T0 VLM, TTS |
+| `backend/pipeline/capture/` | B/A seam | the bridge: mounts A's `T0Loop`, `TickBus`, `FrameRing`, and `/ws/glasses` + `/frames` routes into B's FastAPI app; no edits to A's code |
+| `src/longevity/` | A | T0 capture pipeline: `CaptureSource` adapters (`glasses`, `webcam`, `replay`), sensor fields, frame ring buffer, Gemini VLM tagger, tick assembly |
+| `ios/` | A | Swift side of the glasses path: socket link to the Mac (`MacLink.swift`), corpus recorder (`CorpusRecorder.swift`); lives outside the repo's build, kept here for version control |

@@ -12,11 +12,17 @@ are elapsed demo time (`t` from backend start), not wall clock.
 
 ## 30-second setup checklist
 
-- [ ] **Backend**, from `backend/`: `uv run python -m pipeline.main --source glasses --reasoner openai --speed 1 --demo-mode --port 8010`. Confirms `OPENAI_API_KEY` is set (`.env`) — the process exits immediately if it isn't and `--reasoner openai` was requested.
+- [ ] **T-minus**: open the Fitbit app on the phone once, before anything else, to force a sync — the poller reads whatever Fitbit last synced, so a stale phone-side sync means a stale heart-rate number for the whole demo.
+- [ ] **Backend**, from `backend/`, one process for the whole system: `uv run python -m pipeline.main --source glasses --vlm gemini --reasoner openai --port 8010`. Confirms `OPENAI_API_KEY` and `GEMINI_API_KEY` are set (`.env`) — the process exits immediately if `OPENAI_API_KEY` is missing and `--reasoner openai` was requested. The phone connects to `ws://<mac-lan-ip>:8010/ws/glasses`.
 - [ ] **Dashboard**, from `dashboard/`: `npm run dev`, `NEXT_PUBLIC_API_BASE=http://localhost:8010` in `.env.local`. Load `http://localhost:3000`, confirm `/api/status` shows `demo_mode: true` and `tick_count` climbing.
 - [ ] **Glasses**: charged (streaming drains them in under an hour — plug in until the last possible minute), Bluetooth-bonded to the phone, Meta AI app foregrounded, Developer Mode on.
 - [ ] **Wi-Fi**: phone and laptop on the same LAN. The capture packet uplink is ~40 KB/s — if the venue Wi-Fi is congested, tether the phone to the laptop directly.
-- [ ] **Fallback**: if the glasses drop mid-demo, kill the process and restart with `--source sim --speed 3` — the scripted scenario (seated → coffee → lunch → outdoors → screen) plays on its own and the dashboard keeps working. Person B narrates off whatever the dashboard shows rather than chasing the table below.
+- [ ] **Fallback ladder** — each rung is just a process restart, same port, same dashboard, so Person B can drop down it live without missing a beat:
+  1. `--source glasses` (above) — the real thing.
+  2. `--source webcam` — if the glasses drop or won't pair, point the pipeline at the Mac's own camera (needs camera permission for the terminal app: System Settings → Privacy & Security → Camera).
+  3. `--source replay --dir <corpus> --loop` — if the room's camera won't cooperate either, replay a recorded corpus on a loop (Aidan's glasses corpus, or `data/corpus_smoke` for a quick one).
+  4. `--source sim --speed 3` — no hardware or corpus at all: the scripted scenario (seated → coffee → lunch → outdoors → screen) plays on its own and the dashboard keeps working.
+  Person B narrates off whatever the dashboard shows rather than chasing the table below.
 
 ## Timeline
 
@@ -93,3 +99,11 @@ Real WHOOP/Oura/HealthKit integration in place of the seeded biometric
 fixtures, the DAT glasses capture path replacing today's `sim`/`replay`
 sources with a live 2 fps camera stream, and tick downsampling so storage
 survives longer than a 15-minute demo.
+
+**"Is the wearable data real?"**
+Fitbit is a real OAuth integration polling intraday data — heart rate,
+HRV, SpO2, sleep, straight from the account owner's device. Apple Watch
+data posts through HealthKit in the iOS bridge, over the same ingest
+endpoint. Anything not actually connected — WHOOP, Oura, the rest of the
+seven-day pattern — is clearly labelled `seeded` on the dashboard, never
+passed off as live.
