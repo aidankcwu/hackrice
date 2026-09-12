@@ -1,8 +1,9 @@
 # Architecture spec
 
-Lifestyle tracking on Ray-Ban Meta glasses. This document covers the processing
-architecture only — capture, tiering, storage, and the escalation model. Feature
-list, scoring model, and dashboard are specified elsewhere.
+Lifestyle tracking on Ray-Ban Meta glasses. §1–§6 cover the processing
+architecture — capture, tiering, storage, and the escalation model. §7–§11 cover
+metric sources, reference thresholds, the T0 field set, scoring, and demo build
+defaults. The dashboard is specified elsewhere.
 
 ---
 
@@ -265,3 +266,132 @@ Explicitly built despite looking optional:
   `12:31 · salad · healthy · no action` makes the reasoning legible during silence.
 - **`DEMO_MODE` flag** shortening every cooldown and rate limit. Production timings
   will not let three triggers fire inside a four-minute demo.
+
+---
+
+## 7. Metric sources
+
+Every metric the system scores comes from exactly one of two sources. The
+scoring layer and dashboard do not distinguish between them.
+
+| Source | What it is | Demo status |
+|---|---|---|
+| **Live** | Derived from the tick stream — VLM tags plus non-AI fields, aggregated into episodes (§10) | Built and running |
+| **Seeded** | Phone / wearable / WHOOP integration data | Assumed to exist; **hardcoded** synthetic rows, including the 7-day pattern worth finding |
+
+Rule: anything the camera can see is live. Anything it cannot is seeded. Nothing
+is faked on the live side — if a VLM tag can't support a metric honestly, that
+metric is seeded and labelled as such.
+
+| Metric | Source | Derivation |
+|---|---|---|
+| Daytime light dose | Live (proxy) | `indoor_outdoor` + time of day. Outdoor daylight is reliably >1,000 lux, so "≥30 min outdoors before 10:00" needs no lux estimate. Absolute lux is **not** recoverable from an auto-exposed JPEG; use exposure metadata (ISO/shutter) only if the SDK exposes it |
+| Evening light | Live (proxy) | Indoor + low luminance + warm colour temperature after sunset → "dim warm evening" flag. Covers worn time only |
+| Nature dose | Live | Outdoor + `vegetation_visible` or `scene ∈ {park, trail}`, summed to weekly minutes |
+| Screen / work hours | Live | `screen_present` sustained across ticks + OCR density, integrated to hours |
+| Social integration | Live | `face_count` sustained over a window → conversation episodes per day |
+| Diet pattern | Live | `food_present` + `food_type` enum; T1 tags meals against a Mediterranean pattern |
+| Caffeine cutoff | Live | `caffeine_visible` timestamp vs. seeded bedtime − 9 h |
+| Alcohol | Live | `alcohol_visible` timestamp; nightly HRV drop comes from the seeded side |
+| Resistance training | Live | `scene = gym` + `activity = exercising`, duration and session count |
+| Sauna / cold plunge | Live | `scene ∈ {sauna, cold_plunge}` + duration. Cold plunge scores ~0 per §8 |
+| Activity state | Live | `activity` enum, used as context for every other episode |
+| Sleep duration, SRI | Seeded | Wearable sync |
+| HRV recovery | Seeded | Wearable sync |
+| Steps, VILPA, gait speed | Seeded | Phone pedometer / accelerometer |
+| Night noise | Seeded | Phone mic |
+| Balance, breathwork, purpose | Seeded | User-logged / questionnaire |
+
+---
+
+## 8. Reference thresholds
+
+The numbers scoring is coded against. Grade is evidence quality (A strongest).
+
+| Layer | Metric | Target | Source / grade |
+|---|---|---|---|
+| Light | Daytime melanopic EDI | ≥250 lux sustained daily dose; system target ≥30 min outdoors or bright-band time before 10:00 | Brown et al. 2022 PLOS Biology (consensus); Windred 2024 PNAS — A |
+| Light | Evening (3 h pre-bed) | ≤10 lux melanopic | Brown 2022 — A |
+| Sleep | Duration | 7–9 h (U-shaped risk) | Multiple cohorts — A |
+| Sleep | Regularity (SRI) | Top quintiles ≈ 20–48% lower all-cause mortality; regularity beat duration. System target SRI ≥80 (bed/wake within ±30 min) | Windred 2024 Sleep (UK Biobank, n=60,977) — A |
+| Movement | Steps | ~7,000/day meaningful; plateau ~8,000–10,000 under 60, ~6,000–8,000 over 60 | Paluch 2022 Lancet Public Health — A |
+| Movement | VILPA | 3–4 min/day of vigorous bursts ≈ 26–30% lower all-cause mortality | Stamatakis 2022 Nature Medicine — A |
+| Movement | Resistance training | 30–60 min/week, 2 sessions; 10–17% lower mortality; benefit fades above ~130 min/wk | Momma 2022 BJSM — A |
+| Movement | Gait speed | ≥1.2 m/s good; each +0.1 m/s ≈ 12% lower mortality | Studenski 2011 JAMA — A |
+| Movement | Balance | 10-s one-leg stand; failure → mortality HR 1.84 (ages 51–75) | Araujo 2022 BJSM — B |
+| Social | Integration | Stronger ties → survival OR 1.50; complex integration OR 1.91; isolation OR 1.29, loneliness 1.26 | Holt-Lunstad 2010 / 2015 — A |
+| Nature | Weekly dose | ≥120 min; peak 200–300 min; pattern doesn't matter | White 2019 Sci Rep — B |
+| Heat | Sauna | 2–3×/wk moderate benefit; 4–7×/wk ~40% lower all-cause mortality; sessions >19 min | Laukkanen 2015 JAMA IM — B (single male cohort) |
+| Cold | Cold plunge | No healthspan evidence; log it, score it near zero, say so | — C |
+| Stress | Recovery adequacy | 7-day ln RMSSD ≥ 60-day baseline; flag if below by >1 SD for 3+ days | Standard HRV practice — B |
+| Stress | Work hours | ≥55 h/week associated with higher stroke/IHD mortality | WHO/ILO 2021 — A |
+| Stress | Breathwork | 5 min/day cyclic sighing improves mood, lowers respiratory rate (no HRV change) | Balban 2023 Cell Rep Med — B |
+| Diet | Pattern | Mediterranean pattern ≈ 30% fewer major CV events | PREDIMED (republished 2018) — A |
+| Diet | Caffeine cutoff | Caffeine 6 h before bed cut sleep by >1 h; system cutoff = bedtime − 9 h (CYP1A2 slow: −12 h) | Drake 2013 J Clin Sleep Med — B |
+| Diet | Alcohol | No safe level; nightly HRV drop visible in WHOOP the same night | Zhao 2023 JAMA Netw Open — A |
+| Noise | Night | <45 dB Lnight | WHO 2018 — A |
+| Purpose | Life purpose | Lowest vs highest purpose → mortality HR 2.43 | Alimujiang 2019 JAMA Netw Open — B |
+
+---
+
+## 9. T0 AI field set
+
+The fixed set of VLM outputs referenced in §2.3, sized to cover every live
+metric in §7. Booleans default to false; enums include `unknown`.
+
+| Field | Type | Values |
+|---|---|---|
+| `scene` | enum | `home`, `office`, `restaurant`, `gym`, `sauna`, `cold_plunge`, `park`, `trail`, `vehicle`, `street`, `unknown` |
+| `activity` | enum | `seated`, `standing`, `walking`, `exercising`, `eating`, `unknown` |
+| `food_present` | bool | |
+| `food_type` | enum | `vegetables`, `fruit`, `grains`, `fish`, `poultry`, `red_meat`, `processed`, `sweets`, `mixed`, `none` |
+| `caffeine_visible` | bool | Coffee, tea, energy drink in frame |
+| `alcohol_visible` | bool | |
+| `screen_present` | bool | |
+| `vegetation_visible` | bool | |
+| `people_present` | bool | Cross-checked against on-device `face_count` |
+
+Non-AI fields remain as in §2.3. Where the platform exposes them, add pedometer
+step delta and ambient light sensor (Android yes, iOS no) — both feed the seeded
+side in the demo regardless.
+
+---
+
+## 10. Episodes and scoring
+
+Scoring is computed from **episodes**, not ticks. A fourth component sits
+between the tick stream and the score:
+
+- **Episode builder.** Runs alongside the trigger gate, over the same tick
+  window. Collapses runs of ticks with a stable tag into one row: `meal`,
+  `conversation`, `outdoor_block`, `screen_block`, `gym_session`, `sauna_session`.
+  Each carries start, end, duration, and the dominant tag values. Uses the same
+  debounce parameters as the gate so an episode and its escalation agree on
+  boundaries.
+- **Scorer.** Reads episodes (live) and seeded integration rows, evaluates both
+  against §8 thresholds with the same code path, and emits per-metric scores
+  plus a daily and weekly rollup. Metrics with proxy derivation are scored on
+  the proxy target (e.g. minutes outdoors before 10:00, not lux).
+- **Dashboard** reads scores and episodes. It labels each metric `live` or
+  `seeded` but otherwise treats them identically.
+
+T1's `log_insight` output feeds the same reports but is not a scoring input;
+scores are deterministic from episodes and seeded rows.
+
+**Demo metric set.** Five live metrics that a camera can visibly trigger inside
+a four-minute demo: morning outdoor light, nature minutes, social episodes,
+screen hours, and meal tagging with the caffeine cutoff. Everything else scores
+from seeded rows.
+
+---
+
+## 11. Demo build defaults (proposed, not yet confirmed)
+
+| Decision | Default |
+|---|---|
+| Capture source | `--source` flag taking a webcam index or video file. T0 runs on a laptop; the DAT SDK is a swap-in capture adapter later |
+| T0 VLM | Gemini Flash-Lite |
+| T1 reasoner | Claude, structured tool-use response |
+| Pipeline | Python, FastAPI, SQLite |
+| Dashboard | Next.js, reads from the FastAPI service |
+| Episode identity (§4.7) | **(a)** gate-side suppression for the demo; the "already annotated" hint to T1 can be layered on later without changing the gate |
