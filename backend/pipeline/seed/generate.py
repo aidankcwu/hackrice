@@ -20,7 +20,7 @@ from ..db import Database, day_key
 from ..models import Episode
 from .fixtures import DAY_COUNT, days_ending, seed_live_episodes, seed_rows
 
-__all__ = ["seed_database", "seven_day_summary", "main"]
+__all__ = ["seed_database", "seven_day_summary", "resting_hr_for", "main"]
 
 LATE_COFFEE_FROM_HOUR = 16.0
 SHORT_SLEEP_BELOW_H = 6.5
@@ -138,6 +138,15 @@ def _local_hour(t: float) -> float:
 
     dt = datetime.fromtimestamp(t)
     return dt.hour + dt.minute / 60.0
+
+
+def resting_hr_for(db: Database, day: str) -> float:
+    """Return the day's wearable resting HR, with the demo baseline fallback."""
+
+    return next(
+        (row.value for row in db.list_seeded(day, day) if row.metric == "resting_hr"),
+        58.0,
+    )
 
 
 def seven_day_summary(db: Database, end_day: str) -> str:
@@ -279,6 +288,39 @@ def seven_day_summary(db: Database, end_day: str) -> str:
         tail.append(f"purpose {_mean([v for _, v in purpose]):.1f}/5")
     if tail:
         lines.append("Baselines: " + ", ".join(tail) + ".")
+
+    recovery = series("recovery_score")
+    deep = series("deep_min")
+    rem = series("rem_min")
+    runs = [v for _, v in series("run_km") if v > 0]
+    journal_names = ("caffeine_late", "alcohol", "nicotine", "cannabis")
+    journal = {
+        name: int(sum(v for _, v in series(f"journal_{name}")))
+        for name in journal_names
+    }
+    resting = series("resting_hr")
+    wearable_parts: list[str] = []
+    if recovery:
+        low_day, low_value = min(recovery, key=lambda item: item[1])
+        wearable_parts.append(
+            f"Recovery averaged {_mean([v for _, v in recovery]):.0f}, lowest "
+            f"{low_value:.0f} on {_weekday(low_day)}"
+        )
+    if deep and rem:
+        wearable_parts.append(
+            f"sleep stages averaged {_mean([v for _, v in deep]):.0f} min deep/"
+            f"{_mean([v for _, v in rem]):.0f} min REM"
+        )
+    if resting:
+        wearable_parts.append(
+            f"resting HR {min(v for _, v in resting):.0f}-{max(v for _, v in resting):.0f} bpm"
+        )
+    if runs:
+        wearable_parts.append("Runs: " + ", ".join(f"{v:g} km" for v in runs))
+    wearable_parts.append(
+        "Journal: " + ", ".join(f"{name.replace('_', ' ')} ×{count}" for name, count in journal.items())
+    )
+    lines.append("; ".join(wearable_parts) + ".")
 
     return "\n".join(lines)
 

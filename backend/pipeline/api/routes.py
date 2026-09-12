@@ -91,6 +91,25 @@ async def seeded(request: Request, days: int = Query(7, ge=1)) -> dict:
     return {"rows": _dump(pipeline.db.list_seeded(start.isoformat(), end.isoformat()))}
 
 
+@router.get("/api/biometrics")
+async def biometrics(
+    request: Request,
+    metric: str = "heart_rate",
+    from_: float | None = Query(None, alias="from"),
+    to: float | None = None,
+) -> dict:
+    pipeline = _pipeline(request)
+    end = to if to is not None else (
+        pipeline.last_tick.t if pipeline.last_tick is not None else time.time()
+    )
+    start = from_ if from_ is not None else end - 3600.0
+    return {
+        "metric": metric,
+        "source": "apple_watch",
+        "points": pipeline.db.biometric_series(metric, start, end),
+    }
+
+
 @router.get("/api/events")
 async def events() -> JSONResponse:
     return JSONResponse(status_code=501, content={"detail": "SSE deferred; poll"})

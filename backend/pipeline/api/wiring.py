@@ -21,6 +21,7 @@ from ..reasoner.client import make_client
 from ..reasoner.reasoner import Reasoner
 from ..scoring.scorer import Scorer
 from ..seed.generate import seed_database, seven_day_summary
+from ..seed.biometrics import seed_biometric_series
 from ..sim.scenario import DEFAULT_SCENARIO, Scenario
 from ..sim.source import SimSource
 
@@ -48,6 +49,7 @@ class Pipeline:
         self.episodes = episodes
         self.gate = gate
         self.source = source
+        self.biometrics_start_t = source.start_t
         self.started_at: float | None = None
         self.last_tick: Tick | None = None
         self._tasks: list[asyncio.Task[None]] = []
@@ -164,6 +166,8 @@ def build_pipeline(settings: Settings, *, source: Literal["sim"],
     gate = TriggerGate(default_triggers(timings, settings.demo_mode), timings, db,
                        episodes, reasoner.try_escalate, settings.demo_mode)
     sim_source = SimSource(scenario or DEFAULT_SCENARIO, frame_store, speed=speed)
+    if seed_db:
+        seed_biometric_series(db, sim_source.start_t)
     return Pipeline(settings=settings, source_name=source,
                     reasoner_mode=reasoner_mode, speed=speed, db=db,
                     frame_store=frame_store, bus=bus, scorer=scorer, speech=speech,

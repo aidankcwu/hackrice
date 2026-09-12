@@ -123,6 +123,14 @@ CREATE TABLE IF NOT EXISTS seeded (
     PRIMARY KEY (day, metric)
 );
 
+CREATE TABLE IF NOT EXISTS biometric_series (
+    t      REAL NOT NULL,
+    metric TEXT NOT NULL,
+    value  REAL NOT NULL,
+    source TEXT NOT NULL,
+    PRIMARY KEY (t, metric)
+);
+
 CREATE TABLE IF NOT EXISTS today_summary (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     day         TEXT NOT NULL,
@@ -509,6 +517,30 @@ class Database:
             ).fetchall()
         return [SeededRow(**dict(r)) for r in rows]
 
+    def insert_biometric_series(
+        self, rows: Iterable[tuple[float, str, float, str]]
+    ) -> int:
+        payload = list(rows)
+        if not payload:
+            return 0
+        with self._lock:
+            self.conn.executemany(
+                "INSERT OR REPLACE INTO biometric_series (t, metric, value, source)"
+                " VALUES (?,?,?,?)",
+                payload,
+            )
+            self.conn.commit()
+        return len(payload)
+
+    def biometric_series(self, metric: str, t0: float, t1: float) -> list[tuple[float, float]]:
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT t, value FROM biometric_series"
+                " WHERE metric = ? AND t >= ? AND t <= ? ORDER BY t ASC",
+                (metric, t0, t1),
+            ).fetchall()
+        return [(row["t"], row["value"]) for row in rows]
+
     # -- today's summary (part 4 of the envelope) ------------------------
 
     def append_summary_line(self, line: TodaySummaryLine) -> None:
@@ -543,12 +575,14 @@ class Database:
                 "SELECT (SELECT COUNT(*) FROM ticks),"
                 " (SELECT COUNT(*) FROM ticks WHERE has_ai = 1),"
                 " (SELECT COUNT(*) FROM decisions),"
-                " (SELECT COUNT(*) FROM decisions WHERE dropped = 1)"
+                " (SELECT COUNT(*) FROM decisions WHERE dropped = 1),"
+                " (SELECT COUNT(*) FROM biometric_series)"
             )
-            ticks, ai_ticks, decisions, dropped = cur.fetchone()
+            ticks, ai_ticks, decisions, dropped, biometrics = cur.fetchone()
         return {
             "tick_count": ticks,
             "ai_tick_count": ai_ticks,
             "decision_count": decisions,
             "dropped_count": dropped,
+            "biometric_count": biometrics,
         }

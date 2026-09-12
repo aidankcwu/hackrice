@@ -208,6 +208,16 @@ def test_today_summary(db: Database) -> None:
     assert db.today_summary_lines("1999-01-01") == []
 
 
+def test_biometric_series_range_query(db: Database) -> None:
+    assert db.insert_biometric_series([
+        (102.0, "heart_rate", 62.0, "apple_watch"),
+        (100.0, "heart_rate", 58.0, "apple_watch"),
+        (101.0, "skin_temp", 0.1, "oura"),
+    ]) == 3
+    assert db.biometric_series("heart_rate", 99.0, 101.0) == [(100.0, 58.0)]
+    assert db.stats()["biometric_count"] == 3
+
+
 def test_stats_counts_ai_ticks(db: Database) -> None:
     for i in range(6):
         db.insert_tick(make_tick(i, with_ai=(i < 4)))
@@ -217,6 +227,7 @@ def test_stats_counts_ai_ticks(db: Database) -> None:
         "ai_tick_count": 4,
         "decision_count": 0,
         "dropped_count": 0,
+        "biometric_count": 0,
     }
 
 

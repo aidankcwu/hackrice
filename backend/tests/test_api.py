@@ -43,6 +43,17 @@ async def test_dashboard_routes(tmp_path):
         summary = (await client.get("/api/summary/today")).json()
         assert {"day", "lines"} == summary.keys()
         assert isinstance((await client.get("/api/seeded?days=7")).json()["rows"], list)
+        biometrics = (await client.get(
+            "/api/biometrics",
+            params={
+                "metric": "heart_rate",
+                "from": pipeline.biometrics_start_t + 135,
+                "to": pipeline.biometrics_start_t + 155,
+            },
+        )).json()
+        assert biometrics["metric"] == "heart_rate"
+        assert biometrics["source"] == "apple_watch"
+        assert len(biometrics["points"]) >= 15
         event = await client.get("/api/events")
         assert event.status_code == 501
         assert event.json() == {"detail": "SSE deferred; poll"}

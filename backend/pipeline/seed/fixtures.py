@@ -60,6 +60,23 @@ BREATHWORK_MINUTES = (6.0, 5.0, 5.0, 0.0, 6.0, 0.0, 5.0)
 PURPOSE_SCORE = (4.0, 4.0, 4.0, 3.0, 4.0, 4.0, 4.0)
 DAYTIME_LIGHT_MINUTES = (35.0, 28.0, 41.0, 22.0, 38.0, 26.0, 44.0)
 EVENING_LIGHT_OK = (1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0)
+RESTING_HR = (58.0, 63.0, 58.0, 63.0, 57.0, 63.0, 58.0)
+RESPIRATORY_RATE = (14.2, 15.1, 14.0, 15.3, 13.9, 15.0, 14.1)
+SKIN_TEMP_DEV = (0.0, 0.3, -0.1, 0.4, 0.0, 0.2, -0.1)
+SPO2 = (98.0, 96.0, 98.0, 96.0, 99.0, 97.0, 98.0)
+DEEP_MIN = (92.0, 61.0, 96.0, 64.0, 101.0, 68.0, 94.0)
+REM_MIN = (112.0, 78.0, 116.0, 81.0, 119.0, 84.0, 114.0)
+RECOVERY_SCORE = (82.0, 34.0, 86.0, 39.0, 79.0, 43.0, 84.0)
+STRAIN = (14.2, 6.1, 16.8, 5.4, 18.1, 6.8, 8.3)
+RUN_KM = (8.0, 0.0, 12.0, 0.0, 16.0, 0.0, 0.0)
+RUN_PACE = (5.15, 0.0, 5.25, 0.0, 5.42, 0.0, 0.0)
+RUN_AVG_HR = (146.0, 0.0, 151.0, 0.0, 154.0, 0.0, 0.0)
+VO2_MAX = (51.0,) * DAY_COUNT
+WALKING_STEADINESS = (94.0, 91.0, 95.0, 90.0, 94.0, 92.0, 95.0)
+DAYLIGHT_MIN = (35.0, 28.0, 41.0, 22.0, 38.0, 26.0, 44.0)
+JOURNAL_ALCOHOL = (0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0)
+JOURNAL_CAFFEINE_LATE = (0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0)
+JOURNAL_ZERO = (0.0,) * DAY_COUNT
 
 #: SPEC §7 provenance for each seeded row.
 SEEDED_SOURCES: dict[str, str] = {
@@ -78,6 +95,24 @@ SEEDED_SOURCES: dict[str, str] = {
     "balance_one_leg_s": "user",
     "breathwork_minutes": "user",
     "purpose_score": "user",
+    "resting_hr": "whoop",
+    "respiratory_rate": "oura",
+    "skin_temp_dev": "oura",
+    "spo2": "apple_watch",
+    "deep_min": "oura",
+    "rem_min": "oura",
+    "recovery_score": "whoop",
+    "strain": "whoop",
+    "run_km": "apple_watch",
+    "run_pace": "apple_watch",
+    "run_avg_hr": "apple_watch",
+    "vo2_max": "apple_watch",
+    "walking_steadiness": "apple_watch",
+    "daylight_min": "apple_watch",
+    "journal_alcohol": "whoop",
+    "journal_caffeine_late": "whoop",
+    "journal_nicotine": "whoop",
+    "journal_cannabis": "whoop",
 }
 
 SEEDED_UNITS: dict[str, str] = {
@@ -96,6 +131,24 @@ SEEDED_UNITS: dict[str, str] = {
     "balance_one_leg_s": "s",
     "breathwork_minutes": "min",
     "purpose_score": "1-5",
+    "resting_hr": "bpm",
+    "respiratory_rate": "brpm",
+    "skin_temp_dev": "°C",
+    "spo2": "%",
+    "deep_min": "min",
+    "rem_min": "min",
+    "recovery_score": "0-100",
+    "strain": "0-21",
+    "run_km": "km",
+    "run_pace": "min/km",
+    "run_avg_hr": "bpm",
+    "vo2_max": "mL/kg/min",
+    "walking_steadiness": "%",
+    "daylight_min": "min",
+    "journal_alcohol": "0/1",
+    "journal_caffeine_late": "0/1",
+    "journal_nicotine": "0/1",
+    "journal_cannabis": "0/1",
 }
 
 # -- live episode series, one value per historical day (6 days) -----------
@@ -167,6 +220,24 @@ def seed_rows(end_day: str) -> list[SeededRow]:
             # Nature is a live metric (SPEC §7); the seeded row exists only so
             # the 7-day integration panel is not silently missing it.
             "nature_minutes": 0.0,
+            "resting_hr": RESTING_HR[i],
+            "respiratory_rate": RESPIRATORY_RATE[i],
+            "skin_temp_dev": SKIN_TEMP_DEV[i],
+            "spo2": SPO2[i],
+            "deep_min": DEEP_MIN[i],
+            "rem_min": REM_MIN[i],
+            "recovery_score": RECOVERY_SCORE[i],
+            "strain": STRAIN[i],
+            "run_km": RUN_KM[i],
+            "run_pace": RUN_PACE[i],
+            "run_avg_hr": RUN_AVG_HR[i],
+            "vo2_max": VO2_MAX[i],
+            "walking_steadiness": WALKING_STEADINESS[i],
+            "daylight_min": DAYLIGHT_MIN[i],
+            "journal_alcohol": JOURNAL_ALCOHOL[i],
+            "journal_caffeine_late": JOURNAL_CAFFEINE_LATE[i],
+            "journal_nicotine": JOURNAL_ZERO[i],
+            "journal_cannabis": JOURNAL_ZERO[i],
         }
         rows.extend(_row(day, metric, value) for metric, value in series.items())
     return rows

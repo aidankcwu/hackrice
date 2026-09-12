@@ -67,7 +67,7 @@ def test_every_seeded_metric_has_a_row_on_every_day():
 def test_rows_carry_spec_7_provenance_and_units():
     for row in seed_rows(END_DAY):
         assert row.source == SEEDED_SOURCES[row.metric]
-        assert row.source in ("whoop", "phone", "user")
+        assert row.source in ("whoop", "oura", "apple_watch", "phone", "user")
         assert row.unit
     sources = {r.metric: r.source for r in seed_rows(END_DAY)}
     assert sources["sleep_hours"] == "whoop"
@@ -123,11 +123,17 @@ def test_late_caffeine_days_carry_the_whole_pattern():
             assert 5.8 <= rows[(day, "sleep_hours")] <= 6.2
             assert 0.82 <= rows[(day, "hrv_rmssd_ratio")] <= 0.86
             assert 60 <= rows[(day, "sleep_regularity_sri")] <= 64
+            assert rows[(day, "journal_caffeine_late")] == 1
+            assert 30 <= rows[(day, "recovery_score")] <= 45
+            assert rows[(day, "resting_hr")] >= 63
+            assert rows[(day, "run_km")] == 0
         else:
             assert rows[(day, "bed_time")] == 23.0
             assert 7.4 <= rows[(day, "sleep_hours")] <= 7.8
             assert rows[(day, "hrv_rmssd_ratio")] >= 1.0
             assert rows[(day, "sleep_regularity_sri")] >= 80
+            assert 70 <= rows[(day, "recovery_score")] <= 90
+            assert rows[(day, "resting_hr")] <= 58
 
 
 def test_the_late_coffee_is_visible_on_the_live_side():
@@ -256,6 +262,9 @@ def test_summary_names_the_coffee_to_sleep_pattern(db):
     assert "00:45" in summary  # the bedtime that slipped
     assert "84 min/week" in summary  # live nature dose
     assert "120" in summary  # against the §8 target
+    assert "Recovery" in summary
+    assert "Journal" in summary
+    assert "8 km" in summary
 
 
 def test_summary_is_derived_not_hardcoded(db):
