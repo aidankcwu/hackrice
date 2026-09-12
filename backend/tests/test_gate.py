@@ -74,6 +74,14 @@ def test_default_scenario(tmp_path, capsys) -> None:
     print("scenario escalations:", names)
     assert len(set(names)) >= 3
     assert "caffeine_seen" in names and "alcohol_seen" in names, names
+    bound_triggers = {
+        "food_in_frame", "screen_sustained", "people_sustained", "outdoor_sustained",
+    }
+    assert all(
+        escalation.episode_id is not None
+        for escalation in escalations
+        if escalation.trigger in bound_triggers
+    )
     kinds = {episode.kind for episode in db.list_episodes()}
     assert {"meal", "screen_block", "outdoor_block", "conversation"} <= kinds
     db.close()

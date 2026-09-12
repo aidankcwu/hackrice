@@ -18,6 +18,7 @@ class EpisodeParams:
     exit_min_misses: int
     exit_window_s: float
     unknown_grace_s: float
+    entry: dict[EpisodeKind, tuple[int, float]] = field(default_factory=dict)
     sighting_min_hits: int = 2
     sighting_window_s: float = 10.0
     sighting_idle_close_s: float = 15.0
@@ -25,9 +26,28 @@ class EpisodeParams:
 
     @classmethod
     def from_timings(cls, timings: Timings, demo_mode: bool) -> "EpisodeParams":
+        entry = {
+            "meal": (timings.food_min_hits, timings.food_window),
+            "screen_block": (
+                timings.screen_sustained_min_hits,
+                timings.screen_sustained_window,
+            ),
+            "conversation": (
+                timings.people_sustained_min_hits,
+                timings.people_sustained_window,
+            ),
+            "outdoor_block": (
+                timings.outdoor_min_hits,
+                timings.outdoor_sustained_window,
+            ),
+            "gym_session": (3, 10.0),
+            "sauna_session": (3, 10.0),
+            "caffeine_sighting": (2, 10.0),
+            "alcohol_sighting": (2, 10.0),
+        }
         if demo_mode:
-            return cls(3, 6.0, 4, 6.0, 8.0)
-        return cls(3, 10.0, 4, 10.0, 20.0)
+            return cls(3, 6.0, 4, 6.0, 8.0, entry=entry)
+        return cls(3, 10.0, 4, 10.0, 20.0, entry=entry)
 
 
 Predicate = Callable[[Tick], bool | None]
@@ -160,8 +180,12 @@ class EpisodeBuilder:
             if tick.ai_fresh():
                 state.last_fresh_ai_t = tick.t
             is_sighting = kind in self._SIGHTINGS
-            entry_hits = p.sighting_min_hits if is_sighting else p.entry_min_hits
-            entry_window = p.sighting_window_s if is_sighting else p.entry_window_s
+            fallback = (
+                (p.sighting_min_hits, p.sighting_window_s)
+                if is_sighting
+                else (p.entry_min_hits, p.entry_window_s)
+            )
+            entry_hits, entry_window = p.entry.get(kind, fallback)
 
             if state.episode is None:
                 if value is True:

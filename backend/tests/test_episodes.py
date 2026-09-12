@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pipeline.config import Timings
 from pipeline.db import Database
-from pipeline.episodes import EpisodeBuilder
+from pipeline.episodes import EpisodeBuilder, EpisodeParams
 from pipeline.models import AiBlock, SensorBlock, Tick
 
 
@@ -11,6 +11,33 @@ def tick(seq: int, **ai: object) -> Tick:
         tick_id=f"t_{seq}", t=float(seq), seq=seq,
         sensor=SensorBlock(frame_delta=0.1, phash=f"{seq:016x}"),
         ai=AiBlock(age_ms=0, **ai) if ai else None, frame_ref=f"f_{seq}",
+    )
+
+
+def test_entry_thresholds_match_demo_trigger_thresholds() -> None:
+    timings = Timings.demo()
+    params = EpisodeParams.from_timings(timings, demo_mode=True)
+
+    assert params.entry["meal"] == (timings.food_min_hits, timings.food_window)
+    assert params.entry["screen_block"] == (
+        timings.screen_sustained_min_hits,
+        timings.screen_sustained_window,
+    )
+    assert params.entry["conversation"] == (
+        timings.people_sustained_min_hits,
+        timings.people_sustained_window,
+    )
+    assert params.entry["outdoor_block"] == (
+        timings.outdoor_min_hits,
+        timings.outdoor_sustained_window,
+    )
+    assert params.entry["caffeine_sighting"] == (
+        params.sighting_min_hits,
+        params.sighting_window_s,
+    )
+    assert params.entry["alcohol_sighting"] == (
+        params.sighting_min_hits,
+        params.sighting_window_s,
     )
 
 

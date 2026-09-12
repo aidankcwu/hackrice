@@ -73,3 +73,28 @@ Astra 6 reviewed the plan read-only against the spec. Objections we adopted:
   fallback when a key is missing.
 - **Stage line:** "Two supervisors, one from each vendor, reviewed every
   design decision and every diff. Neither could ship without the other."
+
+## Sat 12 Sep, ~02:50 — S1 foundation landed (Opus)
+
+- Tick contract, SQLite, latest-wins tick bus, 90 s frame store, and a
+  synthetic tick source that plays a scripted day at any speed. 73 tests.
+- Two supervisor amendments before anything built on it: AI booleans are
+  tri-state (missing means *unknown*, never false), and all downstream timing
+  runs on `tick.t` so a 20× simulation can't desync a cooldown.
+- Astra's review caught one bug in the smoke harness (a drop counter read
+  after the bus closed). Fixed inline.
+
+## Sat 12 Sep, ~03:05 — S2 gate + episodes landed (Sol), one real bug caught
+
+- Seven triggers evaluated over tick windows with per-trigger cooldowns, a
+  global gap, episode-identity suppression (option a), and `watch` polling.
+- **Bug caught in review:** a trigger suppressed by its own open episode
+  ended evaluation for the whole tick, so caffeine could never fire while a
+  screen block was already escalated. Two-line fix; the scenario went from
+  four distinct triggers to six.
+- **Astra's review** then caught that episode entry thresholds were hardcoded
+  separately from trigger thresholds, so an escalation could arrive before
+  its episode existed. Terra derived both from the same `Timings` fields.
+- **Stage line:** "Plain code decides *when* to think. Seven conditions, each
+  evaluated over a window of seconds, each with its own cooldown, and a rule
+  that a sustained condition escalates once — not every second."
