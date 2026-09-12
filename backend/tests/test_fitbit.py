@@ -94,7 +94,7 @@ async def test_routes_unconfigured_and_authorize_redirect(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_callback_starts_one_poll_loop_and_an_initial_sync():
+async def test_callback_starts_exactly_one_poll_loop():
     class Client:
         class Config:
             client_id = "id"
@@ -117,6 +117,7 @@ async def test_callback_starts_one_poll_loop_and_an_initial_sync():
         async def sync_once(self): self.sync_calls += 1; return {}
         async def run_forever(self):
             self.poll_calls += 1
+            await self.sync_once()  # the real loop syncs first, then sleeps
             await asyncio.Event().wait()
 
     sync = Sync()
@@ -127,6 +128,6 @@ async def test_callback_starts_one_poll_loop_and_an_initial_sync():
         state = parse_qs(urlparse(redirect.headers["location"]).query)["state"][0]
         assert (await http.get("/api/wearables/fitbit/callback", params={"code": "ok", "state": state})).status_code == 200
         await asyncio.sleep(0)
-        assert sync.connected and sync.sync_calls == 1 and sync.poll_calls == 1
+        assert sync.connected and sync.sync_calls == 1 and sync.poll_calls == 1  # no double sync
         assert (await http.get("/api/wearables/fitbit/status")).json()["polling"] is True
     set_sync(None)

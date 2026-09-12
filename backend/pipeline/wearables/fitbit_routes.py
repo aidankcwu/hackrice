@@ -47,13 +47,8 @@ async def callback(code: str = Query(...), state: str = Query(...)) -> HTMLRespo
     if verifier is None: raise HTTPException(400, "Invalid or expired Fitbit OAuth state")
     await sync.client.exchange_code(code, verifier); sync.connected = True
 
-    async def initial_sync() -> None:
-        try:
-            await sync.sync_once()
-        except Exception:
-            log.exception("fitbit: initial sync after OAuth failed")
-
-    asyncio.create_task(initial_sync(), name="fitbit-initial-sync")
+    # run_forever() syncs immediately on its first iteration, so a separate
+    # one-off sync here would double every Fitbit request (Astra review).
     start_polling(sync)
     return HTMLResponse("<!doctype html><title>Fitbit connected</title><p>Fitbit connected — you can close this tab</p>")
 
