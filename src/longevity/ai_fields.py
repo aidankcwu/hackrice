@@ -26,37 +26,57 @@ from typing import Any
 # `unknown` stays last in every list that has it (`food_type`'s null value is `none`).
 
 SCENE = [
-    "home", "office", "restaurant", "gym", "sauna", "cold_plunge",
-    "park", "trail", "vehicle", "street",
-    # Rooms of a home, all of which used to collapse into `home`.
-    "kitchen", "bedroom", "living_room", "bathroom", "dorm_room",
-    # Indoor public / study / work places that used to collapse into `office`.
-    "classroom", "lecture_hall", "library", "lab", "cafe", "bar",
-    "grocery_store", "store",
-    # Outdoors beyond `park`/`trail`/`street`.
-    "campus_outdoor", "backyard", "beach", "parking_lot", "stadium",
-    # Transitional spaces -- short, and never a meaningful episode on their own.
-    "hallway", "elevator", "transit",
+    # Indoor, by what the place is for.
+    "home", "office", "classroom", "library", "lab",
+    "restaurant", "cafe", "bar", "gym", "store", "grocery_store",
+    "hospital", "hotel",
+    # Outdoor.
+    "park", "trail", "campus", "street", "parking_lot", "beach",
+    "nature", "sports_venue", "construction_site",
+    # In transit.
+    "car", "public_transit", "airport",
+    # Recovery, and the reason this project cares about them (SPEC §7).
+    "sauna", "cold_plunge",
+    # Catch-alls. A frame that is plainly indoors should never fall to `unknown`
+    # just because the room has no name on the list -- indoor/outdoor is the one
+    # distinction the scorer cannot reconstruct from anything else.
+    "indoor_other", "outdoor_other",
     "unknown",
 ]
 
 ACTIVITY = [
-    "seated", "standing", "walking", "exercising", "eating",
-    "lying_down", "cooking", "reading", "typing", "phone_use", "talking",
-    "driving", "running", "lifting_weights", "stretching", "cycling",
-    "cleaning", "shopping", "drinking",
+    # Posture and locomotion.
+    "seated", "standing", "walking", "running", "cycling", "driving",
+    # Deliberate exercise, as distinct from incidental movement above.
+    "exercising", "lifting_weights", "stretching",
+    # Intake.
+    "eating", "drinking", "cooking",
+    # Focused attention. `computer_use` replaces the narrower `typing`.
+    "reading", "computer_use", "phone_use",
+    # Social and errands.
+    "talking", "shopping", "cleaning",
+    # Rest.
+    "lying_down", "sleeping",
+    # Everything else. `other` means "seen but not on this list"; `unknown`
+    # means "could not tell" -- the scorer should treat them differently.
+    "personal_care", "commuting", "other",
     "unknown",
 ]
 
 FOOD_TYPE = [
-    "vegetables", "fruit", "grains", "fish", "poultry", "red_meat",
-    "processed", "sweets", "mixed",
+    # Whole-food groups.
+    "vegetables", "fruit", "grains", "beans_legumes", "fish", "seafood",
+    "poultry", "red_meat", "eggs", "dairy", "nuts",
     # Dish-shaped options: what a plate actually looks like in a frame, which a
     # VLM can see directly and does not have to reason its way back to a food group.
     "salad", "sandwich", "burger", "pizza", "pasta", "rice_bowl", "noodles",
-    "soup", "eggs", "dairy", "nuts", "chips", "candy", "baked_goods",
-    "cereal", "protein_bar", "fast_food", "dessert",
-    "none",
+    "soup", "wrap_taco", "breakfast",
+    # Processed and prepared.
+    "processed", "fried_food", "fast_food", "snack", "chips", "candy",
+    "baked_goods", "cereal", "protein_bar", "sweets", "dessert",
+    # Staples that carry no verdict on their own.
+    "bread", "potatoes",
+    "mixed", "none",
 ]
 
 DRINK = [
@@ -75,14 +95,12 @@ DRINK = [
 
 #: Scenes that count as being outside (the `outdoor_sustained` trigger, §7 nature).
 OUTDOOR_SCENES = frozenset({
-    "park", "trail", "street", "campus_outdoor", "backyard", "beach",
-    "parking_lot", "stadium",
+    "park", "trail", "campus", "street", "parking_lot", "beach",
+    "nature", "sports_venue", "construction_site", "outdoor_other",
 })
 
 #: Scenes that count as being at home -- every room of one.
-HOME_SCENES = frozenset({
-    "home", "kitchen", "bedroom", "living_room", "bathroom", "dorm_room",
-})
+HOME_SCENES = frozenset({"home"})
 
 #: Activities that explain an elevated heart rate on their own (SPEC §14.3).
 EXERTION_ACTIVITIES = frozenset({
@@ -91,15 +109,17 @@ EXERTION_ACTIVITIES = frozenset({
 
 #: `food_type` values counted as on-pattern for PREDIMED-style diet scoring.
 HEALTHY_FOOD_TYPES = frozenset({
-    "vegetables", "fruit", "grains", "fish", "poultry", "salad", "rice_bowl",
-    "soup", "eggs", "nuts", "mixed",
+    "vegetables", "fruit", "grains", "beans_legumes", "fish", "seafood",
+    "poultry", "salad", "rice_bowl", "soup", "eggs", "nuts", "mixed",
 })
 
 #: Explicitly off-pattern. Everything in neither set (`sandwich`, `pasta`,
-#: `red_meat`, `dairy`, `cereal`, `noodles`, `protein_bar`, `none`) is neutral.
+#: `red_meat`, `dairy`, `cereal`, `noodles`, `protein_bar`, `wrap_taco`,
+#: `breakfast`, `snack`, `bread`, `potatoes`, `none`) is neutral. `snack` is
+#: deliberately neutral: a handful of nuts and a bag of chips are both snacks.
 UNHEALTHY_FOOD_TYPES = frozenset({
-    "processed", "sweets", "chips", "candy", "baked_goods", "fast_food",
-    "dessert", "burger", "pizza",
+    "processed", "fried_food", "sweets", "chips", "candy", "baked_goods",
+    "fast_food", "dessert", "burger", "pizza",
 })
 
 #: Drinks that set `caffeine_visible` when the model did not report the flag.
