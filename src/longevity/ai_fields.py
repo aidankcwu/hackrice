@@ -123,7 +123,9 @@ UNHEALTHY_FOOD_TYPES = frozenset({
 })
 
 #: Drinks that set `caffeine_visible` when the model did not report the flag.
-CAFFEINE_DRINKS = frozenset({"coffee", "tea", "energy_drink", "boba"})
+#: `soda` is in deliberately: caffeine-free sodas exist, but the common case is
+#: caffeinated and a false negative costs more here than a false positive.
+CAFFEINE_DRINKS = frozenset({"coffee", "tea", "energy_drink", "boba", "soda"})
 
 #: Drinks that set `alcohol_visible` the same way.
 ALCOHOL_DRINKS = frozenset({"alcohol", "beer", "wine", "cocktail"})
@@ -134,7 +136,10 @@ BOOL_FIELDS = [
     "alcohol_visible",
     "screen_present",
     "vegetation_visible",
+    # `people_present` is "anyone in frame at all"; `people_interacting` is the
+    # social-connection signal. A crowded bus sets the first and not the second.
     "people_present",
+    "people_interacting",
     # Light exposure. `outdoor_visible` is deliberately *not* the same question as
     # `scene in OUTDOOR_SCENES`: it is true through a window too, which is how a
     # desk by daylight is distinguished from a windowless room (SPEC §7 circadian).
@@ -157,7 +162,7 @@ ENUM_FIELDS = {
 FIELD_ORDER = [
     "scene", "activity", "food_present", "food_type", "caffeine_visible",
     "alcohol_visible", "screen_present", "vegetation_visible", "people_present",
-    "direct_sunlight_visible", "outdoor_visible", "smoking_or_vaping_visible",
+    "people_interacting", "direct_sunlight_visible", "outdoor_visible", "smoking_or_vaping_visible",
     "medication_visible",
     "caption", "objects", "drink", "conf",
 ]
@@ -190,6 +195,13 @@ PROMPT = (
     "activity is the most specific matching thing the wearer is doing from this list.\n"
     "food_type is the most specific matching food visible from this list, or none.\n"
     "drink identifies the plainly visible drink, or none when no drink is visible.\n"
+    "vegetation_visible is true only for outdoor greenery such as trees, grass, "
+    "hedges or planted beds. A houseplant, a vase of cut flowers, or a vegetable "
+    "on a plate is not vegetation.\n"
+    "people_present is true if any person is visible at all, including strangers "
+    "in the background. people_interacting is true only when the wearer is engaged "
+    "with someone -- facing them in conversation or a shared activity -- and is "
+    "false for passers-by, crowds and people merely sharing the space.\n"
     "direct_sunlight_visible is true only for unobstructed sun or the hard shadows "
     "it casts, not for a merely bright or overcast sky.\n"
     "outdoor_visible is true whenever the outdoors appears in the frame at all, "

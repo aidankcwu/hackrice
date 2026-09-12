@@ -123,6 +123,6 @@ def test_every_named_alcohol_and_caffeine_drink_derives_its_flag():
         assert coerce({"drink": value})["alcohol_visible"] is True, value
     for value in CAFFEINE_DRINKS:
         assert coerce({"drink": value})["caffeine_visible"] is True, value
-    for value in ("water", "juice", "milk", "smoothie", "soda", "sports_drink"):
+    for value in ("water", "juice", "milk", "smoothie", "sports_drink"):
         assert coerce({"drink": value})["caffeine_visible"] is False, value
         assert coerce({"drink": value})["alcohol_visible"] is False, value
