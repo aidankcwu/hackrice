@@ -30,6 +30,22 @@ def test_env_overrides(monkeypatch) -> None:
     assert s.timings.tick_interval_s == 2.0
 
 
+def test_keyword_triggers_json_env_and_invalid_fallback(monkeypatch, caplog) -> None:
+    monkeypatch.setenv(
+        "KEYWORD_TRIGGERS_JSON",
+        '[{"name":"custom","keywords":["toast"],"cooldown_s":12}]',
+    )
+    assert Settings(_env_file=None).keyword_triggers == [  # type: ignore[call-arg]
+        {"name": "custom", "keywords": ["toast"], "cooldown_s": 12}
+    ]
+
+    monkeypatch.setenv("KEYWORD_TRIGGERS_JSON", "not json")
+    with caplog.at_level("WARNING"):
+        settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.keyword_triggers[0]["name"] == "rice_krispy"
+    assert "using default" in caplog.text
+
+
 def test_timings_selected_by_demo_mode() -> None:
     """Both presets, carrying the configured cadence (default 1.5 s)."""
 

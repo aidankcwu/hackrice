@@ -14,13 +14,44 @@ so the demo/production switch stays in one place.
 
 from __future__ import annotations
 
+import json
+import logging
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
+from typing import Annotated, Any
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import BeforeValidator, Field
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
-__all__ = ["Timings", "Settings", "get_settings"]
+__all__ = ["DEFAULT_KEYWORD_TRIGGERS", "Timings", "Settings", "get_settings"]
+
+log = logging.getLogger(__name__)
+
+DEFAULT_KEYWORD_TRIGGERS = [
+    {
+        "name": "rice_krispy",
+        "keywords": [
+            "rice krispy", "rice krispie", "krispy treat", "krispie treat",
+            "crispy treat", "rice crispy",
+        ],
+        "note": "the wearer wants a reaction when someone is eating Rice Krispy treats",
+        "cooldown_s": 60,
+    }
+]
+
+
+def _parse_keyword_triggers(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    try:
+        parsed = json.loads(value)
+        if not isinstance(parsed, list):
+            raise ValueError("expected a JSON list")
+        return parsed
+    except (json.JSONDecodeError, ValueError) as exc:
+        log.warning("Invalid KEYWORD_TRIGGERS_JSON; using default: %s", exc)
+        return [dict(entry) for entry in DEFAULT_KEYWORD_TRIGGERS]
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,6 +206,15 @@ class Settings(BaseSettings):
     #: stream; Person A's glasses actually emit one tick every 1.5 s. Every
     #: "N hits in W seconds" threshold is scaled by this (``Timings.scaled_hits``).
     tick_interval_s: float = 1.5
+    keyword_triggers: Annotated[
+        list[dict[str, Any]], NoDecode, BeforeValidator(_parse_keyword_triggers)
+    ] = Field(
+        default_factory=lambda: [dict(entry) for entry in DEFAULT_KEYWORD_TRIGGERS],
+        validation_alias="KEYWORD_TRIGGERS_JSON",
+    )
+    # Declared so the literal .env key remains part of the documented Settings
+    # surface; parsing and application happen through ``keyword_triggers``.
+    keyword_triggers_json: str | None = Field(default=None, exclude=True)
 
     # -- live wearables (SPEC §15). Read by pipeline.wearables via os.environ
     # too; declared here so .env.example stays in sync with Settings. --------

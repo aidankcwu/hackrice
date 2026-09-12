@@ -7,6 +7,7 @@ from .triggers import (
     Trigger,
     biometric_anomaly_trigger,
     default_triggers,
+    keyword_trigger,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "TriggerGate",
     "biometric_anomaly_trigger",
     "default_triggers",
+    "keyword_trigger",
 ]

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Protocol, runtime_checkable
 
-from ..config import Timings
+from ..config import DEFAULT_KEYWORD_TRIGGERS, Timings
 from ..models import EpisodeKind, Tick
 
 __all__ = [
@@ -14,6 +14,7 @@ __all__ = [
     "Trigger",
     "biometric_anomaly_trigger",
     "default_triggers",
+    "keyword_trigger",
     "wearable_now_line",
 ]
 
@@ -150,6 +151,50 @@ def _flag_hits(
         return bool(known) and known[-1] is True and sum(value is True for value in known) >= minimum
 
     return predicate
+
+
+def keyword_trigger(
+    name: str,
+    keywords: list[str],
+    timings: Timings,
+    *,
+    min_hits: int = 2,
+    window_s: float = 10.0,
+    cooldown_s: float,
+    reason: str,
+    extra_line: str,
+) -> Trigger:
+    """Trigger on fresh, repeated keyword matches in captions or objects."""
+
+    lowered = [(keyword, keyword.casefold()) for keyword in keywords]
+    minimum = timings.scaled_hits(min_hits)
+
+    def match(tick: Tick) -> tuple[str, str, str] | None:
+        if not tick.ai_fresh(timings.ai_max_age_ms) or tick.ai is None:
+            return None
+        caption = tick.ai.caption or ""
+        objects = tick.ai.objects or []
+        fields = [caption, *objects]
+        for keyword, folded in lowered:
+            if any(folded in field.casefold() for field in fields):
+                return keyword, caption, ", ".join(objects)
+        return None
+
+    def predicate(window: list[Tick]) -> bool:
+        recent = _recent(window, window_s)
+        return bool(recent and match(recent[-1])) and sum(match(t) is not None for t in recent) >= minimum
+
+    def enrich(window: list[Tick]) -> tuple[str, list[str]]:
+        for tick in reversed(_recent(window, window_s)):
+            hit = match(tick)
+            if hit is not None:
+                keyword, caption, objects = hit
+                return reason.format(kw=keyword), [
+                    extra_line.format(caption=caption, objects=objects)
+                ]
+        return reason, []
+
+    return Trigger(name, predicate, cooldown_s, None, reason, enrich)
 
 
 def _outdoor_hits(
@@ -398,7 +443,8 @@ def biometric_anomaly_trigger(timings: Timings, feed: BiometricFeed) -> Trigger:
 
 
 def default_triggers(
-    timings: Timings, demo_mode: bool, feed: BiometricFeed | None = None
+    timings: Timings, demo_mode: bool, feed: BiometricFeed | None = None,
+    keyword_triggers: list[dict] | None = None,
 ) -> list[Trigger]:
     """Return shipped triggers in deterministic priority order."""
 
@@ -425,6 +471,21 @@ def default_triggers(
         ("stillness", _stillness(timings.stillness_window), None, "Low frame motion was sustained"),
     ]
     triggers = [Trigger(name, predicate, cooldown(name), kind, reason) for name, predicate, kind, reason in specs]  # type: ignore[arg-type]
+    entries = DEFAULT_KEYWORD_TRIGGERS if keyword_triggers is None else keyword_triggers
+    for entry in entries:
+        name = str(entry["name"])
+        note = entry.get("note")
+        context = f" Context from the wearer: {note}." if note else ""
+        line = (
+            f'Keyword trigger {name}: the VLM caption was "{{caption}}" with objects '
+            f"[{{objects}}].{context} Decide for yourself whether this deserves speech; "
+            "if so, say it in your own words, short and in the persona's voice."
+        )
+        triggers.append(keyword_trigger(
+            name, list(entry["keywords"]), timings,
+            cooldown_s=float(entry.get("cooldown_s", timings.trigger_cooldown_default)),
+            reason="Keyword '{kw}' seen in caption/objects", extra_line=line,
+        ))
     if feed is not None:
         # Last: a camera trigger that fires on the same tick explains itself,
         # and this one costs a feed read.

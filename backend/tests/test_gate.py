@@ -14,6 +14,7 @@ from pipeline.gate import (
     TriggerGate,
     biometric_anomaly_trigger,
     default_triggers,
+    keyword_trigger,
 )
 from pipeline.gate.triggers import wearable_now_line
 from pipeline.models import AiBlock, Escalation, PendingCheck, SensorBlock, Tick
@@ -155,6 +156,43 @@ def test_suppressed_trigger_does_not_block_others(tmp_path) -> None:
     assert names[0] == "screen_sustained"
     assert "caffeine_seen" in names, names
     db.close()
+
+
+def test_keyword_trigger_fires_on_two_fresh_hits_then_cools_down(tmp_path) -> None:
+    timings = Timings.demo()
+    trigger = keyword_trigger(
+        "rice_krispy", ["rice krispy"], timings, cooldown_s=60,
+        reason="Keyword '{kw}' seen in caption/objects",
+        extra_line='caption="{caption}" objects=[{objects}]',
+    )
+    db = Database(tmp_path / "keyword.db").connect().init_schema()
+    episodes = EpisodeBuilder(db, timings)
+    escalations: list[Escalation] = []
+    gate = TriggerGate([trigger], timings, db, episodes,
+                       lambda e: escalations.append(e) is None, True)
+
+    gate.on_tick(tick(0, caption="person eating a rice krispy treat"))
+    gate.on_tick(tick(1, objects=["rice krispy treat", "laptop"]))
+    gate.on_tick(tick(2, caption="person eating a rice krispy treat"))
+    assert len(escalations) == 1
+    assert escalations[0].reason == "Keyword 'rice krispy' seen in caption/objects"
+    assert escalations[0].extra_text == [
+        'caption="" objects=[rice krispy treat, laptop]'
+    ]
+    assert gate.suppressed["rice_krispy"] == 1
+    db.close()
+
+
+def test_keyword_trigger_ignores_unrelated_and_stale_ai() -> None:
+    trigger = keyword_trigger(
+        "rice_krispy", ["rice krispy"], Timings.demo(), cooldown_s=60,
+        reason="Keyword '{kw}' seen", extra_line="{caption} [{objects}]",
+    )
+    assert not trigger.predicate([tick(0, caption="person using a laptop"),
+                                  tick(1, objects=["plate", "laptop"])])
+    stale = tick(2, caption="rice krispy treat")
+    stale.ai.age_ms = 9999  # type: ignore[union-attr]
+    assert not trigger.predicate([tick(1, caption="rice krispy treat"), stale])
 
 
 # -- biometric_anomaly (SPEC §14.3) ---------------------------------------

@@ -294,6 +294,22 @@ async def test_fake_client_watch_trigger_annotates_only():
     assert [a.type for a in resp.actions] == ["annotate"]
 
 
+async def test_fake_client_keyword_trigger_speaks():
+    from pipeline.reasoner.envelope import build_envelope
+
+    esc = make_escalation("rice_krispy")
+    esc.extra_text = [
+        'Keyword trigger rice_krispy: the VLM caption was "person eating a rice '
+        'krispy treat" with objects [rice krispy treat, laptop].'
+    ]
+    messages = build_envelope(
+        esc, {tk.frame_ref: b"jpeg" for tk in esc.window}, [], "7d", "persona"
+    )
+    resp, _ = await FakeReasonerClient().complete(messages)
+    assert [a.type for a in resp.actions] == ["annotate", "speak"]
+    assert resp.of_type("speak")[0].text == "rice krispy treats again?"
+
+
 def test_make_client_refuses_openai_without_a_key():
     with pytest.raises(RuntimeError):
         make_client(Settings(openai_api_key=None), "openai")

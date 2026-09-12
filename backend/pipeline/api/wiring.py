@@ -223,7 +223,8 @@ def build_pipeline(settings: Settings, *,
         lambda: resting_hr_for(db, end_day),
         db.latest_biometric,
     )
-    gate = TriggerGate(default_triggers(timings, settings.demo_mode, feed=feed), timings, db,
+    gate = TriggerGate(default_triggers(timings, settings.demo_mode, feed=feed,
+                                       keyword_triggers=settings.keyword_triggers), timings, db,
                        episodes, reasoner.try_escalate, settings.demo_mode, feed=feed)
     if source == "sim":
         set_speak_fn(default_speak_fn)

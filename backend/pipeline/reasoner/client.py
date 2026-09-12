@@ -281,6 +281,19 @@ class FakeReasonerClient:
         # dashboard renders it (a fake HH:00 stamp double-prefixed on screen).
         base = trigger.split(":", 1)[0]
 
+        if any(line.startswith("Keyword trigger ") for line in text.splitlines()):
+            spoken_name = base.replace("_", " ")
+            if base == "rice_krispy":
+                spoken_name += " treats"
+            return T1Response(
+                interpretation=f"keyword trigger: {spoken_name}",
+                confidence=0.75,
+                actions=[
+                    AnnotateAction(line=f"{spoken_name} in frame"),
+                    SpeakAction(text=f"{spoken_name} again?", urgency="low"),
+                ],
+            )
+
         if base == "food_in_frame":
             food = self._food_type(text)
             interpretation = f"meal, {food}" if food else "meal"
