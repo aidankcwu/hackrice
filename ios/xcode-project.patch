@@ -1,0 +1,761 @@
+diff --git a/samples/CameraAccess/CameraAccess.xcodeproj/project.pbxproj b/samples/CameraAccess/CameraAccess.xcodeproj/project.pbxproj
+index ec6cda6..951ee88 100644
+--- a/samples/CameraAccess/CameraAccess.xcodeproj/project.pbxproj
++++ b/samples/CameraAccess/CameraAccess.xcodeproj/project.pbxproj
+@@ -16,28 +16,30 @@
+ 		8FD96B952E6F0F7D00F56AB1 /* MWDATCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8FD96B942E6F0F7D00F56AB1 /* MWDATCore */; };
+ 		8FD96B952E6F0F7D00F56AB2 /* MWDATCamera in Frameworks */ = {isa = PBXBuildFile; productRef = 8FD96B942E6F0F7D00F56AB2 /* MWDATCamera */; };
+ 		8FD96B952E6F0F7D00F56AB3 /* MWDATMockDevice in Frameworks */ = {isa = PBXBuildFile; productRef = 8FD96B942E6F0F7D00F56AB3 /* MWDATMockDevice */; };
+-		E66CC01D2F3E1A9300B07380 /* MWDATMockDeviceTestClient in Frameworks */ = {isa = PBXBuildFile; productRef = E66CC01E2F3E1A9300B07380 /* MWDATMockDeviceTestClient */; };
+ 		8FFD5FF52E8422580035E446 /* CircleButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FFD5FF22E8422580035E446 /* CircleButton.swift */; };
+ 		8FFD5FF62E8422580035E446 /* CustomButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FFD5FF32E8422580035E446 /* CustomButton.swift */; };
+-		FACE0000000000000000FA02 /* TipRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0000000000000000FA01 /* TipRow.swift */; };
+ 		8FFD602C2E8433E20035E446 /* MockDeviceKitViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FFD60292E8433E20035E446 /* MockDeviceKitViewModel.swift */; };
+ 		8FFD602D2E8433E20035E446 /* MockDeviceCardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FFD602A2E8433E20035E446 /* MockDeviceCardViewModel.swift */; };
+ 		8FFD60342E8434070035E446 /* MediaPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FFD60322E8434070035E446 /* MediaPickerView.swift */; };
+ 		8FFD60542E849D0D0035E446 /* RegistrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FFD60532E849D0D0035E446 /* RegistrationView.swift */; };
+ 		8FFD60602E84A2F70035E446 /* MainAppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FFD605F2E84A2F70035E446 /* MainAppView.swift */; };
+ 		8FFD60612E84A2F70035E446 /* DebugMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FFD605E2E84A2F70035E446 /* DebugMenuView.swift */; };
+-		E66CC01B2F3E1A9300B07379 /* plant.png in Resources */ = {isa = PBXBuildFile; fileRef = E66CC0192F3E1A9300B07379 /* plant.png */; };
+-		E66CC01C2F3E1A9300B07379 /* plant.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = E66CC0182F3E1A9300B07379 /* plant.mp4 */; };
+-		E66D30242E7DA71900470B48 /* MockDeviceKitButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E66D30232E7DA71900470B48 /* MockDeviceKitButton.swift */; };
+-		E6DA451D2E79A63100E3F688 /* MockDeviceCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6DA45182E79A63100E3F688 /* MockDeviceCardView.swift */; };
+-		E6DA451E2E79A63100E3F688 /* CardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6DA45172E79A63100E3F688 /* CardView.swift */; };
+-		E6DA451F2E79A63100E3F688 /* MockDeviceKitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6DA451A2E79A63100E3F688 /* MockDeviceKitView.swift */; };
+ 		D7A0000000000000000000A4 /* VideoRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7A0000000000000000000A3 /* VideoRecorder.swift */; };
+ 		D7A0000000000000000000A6 /* VideoCaptureHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7A0000000000000000000A5 /* VideoCaptureHandler.swift */; };
+ 		D7A0000000000000000000A8 /* VideoFrameDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7A0000000000000000000A7 /* VideoFrameDecoder.swift */; };
+ 		D7A0000000000000000000AA /* AudioInputHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7A0000000000000000000A9 /* AudioInputHandler.swift */; };
+ 		D7A0000000000000000000AC /* AudioCaptureHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7A0000000000000000000AB /* AudioCaptureHandler.swift */; };
+ 		D7A0000000000000000000B2 /* CameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7A0000000000000000000B1 /* CameraView.swift */; };
++		E66CC01B2F3E1A9300B07379 /* plant.png in Resources */ = {isa = PBXBuildFile; fileRef = E66CC0192F3E1A9300B07379 /* plant.png */; };
++		E66CC01C2F3E1A9300B07379 /* plant.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = E66CC0182F3E1A9300B07379 /* plant.mp4 */; };
++		E66CC01D2F3E1A9300B07380 /* MWDATMockDeviceTestClient in Frameworks */ = {isa = PBXBuildFile; productRef = E66CC01E2F3E1A9300B07380 /* MWDATMockDeviceTestClient */; };
++		E66D30242E7DA71900470B48 /* MockDeviceKitButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E66D30232E7DA71900470B48 /* MockDeviceKitButton.swift */; };
++		E6DA451D2E79A63100E3F688 /* MockDeviceCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6DA45182E79A63100E3F688 /* MockDeviceCardView.swift */; };
++		E6DA451E2E79A63100E3F688 /* CardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6DA45172E79A63100E3F688 /* CardView.swift */; };
++		E6DA451F2E79A63100E3F688 /* MockDeviceKitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6DA451A2E79A63100E3F688 /* MockDeviceKitView.swift */; };
++		F494632330553F1700C1D468 /* CorpusRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = F494632230553F1700C1D468 /* CorpusRecorder.swift */; };
++		F494632530554B4B00C1D468 /* MacLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = F494632430554B4B00C1D468 /* MacLink.swift */; };
++		FACE0000000000000000FA02 /* TipRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0000000000000000FA01 /* TipRow.swift */; };
+ /* End PBXBuildFile section */
+ 
+ /* Begin PBXContainerItemProxy section */
+@@ -82,13 +84,18 @@
+ 		8FD96B7B2E6F0A9800F56AB1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+ 		8FFD5FF22E8422580035E446 /* CircleButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircleButton.swift; sourceTree = "<group>"; };
+ 		8FFD5FF32E8422580035E446 /* CustomButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomButton.swift; sourceTree = "<group>"; };
+-		FACE0000000000000000FA01 /* TipRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipRow.swift; sourceTree = "<group>"; };
+ 		8FFD60292E8433E20035E446 /* MockDeviceKitViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDeviceKitViewModel.swift; sourceTree = "<group>"; };
+ 		8FFD602A2E8433E20035E446 /* MockDeviceCardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDeviceCardViewModel.swift; sourceTree = "<group>"; };
+ 		8FFD60322E8434070035E446 /* MediaPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPickerView.swift; sourceTree = "<group>"; };
+ 		8FFD60532E849D0D0035E446 /* RegistrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistrationView.swift; sourceTree = "<group>"; };
+ 		8FFD605E2E84A2F70035E446 /* DebugMenuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugMenuView.swift; sourceTree = "<group>"; };
+ 		8FFD605F2E84A2F70035E446 /* MainAppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainAppView.swift; sourceTree = "<group>"; };
++		D7A0000000000000000000A3 /* VideoRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoRecorder.swift; sourceTree = "<group>"; };
++		D7A0000000000000000000A5 /* VideoCaptureHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCaptureHandler.swift; sourceTree = "<group>"; };
++		D7A0000000000000000000A7 /* VideoFrameDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFrameDecoder.swift; sourceTree = "<group>"; };
++		D7A0000000000000000000A9 /* AudioInputHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioInputHandler.swift; sourceTree = "<group>"; };
++		D7A0000000000000000000AB /* AudioCaptureHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureHandler.swift; sourceTree = "<group>"; };
++		D7A0000000000000000000B1 /* CameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraView.swift; sourceTree = "<group>"; };
+ 		E66CC00D2F3E05D900B07379 /* CameraAccessUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CameraAccessUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+ 		E66CC0182F3E1A9300B07379 /* plant.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = plant.mp4; sourceTree = "<group>"; };
+ 		E66CC0192F3E1A9300B07379 /* plant.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = plant.png; sourceTree = "<group>"; };
+@@ -97,12 +104,9 @@
+ 		E6DA45172E79A63100E3F688 /* CardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardView.swift; sourceTree = "<group>"; };
+ 		E6DA45182E79A63100E3F688 /* MockDeviceCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDeviceCardView.swift; sourceTree = "<group>"; };
+ 		E6DA451A2E79A63100E3F688 /* MockDeviceKitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDeviceKitView.swift; sourceTree = "<group>"; };
+-		D7A0000000000000000000A3 /* VideoRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoRecorder.swift; sourceTree = "<group>"; };
+-		D7A0000000000000000000A5 /* VideoCaptureHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCaptureHandler.swift; sourceTree = "<group>"; };
+-		D7A0000000000000000000A7 /* VideoFrameDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFrameDecoder.swift; sourceTree = "<group>"; };
+-		D7A0000000000000000000A9 /* AudioInputHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioInputHandler.swift; sourceTree = "<group>"; };
+-		D7A0000000000000000000AB /* AudioCaptureHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureHandler.swift; sourceTree = "<group>"; };
+-		D7A0000000000000000000B1 /* CameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraView.swift; sourceTree = "<group>"; };
++		F494632230553F1700C1D468 /* CorpusRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusRecorder.swift; sourceTree = "<group>"; };
++		F494632430554B4B00C1D468 /* MacLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacLink.swift; sourceTree = "<group>"; };
++		FACE0000000000000000FA01 /* TipRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipRow.swift; sourceTree = "<group>"; };
+ /* End PBXFileReference section */
+ 
+ /* Begin PBXFileSystemSynchronizedRootGroup section */
+@@ -135,6 +139,8 @@
+ 		5A5A5A5A5A5A5A5A5A5A5A5A = {
+ 			isa = PBXGroup;
+ 			children = (
++				F494632230553F1700C1D468 /* CorpusRecorder.swift */,
++				F494632430554B4B00C1D468 /* MacLink.swift */,
+ 				8FD96B7D2E6F0A9800F56AB1 /* CameraAccess */,
+ 				E66CC00E2F3E05D900B07379 /* CameraAccessUITests */,
+ 				8F2A14F12DDBCEB900D4E5F2 /* Frameworks */,
+@@ -170,18 +176,6 @@
+ 			path = ViewModels;
+ 			sourceTree = "<group>";
+ 		};
+-		D7A0000000000000000000F0 /* Media */ = {
+-			isa = PBXGroup;
+-			children = (
+-				D7A0000000000000000000AB /* AudioCaptureHandler.swift */,
+-				D7A0000000000000000000A9 /* AudioInputHandler.swift */,
+-				D7A0000000000000000000A5 /* VideoCaptureHandler.swift */,
+-				D7A0000000000000000000A7 /* VideoFrameDecoder.swift */,
+-				D7A0000000000000000000A3 /* VideoRecorder.swift */,
+-			);
+-			path = Media;
+-			sourceTree = "<group>";
+-		};
+ 		8FD96B762E6F0A9800F56AB1 /* Views */ = {
+ 			isa = PBXGroup;
+ 			children = (
+@@ -231,6 +225,18 @@
+ 			path = MockDeviceKit;
+ 			sourceTree = "<group>";
+ 		};
++		D7A0000000000000000000F0 /* Media */ = {
++			isa = PBXGroup;
++			children = (
++				D7A0000000000000000000AB /* AudioCaptureHandler.swift */,
++				D7A0000000000000000000A9 /* AudioInputHandler.swift */,
++				D7A0000000000000000000A5 /* VideoCaptureHandler.swift */,
++				D7A0000000000000000000A7 /* VideoFrameDecoder.swift */,
++				D7A0000000000000000000A3 /* VideoRecorder.swift */,
++			);
++			path = Media;
++			sourceTree = "<group>";
++		};
+ 		E66CC01A2F3E1A9300B07379 /* TestResources */ = {
+ 			isa = PBXGroup;
+ 			children = (
+@@ -396,6 +402,7 @@
+ 			isa = PBXSourcesBuildPhase;
+ 			buildActionMask = 2147483647;
+ 			files = (
++				F494632330553F1700C1D468 /* CorpusRecorder.swift in Sources */,
+ 				8FD96B7F2E6F0A9800F56AB1 /* CameraAccessApp.swift in Sources */,
+ 				8FD96B812E6F0A9800F56AB1 /* HomeScreenView.swift in Sources */,
+ 				8FFD60542E849D0D0035E446 /* RegistrationView.swift in Sources */,
+@@ -416,6 +423,7 @@
+ 				D7A0000000000000000000A8 /* VideoFrameDecoder.swift in Sources */,
+ 				D7A0000000000000000000AA /* AudioInputHandler.swift in Sources */,
+ 				D7A0000000000000000000AC /* AudioCaptureHandler.swift in Sources */,
++				F494632530554B4B00C1D468 /* MacLink.swift in Sources */,
+ 				D7A0000000000000000000B2 /* CameraView.swift in Sources */,
+ 				8FFD5FF52E8422580035E446 /* CircleButton.swift in Sources */,
+ 				8FFD5FF62E8422580035E446 /* CustomButton.swift in Sources */,
+@@ -460,12 +468,11 @@
+ 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+ 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+ 				CODE_SIGN_ENTITLEMENTS = CameraAccess/CameraAccess.entitlements;
+-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+-				CODE_SIGN_STYLE = Manual;
++				CODE_SIGN_IDENTITY = "Apple Development";
++				CODE_SIGN_STYLE = Automatic;
+ 				CURRENT_PROJECT_VERSION = 1;
+ 				DEVELOPMENT_ASSET_PATHS = "";
+-				DEVELOPMENT_TEAM = "";
+-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = V9WTTPBFK9;
++				DEVELOPMENT_TEAM = 28WZ3U2768;
+ 				ENABLE_PREVIEWS = YES;
+ 				FRAMEWORK_SEARCH_PATHS = "";
+ 				INFOPLIST_FILE = CameraAccess/Info.plist;
+@@ -475,10 +482,9 @@
+ 					"@executable_path/Frameworks",
+ 				);
+ 				MARKETING_VERSION = 1.0;
+-				PRODUCT_BUNDLE_IDENTIFIER = com.meta.wearables.external.CameraAccess;
++				PRODUCT_BUNDLE_IDENTIFIER = com.aidanwu.MetaCameraTest;
+ 				PRODUCT_NAME = "$(TARGET_NAME)";
+ 				PROVISIONING_PROFILE_SPECIFIER = "";
+-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Facebook Generic";
+ 				SWIFT_VERSION = 5.0;
+ 				TARGETED_DEVICE_FAMILY = "1,2";
+ 			};
+@@ -491,12 +497,11 @@
+ 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+ 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+ 				CODE_SIGN_ENTITLEMENTS = CameraAccess/CameraAccess.entitlements;
+-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+-				CODE_SIGN_STYLE = Manual;
++				CODE_SIGN_IDENTITY = "Apple Development";
++				CODE_SIGN_STYLE = Automatic;
+ 				CURRENT_PROJECT_VERSION = 1;
+ 				DEVELOPMENT_ASSET_PATHS = "";
+-				DEVELOPMENT_TEAM = "";
+-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = V9WTTPBFK9;
++				DEVELOPMENT_TEAM = 28WZ3U2768;
+ 				ENABLE_PREVIEWS = YES;
+ 				INFOPLIST_FILE = CameraAccess/Info.plist;
+ 				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
+@@ -505,10 +510,9 @@
+ 					"@executable_path/Frameworks",
+ 				);
+ 				MARKETING_VERSION = 1.0;
+-				PRODUCT_BUNDLE_IDENTIFIER = com.meta.wearables.external.CameraAccess;
++				PRODUCT_BUNDLE_IDENTIFIER = com.aidanwu.MetaCameraTest;
+ 				PRODUCT_NAME = "$(TARGET_NAME)";
+ 				PROVISIONING_PROFILE_SPECIFIER = "";
+-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Facebook Generic";
+ 				SWIFT_VERSION = 5.0;
+ 				TARGETED_DEVICE_FAMILY = "1,2";
+ 			};
+diff --git a/samples/CameraAccess/CameraAccess/CameraAccess.entitlements b/samples/CameraAccess/CameraAccess/CameraAccess.entitlements
+index 278173c..44c3622 100644
+--- a/samples/CameraAccess/CameraAccess/CameraAccess.entitlements
++++ b/samples/CameraAccess/CameraAccess/CameraAccess.entitlements
+@@ -6,9 +6,5 @@
+ 	<array>
+ 		<string>$(AppIdentifierPrefix)$(CFBundleIdentifier)</string>
+ 	</array>
+-	<key>com.apple.developer.networking.HotspotConfiguration</key>
+-	<true/>
+-	<key>com.apple.developer.networking.wifi-info</key>
+-	<true/>
+ </dict>
+ </plist>
+diff --git a/samples/CameraAccess/CameraAccess/Info.plist b/samples/CameraAccess/CameraAccess/Info.plist
+index f0c7623..82d0498 100644
+--- a/samples/CameraAccess/CameraAccess/Info.plist
++++ b/samples/CameraAccess/CameraAccess/Info.plist
+@@ -33,47 +33,40 @@
+ 	</array>
+ 	<key>CFBundleVersion</key>
+ 	<string>$(CURRENT_PROJECT_VERSION)</string>
+-	<!-- Begin required section for Device Access Toolkit Apps -->
+-	<!-- Meta Wearables Device Access Toolkit Setup -->
++	<key>LSSupportsOpeningDocumentsInPlace</key>
++	<true/>
+ 	<key>MWDAT</key>
+ 	<dict>
+ 		<key>AppLinkURLScheme</key>
+-		<!-- Tell DAT your URL scheme so it can be called back from Meta AI -->
+ 		<string>cameraaccess://</string>
+-		<key>MetaAppID</key>
+-		<!-- Without Developer Mode, this key will need to be set with ID from the app registered in Wearables Developer Center -->
+-		<string>$(META_APP_ID)</string>
+-		<!-- Without Developer Mode, this key will need to be set with ClientToken from the app registered in Wearables Developer Center -->
+ 		<key>ClientToken</key>
+ 		<string>$(CLIENT_TOKEN)</string>
+-		<!-- Without Developer Mode, this key will need to be set with your Apple Developer Team ID - Set this in Xcode under Signing & Capabilities -->
++		<key>MetaAppID</key>
++		<string>$(META_APP_ID)</string>
+ 		<key>TeamID</key>
+ 		<string>$(DEVELOPMENT_TEAM)</string>
+ 	</dict>
+-	<key>UIBackgroundModes</key>
+-	<array>
+-		<string>processing</string>
+-		<string>bluetooth-central</string>
+-		<string>audio</string>
+-		<string>bluetooth-peripheral</string>
+-	</array>
++	<key>NSAppTransportSecurity</key>
++	<dict>
++		<key>NSAllowsLocalNetworking</key>
++		<true/>
++	</dict>
+ 	<key>NSBluetoothAlwaysUsageDescription</key>
+ 	<string>Needed to connect to Meta AI Glasses</string>
+-	<key>NSLocalNetworkUsageDescription</key>
+-	<string>This lets your phone find and connect to your glasses over Wi-Fi.</string>
++	<key>NSBluetoothPeripheralUsageDescription</key>
++	<string>Needed to connect to Meta AI Glasses</string>
+ 	<key>NSBonjourServices</key>
+ 	<array>
+ 		<string>_bonjour._tcp</string>
+ 	</array>
+-	<key>NSBluetoothPeripheralUsageDescription</key>
+-	<string>Needed to connect to Meta AI Glasses</string>
+-	<!-- End required section for Device Access Toolkit Apps -->
+-	<key>NSPhotoLibraryAddUsageDescription</key>
+-	<string>This app needs access to save photos captured from your glasses.</string>
+ 	<key>NSCameraUsageDescription</key>
+ 	<string>This app needs camera access to stream from your phone's camera as a mock device feed.</string>
++	<key>NSLocalNetworkUsageDescription</key>
++	<string>This lets your phone find and connect to your glasses over Wi-Fi.</string>
+ 	<key>NSMicrophoneUsageDescription</key>
+ 	<string>This app needs microphone access to record audio together with video from your glasses.</string>
++	<key>NSPhotoLibraryAddUsageDescription</key>
++	<string>This app needs access to save photos captured from your glasses.</string>
+ 	<key>UIApplicationSceneManifest</key>
+ 	<dict>
+ 		<key>UIApplicationSupportsMultipleScenes</key>
+@@ -81,14 +74,26 @@
+ 	</dict>
+ 	<key>UIApplicationSupportsIndirectInputEvents</key>
+ 	<true/>
+-
++	<key>UIBackgroundModes</key>
++	<array>
++		<string>processing</string>
++		<string>bluetooth-central</string>
++		<string>audio</string>
++		<string>bluetooth-peripheral</string>
++		<string>external-accessory</string>
++	</array>
++	<key>UIFileSharingEnabled</key>
++	<true/>
+ 	<key>UILaunchScreen</key>
+ 	<dict/>
+ 	<key>UIRequiredDeviceCapabilities</key>
+ 	<array>
+ 		<string>arm64</string>
+ 	</array>
+-
++	<key>UISupportedExternalAccessoryProtocols</key>
++	<array>
++		<string>com.meta.ar.wearable</string>
++	</array>
+ 	<key>UISupportedInterfaceOrientations</key>
+ 	<array>
+ 		<string>UIInterfaceOrientationPortrait</string>
+diff --git a/samples/CameraAccess/CameraAccess/ViewModels/CameraViewModel.swift b/samples/CameraAccess/CameraAccess/ViewModels/CameraViewModel.swift
+index 8c7b92a..f2562b4 100644
+--- a/samples/CameraAccess/CameraAccess/ViewModels/CameraViewModel.swift
++++ b/samples/CameraAccess/CameraAccess/ViewModels/CameraViewModel.swift
+@@ -166,6 +166,10 @@ final class CameraViewModel {
+   // recording — the passthrough writer handles compressed frames directly.
+   @ObservationIgnored private let videoFrameDecoder = VideoFrameDecoder()
+ 
++  /// PERSON_A.md A4 — throwaway replay-corpus recorder. Remove after the corpus
++  /// is recorded; `CorpusRecorder.encode` is the part worth keeping for A12.
++  let corpusRecorder = CorpusRecorder()
++
+   @ObservationIgnored private var deviceMonitorTask: Task<Void, Never>?
+   @ObservationIgnored private var appLifecycleTask: Task<Void, Never>?
+   @ObservationIgnored private let sessionTokenBag = ListenerTokenBag()
+@@ -496,6 +500,8 @@ final class CameraViewModel {
+ 
+       Task { @MainActor [weak self] in
+         guard let self else { return }
++        // A4: record regardless of the preview guards below.
++        if let previewImage { self.corpusRecorder.offer(previewImage) }
+         // Keep the live surface stable while a capture preview is onscreen.
+         if UIApplication.shared.applicationState != .background,
+           activePreview == nil,
+diff --git a/samples/CameraAccess/CameraAccess/Views/CameraView.swift b/samples/CameraAccess/CameraAccess/Views/CameraView.swift
+index fea2f62..4d78429 100644
+--- a/samples/CameraAccess/CameraAccess/Views/CameraView.swift
++++ b/samples/CameraAccess/CameraAccess/Views/CameraView.swift
+@@ -18,6 +18,7 @@
+ import MWDATCore
+ import SwiftUI
+ import UIKit
++import AVFoundation
+ 
+ private let updateRequiredTitle = "Update required"
+ 
+@@ -26,6 +27,9 @@ struct CameraView: View {
+   @Bindable var wearablesVM: WearablesViewModel
+   @State private var showSettingsMenu: Bool = false
+   @State private var isLaunchingUpdate: Bool = false
++  @State private var speechSynthesizer = AVSpeechSynthesizer()
++  /// PERSON_A.md A11 — socket proof. Remove once A14 sends real packets.
++  @State private var link = MacLink()
+ 
+   init(wearables: WearablesInterface, wearablesVM: WearablesViewModel) {
+     self._viewModel = State(wrappedValue: CameraViewModel(wearables: wearables))
+@@ -104,7 +108,38 @@ struct CameraView: View {
+     }
+     .navigationBarHidden(true)
+   }
++    
++    private func speakTest() {
++      let audioSession = AVAudioSession.sharedInstance()
++
++      do {
++        try audioSession.setCategory(
++          .playback,
++          mode: .spokenAudio,
++          options: [.allowBluetoothA2DP]
++        )
++
++        try audioSession.setActive(true)
++
++        print("=== AUDIO OUTPUT ===")
++        for output in audioSession.currentRoute.outputs {
++          print("\(output.portName) | \(output.portType.rawValue)")
++        }
++      } catch {
++        print("Audio session error: \(error)")
++      }
++
++      let utterance = AVSpeechUtterance(
++        string: "Hello. This voice is being generated by my custom application."
++      )
++
++      utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
++      utterance.rate = 0.48
+ 
++      speechSynthesizer.speak(utterance)
++    }
++    
++    
+   // MARK: - Preview background
+ 
+   @ViewBuilder
+@@ -278,26 +313,100 @@ struct CameraView: View {
+ 
+   // MARK: - Bottom bar
+ 
+-  private var bottomBar: some View {
+-    VStack(spacing: 14) {
+-      if isUpdateRequired {
+-        updateControls
+-      } else {
+-        // Reserved capture-row space + a single persistent button hold the button at
+-        // a fixed Y across every state.
+-        captureRow
+-        anchoredPrimaryButton
++    private var bottomBar: some View {
++      VStack(spacing: 14) {
++        if isUpdateRequired {
++          updateControls
++        } else {
++          captureRow
++
++          Button {
++            speakTest()
++          } label: {
++            HStack(spacing: 8) {
++              Image(systemName: "speaker.wave.2.fill")
++              Text("Speak Test")
++            }
++            .font(.system(size: 15, weight: .semibold))
++            .foregroundStyle(.white)
++            .frame(maxWidth: .infinity)
++            .frame(height: 50)
++            .background(.ultraThinMaterial)
++            .clipShape(Capsule())
++          }
++          .accessibilityIdentifier("speak_test_button")
++
++          // PERSON_A.md A4 — throwaway corpus recorder. Remove once the corpus exists.
++          Button {
++            viewModel.corpusRecorder.isRecording.toggle()
++          } label: {
++            HStack(spacing: 8) {
++              Image(
++                systemName: viewModel.corpusRecorder.isRecording
++                  ? "stop.circle.fill" : "record.circle")
++              Text(
++                viewModel.corpusRecorder.isRecording
++                  ? "Stop — \(viewModel.corpusRecorder.savedCount) frames"
++                  : "Record corpus")
++            }
++            .font(.system(size: 15, weight: .semibold))
++            .foregroundStyle(viewModel.corpusRecorder.isRecording ? Color.red : Color.white)
++            .frame(maxWidth: .infinity)
++            .frame(height: 50)
++            .background(.ultraThinMaterial)
++            .clipShape(Capsule())
++          }
++          .accessibilityIdentifier("record_corpus_button")
++
++          // PERSON_A.md A11 — prove the socket. Tap once to connect (it auto-sends a
++          // hello), tap again to send a ping. `Mac says:` proves the return direction.
++          Button {
++            if link.connected {
++              link.send("ping \(Int(Date().timeIntervalSince1970))")
++            } else {
++              link.connect()
++            }
++          } label: {
++            HStack(spacing: 8) {
++              Image(
++                systemName: link.connected
++                  ? "antenna.radiowaves.left.and.right" : "wifi.slash")
++              Text(link.connected ? "Send to Mac" : "Connect to Mac")
++            }
++            .font(.system(size: 15, weight: .semibold))
++            .foregroundStyle(link.connected ? Color.green : Color.white)
++            .frame(maxWidth: .infinity)
++            .frame(height: 50)
++            .background(.ultraThinMaterial)
++            .clipShape(Capsule())
++          }
++          .accessibilityIdentifier("mac_link_button")
++
++          VStack(spacing: 2) {
++            Text(link.status)
++            Text("Mac says: \(link.lastFromMac)")
++          }
++          .font(.system(size: 11))
++          .foregroundStyle(.white.opacity(0.7))
++          .lineLimit(1)
++          .truncationMode(.middle)
++
++          anchoredPrimaryButton
++        }
+       }
+-    }
+-    .frame(maxWidth: .infinity)
+-    .padding(.horizontal, 24)
+-    .padding(.top, 48)
+-    .padding(.bottom, 28)
+-    .background(
+-      LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .top, endPoint: .bottom)
++      .frame(maxWidth: .infinity)
++      .padding(.horizontal, 24)
++      .padding(.top, 48)
++      .padding(.bottom, 28)
++      .background(
++        LinearGradient(
++          colors: [.clear, .black.opacity(0.75)],
++          startPoint: .top,
++          endPoint: .bottom
++        )
+         .edgesIgnoringSafeArea(.bottom)
+-    )
+-  }
++      )
++    }
+ 
+   /// In-session toolbar (Preview / Photo / Record / Mic), kept laid out so the
+   /// session button below holds a fixed Y. Hidden without a session; Preview leads as
+diff --git a/samples/CameraAccess/CorpusRecorder.swift b/samples/CameraAccess/CorpusRecorder.swift
+new file mode 100644
+index 0000000..056e046
+--- /dev/null
++++ b/samples/CameraAccess/CorpusRecorder.swift
+@@ -0,0 +1,83 @@
++//  CorpusRecorder.swift
++//  Drop into the CameraAccess sample target. PERSON_A.md A4.
++//
++//  Writes the replay corpus: 1 Hz, 512 px longest edge, JPEG q70 — the same encode
++//  A12 uses for the live capture packet (SPEC §2.2). That match is the whole point:
++//  a corpus encoded differently from production means every sensor threshold tuned
++//  against it has to be retuned later.
++//
++//  Deliberately all-synchronous on the main actor. At 1 Hz a 512 px encode plus a
++//  ~40 KB write costs a few ms once a second, which is free next to a 2 fps preview,
++//  and it keeps this throwaway tool clear of Sendable/isolation errors. A12 is a
++//  different story — that one is in the live path and must encode off the main actor.
++//
++//  `encode(_:maxEdge:quality:)` is worth keeping after A4 is done; A12 calls it.
++
++import Observation
++import SwiftUI
++import UIKit
++
++@Observable
++@MainActor
++final class CorpusRecorder {
++  /// Toggled by the button in CameraView.
++  var isRecording = false
++  /// Frames written this session. Shown in the button so you can see it working.
++  var savedCount = 0
++  /// Set if a write fails, so a silent permissions problem doesn't look like success.
++  var lastError: String?
++
++  /// 1 Hz, matching the T0 sample rate. The DAT stream runs faster and we simply drop
++  /// the extra frames (§2.2) — drop, never queue.
++  private let interval: TimeInterval = 1.0
++  private var lastSave: TimeInterval = 0
++  private let dir: URL
++
++  init() {
++    let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
++    dir = base.appendingPathComponent("corpus", isDirectory: true)
++    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
++  }
++
++  /// Call with every decoded frame. Throttles internally, so the caller does nothing.
++  func offer(_ image: UIImage) {
++    guard isRecording else { return }
++    let now = Date().timeIntervalSince1970
++    guard now - lastSave >= interval else { return }
++    lastSave = now
++
++    guard let jpeg = CorpusRecorder.encode(image) else {
++      lastError = "encode failed"
++      return
++    }
++    // frame_<unix_millis>.jpg — 13 digits, so lexicographic sort is chronological
++    // sort, and there is no timezone to get wrong. The replay adapter parses this.
++    let url = dir.appendingPathComponent("frame_\(Int64(now * 1000)).jpg")
++    do {
++      try jpeg.write(to: url, options: .atomic)
++      savedCount += 1
++    } catch {
++      lastError = error.localizedDescription
++    }
++  }
++
++  /// Resize to `maxEdge` on the longest side and JPEG-encode. Never upscales.
++  nonisolated static func encode(
++    _ image: UIImage, maxEdge: CGFloat = 512, quality: CGFloat = 0.7
++  ) -> Data? {
++    let size = image.size
++    guard size.width > 0, size.height > 0 else { return nil }
++    let scale = min(1.0, maxEdge / max(size.width, size.height))
++    let target = CGSize(
++      width: (size.width * scale).rounded(),
++      height: (size.height * scale).rounded())
++
++    let format = UIGraphicsImageRendererFormat.default()
++    format.scale = 1  // points == pixels, or a 3x device triples the file size
++    format.opaque = true  // a JPEG has no alpha channel anyway
++    let resized = UIGraphicsImageRenderer(size: target, format: format).image { _ in
++      image.draw(in: CGRect(origin: .zero, size: target))
++    }
++    return resized.jpegData(compressionQuality: quality)
++  }
++}
+diff --git a/samples/CameraAccess/MacLink.swift b/samples/CameraAccess/MacLink.swift
+new file mode 100644
+index 0000000..d1b16ba
+--- /dev/null
++++ b/samples/CameraAccess/MacLink.swift
+@@ -0,0 +1,154 @@
++//  MacLink.swift
++//  PERSON_A.md A11 — prove the phone <-> Mac socket before any payload rides on it.
++//
++//  Kept deliberately small. A11 exists as its own task because without
++//  NSLocalNetworkUsageDescription and NSAppTransportSecurity -> NSAllowsLocalNetworking
++//  in Info.plist, URLSessionWebSocketTask fails *silently* in a way that reads exactly
++//  like a Python bug — and you lose an hour debugging the wrong half of the system.
++//
++//  No URLSessionWebSocketDelegate on purpose: the delegate buys only a didOpen callback,
++//  and in exchange costs an NSObject subclass plus actor-isolation friction against the
++//  sample's @Observable/@MainActor style. Send and receive prove both directions without it.
++//
++//  A14 replaces `send(_:)`'s payload with a real capture packet. The transport stays.
++
++import AVFoundation
++import Foundation
++import Observation
++
++@Observable
++@MainActor
++final class MacLink {
++  /// True once the socket is resumed. A dead Mac shows up as a send/receive failure.
++  var connected = false
++  /// Human-readable state for the button label — this is a debugging tool.
++  var status = "not connected"
++  /// Most recent message the Mac pushed to us. Proves Mac -> phone.
++  var lastFromMac = "—"
++  var sentCount = 0
++  /// Utterances spoken out the glasses. A16's proof.
++  var spokenCount = 0
++
++  @ObservationIgnored private let synth = AVSpeechSynthesizer()
++
++  @ObservationIgnored private var task: URLSessionWebSocketTask?
++  @ObservationIgnored let url: URL
++
++  /// Dial the Mac's LAN IP. Never `localhost` — on the phone that resolves to the phone.
++  init(host: String = "10.135.100.7", port: Int = 8765) {
++    url = URL(string: "ws://\(host):\(port)/")!
++  }
++
++  func connect() {
++    disconnect()
++    let t = URLSession.shared.webSocketTask(with: url)
++    task = t
++    t.resume()
++    connected = true
++    status = "connected \(url.host ?? "?"):\(url.port ?? 0)"
++    receive()
++    send("hello from the phone")
++  }
++
++  func disconnect() {
++    task?.cancel(with: .goingAway, reason: nil)
++    task = nil
++    connected = false
++    status = "not connected"
++  }
++
++  func send(_ text: String) {
++    guard let task else {
++      status = "not connected"
++      return
++    }
++    let body: [String: Any] = ["v": 1, "type": "echo", "text": text]
++    guard let data = try? JSONSerialization.data(withJSONObject: body),
++      let payload = String(data: data, encoding: .utf8)
++    else { return }
++
++    task.send(.string(payload)) { [weak self] error in
++      Task { @MainActor in
++        guard let self else { return }
++        if let error {
++          self.connected = false
++          self.status = "send failed: \(error.localizedDescription)"
++        } else {
++          self.sentCount += 1
++          self.status = "sent \(self.sentCount)"
++        }
++      }
++    }
++  }
++
++  /// `receive` is ONE-SHOT. Re-arming it is the classic bug here: the first message
++  /// from the Mac arrives and every one after it is silently dropped.
++  private func receive() {
++    task?.receive { [weak self] result in
++      Task { @MainActor in
++        guard let self else { return }
++        switch result {
++        case .success(let message):
++          if case .string(let text) = message {
++            print("from Mac: \(text)")
++            self.handle(text)
++          }
++          self.receive()
++        case .failure(let error):
++          print("socket closed: \(error)")
++          self.connected = false
++          self.status = "closed: \(error.localizedDescription)"
++        }
++      }
++    }
++  }
++
++  // MARK: - A16 · speak
++
++  /// Route an inbound message by `type`. A14 adds nothing here; the Mac only ever
++  /// pushes `speak` (A16) and later `audio` (A18) down this socket.
++  private func handle(_ raw: String) {
++    guard let data = raw.data(using: .utf8),
++      let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
++    else {
++      lastFromMac = raw
++      return
++    }
++    let type = obj["type"] as? String ?? "?"
++    let text = obj["text"] as? String ?? ""
++    lastFromMac = "\(type): \(text)"
++    if type == "speak", !text.isEmpty { speak(text) }
++  }
++
++  /// hardware_software.md §19 — the exact session config validated on real hardware.
++  /// Without `.allowBluetoothA2DP` the speech comes out of the phone, not the glasses.
++  /// §29 confirmed this works *concurrently* with a live DAT camera stream.
++  ///
++  /// Do not add microphone input here: §22 warns that opening a Bluetooth mic can make
++  /// iOS drop off A2DP and degrade this exact output path.
++  private func speak(_ text: String) {
++    // Configure, but never bail on failure. The app may already hold a correctly
++    // configured session — in which case this redundant setCategory throws
++    // OSStatus -50 (kAudio_ParamError) and the existing route is fine anyway. The
++    // sample's own validated speakTest() ignores this error and speaks regardless;
++    // returning early here is what silently swallowed A16's first attempts.
++    do {
++      let session = AVAudioSession.sharedInstance()
++      try session.setCategory(.playback, mode: .spokenAudio, options: [.allowBluetoothA2DP])
++      try session.setActive(true)
++    } catch {
++      print("audio session (non-fatal): \(error)")
++    }
++
++    let utterance = AVSpeechUtterance(string: text)
++    utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
++    utterance.rate = 0.48  // matches the validated speakTest()
++    synth.speak(utterance)
++    spokenCount += 1
++    status = "spoke #\(spokenCount): \(text.prefix(28))"
++
++    if let out = AVAudioSession.sharedInstance().currentRoute.outputs.first {
++      print("speaking out: \(out.portName) [\(out.portType.rawValue)]")
++    }
++  }
++}
