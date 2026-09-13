@@ -66,6 +66,9 @@ class Timings:
     trigger_cooldown_default: float
     #: Minimum gap between *any* two escalations, across all triggers.
     global_escalation_min_gap: float
+    #: Cooldown and rolling one-minute cap for meaningful visual changes.
+    change_cooldown_s: float
+    change_max_per_min: int
 
     # Sustained-condition windows (SPEC §12.2: evaluate over windows, never
     # a single tick, because the `ai` block is only present 50-80% of ticks).
@@ -156,6 +159,8 @@ class Timings:
         return cls(
             trigger_cooldown_default=1200.0,
             global_escalation_min_gap=60.0,
+            change_cooldown_s=20.0,
+            change_max_per_min=3,
             screen_sustained_window=60.0,
             screen_sustained_min_hits=20,
             people_sustained_window=60.0,
@@ -185,6 +190,8 @@ class Timings:
         return cls(
             trigger_cooldown_default=20.0,
             global_escalation_min_gap=5.0,
+            change_cooldown_s=8.0,
+            change_max_per_min=6,
             screen_sustained_window=20.0,
             screen_sustained_min_hits=3,
             people_sustained_window=20.0,

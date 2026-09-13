@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
+import re
 from typing import Callable, Protocol, runtime_checkable
 
 from ..config import DEFAULT_KEYWORD_TRIGGERS, Timings
@@ -13,6 +15,7 @@ __all__ = [
     "CallableBiometricFeed",
     "Trigger",
     "biometric_anomaly_trigger",
+    "change_trigger",
     "default_triggers",
     "keyword_trigger",
     "wearable_now_line",
@@ -150,6 +153,16 @@ def _flag_hits(
     return predicate
 
 
+def _condition_hits(
+    condition: Callable[[Tick], bool | None], seconds: float, minimum: int
+) -> Callable[[list[Tick]], bool]:
+    def predicate(window: list[Tick]) -> bool:
+        known = [v for t in _recent(window, seconds) if (v := condition(t)) is not None]
+        return bool(known) and known[-1] is True and sum(v is True for v in known) >= minimum
+
+    return predicate
+
+
 def keyword_trigger(
     name: str,
     keywords: list[str],
@@ -192,6 +205,94 @@ def keyword_trigger(
         return reason, []
 
     return Trigger(name, predicate, cooldown_s, None, reason, enrich)
+
+
+def change_trigger(timings: Timings) -> Trigger:
+    """Wake T1 for stable, meaningful changes in fresh visual semantics."""
+
+    required = max(2, timings.scaled_hits(2))
+    fired_at: deque[float] = deque()
+    unknown = {None, "", "?", "unknown"}
+
+    def fresh(window: list[Tick], seconds: float) -> list[Tick]:
+        return [
+            tick for tick in _recent(window, seconds)
+            if tick.ai_fresh(timings.ai_max_age_ms) and tick.ai is not None
+        ]
+
+    def value(tick: Tick, name: str) -> str | None:
+        raw = getattr(tick.ai, name, None) if tick.ai is not None else None
+        return None if raw in unknown else str(raw)
+
+    def changes(window: list[Tick]) -> tuple[list[str], list[str]]:
+        recent = fresh(window, 20.0)
+        if len(recent) < required + 1:
+            return [], []
+        newest = recent[-required:]
+        before12 = [t for t in recent[:-required] if t.t >= recent[-1].t - 12.0]
+        reasons: list[str] = []
+        transitions: list[str] = []
+
+        for name in ("scene", "activity"):
+            afters = [value(t, name) for t in newest]
+            prior = next((value(t, name) for t in reversed(before12) if value(t, name)), None)
+            if prior and afters[0] and len(set(afters)) == 1 and prior != afters[0]:
+                reasons.append(f"{name} {prior} -> {afters[0]}")
+                transitions.append(f"{name}: {prior} -> {afters[0]}")
+
+        for name, label in (("drink", "drink"), ("food_type", "food")):
+            afters = [value(t, name) for t in newest]
+            raw_prior = next((value(t, name) for t in reversed(before12) if value(t, name)), None)
+            valid_prior = raw_prior == "none" if name == "drink" else raw_prior is not None
+            if afters[0] and len(set(afters)) == 1 and afters[0] != "none" and valid_prior and raw_prior != afters[0]:
+                reasons.append(f"{label}: {afters[0]}")
+                transitions.append(f"{name}: {raw_prior} -> {afters[0]}")
+
+        current_objects = [set(t.ai.objects or []) for t in newest]  # type: ignore[union-attr]
+        stable_objects = set.intersection(*current_objects) if current_objects else set()
+        old_objects = {
+            obj.casefold()
+            for t in recent[:-required]
+            for obj in (t.ai.objects or [])  # type: ignore[union-attr]
+        }
+        for obj in sorted(stable_objects, key=str.casefold):
+            if obj.casefold() not in old_objects:
+                reasons.append(f"new object: {obj}")
+                transitions.append(f"objects: absent -> {obj}")
+
+        def in_hand(tick: Tick, kind: str) -> bool:
+            caption = tick.ai.caption.casefold() if tick.ai and tick.ai.caption else ""
+            hand = "holding" in caption or "hand" in caption
+            if kind == "food":
+                return hand and tick.flag("food_present", timings.ai_max_age_ms) is True
+            return hand and value(tick, "drink") not in unknown | {"none"}
+
+        for kind in ("food", "drink"):
+            if all(in_hand(t, kind) for t in newest) and not any(in_hand(t, kind) for t in before12):
+                reasons.append(f"{kind} in hand")
+                transitions.append(f"{kind} in hand: no -> yes")
+        return reasons, transitions
+
+    def within_limits(now: float) -> bool:
+        while fired_at and fired_at[0] <= now - 60.0:
+            fired_at.popleft()
+        return (not fired_at or now - fired_at[-1] >= timings.change_cooldown_s) and len(fired_at) < timings.change_max_per_min
+
+    def predicate(window: list[Tick]) -> bool:
+        return bool(
+            window
+            and window[-1].ai_fresh(timings.ai_max_age_ms)
+            and within_limits(window[-1].t)
+            and changes(window)[0]
+        )
+
+    def enrich(window: list[Tick]) -> tuple[str, list[str]]:
+        reasons, transitions = changes(window)
+        if reasons:
+            fired_at.append(window[-1].t)
+        return "; ".join(reasons), ["Visual transition: " + "; ".join(transitions)] if transitions else []
+
+    return Trigger("change", predicate, timings.change_cooldown_s, None, "Meaningful visual change", enrich)
 
 
 def _outdoor_hits(
@@ -458,16 +559,36 @@ def default_triggers(
     #: 1 Hz, and at 1.5 s that floors to one, which is the intent -- a cup seen
     #: once in a 10 s window is a cup. The window itself does not scale.
     sighting_hits = max(1, hits(2))
+    def meal(tick: Tick) -> bool | None:
+        activity = tick.enum("activity", max_age_ms)
+        food = tick.flag("food_present", max_age_ms)
+        if activity == "eating":
+            return True
+        if food is None:
+            return None
+        caption = tick.ai.caption.casefold() if tick.ai and tick.ai.caption else ""
+        return food and re.search(r"\b(?:eat(?:s|ing)?|bit(?:e|ing)|chew(?:s|ing)?)\b", caption) is not None
+
+    def conversation(tick: Tick) -> bool | None:
+        people = tick.flag("people_present", max_age_ms)
+        if people is None:
+            return None
+        return people and (
+            tick.flag("people_interacting", max_age_ms) is True
+            or tick.enum("activity", max_age_ms) == "talking"
+        )
+
     specs = [
-        ("food_in_frame", _flag_hits("food_present", timings.food_window, hits(timings.food_min_hits), max_age_ms), "meal", "Food persisted in the recent frame window"),
+        ("food_in_frame", _condition_hits(meal, timings.food_window, hits(timings.food_min_hits)), "meal", "Eating persisted in the recent frame window"),
         ("screen_sustained", _flag_hits("screen_present", timings.screen_sustained_window, hits(timings.screen_sustained_min_hits), max_age_ms), "screen_block", "Screen presence was sustained"),
-        ("people_sustained", _flag_hits("people_present", timings.people_sustained_window, hits(timings.people_sustained_min_hits), max_age_ms), "conversation", "People presence was sustained"),
+        ("people_sustained", _condition_hits(conversation, timings.people_sustained_window, hits(timings.people_sustained_min_hits)), "conversation", "Social interaction was sustained"),
         ("outdoor_sustained", _outdoor_hits(timings.outdoor_sustained_window, hits(timings.outdoor_min_hits), max_age_ms), "outdoor_block", "Outdoor context was sustained"),
         ("caffeine_seen", _flag_hits("caffeine_visible", 10.0, sighting_hits, max_age_ms), "caffeine_sighting", "Caffeine was seen repeatedly"),
         ("alcohol_seen", _flag_hits("alcohol_visible", 10.0, sighting_hits, max_age_ms), "alcohol_sighting", "Alcohol was seen repeatedly"),
         ("stillness", _stillness(timings.stillness_window), None, "Low frame motion was sustained"),
     ]
-    triggers = [Trigger(name, predicate, cooldown(name), kind, reason) for name, predicate, kind, reason in specs]  # type: ignore[arg-type]
+    triggers = [change_trigger(timings)]
+    triggers.extend(Trigger(name, predicate, cooldown(name), kind, reason) for name, predicate, kind, reason in specs)  # type: ignore[arg-type]
     entries = DEFAULT_KEYWORD_TRIGGERS if keyword_triggers is None else keyword_triggers
     for entry in entries:
         name = str(entry["name"])

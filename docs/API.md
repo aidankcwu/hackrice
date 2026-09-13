@@ -54,7 +54,7 @@ The `scene` / `activity` / `food_type` / `drink` menus live in `src/longevity/ai
 |---|---|
 | `GET /api/status` | `{demo_mode, source, uptime_s, tick_count, ai_coverage, t1_busy, dropped_escalations, last_tick_t}` |
 | `GET /api/ticks/recent?n=60` | last n ticks, no pixels |
-| `GET /api/episodes?day=YYYY-MM-DD` | episodes (default today), open ones included |
+| `GET /api/episodes?day=YYYY-MM-DD` | episodes (default today), open ones included; each carries `label` and `reported` |
 | `GET /api/decisions?limit=50` | decision feed, newest first. **Includes silent decisions** — every escalation produces one row (SPEC §6) |
 | `GET /api/insights?limit=50` | `log_insight` rows |
 | `GET /api/scores?period=daily\|weekly` | per-metric scores with `source: live\|seeded`, `grade`, `target`, `value`, `score` (0–1) |
@@ -72,6 +72,10 @@ The `scene` / `activity` / `food_type` / `drink` menus live in `src/longevity/ai
 | `GET /api/biometrics?metric=heart_rate&from=&to=` | `{metric, source, points: [[t, value], ...]}` — seeded wearable series on the tick clock (SPEC §14.2); defaults to the last hour |
 | `GET /api/events` | SSE stream (deferred — dashboard polls at 1 s for the demo) |
 | `GET /frames?refs=` | see seam §2 |
+| `GET /api/persona` | `{text, source: "default"\|"custom"}` — the persona T1 is briefed with |
+| `PUT /api/persona` | `{text}` → the same shape; empty `text` clears the override back to the default |
+| `GET /api/profile?limit=50` | learned lines `[{id, t, line, source_decision_id}]`, oldest first |
+| `DELETE /api/profile/{id}` | retire one learned line → `{id, removed}`; `404` if it is not active |
 | `GET /api/questions?limit=20` | `pending_questions` rows, newest first (docs/ASK_DESIGN.md §5) |
 | `POST /api/answer` | `{question_id?, text, heard?=true}` → `{question_id, accepted}`; answers by hand what the phone would have transcribed |
 | `POST /api/ask` | `{text, answer_kind?="yes_no", fills?="confirmed", episode_id?}` → `{question_id, suppressed_reason}`; demo/debug ask |
@@ -89,7 +93,8 @@ Decision row shape:
     {"type": "annotate", "line": "12:31 lunch, mixed plate, with people"},
     {"type": "log_insight", "category": "diet", "text": "..."},
     {"type": "watch", "after_s": 900, "reason": "check if still seated"},
-    {"type": "speak", "text": "...", "urgency": "low"}
+    {"type": "speak", "text": "...", "urgency": "low"},
+    {"type": "remember", "line": "Eats lunch with the lab most Thursdays."}
   ],
   "spoke": false,
   "dropped": false, "drop_reason": null,
@@ -238,6 +243,49 @@ the health score is simply the sum over the factors that *were* measured.
 
 `PROFILE_CYP1A2_SLOW=1` widens this view's caffeine cutoff to 12 h
 while the §8 scorer keeps 9 h, so the two panels can disagree on "late".
+
+## The persona that grows (`GET/PUT /api/persona`, `GET/DELETE /api/profile`)
+
+T1's system prompt is rebuilt on every wake-up out of three pieces: the
+persona, what it has learned about the wearer, and the 7-day summary. The first
+two are editable at runtime.
+
+**The persona.** `GET /api/persona` → `{text, source}`. `source` is `"custom"`
+when an operator has stored an override in the `profile` table and `"default"`
+when the text is the one compiled into `pipeline/reasoner/prompts.py`.
+`PUT /api/persona` `{text}` stores an override; **empty `text` clears it**, so
+the box falling empty means "go back to the built-in persona", never "work for
+nobody". A non-string `text` is a `400`.
+
+**The learned lines.** The `remember` action writes one durable fact about the
+wearer — a preference, a habit, a person, a place, a routine — into
+`profile_lines`, and every subsequent system prompt reads them back under
+*What you have learned about the wearer today*, oldest first, capped at 30.
+
+```json
+{"id": "p_3f2a91c4", "t": 1757700842.0,
+ "line": "Drinks his coffee black.", "source_decision_id": "d_0007"}
+```
+
+A line whose casefolded text is already active is ignored, not stored twice:
+the model re-derives the same fact several times a day. `DELETE
+/api/profile/{id}` deactivates one (`404` if it is not active); the row stays
+as history, so the same fact can legitimately be learned again later.
+
+`remember` is distinct from its two neighbours on purpose. `annotate` is about
+*today* and is read back for one day; `log_insight` is a health observation for
+a report; `remember` is about *who the wearer is* and outlives both. The action
+is `{"type": "remember", "line": "..."}`, capped at 160 characters by
+`normalize`.
+
+**Episode labels.** `episodes.label` is one human sentence per episode: T1's
+first `annotate` line about it, extended when an answer settles something —
+`"14:20 cold brew, desk · confirmed, 2"`. Written once and only once by the
+first decision on the episode (the last line of an episode, "still at the
+desk", is a far worse name for it than the first), and carried through
+`upsert_episode`, which the episode builder calls on every tick. `null` until
+T1 names it.
+
 
 ## Feed line format (dashboard)
 

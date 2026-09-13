@@ -27,6 +27,7 @@ __all__ = [
     "AnnotateAction",
     "WatchAction",
     "AskAction",
+    "RememberAction",
     "NothingAction",
     "Action",
     "T1Response",
@@ -42,6 +43,11 @@ __all__ = [
 Urgency = Literal["low", "normal", "high"]
 
 ANNOTATE_MAX_CHARS = 80
+
+#: A ``remember`` line is one durable fact, not a paragraph. Mirrors
+#: ``Database.PROFILE_LINE_MAX_CHARS``; :func:`normalize` is where it is
+#: enforced, because the schema cannot express a length.
+REMEMBER_MAX_CHARS = 160
 
 #: ``AnswerParse.note`` is one line of what the wearer said in effect.
 NOTE_MAX_CHARS = 80
@@ -110,6 +116,19 @@ class AskAction(_ActionBase):
     reason: str = ""
 
 
+class RememberAction(_ActionBase):
+    """One durable fact about the wearer, added to the persona (Part A).
+
+    Distinct from ``annotate``, which is about *today* and is read back for one
+    day, and from ``log_insight``, which is a health observation for a report.
+    A ``remember`` line is about *who the wearer is* -- a preference, a habit, a
+    person, a place, a routine -- and goes into every future system prompt.
+    """
+
+    type: Literal["remember"] = "remember"
+    line: str
+
+
 class NothingAction(_ActionBase):
     type: Literal["nothing"] = "nothing"
 
@@ -121,6 +140,7 @@ Action = Annotated[
         AnnotateAction,
         WatchAction,
         AskAction,
+        RememberAction,
         NothingAction,
     ],
     Field(discriminator="type"),
@@ -224,6 +244,18 @@ _ASK = _obj(
     }
 )
 
+_REMEMBER = _obj(
+    {
+        "type": {"type": "string", "enum": ["remember"]},
+        "line": {
+            "type": "string",
+            "description": "One short durable fact about the wearer -- a "
+            "preference, a habit, a person, a place, a routine -- learned from "
+            "an answer or a repeated pattern. Not today's events.",
+        },
+    }
+)
+
 _NOTHING = _obj({"type": {"type": "string", "enum": ["nothing"]}})
 
 T1_JSON_SCHEMA: dict[str, Any] = _obj(
@@ -240,7 +272,15 @@ T1_JSON_SCHEMA: dict[str, Any] = _obj(
             "type": "array",
             "minItems": 1,
             "items": {
-                "anyOf": [_SPEAK, _LOG_INSIGHT, _ANNOTATE, _WATCH, _ASK, _NOTHING],
+                "anyOf": [
+                    _SPEAK,
+                    _LOG_INSIGHT,
+                    _ANNOTATE,
+                    _WATCH,
+                    _ASK,
+                    _REMEMBER,
+                    _NOTHING,
+                ],
             },
         },
     }
@@ -401,6 +441,8 @@ def normalize(resp: T1Response, t: float | None = None) -> T1Response:
 
     * ``annotate`` is always present (SPEC §4.5 "always write"). A missing one
       is synthesised from the interpretation.
+    * a ``remember`` line is trimmed to ``REMEMBER_MAX_CHARS`` and an empty
+      one is dropped.
     * ``nothing`` is dropped when any other action was chosen -- "no action"
       alongside an action is a contradiction, and the model does emit it.
     * ``confidence`` is clamped to 0..1.
@@ -429,6 +471,20 @@ def normalize(resp: T1Response, t: float | None = None) -> T1Response:
         return True
 
     actions = [a for a in actions if _sayable(a)]
+
+    # A `remember` line is capped here rather than in the schema, which cannot
+    # express a length, and an empty one is dropped outright: a blank fact
+    # would still take a slot in every future system prompt.
+    capped: list[Any] = []
+    for action in actions:
+        if getattr(action, "type", None) != "remember":
+            capped.append(action)
+            continue
+        line = (getattr(action, "line", "") or "").strip()
+        if not line:
+            continue
+        capped.append(RememberAction(line=line[:REMEMBER_MAX_CHARS].rstrip()))
+    actions = capped
 
     if any(a.type == "ask" for a in actions):
         actions = [a for a in actions if a.type != "speak"]

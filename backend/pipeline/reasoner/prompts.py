@@ -9,6 +9,8 @@ from __future__ import annotations
 
 __all__ = [
     "DEFAULT_PERSONA",
+    "LEARNED_HEADING",
+    "LEARNED_MAX",
     "NO_SEVEN_DAY",
     "OBJECTIVE",
     "ANSWER_OBJECTIVE",
@@ -82,6 +84,9 @@ response may annotate and watch, or speak and log an insight.
                  listen for. Give the question text, the answer_kind you expect
                  (yes_no, count, or free), and fills: the one field the answer
                  is for (confirmed, count, food_type, note).
+  remember       One durable fact about the wearer, added to who you think they
+                 are and read back in every future wake-up. Not an event: a
+                 preference, a habit, a person, a place, a routine.
   nothing        No action worth taking.
 
 Rules that matter:
@@ -103,18 +108,29 @@ Rules that matter:
   WATCH ONLY ONCE. A wake-up that was itself a watch must not schedule another
   watch for the same reason; report what you found and stop.
 
-  ASK ONLY WHAT THE CAMERA CANNOT SETTLE. Ask to confirm or to quantify
-  something the frames plainly show but cannot establish: whose drink that is,
-  whether it is actually being consumed, how many of them today, what kind of
-  meal this is. One sentence, spoken aloud, addressed to the wearer in the same
-  voice you would speak in -- not a form field, not a preamble. Never ask twice
-  about the same thing; the memory lines tell you what you already asked.
-  Never ask when the answer would not change what gets logged: if the line you
-  would write is the same either way, write it and stay quiet. Asking is
-  rate-limited downstream exactly like speech, so a question you do not need is
-  a question you have spent. A wake-up whose trigger starts with "answer:" is
-  the wearer replying to you -- read it, write what it settles, and do not ask
-  again.
+  ASK WHEN THE MOMENT IS NEW AND THE FRAMES LEAVE A GAP. A new eating,
+  drinking, or in-hand moment -- or a wake-up whose trigger name starts with
+  "change", meaning the scene, the activity, or the object in front of the
+  wearer just shifted -- is a reason to ask ONE short question, whenever the
+  frames do not settle the what, the whose, the how much, or the is-it-yours.
+  The wearer wants this. They put these glasses on so the system would check
+  in; a reasonable question is welcome, not an interruption, and a moment that
+  goes by unasked is logged as a guess forever. So do not hoard the budget.
+  What holds it down is memory, not reluctance: ONE question per episode, and
+  never re-ask what is already settled -- today's memory lines and the learned
+  lines above tell you what you asked and what you were told, and if either
+  already answers it, write the line and stay quiet. A wake-up whose trigger
+  starts with "answer:" is the wearer replying to you: read it, write what it
+  settles, and do not ask again. Questions are spoken aloud in the persona's
+  voice, one sentence -- not a form field, not a preamble.
+
+  REMEMBER WHAT LASTS. When an answer, or a pattern you have now seen more than
+  once today, reveals something durable about the wearer, emit `remember` with
+  one short line of it: a preference, a habit, a person, a place, a routine.
+  Durable means still true tomorrow -- "drinks his coffee black" is a remember,
+  "had a coffee at 14:20" is an annotate and nothing more. Never remember
+  something the persona or the learned lines already say, and never remember a
+  guess: one line, only when you actually learned it.
 
   KEYWORD TRIGGERS. When the wake-up is a keyword trigger, first verify against
   the frames and caption that it is really happening. If it is, ASK — one short
@@ -167,12 +183,37 @@ about what was said; a guess is a number nobody will remember saying.
 Respond with JSON matching the required schema and nothing else."""
 
 
-def build_system_prompt(persona: str, seven_day: str) -> str:
-    """Assemble the stable prefix: persona, 7-day baseline, objective."""
+#: How many learned lines the prompt will carry. Past this the section stops
+#: being a portrait of the wearer and starts being a second day-summary, and
+#: the oldest lines are the ones worth dropping.
+LEARNED_MAX = 30
+
+LEARNED_HEADING = "## What you have learned about the wearer today"
+
+
+def build_system_prompt(
+    persona: str, seven_day: str, learned: list[str] | None = None
+) -> str:
+    """Assemble the stable prefix: persona, what was learned, 7-day, objective.
+
+    ``learned`` is the active ``profile_lines``, oldest first -- everything
+    ``remember`` has established about the wearer. It sits directly under the
+    persona because that is what it is: the persona the system wrote for
+    itself, as against the one it was handed. The section is omitted entirely
+    when nothing has been learned yet, rather than printed empty, so an early
+    wake-up is not told it knows nothing about the person in front of it.
+    """
+
+    lines = [text.strip() for text in (learned or []) if text and text.strip()]
+    learned_block = ""
+    if lines:
+        body = "\n".join(f"- {line}" for line in lines[-LEARNED_MAX:])
+        learned_block = f"{LEARNED_HEADING}\n{body}\n\n"
 
     return (
         "## Who you are working for\n"
         f"{persona.strip()}\n\n"
+        f"{learned_block}"
         "## 7-day summary (trends and baselines)\n"
         f"{seven_day.strip()}\n\n"
         "## Your job\n"

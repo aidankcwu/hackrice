@@ -16,6 +16,7 @@ from pydantic import ValidationError
 from ..actions.speech import get_speak_fn
 from ..db import day_key
 from ..models import PendingCheck
+from ..reasoner.prompts import DEFAULT_PERSONA
 from ..reasoner.schema import AskAction
 from ..scoring import healthspan_for_day
 from ..scoring.scorer import rollup
@@ -121,7 +122,14 @@ async def episodes(request: Request, day: str | None = None) -> list[dict]:
     selected = day or day_key(pipeline.last_tick.t if pipeline.last_tick else time.time())
     rows = pipeline.db.list_episodes(selected)
     reported = _reported_map(pipeline.db)
-    return [{**row.model_dump(), "reported": reported.get(row.id)}
+    # `label` is merged from the table rather than read off the model: it is a
+    # column the episode builder never writes and `Episode` does not carry, so
+    # `model_dump()` cannot know about it. `or None` keeps the key's contract
+    # ("null until T1 names it") whichever side supplies it.
+    labels = pipeline.db.episode_labels(selected)
+    return [{**row.model_dump(),
+             "reported": reported.get(row.id),
+             "label": getattr(row, "label", None) or labels.get(row.id)}
             for row in rows]
 
 
@@ -378,6 +386,59 @@ async def speak_now(body: dict[str, Any]) -> dict[str, Any]:
     get_speak_fn()(text, urgency)
     return {"ok": True, "text": text, "urgency": urgency}
 
+
+
+# -- persona and profile (the growing persona) ----------------------------
+
+
+@router.get("/api/persona")
+async def get_persona(request: Request) -> dict:
+    """The persona T1 is briefed with, and whether it is the built-in one.
+
+    ``source`` matters more than it looks: an operator editing this box needs
+    to know whether they are looking at the default -- which they can revise
+    freely -- or at something they already overrode.
+    """
+
+    pipeline = _pipeline(request)
+    override = pipeline.db.get_persona()
+    reasoner = getattr(pipeline, "reasoner", None)
+    fallback = getattr(reasoner, "persona", "") or DEFAULT_PERSONA
+    return {"text": override or fallback,
+            "source": "custom" if override else "default"}
+
+
+@router.put("/api/persona")
+async def put_persona(request: Request, body: dict[str, Any]) -> dict:
+    """Set the persona override; empty text clears it back to the default.
+
+    Clearing rather than storing "" on purpose: a blank persona would brief the
+    model with nothing at all, and "I cleared the box" always means "go back to
+    how it was", never "work for nobody".
+    """
+
+    text = body.get("text", "")
+    if not isinstance(text, str):
+        raise HTTPException(400, "text must be a string")
+    pipeline = _pipeline(request)
+    pipeline.db.set_persona(text, _now(pipeline))
+    return await get_persona(request)
+
+
+@router.get("/api/profile")
+async def profile(request: Request, limit: int = Query(50, ge=1)) -> list[dict]:
+    """Active learned lines -- what `remember` has established -- oldest first."""
+
+    return _pipeline(request).db.profile_lines(limit)
+
+
+@router.delete("/api/profile/{line_id}")
+async def delete_profile_line(request: Request, line_id: str) -> dict:
+    """Retire one learned line. 404 when it is already gone or never existed."""
+
+    if not _pipeline(request).db.deactivate_profile_line(line_id):
+        raise HTTPException(404, "no such active profile line")
+    return {"id": line_id, "removed": True}
 
 
 # -- ask / answer (ASK_DESIGN §8.11) --------------------------------------

@@ -128,3 +128,12 @@ export interface HealthspanProvenance { source: Provenance; basis: string; detai
 export interface HealthspanProfile { age: number; sex: string; goal: string; cyp1a2_slow: boolean; height_m: number | null; bedtime_hh: number; bedtime_source: Provenance }
 /** GET /api/healthspan — brian_score.to_payload plus adapter fields (backend/pipeline/scoring/healthspan.py). Sits beside, not instead of, Scores. */
 export interface Healthspan { day: string; as_of_hh: number | null; engine: string; overall: number; layers: Record<string, number>; years_delta: number; years_ci: [number, number]; hours_today: number; hours_ci: [number, number]; measured: { count: number; total: number }; factors: HealthspanFactor[]; ledger: HealthspanLedgerLine[]; forecast: HealthspanForecast; levers: HealthspanLever[]; levers_free: HealthspanLever[]; insights: HealthspanInsight[]; pins: HealthspanPin[]; observations: Record<string, number>; provenance: Record<string, HealthspanProvenance>; effects: HealthspanEffect[]; profile: HealthspanProfile; baseline_sleep_h: number; window: { ledger_days: string[]; factor_days: string[]; uncovered_days: string[]; days_elapsed: number }; conventions: string[] }
+
+// --- The persona that grows (GET/PUT /api/persona, GET/DELETE /api/profile) ---
+/** The persona T1 is briefed with. `source` is `custom` once an operator has
+ *  stored an override, `default` while it is the one compiled into the backend. */
+export interface Persona { text: string; source: "default" | "custom" }
+/** One durable fact `remember` learned about the wearer. Read back into every
+ *  system prompt, so it outlives today's summary. */
+export interface ProfileLine { id: string; t: number; line: string; source_decision_id: string | null }
+export interface ForgetResult { id: string; removed: boolean }

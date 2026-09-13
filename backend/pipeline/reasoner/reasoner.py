@@ -34,16 +34,53 @@ from ..models import Decision, Escalation, PendingQuestion
 from .client import AnswerParser, ReasonerClient
 from .envelope import build_envelope, local_time, select_frames
 from .evidence import EvidenceStore
-from .prompts import DEFAULT_PERSONA, NO_SEVEN_DAY
+from .prompts import DEFAULT_PERSONA, LEARNED_MAX, NO_SEVEN_DAY
 from .schema import normalize
 
 log = logging.getLogger(__name__)
 
-__all__ = ["Reasoner", "FRAMES_PER_ESCALATION"]
+__all__ = ["Reasoner", "FRAMES_PER_ESCALATION", "settled_fact"]
 
 #: SPEC §4.3 -- "Four images is the right number; the fifth adds latency and
 #: little information."
 FRAMES_PER_ESCALATION = 4
+
+
+def _number(value: float) -> str:
+    """``2.0`` -> ``2``; ``1.5`` stays ``1.5``. Nobody drank 2.0 beers."""
+
+    return str(int(value)) if float(value).is_integer() else f"{value:g}"
+
+
+def settled_fact(parse: Any) -> str:
+    """What an answer established, in the few words an episode label can hold.
+
+    ``"confirmed, 2 beer"`` / ``"not theirs"`` / ``""``. Built from the parsed
+    fields, never from the raw transcript: the transcript is whatever the
+    microphone heard, and the parse is the part of it the system was willing to
+    believe. Empty when the answer settled nothing worth naming -- an
+    un-understood reply must not append noise to the label.
+    """
+
+    bits: list[str] = []
+    confirmed = getattr(parse, "confirmed", None)
+    if confirmed is True:
+        bits.append("confirmed")
+    elif confirmed is False:
+        bits.append("not theirs")
+
+    count = getattr(parse, "count", None)
+    food = (getattr(parse, "food_type", None) or "").strip()
+    if count is not None:
+        bits.append(f"{_number(count)} {food}" if food else _number(count))
+    elif food:
+        bits.append(food)
+
+    if not bits:
+        note = (getattr(parse, "note", "") or "").strip()
+        if note and getattr(parse, "understood", False):
+            bits.append(note)
+    return ", ".join(bits)
 
 
 class Reasoner:
@@ -108,6 +145,7 @@ class Reasoner:
         self.spoke_count = 0
         self.answers_completed = 0
         self.answers_dropped = 0
+        self.remembered = 0
         self.last_latency_ms: int | None = None
         self.last_decision_t: float | None = None
         #: Bumped by a judge-session start. A call admitted under an older epoch
@@ -237,6 +275,7 @@ class Reasoner:
                 )
                 return
             self.questions.apply_parse(question, parsed, t)
+            self._extend_episode_label(question.episode_id, parsed)
             self.answers_completed += 1
         except asyncio.CancelledError:  # pragma: no cover - shutdown path
             raise
@@ -428,6 +467,9 @@ class Reasoner:
                                            if k in result})
                 self.db.insert_decision(decision)
 
+            self._remember(decision_id, esc.t, norm)
+            self._label_episode(esc.episode_id, norm)
+
             self.completed += 1
             log.info(self.feed_line(decision))
         except asyncio.CancelledError:  # pragma: no cover - shutdown path
@@ -476,9 +518,108 @@ class Reasoner:
             frames,
             today,
             seven_day,
-            self.persona,
+            self.current_persona(),
             k=FRAMES_PER_ESCALATION,
+            learned=self.learned_lines(),
         )
+
+    # -- the growing persona ----------------------------------------------
+    #
+    # The system prompt is rebuilt on every wake-up rather than cached at
+    # construction, because both halves of it can change while the process
+    # runs: the operator can rewrite the persona from the dashboard, and T1
+    # adds to what it has learned with every `remember` it emits.
+
+    def current_persona(self) -> str:
+        """The operator's override if there is one, else the persona we were given."""
+
+        try:
+            override = self.db.get_persona()
+        except Exception:  # pragma: no cover - defensive
+            log.exception("could not read the persona override; using the default")
+            return self.persona
+        return override or self.persona
+
+    def learned_lines(self) -> list[str]:
+        """Active profile lines, oldest first, capped for the prompt."""
+
+        try:
+            rows = self.db.profile_lines(limit=LEARNED_MAX)
+        except Exception:  # pragma: no cover - defensive
+            log.exception("could not read the learned lines; sending none")
+            return []
+        return [str(row["line"]) for row in rows if row.get("line")]
+
+    def _remember(self, decision_id: str, t: float, resp: Any) -> None:
+        """Store every ``remember`` line on the decision (Part A).
+
+        Done here rather than in :class:`~pipeline.actions.handlers.ActionHandler`
+        because this is the only layer that owns the persona the lines feed
+        back into. A duplicate is not an error: the model re-derives the same
+        fact across a day, and the db drops it silently.
+        """
+
+        for action in resp.actions:
+            if getattr(action, "type", None) != "remember":
+                continue
+            try:
+                line_id = self.db.add_profile_line(action.line, t, decision_id)
+            except Exception:
+                log.exception("could not remember a line for %s", decision_id)
+                continue
+            if line_id is None:
+                log.info("%s: remember ignored, already known: %s",
+                         decision_id, action.line)
+            else:
+                self.remembered += 1
+                log.info("%s: remembered %s -- %s", decision_id, line_id, action.line)
+
+    def _label_episode(self, episode_id: str | None, resp: Any) -> None:
+        """Name the episode after the first ``annotate`` line, once.
+
+        "Once" is the whole rule: an episode runs for minutes and wakes T1
+        several times, and the last line ("still at the desk") is a far worse
+        name for it than the first ("cold brew, desk, 14:20").
+        """
+
+        if not episode_id:
+            return
+        line = next(
+            (a.line for a in resp.actions
+             if getattr(a, "type", None) == "annotate" and (a.line or "").strip()),
+            None,
+        )
+        if not line:
+            return
+        try:
+            if self.db.episode_label(episode_id):
+                return
+            self.db.set_episode_label(episode_id, line.strip())
+        except Exception:  # pragma: no cover - defensive
+            log.exception("could not label episode %s", episode_id)
+
+    def _extend_episode_label(self, episode_id: str | None, parse: Any) -> None:
+        """Append what an answer settled to its episode's label.
+
+        ``cold brew, desk`` becomes ``cold brew, desk · confirmed, 2``. Skipped
+        when the same fact is already on the label, so a re-delivered answer
+        cannot stutter it.
+        """
+
+        if not episode_id:
+            return
+        fact = settled_fact(parse)
+        if not fact:
+            return
+        try:
+            current = (self.db.episode_label(episode_id) or "").strip()
+            if fact in current:
+                return
+            self.db.set_episode_label(
+                episode_id, f"{current} \u00b7 {fact}" if current else fact
+            )
+        except Exception:  # pragma: no cover - defensive
+            log.exception("could not extend the label on episode %s", episode_id)
 
     # -- reporting --------------------------------------------------------
 
@@ -515,6 +656,7 @@ class Reasoner:
             "spoke": self.spoke_count,
             "answers_completed": self.answers_completed,
             "answers_dropped": self.answers_dropped,
+            "remembered": self.remembered,
             "frames_copied": self.evidence.copied,
             "frames_missing": self.evidence.missing,
             "model": getattr(self.client, "model", ""),

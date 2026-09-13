@@ -29,6 +29,9 @@ def test_entry_thresholds_match_demo_trigger_thresholds(interval_s: float) -> No
     hits = timings.scaled_hits
 
     assert params.entry["meal"] == (hits(timings.food_min_hits), timings.food_window)
+    assert params.entry["food_sighting"] == (
+        params.sighting_min_hits, params.sighting_window_s,
+    )
     assert params.entry["screen_block"] == (
         hits(timings.screen_sustained_min_hits),
         timings.screen_sustained_window,
@@ -77,7 +80,7 @@ def test_a_slow_demo_is_still_a_demo(tmp_path) -> None:
 
 
 def test_episodes_open_at_the_slow_cadence(tmp_path) -> None:
-    """Two positive ticks 1.5 s apart are enough to open a meal at 1.5 s."""
+    """Visible food without eating opens a sighting, not a meal."""
 
     db = Database(tmp_path / "slow.db").connect().init_schema()
     builder = EpisodeBuilder(db, Timings.demo(tick_interval_s=1.5))
@@ -87,7 +90,8 @@ def test_episodes_open_at_the_slow_cadence(tmp_path) -> None:
             sensor=SensorBlock(frame_delta=0.1, phash=f"{int(i * 2):016x}"),
             ai=AiBlock(age_ms=0, scene="restaurant", food_present=True),
         ))
-    assert "meal" in builder.open_episodes()
+    assert "food_sighting" in builder.open_episodes()
+    assert "meal" not in builder.open_episodes()
     db.close()
 
 
@@ -100,11 +104,44 @@ def test_episode_debounce_gap_close_and_upsert(tmp_path) -> None:
     assert meal.start_t == 0
     builder.on_tick(tick(5))
     assert builder.open_episodes()["meal"].open
-    for i in (6, 7, 8, 9):
+    for i in range(6, 22):
         builder.on_tick(tick(i, scene="office", food_present=False))
     assert "meal" not in builder.open_episodes()
     stored = db.list_episodes()
     assert stored[0].open is False and stored[0].dominant["food_type"] == "mixed"
+    db.close()
+
+
+def test_honest_food_and_conversation_classification(tmp_path) -> None:
+    db = Database(tmp_path / "honest.db").connect().init_schema()
+    builder = EpisodeBuilder(db, Timings.demo())
+    for i in (0, 2, 4):
+        builder.on_tick(tick(i, scene="home", activity="other", food_present=True,
+                             caption="inside a refrigerator"))
+    assert "food_sighting" in builder.open_episodes()
+    assert "meal" not in builder.open_episodes()
+    for i in (5, 7, 9):
+        builder.on_tick(tick(i, activity="eating", food_present=True, caption="taking a bite"))
+    assert "meal" in builder.open_episodes()
+
+    for i in (30, 32, 34):
+        builder.on_tick(tick(i, activity="computer_use", people_present=True,
+                             people_interacting=False, screen_present=True))
+    assert "conversation" not in builder.open_episodes()
+    db.close()
+
+
+def test_three_second_gap_does_not_split_demo_screen_block(tmp_path) -> None:
+    db = Database(tmp_path / "gap.db").connect().init_schema()
+    builder = EpisodeBuilder(db, Timings.demo())
+    for i in (0, 1, 2):
+        builder.on_tick(tick(i, screen_present=True))
+    episode_id = builder.open_episodes()["screen_block"].id
+    for i in (3, 4, 5):
+        builder.on_tick(tick(i, screen_present=False))
+    for i in (6, 7):
+        builder.on_tick(tick(i, screen_present=True))
+    assert builder.open_episodes()["screen_block"].id == episode_id
     db.close()
 
 

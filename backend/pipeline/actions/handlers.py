@@ -150,6 +150,13 @@ class ActionHandler:
             payload["outcome"] = "sent" if reason is None else f"suppressed:{reason}"
             result.setdefault("asks", []).append(payload)
 
+        elif kind == "remember":
+            # Applied by `Reasoner._remember`, which owns the persona these
+            # lines feed back into. Named here anyway: without the branch it
+            # falls through to the "unknown action type" warning below, which
+            # would be untrue of every `remember` the model ever emits.
+            pass
+
         elif kind == "nothing":
             pass
 

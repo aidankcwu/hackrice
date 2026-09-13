@@ -16,7 +16,7 @@ from pipeline.gate import (
     default_triggers,
     keyword_trigger,
 )
-from pipeline.gate.triggers import wearable_now_line
+from pipeline.gate.triggers import change_trigger, wearable_now_line
 from pipeline.models import AiBlock, Escalation, PendingCheck, SensorBlock, Tick
 from pipeline.sim import DEFAULT_SCENARIO, SimSource
 
@@ -35,7 +35,7 @@ def test_gate_episode_suppression_drop_and_watch(tmp_path) -> None:
     seen = []
     gate = TriggerGate(default_triggers(Timings.demo(), True), Timings.demo(), db, episodes, lambda e: seen.append(e) is None, True)
     for i in range(8):
-        current = tick(i, scene="restaurant", food_present=True)
+        current = tick(i, scene="restaurant", activity="eating", food_present=True)
         episodes.on_tick(current)
         gate.on_tick(current)
     assert [e.trigger for e in seen].count("food_in_frame") == 1
@@ -99,10 +99,10 @@ def test_default_scenario(tmp_path, interval_s: float) -> None:
     print(f"scenario escalations @{interval_s}s:", names)
     assert set(names) == {
         "food_in_frame", "screen_sustained", "people_sustained",
-        "outdoor_sustained", "caffeine_seen", "alcohol_seen",
-    }, names
+        "outdoor_sustained", "caffeine_seen", "alcohol_seen", "change",
+    } - {"people_sustained"}, names
     bound_triggers = {
-        "food_in_frame", "screen_sustained", "people_sustained", "outdoor_sustained",
+        "food_in_frame", "screen_sustained", "outdoor_sustained",
     }
     assert all(
         escalation.episode_id is not None
@@ -110,7 +110,8 @@ def test_default_scenario(tmp_path, interval_s: float) -> None:
         if escalation.trigger in bound_triggers
     )
     kinds = {episode.kind for episode in db.list_episodes()}
-    assert {"meal", "screen_block", "outdoor_block", "conversation"} <= kinds
+    assert {"meal", "screen_block", "outdoor_block"} <= kinds
+    assert "conversation" not in kinds
     db.close()
 
 
@@ -193,6 +194,50 @@ def test_keyword_trigger_ignores_unrelated_and_stale_ai() -> None:
     stale = tick(2, caption="rice krispy treat")
     stale.ai.age_ms = 9999  # type: ignore[union-attr]
     assert not trigger.predicate([tick(1, caption="rice krispy treat"), stale])
+
+
+def test_change_trigger_scene_activity_object_and_in_hand() -> None:
+    trigger = change_trigger(Timings.demo())
+    window = [
+        tick(0, scene="home", activity="computer_use", objects=["laptop"]),
+        tick(1, scene="outdoor_other", activity="standing", food_present=True,
+             caption="holding a snack bar in hand", objects=["snack bar"]),
+        tick(2, scene="outdoor_other", activity="standing", food_present=True,
+             caption="holding a snack bar in hand", objects=["snack bar"]),
+    ]
+    assert trigger.predicate(window)
+    reason, extra = trigger.enrich(window)  # type: ignore[misc]
+    for fragment in ("scene home -> outdoor_other", "activity computer_use -> standing",
+                     "new object: snack bar", "food in hand"):
+        assert fragment in reason
+    assert extra and "Visual transition:" in extra[0]
+
+
+def test_change_trigger_rejects_flicker_and_stale_ticks() -> None:
+    trigger = change_trigger(Timings.demo())
+    assert not trigger.predicate([
+        tick(0, scene="home"), tick(1, scene="outdoor_other"), tick(2, scene="home"),
+    ])
+    stale = tick(2, scene="outdoor_other")
+    stale.ai.age_ms = 9999  # type: ignore[union-attr]
+    assert not trigger.predicate([tick(0, scene="home"), tick(1, scene="outdoor_other"), stale])
+
+
+def test_change_trigger_cooldown_and_per_minute_cap() -> None:
+    trigger = change_trigger(Timings.demo())
+    assert trigger.predicate([tick(0, scene="home"), tick(1, scene="street"), tick(2, scene="street")])
+    trigger.enrich([tick(0, scene="home"), tick(1, scene="street"), tick(2, scene="street")])  # type: ignore[misc]
+    assert not trigger.predicate([tick(2, scene="street"), tick(3, scene="home"), tick(4, scene="home")])
+
+    # Five more accepted changes reach the demo cap of six inside one minute.
+    prior, now = "street", "home"
+    for base in (10, 19, 28, 37, 46):
+        window = [tick(base, scene=prior), tick(base + 1, scene=now), tick(base + 2, scene=now)]
+        assert trigger.predicate(window)
+        trigger.enrich(window)  # type: ignore[misc]
+        prior, now = now, prior
+    blocked = [tick(55, scene=prior), tick(56, scene=now), tick(57, scene=now)]
+    assert not trigger.predicate(blocked)
 
 
 # -- biometric_anomaly (SPEC §14.3) ---------------------------------------

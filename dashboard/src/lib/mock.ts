@@ -1,4 +1,4 @@
-import type { BiometricOrigin, Biometrics, BiometricsMulti, Decision, DecisionAction, Episode, Healthspan, HealthspanFactor, PendingCheck, Provenance, Question, Scores, SeededDay, SeededMetricRow, Status, Tick, TodaySummary, WearablesStatus } from "./types";
+import type { BiometricOrigin, Biometrics, BiometricsMulti, Decision, DecisionAction, Episode, Healthspan, HealthspanFactor, PendingCheck, Persona, ProfileLine, Provenance, Question, Scores, SeededDay, SeededMetricRow, Status, Tick, TodaySummary, WearablesStatus } from "./types";
 const now = Date.now() / 1000;
 const scenes = ["office","office","restaurant","restaurant","street","park","park","gym"];
 export const mockTicks: Tick[] = Array.from({length:30},(_,i) => { const scene=scenes[Math.floor(i/4)%scenes.length]; const missing=i%5===0; const caption=`person in ${scene}`; return {v:1,tick_id:`t_${1740+i}`,t:now-29+i,seq:1740+i,sensor:{lux_proxy:scene==="park"?510:180,cct:4100,hist_spread:.62,frame_delta:.08+(i%4)*.04,flow_mag:.04,sharpness:88,phash:`e3a91c04b7d2${i.toString().padStart(4,"0")}`},device:{accel_rms:.04,gps_speed:scene==="street"?1.2:.2},...(!missing&&{ai:{as_of:now-29+i-.3,age_ms:300,scene,activity:scene==="gym"?"exercising":"seated",food_present:scene==="restaurant",food_type:scene==="restaurant"?"mixed":"none",caffeine_visible:i===12,alcohol_visible:i===15,screen_present:scene==="office",vegetation_visible:scene==="park",people_present:["restaurant","park"].includes(scene),caption,objects:["person",scene==="office"?"laptop":"chair"],drink:i===12?"coffee":i===15?"alcohol":"none",conf:.86}}),frame_ref:`f_${1740+i}`}; });
@@ -227,3 +227,15 @@ export const mockHealthspan: Healthspan = {
   "Alcohol sightings within 30 min are one drink; a journal '1' is read as one drink.",
  ],
 };
+// The persona panel's fallback. Kept short and obviously generic: it stands in
+// only when `/api/persona` is unreachable, and the panel disables Save in that
+// state so this text can never be written over the real one.
+export const mockPersona: Persona = {
+ text:"Rishi (he/him), a Rice undergrad in Houston: startup, lab, hackathons, marathon training. Short and direct, never nagged; say a thing once, at the moment it is actionable, and otherwise write it down and stay quiet.",
+ source:"default",
+};
+export const mockProfileLines: ProfileLine[] = [
+ {id:"p_7c1e0a44",t:now-9400,line:"Drinks his coffee black.",source_decision_id:"d_0004"},
+ {id:"p_2a90b3f1",t:now-5200,line:"Runs the bayou trail on long-run days.",source_decision_id:"d_0009"},
+ {id:"p_55dd18c0",t:now-900,line:"Eats lunch with the lab most Thursdays.",source_decision_id:"d_0011"},
+];

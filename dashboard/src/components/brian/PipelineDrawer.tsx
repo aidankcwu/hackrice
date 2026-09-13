@@ -13,6 +13,9 @@ import { EpisodeTimeline } from "@/components/EpisodeTimeline";
 import { ScoresPanel } from "@/components/ScoresPanel";
 import { HealthspanPanel } from "@/components/HealthspanPanel";
 import { MemoryPanel, SevenDayPanel } from "@/components/MemoryPanels";
+import { JudgeSession } from "@/components/JudgeSession";
+import { QuestionsPanel } from "@/components/QuestionsPanel";
+import { PersonaPanel } from "@/components/PersonaPanel";
 
 /**
  * The old dark dashboard, folded into a collapsible drawer under the Brian page.
@@ -81,6 +84,7 @@ function PipelinePanels() {
         </div>
       )}
       <StatusBar status={status.data} />
+      <JudgeSession />
       <CapturePanel status={status.data} />
       <div className="mt-3">
         <TickStrip ticks={ticks.data} />
@@ -94,12 +98,14 @@ function PipelinePanels() {
           <EpisodeTimeline episodes={episodes.data} />
         </div>
         <div className="space-y-3">
+          <QuestionsPanel />
           <MemoryPanel summary={summary.data} pending={pending.data} />
           <SevenDayPanel rows={seeded.data} />
         </div>
         <div className="space-y-3">
           <HealthspanPanel data={healthspan.data} />
           <ScoresPanel scores={scores.data} />
+          <PersonaPanel />
         </div>
       </div>
       <footer className="py-4 text-center text-[10px] uppercase tracking-[.2em] text-zinc-700">

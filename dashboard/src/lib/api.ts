@@ -1,5 +1,5 @@
-import { mockBiometrics, mockBiometricsMulti, mockDecisions, mockEpisodes, mockHealthspan, mockPending, mockQuestions, mockScores, mockSeeded, mockSeededRows, mockStatus, mockSummary, mockTicks, mockWearablesStatus } from "./mock";
-import type { AnswerResult, AskResult, Biometrics, BiometricsMulti, Decision, Episode, Healthspan, Insight, MetricScore, PendingCheck, Question, Recap, Scores, SeededDay, SeededMetricRow, Session, Status, Tick, WearablesStatus } from "./types";
+import { mockBiometrics, mockBiometricsMulti, mockDecisions, mockEpisodes, mockHealthspan, mockPending, mockPersona, mockProfileLines, mockQuestions, mockScores, mockSeeded, mockSeededRows, mockStatus, mockSummary, mockTicks, mockWearablesStatus } from "./mock";
+import type { AnswerResult, AskResult, Biometrics, BiometricsMulti, Decision, Episode, ForgetResult, Healthspan, Insight, MetricScore, PendingCheck, Persona, ProfileLine, Question, Recap, Scores, SeededDay, SeededMetricRow, Session, Status, Tick, TodaySummary, WearablesStatus } from "./types";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8010";
 export const configuredMock = process.env.NEXT_PUBLIC_MOCK === "1";
@@ -20,15 +20,18 @@ const list = <T>(value: T[] | Record<string,T[]>, keys: string[]): T[] => Array.
 /** Actions, unlike polls, must fail loudly: a judge session that silently did not
  *  start is worse than an error on screen. So no mock fallback and no timeout --
  *  `POST /api/recap` runs an LLM call and legitimately takes several seconds. */
-async function action<T>(path: string, body?: unknown): Promise<T> {
+async function mutate<T>(path: string, method: "POST" | "PUT" | "DELETE", body?: unknown): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
-    method: "POST", cache: "no-store",
+    method, cache: "no-store",
     headers: {"content-type": "application/json"},
-    body: JSON.stringify(body ?? {}),
+    // A DELETE with no body stays bodyless; `{}` on one is the kind of thing a
+    // proxy rejects for no visible reason.
+    body: method === "DELETE" && body === undefined ? undefined : JSON.stringify(body ?? {}),
   });
   if (!response.ok) throw new Error(`${path} -> ${response.status}`);
   return await response.json() as T;
 }
+const action = <T>(path: string, body?: unknown) => mutate<T>(path, "POST", body);
 
 const hhmm = (t: number) => new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 // 1 -> a compact tag, in the order the persona cares about (SPEC §14.1).
@@ -50,6 +53,15 @@ export const api = {
     action<AnswerResult>("/api/answer", questionId ? {question_id: questionId, text} : {text}),
   /** Demo/debug ask. Still passes the §4 guards, so `question_id` may be null. */
   ask: (text: string) => action<AskResult>("/api/ask", {text}),
+  // -- the persona that grows (docs/API.md "The persona that grows"). Both
+  // polls fall back to mock data like every other read, and `PersonaPanel`
+  // disables saving while they do -- writing the mock persona over the real
+  // one because the backend blinked is the one failure here that lasts.
+  persona: ()=>request<Persona>("/api/persona",mockPersona),
+  /** Empty `text` clears the override back to the built-in persona. */
+  savePersona: (text: string) => mutate<Persona>("/api/persona", "PUT", {text}),
+  profile: async (limit=50)=>{const r=await request<ProfileLine[]|{profile:ProfileLine[]}>(`/api/profile?limit=${limit}`,mockProfileLines);return {...r,data:list(r.data,["profile","lines"])};},
+  forgetProfileLine: (id: string) => mutate<ForgetResult>(`/api/profile/${encodeURIComponent(id)}`, "DELETE"),
   insights: async (limit=50)=>{const r=await request<Insight[]|{insights:Insight[]}>(`/api/insights?limit=${limit}`,[]);return {...r,data:list(r.data,["insights"])};},
   scores: async (period:"daily"|"weekly"="daily")=>{
     // Backend: {period, overall, scores:[{metric, layer, value, target, score, source, grade, note}]}

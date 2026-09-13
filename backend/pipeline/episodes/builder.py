@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter, deque
 from dataclasses import dataclass, field
+import re
 from typing import Callable
 
 from ..config import Timings
@@ -39,6 +40,7 @@ class EpisodeParams:
         hits = timings.scaled_hits
         entry = {
             "meal": (hits(timings.food_min_hits), timings.food_window),
+            "food_sighting": (max(1, hits(2)), 10.0),
             "screen_block": (
                 hits(timings.screen_sustained_min_hits),
                 timings.screen_sustained_window,
@@ -62,7 +64,7 @@ class EpisodeParams:
             ai_max_age_ms=timings.ai_max_age_ms,
         )
         if demo_mode:
-            return cls(hits(3), 6.0, hits(4), 6.0, 8.0, **common)
+            return cls(hits(3), 6.0, hits(4), 15.0, 8.0, **common)
         return cls(hits(3), 10.0, hits(4), 10.0, 20.0, **common)
 
 
@@ -111,9 +113,35 @@ def _scene(expected: str, max_age_ms: int = 3000) -> Predicate:
 def _predicates(max_age_ms: int) -> dict[EpisodeKind, Predicate]:
     """The per-kind tri-state tag readers, at one freshness budget."""
 
+    def meal(tick: Tick) -> bool | None:
+        activity = tick.enum("activity", max_age_ms)
+        food = tick.flag("food_present", max_age_ms)
+        if activity == "eating":
+            return True
+        if food is None:
+            return None
+        caption = tick.ai.caption.casefold() if tick.ai and tick.ai.caption else ""
+        return food and re.search(r"\b(?:eat(?:s|ing)?|bit(?:e|ing)|chew(?:s|ing)?)\b", caption) is not None
+
+    def food_sighting(tick: Tick) -> bool | None:
+        food = tick.flag("food_present", max_age_ms)
+        eating = meal(tick)
+        if food is None:
+            return None
+        return food and eating is not True
+
+    def conversation(tick: Tick) -> bool | None:
+        people = tick.flag("people_present", max_age_ms)
+        interacting = tick.flag("people_interacting", max_age_ms)
+        activity = tick.enum("activity", max_age_ms)
+        if people is None:
+            return None
+        return people and (interacting is True or activity == "talking")
+
     return {
-        "meal": _flag("food_present", max_age_ms),
-        "conversation": _flag("people_present", max_age_ms),
+        "meal": meal,
+        "food_sighting": food_sighting,
+        "conversation": conversation,
         "outdoor_block": _outdoor(max_age_ms),
         "screen_block": _flag("screen_present", max_age_ms),
         "gym_session": _scene("gym", max_age_ms),
@@ -126,7 +154,7 @@ def _predicates(max_age_ms: int) -> dict[EpisodeKind, Predicate]:
 class EpisodeBuilder:
     """Collapse noisy tick tags into persisted episodes."""
 
-    _SIGHTINGS = {"caffeine_sighting", "alcohol_sighting"}
+    _SIGHTINGS = {"food_sighting", "caffeine_sighting", "alcohol_sighting"}
 
     def __init__(self, db: Database, timings: Timings) -> None:
         self.db = db
@@ -285,7 +313,12 @@ class EpisodeBuilder:
                     or tick.t - state.last_hit_t >= p.sighting_idle_close_s
                 )
             else:
+                miss_span = (
+                    tick.t - state.negatives[0] if state.negatives else 0.0
+                )
                 close = len(state.negatives) >= p.exit_min_misses
+                if kind in {"screen_block", "conversation", "outdoor_block", "meal"}:
+                    close = close and miss_span >= p.exit_window_s
                 close = close or silence >= p.unknown_grace_s * 4
             if close:
                 episode = self._close(state, tick)

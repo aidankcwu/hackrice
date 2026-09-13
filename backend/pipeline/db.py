@@ -19,6 +19,7 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
+from uuid import uuid4
 
 from .models import (
     Decision,
@@ -61,7 +62,13 @@ CREATE TABLE IF NOT EXISTS episodes (
     dominant   TEXT NOT NULL DEFAULT '{}',
     tick_count INTEGER NOT NULL DEFAULT 0,
     open       INTEGER NOT NULL DEFAULT 1,
-    day        TEXT NOT NULL
+    day        TEXT NOT NULL,
+    -- One human sentence for the episode, written by T1's first `annotate`
+    -- and extended when an answer settles something (`· confirmed, 2 beers`).
+    -- Never touched by the episode builder, which rewrites `dominant` on every
+    -- tick and would erase it. Added after the table shipped: init_schema also
+    -- applies it to existing files via ALTER TABLE.
+    label      TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_episodes_day ON episodes(day);
 
@@ -180,6 +187,28 @@ CREATE TABLE IF NOT EXISTS escalated_frames (
 );
 
 CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', started_t REAL NOT NULL, ended_t REAL);
+
+-- The persona the reasoner speaks in, when the operator has overridden the
+-- one compiled into `reasoner.prompts`. One row per key; only `persona` is
+-- used today, but a key/value table means the next knob is a write, not a
+-- migration.
+CREATE TABLE IF NOT EXISTS profile (
+    key       TEXT PRIMARY KEY,
+    value     TEXT NOT NULL DEFAULT '',
+    updated_t REAL NOT NULL DEFAULT 0
+);
+
+-- What T1 has learned about the wearer, one durable line at a time
+-- (`remember`). Read back into every system prompt, so it grows the persona
+-- over a day rather than only the day's summary.
+CREATE TABLE IF NOT EXISTS profile_lines (
+    id                 TEXT PRIMARY KEY,
+    t                  REAL NOT NULL,
+    line               TEXT NOT NULL,
+    source_decision_id TEXT,
+    active             INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS ix_profile_lines_active ON profile_lines(active, t);
 """
 
 
@@ -248,6 +277,10 @@ class Database:
                 "ALTER TABLE biometric_series"
                 " ADD COLUMN origin TEXT NOT NULL DEFAULT 'seed'"
             )
+
+        columns = {row["name"] for row in self.conn.execute("PRAGMA table_info(episodes)")}
+        if "label" not in columns:
+            self.conn.execute("ALTER TABLE episodes ADD COLUMN label TEXT")
 
     def close(self) -> None:
         with self._lock:
@@ -326,11 +359,21 @@ class Database:
     # -- episodes --------------------------------------------------------
 
     def upsert_episode(self, episode: Episode) -> None:
+        """Write the episode row, carrying any existing ``label`` forward.
+
+        The builder re-upserts an open episode on every tick, so a plain
+        ``INSERT OR REPLACE`` would erase the label T1 wrote the moment the
+        next frame arrived. The sub-select re-reads the label the row already
+        has (``NULL`` on a first insert) rather than trusting the caller, which
+        is the episode builder and does not know about labels at all.
+        """
+
         with self._lock:
             self.conn.execute(
                 "INSERT OR REPLACE INTO episodes"
-                " (id, kind, start_t, end_t, duration_s, dominant, tick_count, open, day)"
-                " VALUES (?,?,?,?,?,?,?,?,?)",
+                " (id, kind, start_t, end_t, duration_s, dominant, tick_count,"
+                "  open, day, label)"
+                " VALUES (?,?,?,?,?,?,?,?,?,(SELECT label FROM episodes WHERE id = ?))",
                 (
                     episode.id,
                     episode.kind,
@@ -341,9 +384,47 @@ class Database:
                     episode.tick_count,
                     1 if episode.open else 0,
                     day_key(episode.start_t),
+                    episode.id,
                 ),
             )
             self.conn.commit()
+
+    def set_episode_label(self, episode_id: str, label: str) -> bool:
+        """Give one episode its human line. ``True`` iff a row was updated.
+
+        Stored on the row rather than projected like ``reported`` because it is
+        T1's sentence about the moment, not a re-derivation of the tick tags --
+        nothing else can recompute it.
+        """
+
+        text = (label or "").strip()
+        if not text:
+            return False
+        with self._lock:
+            cur = self.conn.execute(
+                "UPDATE episodes SET label = ? WHERE id = ?", (text, episode_id)
+            )
+            self.conn.commit()
+        return cur.rowcount == 1
+
+    def episode_label(self, episode_id: str) -> str | None:
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT label FROM episodes WHERE id = ?", (episode_id,)
+            ).fetchone()
+        return None if row is None else row["label"]
+
+    def episode_labels(self, day: str | None = None) -> dict[str, str]:
+        """``episode_id -> label`` for every labelled episode, in one query."""
+
+        sql = "SELECT id, label FROM episodes WHERE label IS NOT NULL AND label != ''"
+        args: tuple[Any, ...] = ()
+        if day is not None:
+            sql += " AND day = ?"
+            args = (day,)
+        with self._lock:
+            rows = self.conn.execute(sql, args).fetchall()
+        return {row["id"]: row["label"] for row in rows}
 
     def close_open_episodes(self, t: float) -> int:
         """Close every episode still marked open, at ``t``. Returns how many.
@@ -979,6 +1060,137 @@ class Database:
                 " answer_text = ?, heard = ?, answer_t = ?"
                 " WHERE id = ? AND status = 'open'",
                 (text, 1 if heard else 0, t, question_id),
+            )
+            self.conn.commit()
+        return cur.rowcount == 1
+
+    # -- the growing persona (profile, profile_lines) ---------------------
+    #
+    # Two halves of one idea. ``profile`` holds what the operator typed: an
+    # override for the persona compiled into ``reasoner.prompts``, absent until
+    # somebody sets one. ``profile_lines`` holds what T1 worked out for itself
+    # -- one durable fact per ``remember`` action -- and is read back into
+    # every system prompt, so a day's answers accumulate into who the wearer is
+    # rather than evaporating with today's summary.
+
+    PERSONA_KEY = "persona"
+
+    #: A learned line is one fact, not a paragraph (mirrors
+    #: ``reasoner.schema.REMEMBER_MAX_CHARS``).
+    PROFILE_LINE_MAX_CHARS = 160
+
+    def get_persona(self) -> str | None:
+        """The operator's persona override, or ``None`` when there is none.
+
+        Empty is the same as absent: clearing the box in the dashboard must
+        fall back to the built-in persona, not brief the model with "".
+        """
+
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT value FROM profile WHERE key = ?", (self.PERSONA_KEY,)
+            ).fetchone()
+        if row is None:
+            return None
+        text = (row["value"] or "").strip()
+        return text or None
+
+    def set_persona(self, text: str, t: float | None = None) -> None:
+        """Store (or, with empty text, clear) the persona override."""
+
+        import time as _time
+
+        stamp = _time.time() if t is None else t
+        value = (text or "").strip()
+        with self._lock:
+            if not value:
+                self.conn.execute(
+                    "DELETE FROM profile WHERE key = ?", (self.PERSONA_KEY,)
+                )
+            else:
+                self.conn.execute(
+                    "INSERT OR REPLACE INTO profile (key, value, updated_t)"
+                    " VALUES (?,?,?)",
+                    (self.PERSONA_KEY, value, stamp),
+                )
+            self.conn.commit()
+
+    def add_profile_line(
+        self, line: str, t: float, decision_id: str | None = None
+    ) -> str | None:
+        """Remember one line about the wearer. Returns its id, or ``None``.
+
+        ``None`` means the line was ignored: empty, or a casefolded duplicate
+        of one already active. The model re-derives the same fact across a day
+        ("he drinks his coffee black") and the prompt would otherwise fill up
+        with restatements of one thing it already knows.
+        """
+
+        text = (line or "").strip()
+        if not text:
+            return None
+        text = text[: self.PROFILE_LINE_MAX_CHARS].rstrip()
+        key = text.casefold()
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT line FROM profile_lines WHERE active = 1"
+            ).fetchall()
+            # Casefolded in Python, not by SQLite: `LIKE`/`=` on TEXT folds
+            # ASCII only, and the lines are prose.
+            if any((r["line"] or "").strip().casefold() == key for r in rows):
+                return None
+            row_id = f"p_{uuid4().hex[:8]}"
+            self.conn.execute(
+                "INSERT OR REPLACE INTO profile_lines"
+                " (id, t, line, source_decision_id, active) VALUES (?,?,?,?,1)",
+                (row_id, t, text, decision_id),
+            )
+            self.conn.commit()
+        return row_id
+
+    def profile_lines(self, limit: int = 50) -> list[dict[str, Any]]:
+        """The active learned lines, **oldest first**, newest ``limit`` of them.
+
+        Oldest first because that is the order they go into the prompt: what
+        was learned first reads as background, what was learned last reads as
+        news. The limit still takes the *newest* rows -- a day that learns a
+        hundred things should drop the stalest, not the freshest.
+        """
+
+        with self._lock:
+            rows = self.conn.execute(
+                # `rowid` is aliased into the subquery because it is not a
+                # column of a subquery's result, and it is the tiebreaker that
+                # keeps two lines learned in the same second in insert order.
+                "SELECT * FROM (SELECT rowid AS rid, * FROM profile_lines"
+                " WHERE active = 1 ORDER BY t DESC, rid DESC LIMIT ?)"
+                " ORDER BY t ASC, rid ASC",
+                (limit,),
+            ).fetchall()
+        return [
+            {
+                "id": r["id"],
+                "t": r["t"],
+                "line": r["line"],
+                "source_decision_id": r["source_decision_id"],
+            }
+            for r in rows
+        ]
+
+    def deactivate_profile_line(self, line_id: str) -> bool:
+        """Retire one learned line. ``True`` iff it was active until now.
+
+        Deactivated rather than deleted, so the row stays as history of what
+        the system once believed. Nothing reads an inactive line: not the
+        prompt, not ``GET /api/profile``, not the dedupe -- which means the
+        same fact *can* be learned again later, and should be, since the model
+        would be re-deriving it from what it sees now.
+        """
+
+        with self._lock:
+            cur = self.conn.execute(
+                "UPDATE profile_lines SET active = 0 WHERE id = ? AND active = 1",
+                (line_id,),
             )
             self.conn.commit()
         return cur.rowcount == 1

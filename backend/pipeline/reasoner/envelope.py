@@ -265,6 +265,7 @@ def build_envelope(
     seven_day: str,
     persona: str,
     k: int = 4,
+    learned: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Build the Responses API ``input`` for one escalation.
 
@@ -272,6 +273,10 @@ def build_envelope(
     ``frame_ref``; a ref missing from it (expired before the copy) simply drops
     its image and label. Selection is deterministic, so re-running
     :func:`select_frames` here yields exactly the ticks the caller copied.
+
+    ``learned`` is the active profile lines, oldest first; it joins the system
+    prompt rather than the user turn because it is stable across a day, like
+    the persona it extends.
     """
 
     origin = esc.t
@@ -327,7 +332,7 @@ def build_envelope(
             "content": [
                 {
                     "type": "input_text",
-                    "text": build_system_prompt(persona, seven_day),
+                    "text": build_system_prompt(persona, seven_day, learned),
                 }
             ],
         },

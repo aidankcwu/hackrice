@@ -111,8 +111,9 @@ def test_demo_shortens_every_duration() -> None:
         p, d = getattr(prod, f.name), getattr(demo, f.name)
         if f.name in (
             "t1_max_concurrent",
-            "speech_max_per_hour",
-            "ask_max_per_hour",
+                "speech_max_per_hour",
+                "ask_max_per_hour",
+                "change_max_per_min",
         ):
             continue  # a cap, not a duration
         assert d <= p, f"{f.name}: demo {d} should not exceed production {p}"

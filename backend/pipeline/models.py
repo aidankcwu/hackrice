@@ -154,6 +154,7 @@ UNHEALTHY_FOOD_TYPES: frozenset[str] = frozenset({
 
 EpisodeKind = Literal[
     "meal",
+    "food_sighting",
     "conversation",
     "outdoor_block",
     "screen_block",
