@@ -732,3 +732,28 @@ def test_normalize_drops_non_speech_speak_text() -> None:
         "actions": [{"type": "speak", "text": "Cereal at 5am. Bold.", "urgency": "low"}],
     })
     assert any(a.type == "speak" for a in normalize(good, t=1.0).actions)
+
+
+def test_a_keyword_trigger_with_a_fixed_line_speaks_it_without_a_model_call(db, frame_store, settings):
+    """Demo: rice krispy in frame -> "Put down the rice krispy." verbatim, no GPT."""
+
+    class NeverCalled:
+        model = "never"
+        async def complete(self, input_messages):
+            raise AssertionError("the clerk must not be called for a fixed line")
+
+    class FakeAgent:
+        def __init__(self): self.calls = []
+        def request_fixed(self, text, topic, *, decision_id=None):
+            self.calls.append((text, topic)); return "handed_off:c_fixed01"
+        def request(self, *a, **k): raise AssertionError("not a hand-off")
+
+    reasoner = build_reasoner(db, frame_store, settings, NeverCalled())
+    agent = FakeAgent()
+    reasoner._conversation = agent
+    assert reasoner.try_escalate(make_escalation(trigger="rice_krispy"))
+    assert agent.calls == [("Put down the rice krispy.", make_escalation(trigger="rice_krispy").reason or "rice_krispy")]
+    rows = db.list_decisions()
+    assert rows and rows[-1].model == "fixed" and rows[-1].spoke
+    assert rows[-1].actions[0]["outcome"] == "handed_off:c_fixed01"
+    assert not reasoner.busy

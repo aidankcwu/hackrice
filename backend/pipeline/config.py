@@ -35,9 +35,20 @@ DEFAULT_KEYWORD_TRIGGERS = [
             "rice krispy", "rice krispie", "krispy treat", "krispie treat",
             "crispy treat", "rice crispy",
         ],
-        "note": "the wearer wants the glasses to ask a question whenever someone is holding or eating a Rice Krispy treat",
-        "cooldown_s": 60,
-    }
+        "note": "the wearer wants the glasses to react whenever someone is holding or eating a Rice Krispy treat",
+        #: A fixed line: spoken verbatim the moment the keyword is seen, no
+        #: model call (demo). Omit `say` and the clerk hands the sighting to
+        #: the voice agent instead.
+        "say": "Put down the rice krispy.",
+        "cooldown_s": 20,
+    },
+    {
+        "name": "lettuce",
+        "keywords": ["lettuce", "romaine", "iceberg", "salad greens", "head of lettuce"],
+        "note": "the wearer wants approval whenever they pick up lettuce",
+        "say": "That's a great healthy choice!",
+        "cooldown_s": 20,
+    },
 ]
 
 

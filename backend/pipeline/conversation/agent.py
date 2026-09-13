@@ -217,6 +217,49 @@ class ConversationAgent:
                 self._close(active, "open_failed")
             return NO_TRANSPORT
 
+    def request_fixed(self, text: str, topic: str, *, decision_id: str | None = None) -> str:
+        """Speak ``text`` verbatim as a one-line conversation: no model call.
+
+        Same guards as :meth:`request` (one at a time, cooldown, transport),
+        but the words are given -- a demo keyword line -- so the repeat guard
+        is skipped too: the keyword trigger's own cooldown paces it.
+        """
+
+        line = (text or "").strip()
+        if not line:
+            return NO_TRANSPORT
+        t = self.now_fn()
+        if self._active is not None:
+            self.dropped_active += 1
+            log.info("conversation: hand-off dropped · conversation_active · \"%s\"", line[:80])
+            return ACTIVE
+        if t < self._cooldown_until:
+            self.dropped_cooldown += 1
+            log.info("conversation: hand-off dropped · conversation_cooldown · \"%s\"", line[:80])
+            return COOLDOWN
+        conv: dict[str, Any] = {
+            "id": _cid(), "opened_t": t, "closed_t": None, "reason": "keyword line",
+            "topic": topic, "decision_id": decision_id, "episode_id": None,
+            "state": "active", "turns": [], "settled": {}, "close_reason": None,
+        }
+        self._active = conv
+        self._thread = []
+        self._questions_asked = 0
+        self._pending = None
+        self._last_answered = None
+        self.opened += 1
+        try:
+            self.db.insert_conversation(conv)
+        except Exception:
+            self._active = None
+            self.opened -= 1
+            log.exception("conversation: %s could not be persisted; slot released", conv["id"])
+            return NO_TRANSPORT
+        log.info("conversation: %s opened · fixed · \"%s\" · %s", conv["id"], line[:80], decision_id or "-")
+        self._say(conv, line, t)
+        self._close(conv, "fixed")
+        return f"handed_off:{conv['id']}"
+
     # -- introspection ----------------------------------------------------
 
     def is_active(self, conversation_id: str | None) -> bool:
