@@ -1,5 +1,6 @@
 import "server-only";
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import type { EnginePayload, EngineRequest } from "./types";
 
@@ -18,6 +19,11 @@ const BATCH_SCRIPT = path.join(process.cwd(), "lib", "score", "brian_batch.py");
 export function pythonCommand(): string {
   const configured = process.env.BRIAN_PYTHON?.trim();
   if (configured) return configured;
+  // The backend's uv venv already carries numpy (backend/pyproject.toml); the
+  // system python3 on a fresh Mac does not. Prefer the venv when it exists so
+  // `uv sync` in backend/ is the only setup step, as for the rest of the repo.
+  const venv = path.join(process.cwd(), "..", "backend", ".venv", "bin", "python3");
+  if (existsSync(venv)) return venv;
   return process.platform === "win32" ? "python" : "python3";
 }
 
