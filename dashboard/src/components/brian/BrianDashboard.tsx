@@ -1,12 +1,13 @@
 "use client";
 import { T } from "@/lib/tokens";
+import { minutesOfInstant } from "@/lib/score/narrative";
 import type { DashboardData, Goal } from "@/lib/score/types";
 import { BrianHeader } from "./Header";
+import { BryanSaid } from "./BryanSaid";
 import { Effects } from "./Effects";
 import { Evidence } from "./Evidence";
 import { Layers } from "./Layers";
 import { Levers } from "./Levers";
-import { Rings } from "./Rings";
 import { SevenDays } from "./SevenDays";
 import { Today } from "./Today";
 import { Tonight } from "./Tonight";
@@ -26,34 +27,41 @@ export interface BrianDashboardProps {
   Bryan — dashboard. Minimalism / Swiss in the visual language of the WHOOP
   reference: black wordmark bar, white page, soft grey containers with a 20px
   radius, one bold sans (DM Sans), and colour reserved for data: green earns,
-  red costs. No neon, no gradients, no monospace. Two bold elements: the
-  activity rings in the top row, which are the wrist device's own day, and the
+  red costs. No neon, no gradients, no monospace, and no gauges or rings
+  (SKILL.md law 5): the wrist device's own numbers live at the bottom, under
+  "The numbers your wearable already knows". The one bold element is the
   evidence strip — a real frame from the glasses pinned to what it earned or
   cost tonight. Everything drawn here comes from `data`.
 */
 export function BrianDashboard({ data, goal, onGoalChange, updating = false }: BrianDashboardProps) {
   return (
     <div className="brian min-h-dvh bg-bg text-text">
-      <BrianHeader person={data.person} source={data.source} goal={goal} onGoalChange={onGoalChange} active="today" />
+      <BrianHeader person={data.person} source={data.source} />
       <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
         {/* The persona T1 is briefed with, first: it is the one thing the
             operator edits mid-demo (include or exclude what the glasses care
             about), so it is not buried in the pipeline drawer. Light skin so it
             sits flush with Today and Activity. */}
         <PersonaPanel variant="light" />
-        {/* Top row: the healthspan number beside the day's activity rings.
-            One column on phones, so neither can overflow. */}
+        {/* Top row: the healthspan ledger (screens.md §1.1). */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
           <Today d={data} updating={updating} />
-          <Rings activity={data.activity} d={data} />
         </div>
         {/* Layers carries its own `md:col-span-7`, so it gets a 7-column grid. */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-7">
-          <Layers layers={data.layers} />
+          <Layers d={data} />
         </div>
+        {/* §1.3 then §1.4: what Bryan said, then the frames it said it about.
+            `generated_at` is the minute the payload was scored at, so an
+            outcome window that has not elapsed yet stays Pending. */}
+        <BryanSaid pins={data.pins} nowMinute={minutesOfInstant(data.generated_at)} />
         <Evidence pins={data.pins} />
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          <Tonight f={data.forecast} />
+          <Tonight
+            f={data.forecast}
+            observations={data.observations}
+            profile={{ age: data.person.age, sex: data.person.sex, goal: data.person.goal, bedtime_hh: data.person.bedtime_hh }}
+          />
           <Levers levers={data.levers} />
         </div>
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">

@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 /* ---------------------------------------------------------------------------
-   Project Bryan tokens (CLAUDE_CODE_INTEGRATION.md §1). The JS copy is
-   src/lib/tokens.ts; design-system/brian/MASTER.md documents both.
+   Project Bryan tokens — the table in .claude/skills/brian-ui/SKILL.md. The JS
+   copy is src/lib/tokens.ts; design-system/brian/MASTER.md documents both.
    --------------------------------------------------------------------------- */
 :root {
   color-scheme: light;
@@ -17,10 +17,23 @@
   --earn-soft: #e8f5ec;
   --cost: #c62828;
   --cost-soft: #fbeaea;
+  /* One accent, one meaning: the circadian instrument only. */
+  --clock: #1d4ed8;
   --header: #000000;
   --radius-panel: 20px;
   --radius-pin: 16px;
   --radius-chip: 9999px;
+  /* Type scale: hero number · tile number · section title · body · secondary ·
+     caption. Nothing below 12px, and body stays 16 on mobile inputs. */
+  --text-hero: 72px;
+  --text-tile: 40px;
+  --text-section: 24px;
+  --text-body: 16px;
+  --text-secondary: 14px;
+  --text-caption: 12px;
+  /* Header bar 64px desktop, mobile bottom tab bar 56px + the safe area under it. */
+  --header-h: 64px;
+  --tabbar-h: 56px;
 }
 
 /* Tailwind v4 theme: `bg-surface`, `text-ink`, `text-muted`, `text-earn`,
@@ -37,6 +50,7 @@
   --color-earn-soft: var(--earn-soft);
   --color-cost: var(--cost);
   --color-cost-soft: var(--cost-soft);
+  --color-clock: var(--clock);
   --color-header: var(--header);
   --radius-panel: var(--radius-panel);
   --radius-pin: var(--radius-pin);
@@ -89,9 +103,25 @@ body {
   outline-color: #f4f4f5;
 }
 
-/* Tabular figures so numbers in tables and tiles do not jitter. */
-.brian .tnum {
+/* Tabular figures so numbers in tables and tiles do not jitter. `tnum` is kept
+   as the explicit opt-in the panels already use; the element selectors below
+   make it the default everywhere a number is drawn, so a new panel cannot ship
+   proportional figures by forgetting the class. */
+.brian .tnum,
+.brian table,
+.brian output,
+.brian time,
+.brian data {
   font-variant-numeric: tabular-nums;
+}
+
+/* The mobile bottom tab bar sits above the iOS home indicator, and the page
+   leaves room for it so the last panel is never trapped underneath. */
+.brian .tabbar {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.brian .tabbar-gutter {
+  height: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
 }
 
 /* Hide the scrollbar on the pins strip without removing scrollability. */

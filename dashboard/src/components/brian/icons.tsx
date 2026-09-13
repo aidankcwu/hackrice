@@ -1,5 +1,7 @@
 import {
   Activity,
+  Brain,
+  Clock,
   Coffee,
   Dumbbell,
   Eye,
@@ -11,18 +13,27 @@ import {
   Trees,
   Users,
   Utensils,
+  Wind,
   Wine,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { IconName } from "@/lib/score/types";
 
-/** `IconName` (data layer) → lucide component. The data layer never imports lucide. */
+/**
+ * `IconName` (data layer) → lucide component. The data layer never imports
+ * lucide. One icon per layer, fixed by the SKILL.md table: Clock=Clock,
+ * Light=Sun, People=Users, Outside=Trees, Air=Wind, Mind=Brain,
+ * Body=Footprints, Sleep=Moon, Fuel=Utensils, Recovery=Flame.
+ */
 export const ICONS: Record<IconName, LucideIcon> = {
+  clock: Clock,
   sun: Sun,
   users: Users,
   footprints: Footprints,
   moon: Moon,
   trees: Trees,
+  wind: Wind,
+  brain: Brain,
   wine: Wine,
   coffee: Coffee,
   smartphone: Smartphone,
@@ -35,7 +46,7 @@ export const ICONS: Record<IconName, LucideIcon> = {
 
 export interface IconProps {
   name: IconName;
-  /** 18px in lists (brief §1); pins use 28. */
+  /** 18px in rows, 20px in tiles (SKILL.md); pins use 28. */
   size?: number;
   strokeWidth?: number;
   color?: string;

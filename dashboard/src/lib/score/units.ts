@@ -59,22 +59,6 @@ export const GRADE_SHRINK: Record<EvidenceGrade, number> = {
 /** Within-layer discount on correlated factors (engine `LAYER_DISCOUNT`). */
 export const LAYER_DISCOUNT = [1.0, 0.6, 0.4, 0.3, 0.25, 0.2] as const;
 
-/**
- * Daily targets the three activity rings sweep against.
- *
- * These are conventional round numbers of the kind a fitness app ships as a
- * starting ring goal — not medical thresholds, and nothing here is claimed to
- * be research-backed. The scoring engine's own dose-response curves are the
- * only evidence-derived numbers on the dashboard; a ring at 100 % means the
- * wearer hit the target they were set, nothing more.
- *
- * `RING_GOAL_STEPS` is deliberately the same 8,000 the engine uses as the
- * under-60 step plateau, so the ring and the Movement layer don't disagree.
- */
-export const RING_GOAL_MOVE_KCAL = 500;
-export const RING_GOAL_STEPS = 8000;
-export const RING_GOAL_EXERCISE_MIN = 30;
-
 /** Engine layer key → display label (engine `LAYER_LABELS`). */
 export const LAYER_LABELS: Record<string, LayerName> = {
   movement: "Movement",
@@ -83,5 +67,6 @@ export const LAYER_LABELS: Record<string, LayerName> = {
   social: "Social",
   environment: "Environment",
   diet: "Diet & substances",
+  cognition: "Cognition",
   recovery: "Recovery",
 };

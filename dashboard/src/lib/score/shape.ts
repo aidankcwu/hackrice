@@ -46,6 +46,7 @@ const LAYER_ICONS: Readonly<Record<LayerName, IconName>> = {
   Social: "users",
   Environment: "trees",
   "Diet & substances": "wine",
+  Cognition: "brain",
   Recovery: "flame",
 };
 
@@ -78,11 +79,13 @@ const DOSE_PHRASES: Readonly<Record<string, DosePhrase>> = {
   social_index: (d) => `social ${trimFixed(d, 0)}`,
   purpose: (d) => `purpose ${trimFixed(d, 0)}/6`,
   nature_min_wk: (d) => `${trimFixed(d, 0)} min in nature this week`,
+  pm25: (d) => `air ${trimFixed(d, 0)} µg/m³`,
   noise_night_db: (d) => `${trimFixed(d, 0)} dB at night`,
   med_adherence: (d) => `meals ${Math.round(d * 100)}% on pattern`,
   alcohol_drinks: (d) => (d === 0 ? "no drinks" : d === 1 ? "1 drink" : `${trimFixed(d, 1)} drinks`),
   smoker: (d) => (d ? "nicotine daily" : "no nicotine"),
   sauna_wk: (d) => `${trimFixed(d, 1)} sauna session${d === 1 ? "" : "s"}`,
+  rt_z: (d) => `reaction time ${d > 0 ? "+" : d < 0 ? "−" : ""}${Math.abs(d).toFixed(1)} SD vs baseline`,
   recovery_ratio: (d) => `HRV ${d.toFixed(2)}× baseline`,
 };
 

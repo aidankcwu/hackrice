@@ -55,12 +55,14 @@ const EXPECTED_LAYER_HOURS: Record<LayerName, number> = {
   Environment: -0.05,
   "Diet & substances": -0.54,
   Recovery: 0.02,
+  // No PVT in the fixture, so the cognition factor is unmeasured and earns nothing.
+  Cognition: 0,
 };
 
 function payload(overrides: Partial<EnginePayload> = {}): EnginePayload {
   return {
     overall: 71,
-    layers: { Movement: 80.4, Sleep: 70, "Light & clock": 60, Social: 55, Environment: 50, "Diet & substances": 40, Recovery: 65 },
+    layers: { Movement: 80.4, Sleep: 70, "Light & clock": 60, Social: 55, Environment: 50, "Diet & substances": 40, Recovery: 65, Cognition: 65 },
     years_delta: 1.2,
     years_ci: [0.8, 1.6],
     hours_today: 0.64,
@@ -425,7 +427,7 @@ describe("shapeDashboard", () => {
     expect(data.source).toBe(SOURCE);
     expect(data.person).toBe(PERSON);
     expect(data).toMatchObject({ overall: 71, hours_today: 0.64, hours_ci: [0.4, 0.88], years_delta: 1.2, years_ci: [0.8, 1.6] });
-    expect(data.layers).toHaveLength(7);
+    expect(data.layers).toHaveLength(8);
     expect(data.pins).toHaveLength(9);
     expect(data.forecast.bedtime).toBe("23:00");
     expect(data.week.map((d) => d.hours)).toEqual([0.3, 0.64]);

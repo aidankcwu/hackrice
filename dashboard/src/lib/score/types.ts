@@ -11,6 +11,7 @@
  *
  * Field names on the engine side mirror the Python exactly (snake_case).
  */
+import type { Provenance } from "./provenance";
 
 // ---------------------------------------------------------------------------
 // Engine request
@@ -148,6 +149,8 @@ export interface EngineRequest {
 export type EvidenceGrade = "A_rct" | "A_cohort" | "B" | "C";
 export type PinGrade = "A" | "B" | "C";
 
+/** The engine's own layer labels (`LAYER_LABELS` in brian_score.py). The nine
+ *  rows the UI draws are a re-cut of these — see `LAYER_SPECS` in Layers.tsx. */
 export type LayerName =
   | "Movement"
   | "Sleep"
@@ -155,6 +158,7 @@ export type LayerName =
   | "Social"
   | "Environment"
   | "Diet & substances"
+  | "Cognition"
   | "Recovery";
 
 export const LAYER_ORDER: readonly LayerName[] = [
@@ -164,6 +168,7 @@ export const LAYER_ORDER: readonly LayerName[] = [
   "Social",
   "Environment",
   "Diet & substances",
+  "Cognition",
   "Recovery",
 ];
 
@@ -297,13 +302,21 @@ export interface DayInputs {
 // Dashboard data (what BrianDashboard renders)
 // ---------------------------------------------------------------------------
 
-/** Lucide icon names the UI knows how to draw; keeps icons out of the data layer. */
+/**
+ * Lucide icon names the UI knows how to draw; keeps icons out of the data layer.
+ * The per-layer assignment is fixed by the SKILL.md token table — Clock=clock,
+ * Light=sun, People=users, Outside=trees, Air=wind, Mind=brain, Body=footprints,
+ * Sleep=moon, Fuel=utensils, Recovery=flame.
+ */
 export type IconName =
+  | "clock"
   | "sun"
   | "users"
   | "footprints"
   | "moon"
   | "trees"
+  | "wind"
+  | "brain"
   | "wine"
   | "coffee"
   | "smartphone"
@@ -410,42 +423,37 @@ export interface WeekDay {
 }
 
 /**
- * One activity ring. `value` is null when nothing real measured it today — the
- * ring then draws an empty track and reads "not measured" (no zero, no
- * fabricated goal achievement), matching how the engine imputes an unmeasured
- * factor at the population reference and credits it nothing.
+ * `utility_today()` from the engine — how well today was lived, not how long.
+ * Every component is null until something real measured it: a day with no PVT,
+ * no self-check and no recovery score has no utility at all and the whole object
+ * is absent rather than defaulted to a perfect day (R1).
  */
-export interface ActivityRing {
-  key: "move" | "steps" | "exercise";
-  /** "Move", "Steps", "Exercise". */
-  label: string;
-  /** Today's measured total, or null when no real source reported it. */
-  value: number | null;
-  /** The conventional daily target this ring sweeps against (see RING_GOALS). */
-  goal: number;
-  /** Display unit: "kcal", "steps", "min". */
-  unit: string;
-  /**
-   * Which stream filed the number, in the vocabulary the wearable strip already
-   * uses: "fitbit", "glasses", "seeded", or "not connected" when no device that
-   * could measure this ring is paired. Shown verbatim under the value, prefixed
-   * with "not measured · " whenever `value` is null.
-   */
-  source: string;
+export interface ExperienceView {
+  /** 0–1. */
+  utility: number;
+  /** `utility` × 24, the "fully-lived hours" currency. */
+  fully_lived_hours: number;
+  components: {
+    /** Reaction time from the PVT. */
+    pvt: number | null;
+    /** The three-tap energy / mood / clarity check. */
+    check: number | null;
+    /** WHOOP recovery score 0–100. */
+    recovery: number | null;
+    pain_or_illness: boolean;
+  };
 }
 
-/**
- * The three rings, in draw order (outer → inner). Optional on `DashboardData`
- * because the loader lane fills it: Move wants today's `active_energy` kcal
- * (intraday sum or the daily row), Steps today's `steps_delta` sum or the
- * daily/seeded `steps` row, Exercise the summed minutes of today's
- * `gym_session` + `outdoor_block` episodes. When it is absent, `Rings` derives
- * what the engine payload already proves and leaves the rest not measured.
- */
-export interface ActivityRings {
-  move: ActivityRing;
-  steps: ActivityRing;
-  exercise: ActivityRing;
+/** `two_currencies()` — today's fully-lived hours and the future healthy years they weight. */
+export interface CurrenciesView {
+  future_healthy_years: number;
+  future_healthy_years_ci: [number, number];
+  fully_lived_hours_today: number;
+  utility_today: number;
+  /** Null until enough prior days carry a utility; a 30-day label on 6 days is a lie. */
+  utility_mean_30d: number | null;
+  /** How many days actually went into the mean. */
+  utility_days: number;
 }
 
 export interface DataSource {
@@ -459,6 +467,24 @@ export interface DataSource {
   last_tick_t?: number;
 }
 
+/**
+ * One compact stat under "The numbers your wearable already knows" (§1.8).
+ * `value` is null whenever no real row reported it today, and the tile then
+ * prints the voice.md unmeasured string instead of a zero (R1).
+ */
+export interface WearableStat {
+  key: string;
+  /** "Steps", "Strain", "Resting heart rate", … */
+  label: string;
+  value: number | null;
+  /** "steps", "h", "bpm", "%", "°C", "br/min" — empty for an index. */
+  unit: string;
+  /** Decimals to print; 0 for steps and bpm, 1 for hours and temperature. */
+  digits: number;
+  /** Which stream filed it — the chip on the tile. */
+  provenance: Provenance;
+}
+
 export interface DashboardData {
   /** Unix seconds when this payload was built. */
   generated_at: number;
@@ -470,8 +496,16 @@ export interface DashboardData {
   years_delta: number;
   years_ci: [number, number];
   layers: LayerRow[];
-  /** Today's three activity rings; absent until the loader lane supplies them. */
-  activity?: ActivityRings;
+  /**
+   * How well today was lived (`utility_today`), and the two currencies the
+   * ledger card shows. Both absent until the loader lane forwards the engine's
+   * `experience` / `currencies` — and absent is the honest state for a day with
+   * no PVT, no self-check and no recovery score.
+   */
+  experience?: ExperienceView | null;
+  currencies?: CurrenciesView | null;
+  /** The wearable-known numbers for §1.8; absent until the loader lane fills it. */
+  wearable?: WearableStat[];
   pins: PinRow[];
   forecast: ForecastView;
   levers: LeverRow[];

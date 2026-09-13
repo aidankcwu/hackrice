@@ -1,16 +1,17 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { T } from "@/lib/tokens";
 import type { PinRow } from "@/lib/score/types";
-import { DecisionStream } from "./DecisionStream";
 import { Icon } from "./icons";
-import { Panel } from "./Panel";
+import { H2, Panel } from "./Panel";
 
-/** The strip stays light; the full-day grid is the place for a long day. */
-const STRIP_LIMIT = 24;
+/** screens.md §1.4: merged episodes, at most 12 on Today. */
+const STRIP_LIMIT = 12;
 const FRAME_W = 288;
 const FRAME_H = 160;
+/** One card plus its gap — the distance an arrow key moves the strip. */
+const SCROLL_STEP = FRAME_W + 16;
 
 function Pin({ p, fluid }: { p: PinRow; fluid: boolean }) {
   const earn = p.kind === "earn";
@@ -54,13 +55,13 @@ function Pin({ p, fluid }: { p: PinRow; fluid: boolean }) {
         </span>
       </div>
       <figcaption className="p-4">
-        <div className="text-sm font-semibold" style={{ color: T.ink }}>
+        <div className="text-base font-semibold" style={{ color: T.ink }}>
           {p.seen}
         </div>
         <div className="mt-1 text-sm" style={{ color: T.text }}>
           {p.effect}
         </div>
-        <div className="mt-2 text-sm" style={{ color: T.muted }}>
+        <div className="mt-2 text-xs" style={{ color: T.muted }}>
           Evidence grade {p.grade}
         </div>
       </figcaption>
@@ -68,8 +69,18 @@ function Pin({ p, fluid }: { p: PinRow; fluid: boolean }) {
   );
 }
 
-function EvidenceStrip({ pins }: { pins: PinRow[] }) {
+/**
+ * What the glasses saw (screens.md §1.4) — the evidence pins, one per merged
+ * episode. The engine merges fragments and repeated sightings before it pins
+ * anything (`merge_episodes`), so a row is an episode and never a frame count:
+ * "55 drinks" is a pipeline bug, never a display (SKILL.md "Do not").
+ *
+ * The strip is the one place on the page allowed to scroll sideways, so it
+ * carries a visible scrollbar and arrow-key handling (checklist.md).
+ */
+export function Evidence({ pins }: { pins: readonly PinRow[] }) {
   const [full, setFull] = useState(false);
+  const strip = useRef<HTMLUListElement | null>(null);
   const capped = !full && pins.length > STRIP_LIMIT;
   // Newest first: the frame from a minute ago is the one you look for.
   const shown = (capped ? pins.slice(-STRIP_LIMIT) : pins).slice().reverse();
@@ -77,20 +88,15 @@ function EvidenceStrip({ pins }: { pins: PinRow[] }) {
   return (
     <Panel id="evidence" labelledBy="evidence-title">
       <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h2 id="evidence-title" className="m-0 text-xl font-bold leading-tight" style={{ color: T.ink }}>
-            What the glasses saw, and what it cost
-          </h2>
-          <p className="m-0 mt-1 text-sm" style={{ color: T.muted }}>
-            Frames stay on your phone. Each one is tied to the number it moved.
-          </p>
-        </div>
-        {pins.length > 0 && (
+        <H2 id="evidence-title" sub="Frames stay on your phone. Each one is tied to the number it moved.">
+          What the glasses saw
+        </H2>
+        {pins.length > STRIP_LIMIT && (
           <button
             type="button"
             onClick={() => setFull((v) => !v)}
             aria-pressed={full}
-            className="tile inline-flex h-11 items-center gap-1 rounded-full px-4 text-sm font-medium"
+            className="tile inline-flex h-11 shrink-0 items-center gap-1 rounded-full px-4 text-sm font-medium"
             style={{ background: T.bg, color: T.ink, border: 0 }}
           >
             {full ? (
@@ -99,7 +105,7 @@ function EvidenceStrip({ pins }: { pins: PinRow[] }) {
               </>
             ) : (
               <>
-                Full day <ChevronRight size={16} aria-hidden="true" />
+                Full Day <ChevronRight size={16} aria-hidden="true" />
               </>
             )}
           </button>
@@ -108,46 +114,40 @@ function EvidenceStrip({ pins }: { pins: PinRow[] }) {
 
       {pins.length === 0 ? (
         <p className="m-0 text-sm" style={{ color: T.muted }}>
-          Nothing pinned yet. A pin appears when the glasses see something that moves a number.
+          Put the glasses on. Bryan starts counting light, people, and air the moment the camera is up.
         </p>
       ) : full ? (
         <ul className="m-0 grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {pins.map((p) => (
+          {shown.map((p) => (
             <li key={p.id} className="min-w-0">
               <Pin p={p} fluid />
             </li>
           ))}
         </ul>
       ) : (
-        <>
-          <ul className="strip -mx-1 my-0 flex list-none gap-4 overflow-x-auto px-1 pb-2">
-            {shown.map((p) => (
-              <li key={p.id} className="shrink-0">
-                <Pin p={p} fluid={false} />
-              </li>
-            ))}
-          </ul>
-          {capped && (
-            <p className="m-0 mt-2 text-sm" style={{ color: T.muted }}>
-              Showing the last {STRIP_LIMIT} of {pins.length}. Full day shows them all.
-            </p>
-          )}
-        </>
+        <ul
+          ref={strip}
+          // The strip is focusable so the arrow keys below have somewhere to
+          // land; a scroll container is not reachable by keyboard otherwise.
+          tabIndex={0}
+          aria-label="Evidence pins, newest first"
+          onKeyDown={(e) => {
+            const by = e.key === "ArrowRight" ? SCROLL_STEP : e.key === "ArrowLeft" ? -SCROLL_STEP : 0;
+            if (by === 0) return;
+            e.preventDefault();
+            strip.current?.scrollBy({ left: by, behavior: "smooth" });
+          }}
+          className="strip -mx-1 my-0 flex list-none snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-2"
+        >
+          {shown.map((p) => (
+            <li key={p.id} className="shrink-0 snap-start">
+              <Pin p={p} fluid={false} />
+            </li>
+          ))}
+        </ul>
       )}
     </Panel>
   );
 }
 
-/**
- * The evidence strip and, directly beneath it, the decision stream — what the
- * glasses saw, then what the reasoner did about it. The stream polls
- * `GET /api/decisions` itself but takes the pins it links to from this payload.
- */
-export function Evidence({ pins }: { pins: PinRow[] }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-6">
-      <EvidenceStrip pins={pins} />
-      <DecisionStream pins={pins} />
-    </div>
-  );
-}
+export default Evidence;

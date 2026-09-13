@@ -20,7 +20,7 @@ const at = (h: number): number => new Date(2026, 8, 12, h, 0, 0).getTime() / 100
 
 const payload = (): EnginePayload => ({
   overall: 60,
-  layers: { Movement: 50, Sleep: 50, "Light & clock": 50, Social: 50, Environment: 50, "Diet & substances": 50, Recovery: 50 },
+  layers: { Movement: 50, Sleep: 50, "Light & clock": 50, Social: 50, Environment: 50, "Diet & substances": 50, Recovery: 50, Cognition: 50 },
   years_delta: 0,
   years_ci: [0, 0],
   hours_today: 0.1,

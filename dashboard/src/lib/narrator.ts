@@ -164,6 +164,120 @@ export function isAnnotation(v: unknown): v is Annotation {
   return v !== null && typeof v === "object" && isKind((v as { kind?: unknown }).kind);
 }
 
+// ---------------------------------------------------------------------------
+// Annotations from the week rows (the engine's `annotate_week`, in TypeScript)
+// ---------------------------------------------------------------------------
+
+/**
+ * One week row in the shape `annotate_week` reads: `{day, hours, sleep, rec,
+ * drivers}`. `drivers` holds only the flags the caller can actually prove; an
+ * absent flag is absent, never false-by-assumption, because a contrast between
+ * "the days with X" and "the days without X" is wrong the moment a day with no
+ * evidence is counted as a clean one (product rule R1).
+ */
+export interface WeekRow {
+  day: string;
+  hours: number;
+  sleep: number | null;
+  rec: number | null;
+  drivers: Readonly<Partial<Record<string, boolean>>>;
+}
+
+/** Driver keys `annotate_week` scans, in its own order. */
+export const DRIVER_KEYS: readonly string[] = [
+  "caffeine_late",
+  "alcohol",
+  "night_screen",
+  "late_bed",
+  "no_daylight",
+  "isolated",
+];
+
+/** The engine's `_DRIVER_EVIDENCE` citations, so a derived annotation cites what the engine cites. */
+const DRIVER_EVIDENCE: Readonly<Record<string, string>> = {
+  caffeine_late: "Drake 2013",
+  alcohol: "Zhao 2023",
+  night_screen: "Brown 2022",
+  late_bed: "Windred 2024",
+  no_daylight: "Windred 2024",
+  isolated: "Holt-Lunstad 2010",
+};
+
+const mean1 = (rows: readonly WeekRow[], pick: (r: WeekRow) => number | null): number =>
+  Math.round((rows.reduce((sum, r) => sum + (pick(r) ?? 0), 0) / rows.length) * 10) / 10;
+
+/** `_common_drivers`: a driver flagged on all but one day of the span. */
+function commonDrivers(span: readonly WeekRow[]): string[] {
+  const need = Math.max(2, span.length - 1);
+  return DRIVER_KEYS.filter((k) => span.filter((r) => r.drivers[k] === true).length >= need);
+}
+
+/**
+ * `annotate_week` (brian_score.py) over rows the UI already has: the runs, the
+ * contrasts, and the worst/best extreme. Used only when the payload carries no
+ * `annotations[]` of its own — the engine's output is always preferred, because
+ * it sees drivers (night screens, late bed, no daylight, isolation) these rows
+ * cannot prove. Oldest first, like the engine.
+ */
+export function annotationsFromWeek(rows: readonly WeekRow[], minLen = 2): Annotation[] {
+  const out: Annotation[] = [];
+  let i = 0;
+  while (i < rows.length - 1) {
+    const sign: 1 | -1 = rows[i + 1].hours > rows[i].hours ? 1 : -1;
+    let j = i;
+    while (j < rows.length - 1 && (rows[j + 1].hours - rows[j].hours) * sign > 0) j += 1;
+    if (j - i >= minLen) {
+      const span = rows.slice(i, j + 1);
+      const drivers = commonDrivers(span);
+      out.push({
+        kind: "run",
+        from: rows[i].day,
+        to: rows[j].day,
+        direction: sign,
+        delta_hours: Math.round((rows[j].hours - rows[i].hours) * 10) / 10,
+        sleep_from: rows[i].sleep,
+        sleep_to: rows[j].sleep,
+        rec_from: rows[i].rec,
+        rec_to: rows[j].rec,
+        drivers,
+        evidence: drivers.flatMap((d) => (DRIVER_EVIDENCE[d] ? [DRIVER_EVIDENCE[d]] : [])),
+      });
+    }
+    i = Math.max(j, i + 1);
+  }
+  for (const key of DRIVER_KEYS) {
+    const a = rows.filter((r) => r.drivers[key] === true);
+    const b = rows.filter((r) => r.drivers[key] !== true);
+    if (a.length < 2 || b.length < 2) continue;
+    out.push({
+      kind: "contrast",
+      driver: key,
+      n_with: a.length,
+      n_without: b.length,
+      hours_with: mean1(a, (r) => r.hours),
+      hours_without: mean1(b, (r) => r.hours),
+      sleep_with: mean1(a, (r) => r.sleep),
+      sleep_without: mean1(b, (r) => r.sleep),
+      rec_with: mean1(a, (r) => r.rec),
+      rec_without: mean1(b, (r) => r.rec),
+      evidence: DRIVER_EVIDENCE[key] ? [DRIVER_EVIDENCE[key]] : [],
+    });
+  }
+  if (rows.length > 0) {
+    const worst = rows.reduce((acc, r) => (r.hours < acc.hours ? r : acc));
+    const best = rows.reduce((acc, r) => (r.hours > acc.hours ? r : acc));
+    out.push({
+      kind: "extreme",
+      worst_day: worst.day,
+      worst_hours: worst.hours,
+      worst_drivers: DRIVER_KEYS.filter((k) => worst.drivers[k] === true),
+      best_day: best.day,
+      best_hours: best.hours,
+    });
+  }
+  return out;
+}
+
 export type LlmSentence = (prompt: string) => Promise<string | null>;
 
 /**

@@ -1,131 +1,163 @@
 "use client";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Brain, Calendar, Camera, Home, Scale } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { T } from "@/lib/tokens";
-import { GOALS } from "@/lib/score/types";
-import type { DataSource, Goal, Person } from "@/lib/score/types";
+import type { DataSource, Person } from "@/lib/score/types";
 
 export interface BrianHeaderProps {
   person: Person;
   source: DataSource;
-  goal: Goal;
-  onGoalChange?: (goal: Goal) => void;
-  /** Which top-level view is showing, for `aria-current`. */
-  active?: "today" | "factors";
+  /** Opens the Profile sheet; absent until the profile lane lands it. */
+  onOpenProfile?: () => void;
 }
 
-/** In-page sections, in page order; the ids live on the panels in BrianDashboard. */
-const SECTIONS = [
-  { id: "today", label: "Today" },
-  { id: "week", label: "Week" },
-  { id: "evidence", label: "Evidence" },
-  { id: "plan", label: "Plan" },
-] as const;
+/**
+ * The five pages, in page order, with the route each pill owns (screens.md §0).
+ * Only `/` exists today; the other four are built by later lanes and are linked
+ * regardless, so the nav is complete the moment each page lands.
+ */
+const TABS: ReadonlyArray<{ href: string; label: string; icon: LucideIcon }> = [
+  { href: "/", label: "Today", icon: Home },
+  { href: "/week", label: "Week", icon: Calendar },
+  { href: "/evidence", label: "Evidence", icon: Camera },
+  { href: "/plan", label: "Plan", icon: Brain },
+  { href: "/how-its-scored", label: "How it's scored", icon: Scale },
+];
 
-const isGoal = (v: string): v is Goal => GOALS.some((g) => g.value === v);
+/** A tick older than this is history, not a live stream (screens.md §0). */
+const LIVE_WINDOW_S = 60;
 
-function sourceChip(source: DataSource): string {
-  if (source.mode !== "live") return "backend offline · nothing measured";
-  const parts = ["live"];
-  if (source.capture_source) parts.push(source.capture_source);
-  if (source.tick_count !== undefined) parts.push(`${source.tick_count.toLocaleString("en-US")} ticks`);
-  return parts.join(" · ");
-}
+const isActive = (pathname: string, href: string): boolean =>
+  href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
 
-const PILL = "inline-flex items-center h-11 px-4 rounded-full text-sm font-medium no-underline";
-const pillStyle = (on: boolean) => ({ color: on ? T.header : T.bg, background: on ? T.bg : "transparent" });
-
-export function BrianHeader({ person, source, goal, onGoalChange, active = "today" }: BrianHeaderProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const onDashboard = active !== "factors";
-
-  // The hash is not part of the server render, so it is read after mount;
-  // the click handler updates it too because a same-page anchor navigation
-  // does not always fire `hashchange`.
-  const [hash, setHash] = useState("");
+/**
+ * Green "Live" only when a glasses tick actually arrived inside the last
+ * 60 seconds; grey "Seeded" otherwise. Computed after mount because the
+ * comparison needs the reader's clock, and a server render cannot know how long
+ * the HTML sat in transit — the dot would otherwise claim a liveness the stream
+ * has not earned (R1).
+ */
+function useLive(source: DataSource): boolean {
+  const [live, setLive] = useState(false);
+  const lastTick = source.last_tick_t;
   useEffect(() => {
-    const read = () => setHash(window.location.hash.replace(/^#/, ""));
+    if (source.mode !== "live" || lastTick === undefined) {
+      setLive(false);
+      return;
+    }
+    const read = () => setLive(Date.now() / 1000 - lastTick < LIVE_WINDOW_S);
     read();
-    window.addEventListener("hashchange", read);
-    return () => window.removeEventListener("hashchange", read);
-  }, []);
-  const currentSection = onDashboard ? hash || "today" : "";
+    // The dot has to go grey on its own when the stream stops, not wait for the
+    // next payload — a stalled poll would otherwise freeze it on green.
+    const timer = window.setInterval(read, 5000);
+    return () => window.clearInterval(timer);
+  }, [source.mode, lastTick]);
+  return live;
+}
 
-  const changeGoal = (value: string) => {
-    if (!isGoal(value)) return;
-    if (onGoalChange) onGoalChange(value);
-    else router.push(`${pathname}?goal=${value}`);
-  };
+function StatusDot({ live }: { live: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-2 text-sm" style={{ color: "rgba(255,255,255,0.8)" }}>
+      <span
+        aria-hidden="true"
+        className="block shrink-0 rounded-full"
+        style={{ width: 8, height: 8, background: live ? T.earn : "#8A8A92" }}
+      />
+      {live ? "Live" : "Seeded"}
+    </span>
+  );
+}
+
+/** `Bryan · 20 · Average` — the wearer, their age, the goal driving the targets. */
+function ProfileChip({ person, onOpenProfile }: { person: Person; onOpenProfile?: () => void }) {
+  const label = `${person.name} · ${person.age} · ${person.profileLabel}`;
+  const className = "inline-flex h-11 items-center rounded-full px-4 text-sm font-medium";
+  const style = { background: "rgba(255,255,255,0.12)", color: T.bg };
+  return onOpenProfile ? (
+    <button type="button" onClick={onOpenProfile} className={className} style={style} aria-haspopup="dialog">
+      {label}
+    </button>
+  ) : (
+    <span className={className} style={style}>
+      {label}
+    </span>
+  );
+}
+
+export function BrianHeader({ person, source, onOpenProfile }: BrianHeaderProps) {
+  const pathname = usePathname() ?? "/";
+  const live = useLive(source);
 
   return (
-    <header style={{ background: T.header }}>
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 sm:px-6 md:min-h-16">
-        <h1 className="m-0 text-2xl font-extrabold leading-none tracking-tight" style={{ color: T.bg }}>
-          BRYAN
-        </h1>
-
-        <nav
-          aria-label="Sections"
-          className="order-last flex w-full flex-wrap items-center gap-1 md:order-none md:mx-auto md:w-auto"
-        >
-          {SECTIONS.map((s) => {
-            const on = currentSection === s.id;
-            return onDashboard ? (
-              <a
-                key={s.id}
-                href={`#${s.id}`}
-                className={PILL}
-                style={pillStyle(on)}
-                aria-current={on ? (hash ? "location" : "page") : undefined}
-                onClick={() => setHash(s.id)}
-              >
-                {s.label}
-              </a>
-            ) : (
-              <Link key={s.id} href={`/#${s.id}`} className={PILL} style={pillStyle(false)}>
-                {s.label}
-              </Link>
-            );
-          })}
+    <>
+      <header style={{ background: T.header }}>
+        <div className="mx-auto flex min-h-16 max-w-[1200px] items-center gap-4 px-4 sm:px-6">
           <Link
-            href="/factors"
-            className={PILL}
-            style={pillStyle(!onDashboard)}
-            aria-current={!onDashboard ? "page" : undefined}
+            href="/"
+            className="m-0 shrink-0 font-extrabold leading-none no-underline"
+            style={{ color: T.bg, fontSize: 24, letterSpacing: "-0.02em" }}
           >
-            Factors
+            BRYAN
           </Link>
-        </nav>
 
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
-          <p className="m-0 text-sm" style={{ color: "rgba(255,255,255,0.8)" }}>
-            {person.name} · {person.age} · {person.profileLabel}
-          </p>
-          <span
-            className="inline-flex h-7 items-center rounded-full px-3 text-xs font-medium"
-            style={{ background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.8)" }}
-          >
-            {sourceChip(source)}
-          </span>
-          <label className="flex items-center gap-2 text-sm" style={{ color: T.bg }}>
-            Profile
-            <select
-              value={goal}
-              onChange={(e) => changeGoal(e.target.value)}
-              className="h-11 rounded-full px-3 text-sm font-medium"
-              style={{ background: T.bg, color: T.ink, border: 0 }}
-            >
-              {GOALS.map((g) => (
-                <option key={g.value} value={g.value}>
-                  {g.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          {/* Desktop tabs. On phones the same five items are the bottom bar
+              below, so this nav is hidden there rather than wrapped. */}
+          <nav aria-label="Pages" className="mx-auto hidden items-center gap-1 md:flex">
+            {TABS.map((tab) => {
+              const on = isActive(pathname, tab.href);
+              return (
+                <Link
+                  key={tab.href}
+                  href={tab.href}
+                  aria-current={on ? "page" : undefined}
+                  className="inline-flex h-11 items-center rounded-full px-4 text-sm font-medium whitespace-nowrap no-underline"
+                  style={{
+                    color: on ? T.ink : "rgba(255,255,255,0.82)",
+                    background: on ? T.bg : "transparent",
+                  }}
+                >
+                  {tab.label}
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div className="ml-auto flex shrink-0 items-center gap-3 sm:gap-4">
+            <StatusDot live={live} />
+            <ProfileChip person={person} onOpenProfile={onOpenProfile} />
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+
+      {/* Mobile: the five pages as a fixed bottom bar, icons over 12px labels,
+          56px tall plus the home-indicator inset. */}
+      <nav
+        aria-label="Pages"
+        className="tabbar fixed bottom-0 left-0 z-40 flex w-full md:hidden"
+        style={{ background: T.header }}
+      >
+        {TABS.map((tab) => {
+          const on = isActive(pathname, tab.href);
+          const TabIcon = tab.icon;
+          return (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              aria-current={on ? "page" : undefined}
+              className="flex min-w-0 flex-1 flex-col items-center justify-center gap-1 no-underline"
+              style={{ height: 56, color: on ? T.bg : "rgba(255,255,255,0.62)" }}
+            >
+              <TabIcon size={20} strokeWidth={2} aria-hidden="true" focusable="false" />
+              <span className="w-full truncate px-1 text-center" style={{ fontSize: 12 }}>
+                {tab.label}
+              </span>
+            </Link>
+          );
+        })}
+      </nav>
+    </>
   );
 }

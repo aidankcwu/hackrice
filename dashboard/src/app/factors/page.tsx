@@ -298,7 +298,7 @@ export default async function FactorsPage({ searchParams }: { searchParams: Prom
 
   return (
     <div className="brian min-h-dvh bg-bg text-text">
-      <BrianHeader person={data.person} source={data.source} goal={goal} active="factors" />
+      <BrianHeader person={data.person} source={data.source} />
       <main className="mx-auto w-full max-w-6xl px-6 py-8">
         <h1 className="text-3xl font-bold text-ink">Where the numbers come from</h1>
         <div className="mt-4 max-w-3xl space-y-3">
