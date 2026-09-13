@@ -73,6 +73,25 @@ async def recap(request: Request, body: dict[str, Any] | None = None) -> dict:
         raise HTTPException(status_code=404, detail="unknown session") from None
 
 
+@router.get("/api/recaps")
+async def list_recaps(request: Request, limit: int = Query(50, ge=1, le=200)) -> dict:
+    """Every saved recap, newest first, without the bodies.
+
+    Ordered by ``generated_at`` rather than by the window: a recap generated
+    now for an earlier window is still the newest entry in the log.
+    """
+
+    return {"recaps": recap_store(_pipeline(request)).list(limit)}
+
+
+@router.get("/api/recaps/{recap_id}")
+async def get_recap(request: Request, recap_id: str) -> dict:
+    body = recap_store(_pipeline(request)).get(recap_id)
+    if body is None:
+        raise HTTPException(status_code=404, detail="unknown recap")
+    return body
+
+
 @router.get("/api/recap/latest")
 async def latest_recap(request: Request) -> dict:
     """The most recently generated recap, or 404 if none has been asked for."""

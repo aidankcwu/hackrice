@@ -14,6 +14,7 @@ import { WearableNumbers } from "./WearableNumbers";
 import { Today } from "./Today";
 import { Tonight } from "./Tonight";
 import { WeekLedger } from "./WeekLedger";
+import { Logs } from "./Logs";
 import { PersonaPanel } from "@/components/PersonaPanel";
 
 export interface BrianDashboardProps {
@@ -45,6 +46,10 @@ export function BrianDashboard({ data, goal, onGoalChange, updating = false }: B
             about), so it is not buried in the pipeline drawer. Light skin so it
             sits flush with Today and Activity. */}
         <PersonaPanel variant="light" />
+        {/* Logs: recorded sessions, newest first. Above Today because a judge
+            session is the thing being demonstrated, and its report is the
+            payload -- Today is the day it happens to sit inside. */}
+        <Logs />
         {/* §1.1 beside §1.2: the ledger, then the five layers only the glasses
             measure. `provenance` is derived from the factors the payload
             carries: a factor the engine did not measure is `missing`, so its
