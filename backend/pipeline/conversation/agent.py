@@ -52,13 +52,13 @@ log = logging.getLogger(__name__)
 __all__ = ["ConversationAgent", "TODAY_LINES", "OPENING_FRAMES", "REPLY_FRAMES"]
 
 #: Memory lines carried into the opening turn (§3, "last ~15").
-TODAY_LINES = 15
+TODAY_LINES = 8
 #: Seconds of tick table shown at the open (§3, "the last ~20 s").
 OPENING_WINDOW_S = 20.0
 #: The current frame plus up to two earlier ones (§3).
-OPENING_FRAMES = 3
+OPENING_FRAMES = 1  # the trigger frame only: every extra image is ~200-300 ms of model time
 #: Frames since the question went out (§3).
-REPLY_FRAMES = 3
+REPLY_FRAMES = 1
 #: Longest a single turn may take before the conversation is abandoned.
 TURN_DEADLINE_S = 15.0
 
