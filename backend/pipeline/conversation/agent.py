@@ -59,6 +59,8 @@ OPENING_WINDOW_S = 20.0
 OPENING_FRAMES = 1  # the trigger frame only: every extra image is ~200-300 ms of model time
 #: Frames since the question went out (§3).
 REPLY_FRAMES = 1
+#: A statement already spoken this recently is not spoken again ("say it once").
+REPEAT_WINDOW_S = 300.0
 #: Longest a single turn may take before the conversation is abandoned.
 TURN_DEADLINE_S = 15.0
 
@@ -368,11 +370,43 @@ class ConversationAgent:
             self._ask(conv, utterance, t)
             return
 
+        if utterance and self._recently_said(utterance, t):
+            # Code-level "say it once": the model repeated a line it said
+            # minutes ago ("Stand up and look away" twice in twelve seconds,
+            # seen live). The prompt asks for this; this makes it true.
+            log.info("conversation: %s repeat suppressed · \"%s\"", conv["id"], utterance[:80])
+            self._turn(conv, "agent", "", kind="statement")
+            self._close(conv, "repeat")
+            return
         if utterance:
             self._say(conv, utterance, t)
         else:
             self._turn(conv, "agent", "", kind="statement")
         self._close(conv, "capped" if capped else ("done" if utterance else "silent"))
+
+    def _recently_said(self, text: str, t: float) -> bool:
+        """Was (nearly) this line spoken in a conversation within REPEAT_WINDOW_S?"""
+
+        def norm(s: str) -> str:
+            return " ".join("".join(ch.lower() if ch.isalnum() or ch == " " else " " for ch in s).split())
+
+        want = norm(text)
+        if not want:
+            return False
+        try:
+            rows = self.db.list_conversations(limit=12)
+        except Exception:  # pragma: no cover - defensive
+            return False
+        for row in rows:
+            for turn in row.get("turns") or []:
+                if turn.get("role") != "agent" or not turn.get("text"):
+                    continue
+                if t - float(turn.get("t") or 0) > REPEAT_WINDOW_S:
+                    continue
+                said = norm(str(turn["text"]))
+                if said == want or (len(want) > 12 and (want in said or said in want)):
+                    return True
+        return False
 
     def _say(self, conv: dict[str, Any], text: str, t: float) -> None:
         """Speak one statement through the existing seam (§5).

@@ -660,3 +660,43 @@ def test_settled_fields_need_a_heard_answer(tmp_path):
         assert rows[0]["settled"] == {"note": "Monster"}
     asyncio.run(run())
     db.close()
+
+
+def test_a_line_said_minutes_ago_is_not_said_again(tmp_path):
+    """Live defect: "Stand up and look away" twice in twelve seconds."""
+    import asyncio
+    from pipeline.actions.speech import SpeechLimiter
+    from pipeline.config import Settings
+    from pipeline.conversation.agent import ConversationAgent
+    from pipeline.conversation.client import FakeVoiceClient
+    from pipeline.conversation.schema import VoiceReply, VoiceSettled
+    from pipeline.db import Database
+    from pipeline.frames import InMemoryFrameStore
+
+    class SameLine(FakeVoiceClient):
+        model = "same"
+        async def complete(self, thread):
+            return VoiceReply(utterance="Stand up and look away.", kind="statement", done=True,
+                              heard=True, settled=VoiceSettled()), {"latency_ms": 1}
+
+    settings = Settings(db_path=tmp_path / "repeat.db", demo_mode=True)
+    db = Database(settings.db_path).connect().init_schema()
+    clock = [1000.0]
+
+    async def run():
+        agent = ConversationAgent(db, InMemoryFrameStore(), SameLine(), SpeechLimiter(0, 100),
+                                  settings, questions=None, now_fn=lambda: clock[0])
+        assert agent.request("screen", "statement").startswith("handed_off:")
+        for _ in range(50):
+            if agent.current() is None: break
+            await asyncio.sleep(0.02)
+        clock[0] += settings.timings.conversation_cooldown_s + 12  # twelve seconds later, after cooldown
+        assert agent.request("screen again", "statement").startswith("handed_off:")
+        for _ in range(50):
+            if agent.current() is None: break
+            await asyncio.sleep(0.02)
+        rows = agent.list(5)
+        assert [r["close_reason"] for r in rows] == ["repeat", "done"]
+        assert rows[0]["turns"][0]["text"] == ""
+    asyncio.run(run())
+    db.close()
