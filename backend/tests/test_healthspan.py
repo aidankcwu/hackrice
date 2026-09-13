@@ -22,13 +22,16 @@ from pipeline.models import (
     FOOD_TYPES,
     HEALTHY_FOOD_TYPES,
     OUTDOOR_SCENES,
-    SCENES,
     Episode,
     EpisodeKind,
+    SCENES,
+    SeededRow,
 )
+from pipeline.scoring import brian_score as bs
 from pipeline.scoring import healthspan as hs
 from pipeline.scoring.healthspan import healthspan_for_day, profile_from_settings
 from pipeline.scoring.scorer import Scorer
+from pipeline.wearables import air
 from pipeline.seed.fixtures import (
     LATE_CAFFEINE_INDEXES,
     SEEDED_SOURCES,
@@ -44,6 +47,9 @@ LATE_DAYS = [DAYS[i] for i in LATE_CAFFEINE_INDEXES]
 NORMAL_DAYS = [d for i, d in enumerate(DAYS) if i not in LATE_CAFFEINE_INDEXES]
 
 PROVENANCE_LABELS = {"live", "seeded", "derived", "missing"}
+#: Seeded metrics written at runtime rather than by the §7 seed generator.
+RUNTIME_METRICS = {"pm25", "pvt_rt_z", "pvt_lapses", "pvt_rt_ms",
+                   "pvt_check_energy", "pvt_check_mood", "pvt_check_clarity"}
 
 
 @pytest.fixture
@@ -115,28 +121,31 @@ def test_payload_shape_and_json_roundtrip(seeded, settings):
     assert {
         "day", "as_of_hh", "engine", "overall", "layers", "years_delta", "years_ci",
         "hours_today", "hours_ci", "measured", "factors", "ledger", "forecast", "levers",
-        "levers_free", "insights", "pins", "observations", "provenance", "effects", "profile",
-        "baseline_sleep_h", "window", "conventions",
+        "levers_free", "levers_personalized", "insights", "pins", "experience", "currencies",
+        "week_table", "annotations", "narrator_prompts", "driver_rules", "observations",
+        "provenance", "effects", "profile", "baseline_sleep_h", "window", "conventions",
     } <= body.keys()
     json.dumps(body, allow_nan=False)
     assert body["day"] == END_DAY
     assert body["engine"] == "brian_score"
     assert body["as_of_hh"] is None
     assert 0 <= body["overall"] <= 100
-    assert len(body["layers"]) == 7
-    # 18 factors + 3 leading indicators + bedtime_hh + baseline_sleep_h.
-    assert len(body["provenance"]) == 23
+    assert len(body["layers"]) == 8
+    # 20 factors + 3 leading indicators + bedtime_hh + baseline_sleep_h.
+    assert len(body["provenance"]) == 25
     assert {p["source"] for p in body["provenance"].values()} <= PROVENANCE_LABELS
-    assert len(body["factors"]) == 18
+    assert len(body["factors"]) == 20
     for row in body["factors"]:
         assert {"provenance", "basis", "detail"} <= row.keys()
         assert row["provenance"] in PROVENANCE_LABELS
         assert row["provenance"] == body["provenance"][row["key"]]["source"]
     assert body["measured"] == {"count": sum(1 for f in body["factors"] if f["measured"]),
-                                "total": 18}
+                                "total": 20}
     assert body["window"]["days_elapsed"] == 7
     assert body["window"]["uncovered_days"] == [END_DAY]
-    assert len(body["conventions"]) == 5
+    assert len(body["conventions"]) == 8
+    assert set(body["driver_rules"]) == {"caffeine_late", "alcohol", "night_screen",
+                                         "late_bed", "no_daylight", "isolated"}
 
 
 # -- forecast --------------------------------------------------------------
@@ -297,10 +306,13 @@ def test_healthy_food_types_and_seeded_metrics_still_exist():
     assert HEALTHY_FOOD_TYPES <= set(FOOD_TYPES)
     seeded_metrics = {metric for metric, _ in hs._SEEDED_AS_IS.values()} | {
         "vo2_max", "daytime_light_minutes", "evening_light_ok", "purpose_score",
-        "journal_alcohol", "bed_time", "strain",
+        "journal_alcohol", "bed_time", "strain", "recovery_score",
     }
-    assert seeded_metrics <= SEEDED_UNITS.keys()
-    assert seeded_metrics <= SEEDED_SOURCES.keys()
+    # pm25 and the pvt_* rows are written at runtime (wearables/air.py, POST
+    # /api/pvt), never by the §7 seed generator, so they have no fixture entry.
+    assert seeded_metrics - RUNTIME_METRICS <= SEEDED_UNITS.keys()
+    assert seeded_metrics - RUNTIME_METRICS <= SEEDED_SOURCES.keys()
+    assert RUNTIME_METRICS.isdisjoint(SEEDED_UNITS.keys())
 
 
 def test_nature_counts_nature_scenes_and_untagged_blocks(seeded, settings):
@@ -633,6 +645,347 @@ def test_live_episode_moves_the_numbers_today(seeded, settings):
         k: v for k, v in body.items() if k != "as_of_hh"}
 
 
+# -- Mind (rt_z) and Air (pm25) --------------------------------------------
+
+
+def write(db: Database, day: str, metric: str, value: float,
+          unit: str = "", source: str = "pvt") -> None:
+    db.insert_seeded_rows([SeededRow(day=day, metric=metric, value=value,
+                                     unit=unit, source=source)])
+
+
+def test_rt_z_is_unmeasured_without_a_pvt(seeded, settings):
+    body = healthspan_for_day(seeded, settings, END_DAY)
+    assert body["provenance"]["rt_z"] == {
+        "source": "missing", "basis": "pvt", "detail": "no PVT today"}
+    row = by_key(body)["rt_z"]
+    assert (row["measured"], row["dose"], row["hr"], row["hours"]) == (False, None, None, 0)
+    assert row["layer"] == "Cognition"
+    assert "rt_z" not in body["observations"]
+
+
+def test_rt_z_from_the_days_pvt_rows(seeded, settings):
+    write(seeded, END_DAY, "pvt_rt_z", 1.2, "z")
+    write(seeded, END_DAY, "pvt_lapses", 3, "count")
+    body = healthspan_for_day(seeded, settings, END_DAY)
+    prov = body["provenance"]["rt_z"]
+    assert (prov["source"], prov["basis"]) == ("derived", "pvt")
+    assert "+1.20 SD vs your own baseline" in prov["detail"]
+    assert "3 lapse(s)" in prov["detail"]
+    row = by_key(body)["rt_z"]
+    assert row["measured"] is True
+    assert row["dose"] == pytest.approx(1.2)
+    assert row["hours"] < 0                      # slower than baseline costs hours
+    assert body["observations"]["rt_z"] == pytest.approx(1.2)
+    # A faster day earns, and a baseline day is neither.
+    write(seeded, END_DAY, "pvt_rt_z", -1.0, "z")
+    assert by_key(healthspan_for_day(seeded, settings, END_DAY))["rt_z"]["hours"] > 0
+    write(seeded, END_DAY, "pvt_rt_z", 0.0, "z")
+    assert by_key(healthspan_for_day(seeded, settings, END_DAY))["rt_z"]["hours"] == 0
+
+
+def test_rt_z_is_a_state_marker_not_a_lever(seeded, settings):
+    assert "rt_z" in hs.STATE_MARKERS
+    write(seeded, END_DAY, "pvt_rt_z", 1.5, "z")
+    body = healthspan_for_day(seeded, settings, END_DAY)
+    assert "rt_z" not in {lv["key"] for lv in body["levers"] + body["levers_free"]}
+
+
+def test_pm25_is_the_openaq_row_else_unmeasured(seeded, settings):
+    body = healthspan_for_day(seeded, settings, END_DAY)
+    prov = body["provenance"]["pm25"]
+    assert (prov["source"], prov["basis"]) == ("missing", "openaq")
+    assert "AIR_LAT/AIR_LON unset" in prov["detail"]
+    assert by_key(body)["pm25"]["measured"] is False
+
+    write(seeded, END_DAY, "pm25", 31.0, air.PM25_UNIT, air.PM25_SOURCE)
+    body = healthspan_for_day(seeded, settings, END_DAY)
+    prov = body["provenance"]["pm25"]
+    assert (prov["source"], prov["basis"]) == ("seeded", "openaq")
+    assert "31 µg/m³" in prov["detail"]
+    row = by_key(body)["pm25"]
+    assert row["dose"] == pytest.approx(31.0)
+    assert row["layer"] == "Environment"
+    assert row["hours"] < 0                      # above the 9 µg/m³ reference
+    # Clean air earns.
+    write(seeded, END_DAY, "pm25", 4.0, air.PM25_UNIT, air.PM25_SOURCE)
+    assert by_key(healthspan_for_day(seeded, settings, END_DAY))["pm25"]["hours"] > 0
+
+
+# -- experience and the two currencies -------------------------------------
+
+
+def test_experience_uses_recovery_pvt_and_the_three_tap_check(seeded, settings):
+    body = healthspan_for_day(seeded, settings, END_DAY)
+    experience = body["experience"]
+    # The seeded Sunday has a recovery_score but no PVT and no self-check.
+    assert experience["components"]["recovery"] == pytest.approx(84.0)
+    assert experience["components"]["pvt"] is None
+    assert experience["components"]["check"] is None
+    assert 0.4 <= experience["utility"] <= 1.0
+    assert experience["fully_lived_hours"] == pytest.approx(24 * experience["utility"], abs=0.05)
+
+    for metric, value in (("pvt_rt_z", 0.5), ("pvt_lapses", 1), ("pvt_rt_ms", 298.0),
+                          ("pvt_check_energy", 2), ("pvt_check_mood", 2),
+                          ("pvt_check_clarity", 2)):
+        write(seeded, END_DAY, metric, value)
+    worse = healthspan_for_day(seeded, settings, END_DAY)["experience"]
+    assert worse["components"]["pvt"] == {"rt_z": 0.5, "lapses": 1.0, "rt_ms_median": 298.0}
+    assert worse["components"]["check"] == {"energy": 2.0, "mood": 2.0, "clarity": 2.0}
+    assert worse["utility"] < experience["utility"]
+
+
+def test_experience_is_none_when_nothing_about_the_day_was_measured(db, settings):
+    """The engine would return 1.0 off its pain/illness term alone; 1.0 is a lie."""
+
+    body = healthspan_for_day(db, settings, END_DAY)
+    assert body["experience"] is None
+    assert body["currencies"] is None
+
+
+def test_currencies_weight_years_by_utility(seeded, settings):
+    body = healthspan_for_day(seeded, settings, END_DAY)
+    currencies, experience = body["currencies"], body["experience"]
+    assert currencies["utility_today"] == experience["utility"]
+    assert currencies["fully_lived_hours_today"] == experience["fully_lived_hours"]
+    assert currencies["future_healthy_years"] == pytest.approx(
+        body["years_delta"] * experience["utility"], abs=0.01)
+    lo, hi = currencies["future_healthy_years_ci"]
+    assert lo <= currencies["future_healthy_years"] <= hi
+    # Six prior days carry a utility -- one short of the seven a 30-day mean needs.
+    assert currencies["utility_days"] == 6
+    assert currencies["utility_mean_30d"] is None
+
+
+def test_utility_mean_appears_at_seven_prior_days(seeded, settings):
+    """Below the threshold the mean is None, not a two-day number wearing a 30-day label."""
+
+    assert hs.MIN_UTILITY_DAYS == 7
+    seventh = Scorer.week_days(END_DAY, 8)[0]
+    write(seeded, seventh, "recovery_score", 50.0, "%", "whoop")
+    body = healthspan_for_day(seeded, settings, END_DAY)
+    assert body["currencies"]["utility_days"] == 7
+    mean = body["currencies"]["utility_mean_30d"]
+    assert mean is not None
+    assert 0.4 <= mean <= 1.0
+    assert body["currencies"]["future_healthy_years"] == pytest.approx(
+        body["years_delta"] * mean, abs=0.01)
+
+
+# -- the narrator ----------------------------------------------------------
+
+
+def drivers(body: dict) -> dict[str, dict[str, bool]]:
+    return {row["day"]: row["drivers"] for row in body["week_table"]}
+
+
+def test_week_table_is_one_row_per_trailing_day_with_its_own_hours(seeded, settings):
+    body = healthspan_for_day(seeded, settings, END_DAY)
+    table = body["week_table"]
+    assert [row["day"] for row in table] == DAYS
+    assert table[-1]["hours"] == pytest.approx(body["hours_today"], abs=0.01)
+    for row in table:
+        assert row.keys() == {"day", "hours", "sleep", "rec", "sri", "drivers"}
+        assert set(row["drivers"]) == set(hs.DRIVER_RULES)
+        assert all(isinstance(v, bool) for v in row["drivers"].values())
+
+
+def test_driver_flags_are_only_true_on_evidence(seeded, settings):
+    flags = drivers(healthspan_for_day(seeded, settings, END_DAY))
+    # The three late-caffeine days, and only those.
+    assert [d for d, f in flags.items() if f["caffeine_late"]] == LATE_DAYS
+    # DAYS[3] has the journal alcohol row.
+    assert [d for d, f in flags.items() if f["alcohol"]] == [DAYS[3]]
+    # Nothing on the seeded week screens late, is isolated, or misses daylight.
+    for key in ("night_screen", "no_daylight", "isolated"):
+        assert not any(f[key] for f in flags.values()), key
+
+
+def test_an_unmeasured_day_is_never_a_clean_day(seeded, settings):
+    """END_DAY has no episodes, so it is absent from both arms, not in the clean one."""
+
+    body = healthspan_for_day(seeded, settings, END_DAY)
+    assert body["provenance"]["social_index"]["source"] == "missing"
+    assert body["provenance"]["night_screen_min"]["source"] == "missing"
+    row = body["week_table"][-1]
+    assert row["day"] == END_DAY
+    assert row["drivers"]["isolated"] is False
+    assert row["drivers"]["night_screen"] is False
+
+
+def test_night_screen_driver_fires_at_its_documented_threshold(seeded, settings):
+    add(seeded, "e_screen", "screen_block", END_DAY, 22.0, hs.NIGHT_SCREEN_MIN_MIN,
+        {"scene": "home"})
+    assert drivers(healthspan_for_day(seeded, settings, END_DAY))[END_DAY]["night_screen"]
+
+    # One minute short of the threshold is not a night-screen day.
+    seeded.conn.execute("DELETE FROM episodes WHERE id = 'e_screen'")
+    add(seeded, "e_screen_short", "screen_block", END_DAY, 22.0,
+        hs.NIGHT_SCREEN_MIN_MIN - 1, {"scene": "home"})
+    assert not drivers(healthspan_for_day(seeded, settings, END_DAY))[END_DAY]["night_screen"]
+
+
+def test_isolated_driver_is_a_short_day_of_conversation(seeded, settings):
+    add(seeded, "e_conv_brief", "conversation", END_DAY, 10.0, 5.0, {"scene": "office"})
+    assert drivers(healthspan_for_day(seeded, settings, END_DAY))[END_DAY]["isolated"]
+    add(seeded, "e_conv_long", "conversation", END_DAY, 12.0, 45.0, {"scene": "office"})
+    assert not drivers(healthspan_for_day(seeded, settings, END_DAY))[END_DAY]["isolated"]
+
+
+def test_no_daylight_driver_needs_a_measured_zero(seeded, settings):
+    # With the phone row in place the day has 35 bright minutes.
+    assert not drivers(healthspan_for_day(seeded, settings, DAYS[0]))[DAYS[0]]["no_daylight"]
+    # Without it the glasses' own zero inside 08:00-18:00 is the measurement.
+    delete_seeded(seeded, DAYS[0], "daytime_light_minutes")
+    assert drivers(healthspan_for_day(seeded, settings, DAYS[0]))[DAYS[0]]["no_daylight"]
+
+
+def test_annotations_and_prompts_carry_the_evidence(seeded, settings):
+    body = healthspan_for_day(seeded, settings, END_DAY)
+    annotations = body["annotations"]
+    assert annotations
+    assert len(body["narrator_prompts"]) == len(annotations)
+    kinds = {a["kind"] for a in annotations}
+    assert {"contrast", "extreme"} <= kinds
+
+    caffeine = next(a for a in annotations
+                    if a["kind"] == "contrast" and a["driver"] == "caffeine_late")
+    assert (caffeine["n_with"], caffeine["n_without"]) == (3, 4)
+    assert caffeine["hours_with"] < caffeine["hours_without"]
+    assert caffeine["sleep_with"] < caffeine["sleep_without"]
+    assert caffeine["rec_with"] < caffeine["rec_without"]
+    assert any("Drake 2013" in line for line in caffeine["evidence"])
+
+    worst = next(a for a in annotations if a["kind"] == "extreme")
+    assert worst["worst_hours"] <= worst["best_hours"]
+    assert worst["worst_day"] in DAYS and worst["best_day"] in DAYS
+
+    # The prompt hands the model facts only, and forbids inventing numbers.
+    prompt = body["narrator_prompts"][0]
+    assert "do not add numbers" in prompt
+    assert json.dumps(annotations[0]) in prompt
+
+
+# -- adherence -------------------------------------------------------------
+
+
+def test_levers_personalized_absent_until_adherence_is_learned(seeded, settings):
+    assert healthspan_for_day(seeded, settings, END_DAY)["levers_personalized"] is None
+
+    body = healthspan_for_day(seeded, settings, END_DAY)
+    key = body["levers"][0]["key"]
+    write(seeded, END_DAY, f"{hs.ADHERENCE_PREFIX}{key}_a", 7.0, "count", "user")
+    write(seeded, END_DAY, f"{hs.ADHERENCE_PREFIX}{key}_b", 3.0, "count", "user")
+    ranked = healthspan_for_day(seeded, settings, END_DAY)["levers_personalized"]
+    assert ranked is not None
+    assert {lv["key"] for lv in ranked} == {lv["key"] for lv in body["levers"]}
+    by_lever = {lv["key"]: lv for lv in ranked}
+    assert by_lever[key]["p_adherence"] == pytest.approx(0.7)
+    # A lever with no history sits at the uninformative Beta(1, 1) prior.
+    others = [lv for lv in ranked if lv["key"] != key]
+    assert all(lv["p_adherence"] == pytest.approx(0.5) for lv in others)
+    # Deterministic: the same day ranks the same way on every poll.
+    assert healthspan_for_day(seeded, settings, END_DAY)["levers_personalized"] == ranked
+
+
+# -- episode merging: "55 drinks" is a pipeline bug ------------------------
+
+
+def test_repeated_sightings_are_one_drink_and_a_small_pin_count(seeded, settings):
+    for i in range(55):
+        add(seeded, f"e_drink_{i}", "alcohol_sighting", END_DAY, 19.0 + i / 60.0, 1.0,
+            {"scene": "bar"})
+    body = healthspan_for_day(seeded, settings, END_DAY)
+    assert body["observations"]["alcohol_drinks"] == 1.0
+    assert "55 sighting(s) in 1 occasion(s)" in body["provenance"]["alcohol_drinks"]["detail"]
+    # The engine's merge window for a sighting is 45 min, so 55 minutes of them
+    # collapse to two pins rather than one -- and never to 55.
+    assert body["pins_total"] == 2
+    assert len(body["pins"]) == 2
+    assert all(p["seen"] == "Alcohol in frame" for p in body["pins"])
+
+
+def test_drinks_stop_at_the_top_of_the_hazard_curve(seeded, settings):
+    """Seventeen occasions in a day is a camera re-seeing one table, not 17 drinks."""
+
+    assert hs.MAX_DRINKS_PER_DAY == 6
+    for i in range(17):
+        add(seeded, f"e_occasion_{i}", "alcohol_sighting", END_DAY, 6.0 + i, 1.0, {"scene": "bar"})
+    body = healthspan_for_day(seeded, settings, END_DAY)
+    assert body["observations"]["alcohol_drinks"] == 6.0
+    detail = body["provenance"]["alcohol_drinks"]["detail"]
+    assert "17 sighting(s) in 17 occasion(s)" in detail
+    assert "read as 6" in detail
+    assert by_key(body)["alcohol_drinks"]["dose"] == 6.0
+
+
+def test_today_shows_at_most_twelve_pins(seeded, settings):
+    assert hs.MAX_PINS_TODAY == 12
+    kinds = ["conversation", "outdoor_block", "meal", "caffeine_sighting"]
+    for hour in range(6, 23):
+        for i, kind in enumerate(kinds):
+            add(seeded, f"e_{kind}_{hour}", kind, END_DAY, hour + i * 0.15, 2.0, {"scene": "home"})
+    body = healthspan_for_day(seeded, settings, END_DAY)
+    assert body["pins_total"] > 12
+    pins = body["pins"]
+    assert len(pins) == 12
+    # The most recent 12, in order, and each still tied to what it moved.
+    times = [p["time"] for p in pins]
+    assert times == sorted(times)
+    assert times[-1] >= "22:00"
+    assert all(p["seen"] and p["effect"] for p in pins)
+
+
+# -- week view and registry ------------------------------------------------
+
+
+def test_week_is_a_lite_day_per_day_plus_the_full_today(seeded, settings):
+    week = hs.healthspan_week(seeded, settings, END_DAY, 7)
+    assert week["day"] == END_DAY
+    assert [d["day"] for d in week["days"]] == DAYS
+    assert week["today"] == healthspan_for_day(seeded, settings, END_DAY)
+    for lite, day in zip(week["days"], DAYS):
+        full = healthspan_for_day(seeded, settings, day)
+        assert lite["hours_today"] == full["hours_today"]
+        assert lite["overall"] == full["overall"]
+        assert lite["drivers"] == full["week_table"][-1]["drivers"]
+        assert "factors" not in lite
+        assert "pins" not in lite
+        assert "provenance" not in lite
+    json.dumps(week, allow_nan=False)
+
+
+def test_week_clamps_days_to_the_documented_range(seeded, settings):
+    assert hs.MAX_WEEK_DAYS == 31
+    assert len(hs.healthspan_week(seeded, settings, END_DAY, 0)["days"]) == 1
+    assert len(hs.healthspan_week(seeded, settings, END_DAY, 1)["days"]) == 1
+    assert len(hs.healthspan_week(seeded, settings, END_DAY, 99)["days"]) == 31
+    with pytest.raises(ValueError):
+        hs.healthspan_week(seeded, settings, "nonsense", 7)
+
+
+def test_registry_maps_every_engine_factor_to_an_app_source():
+    registry = hs.healthspan_registry()
+    assert {"pipeline", "factors", "limitations", "leading_indicators",
+            "adapter"} <= registry.keys()
+    assert len(registry["factors"]) == len(bs.FACTORS) == 20
+    sources = registry["adapter"]["factor_sources"]
+    # Every factor, and none of them left unmapped: a factor the engine gains
+    # and the adapter has not wired fails here rather than on the page.
+    assert sources.keys() == bs.FACTORS.keys()
+    assert [key for key, row in sources.items() if row["source"] == "unmapped"] == []
+    assert "OpenAQ" in sources["pm25"]["source"]
+    assert "POST /api/pvt" in sources["rt_z"]["source"]
+    # The bonus flag is carried so the page can say why sauna is off the layer scale.
+    assert sources["sauna_wk"]["bonus"]
+    assert all(row["bonus"] == "" for key, row in sources.items() if key != "sauna_wk")
+    assert registry["adapter"]["state_markers"] == sorted(hs.STATE_MARKERS)
+    assert registry["adapter"]["driver_rules"] == hs.DRIVER_RULES
+    assert registry["adapter"]["conventions"] == hs.CONVENTIONS
+    assert set(registry["adapter"]["provenance_labels"]) == PROVENANCE_LABELS
+    json.dumps(registry, allow_nan=False)
+
+
 # -- hygiene ---------------------------------------------------------------
 
 
@@ -676,7 +1029,7 @@ def test_bad_day_raises_value_error(seeded, settings):
 
 def test_empty_database_scores_with_everything_missing(db, settings):
     body = healthspan_for_day(db, settings, END_DAY)
-    assert body["measured"] == {"count": 0, "total": 18}
+    assert body["measured"] == {"count": 0, "total": 20}
     assert all(row["provenance"] == "missing" for row in body["factors"])
     assert body["observations"] == {"planned_bed_shift_min": 0.0}
     assert body["profile"]["bedtime_source"] == "missing"

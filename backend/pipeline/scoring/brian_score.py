@@ -92,6 +92,7 @@ class Factor:
     active_for: Optional[List[str]] = None # goal profiles this applies to (None = all)
     age_min: int = 0
     note: str = ""
+    bonus: bool = False                     # earns hours but is excluded from the 0-100 layer scale
 
     def hr(self, dose: float) -> float:
         xs = [p[0] for p in self.points]
@@ -180,6 +181,11 @@ FACTORS: Dict[str, Factor] = {f.key: f for f in [
            "B", 0.02, ref=60,
            source="White 2019 Sci Rep (n≈20k): ≥120 min/wk → better health/wellbeing; Rojas-Rueda 2019 Lancet Planet Health: 4% lower mortality per 0.1 NDVI",
            lever_step=60, lever_time_min=60),
+    Factor("pm25", "environment", "Air (PM2.5)", "µg/m³",
+           [(5, 1.00), (12, 1.06), (25, 1.16), (35, 1.24), (55, 1.40)],
+           "A_cohort", 0.03, ref=9, higher_is_better=False,
+           source="Chen & Hoek 2020 Environment International meta-analysis: ~8% higher all-cause mortality per 10 µg/m³ long-term PM2.5; WHO 2021 guideline 5 µg/m³ annual",
+           lever_step=-10, lever_time_min=0, note="daily exposure from OpenAQ/PurpleAir by GPS; long-term effect applied to today's share"),
     Factor("noise_night_db", "environment", "Night noise", "dB(A)",
            [(30, 1.00), (45, 1.00), (55, 1.05), (65, 1.10)],
            "B", 0.03, ref=40, higher_is_better=False,
@@ -206,7 +212,14 @@ FACTORS: Dict[str, Factor] = {f.key: f for f in [
            [(0, 1.00), (1, 1.00), (2.5, 0.78), (4, 0.60), (7, 0.60)],
            "B", 0.12, ref=0,
            source="Laukkanen 2015 JAMA IM (n=2,315 Finnish men, 20.7 y): 4–7×/wk vs 1× HR 0.60 all-cause; sessions >19 min",
-           lever_step=1, lever_time_min=25, note="single male cohort — shrunk 50%"),
+           lever_step=1, lever_time_min=25, note="single male cohort — shrunk 50%", bonus=True),
+    # ---------------- Cognition ----------------
+    Factor("rt_z", "cognition", "Reaction time vs your baseline", "z-score",
+           [(-2, 0.82), (0, 1.00), (1, 1.25), (2, 1.56)],
+           "A_cohort", 0.05, ref=0, higher_is_better=False,
+           source="Hagger-Johnson 2014 PLOS ONE (NHANES-III, n=5,134): 1 SD slower reaction time → HR 1.25 all-cause, 1.36 CVD; 1 SD more variable → HR 1.36; comparable to smoking. Measured with a 3-min PVT (Basner 2016, smartphone version validated)",
+           lever_step=-0.5, lever_time_min=0,
+           note="z-score against the person's own first-week baseline; within-person trend only"),
     Factor("recovery_ratio", "recovery", "HRV vs your baseline", "7d/60d ln-RMSSD",
            [(0.70, 1.10), (0.85, 1.05), (1.00, 1.00), (1.15, 0.97)],
            "B", 0.05, ref=1.0,
@@ -229,7 +242,7 @@ LEADING = {
 LAYER_LABELS = {
     "movement": "Movement", "sleep": "Sleep", "light": "Light & clock",
     "social": "Social", "environment": "Environment", "diet": "Diet & substances",
-    "recovery": "Recovery",
+    "recovery": "Recovery", "cognition": "Cognition",
 }
 
 
@@ -246,6 +259,7 @@ class Profile:
     lpa_high: bool = False
     cyp1a2_slow: bool = False
     bedtime_hh: float = 23.0   # habitual bedtime, decimal hours
+    targets_override: Optional[Dict[str, float]] = None  # per-user adaptive targets (adapt_target), merged last
 
     def factor_weight(self, f: Factor) -> float:
         """Profile multipliers on the *priority* of a factor. Biology stays the same;
@@ -294,6 +308,8 @@ class Profile:
             t["sleep_hours"] = 8.5
             t["steps"] = 6000
             t["mobility_min_wk"] = 60      # tracked target, not a hazard factor
+        if self.targets_override:
+            t.update(self.targets_override)
         return t
 
 
@@ -358,9 +374,10 @@ def score_day(obs: Dict[str, float], profile: Profile) -> DayScore:
         lh = f.log_hazard(dose) * w
         lh_ref = f.log_hazard(f.ref) * w
         rel = lh - lh_ref if measured else 0.0
-        per_layer.setdefault(f.layer, []).append(lh)
-        per_layer_best.setdefault(f.layer, []).append(f.log_hazard(f.best_dose()) * w)
-        per_layer_worst.setdefault(f.layer, []).append(f.log_hazard(f.worst_dose()) * w)
+        if not f.bonus:
+            per_layer.setdefault(f.layer, []).append(lh)
+            per_layer_best.setdefault(f.layer, []).append(f.log_hazard(f.best_dose()) * w)
+            per_layer_worst.setdefault(f.layer, []).append(f.log_hazard(f.worst_dose()) * w)
         rel_by_layer.setdefault(f.layer, []).append(rel)
         if measured:
             var_terms.append((f.se_log * SHRINK[f.grade] * w) ** 2)
@@ -463,6 +480,8 @@ class Forecast:
 
 def forecast_tonight(today: Dict[str, float], baseline_sleep_h: float, profile: Profile) -> Forecast:
     drivers: List[str] = []
+    if not baseline_sleep_h or baseline_sleep_h < 4:
+        baseline_sleep_h = 7.5                       # missing/implausible baseline → population default
     sleep = baseline_sleep_h
     hrv = 0.0
     sri = 0.0
@@ -486,6 +505,10 @@ def forecast_tonight(today: Dict[str, float], baseline_sleep_h: float, profile: 
     if abs(shift) >= 30:
         sri += LEADING["late_bed_shift_min"]["sri_pts_per_30min"] * abs(shift) / 30
         drivers.append(f"bedtime {shift:+.0f} min vs habit")
+    sleep = max(3.5, min(10.0, sleep))
+    hrv = max(-40.0, min(10.0, hrv))
+    sri = max(-30.0, min(0.0, sri))
+    mel = max(0.0, min(120.0, mel))
     return Forecast(round(sleep, 2), round(hrv, 1), round(sri, 1), round(mel, 0), drivers)
 
 
@@ -661,12 +684,206 @@ def to_payload(day: DayScore, ledger: List[LedgerLine], fc: Forecast, lv: List[L
     }
 
 
+
+# --------------------------------------------------------------------------- #
+# 9b. Two currencies — fully-lived hours today (experience) and future healthy years
+# --------------------------------------------------------------------------- #
+
+def utility_today(pvt: Optional[dict] = None, check: Optional[dict] = None,
+                  recovery_score: Optional[float] = None, pain_or_illness: bool = False) -> dict:
+    """Daily quality weight u in [0.4, 1], the QALY/HALE idea applied to one day.
+    pvt: {"rt_z": float, "lapses": int}  (3-min psychomotor vigilance test, vs own baseline)
+    check: {"energy": 1-5, "mood": 1-5, "clarity": 1-5}  (three taps)
+    recovery_score: WHOOP recovery 0-100
+    Weights: 0.35 objective clarity, 0.35 self-report, 0.20 recovery, 0.10 pain/illness."""
+    parts, weights = [], []
+    if pvt and pvt.get("rt_z") is not None:
+        clarity = 1.0 - 0.15 * max(0.0, float(pvt["rt_z"])) - 0.05 * float(pvt.get("lapses", 0))
+        parts.append(max(0.4, min(1.0, clarity))); weights.append(0.35)
+    if check:
+        vals = [check.get(k) for k in ("energy", "mood", "clarity") if check.get(k) is not None]
+        if vals:
+            parts.append(0.4 + 0.6 * (sum(vals) / len(vals) - 1) / 4); weights.append(0.35)
+    if recovery_score is not None:
+        parts.append(0.4 + 0.6 * float(recovery_score) / 100); weights.append(0.20)
+    parts.append(0.6 if pain_or_illness else 1.0); weights.append(0.10)
+    u = sum(p * w for p, w in zip(parts, weights)) / sum(weights)
+    u = float(max(0.4, min(1.0, u)))
+    return {"utility": round(u, 3), "fully_lived_hours": round(24 * u, 1),
+            "components": {"pvt": pvt, "check": check, "recovery": recovery_score, "pain_or_illness": pain_or_illness}}
+
+
+def two_currencies(day: "DayScore", u_today: float, u_mean: Optional[float] = None) -> dict:
+    """Future healthy years = mortality-based years × expected utility (QALY-weighted)."""
+    ubar = u_mean if u_mean is not None else u_today
+    return {"future_healthy_years": round(day.years_delta * ubar, 2),
+            "future_healthy_years_ci": [round(day.years_ci[0] * ubar, 2), round(day.years_ci[1] * ubar, 2)],
+            "fully_lived_hours_today": round(24 * u_today, 1),
+            "utility_today": round(u_today, 3)}
+
+
+# --------------------------------------------------------------------------- #
+# 9c. Narrator — multi-day patterns with the "because"
+# --------------------------------------------------------------------------- #
+
+_DRIVER_EVIDENCE = {
+    "caffeine_late": "Drake 2013 J Clin Sleep Med: caffeine 6 h before bed cut sleep by >1 h",
+    "alcohol": "Zhao 2023 JAMA Netw Open: no protective dose; same-night HRV suppression",
+    "night_screen": "Brown 2022 PLOS Biology: evening light ≥10 lx melanopic delays melatonin",
+    "late_bed": "Windred 2024 Sleep: irregular sleep timing → 20–48% higher mortality vs regular",
+    "no_daylight": "Windred 2024 PNAS: darker days → higher mortality",
+    "isolated": "Holt-Lunstad 2010: weak social ties → survival OR 0.67",
+}
+
+
+def annotate_week(rows: List[dict], min_len: int = 2) -> List[dict]:
+    """rows (oldest first): {"day","hours","sleep","rec","sri","drivers":{caffeine_late,alcohol,night_screen,late_bed,no_daylight,isolated}}
+    Returns arrows (runs) and contrasts, each with the drivers and the evidence line.
+    Sentences are generated downstream from these facts only."""
+    ann: List[dict] = []
+    i = 0
+    while i < len(rows) - 1:
+        sign = 1 if rows[i + 1]["hours"] > rows[i]["hours"] else -1
+        j = i
+        while j < len(rows) - 1 and (rows[j + 1]["hours"] - rows[j]["hours"]) * sign > 0:
+            j += 1
+        if j - i >= min_len:
+            span = rows[i:j + 1]
+            drivers = _common_drivers(span)
+            ann.append({"kind": "run", "from": rows[i]["day"], "to": rows[j]["day"], "direction": sign,
+                        "delta_hours": round(rows[j]["hours"] - rows[i]["hours"], 1),
+                        "sleep_from": rows[i].get("sleep"), "sleep_to": rows[j].get("sleep"),
+                        "rec_from": rows[i].get("rec"), "rec_to": rows[j].get("rec"),
+                        "drivers": drivers, "evidence": [_DRIVER_EVIDENCE[d] for d in drivers if d in _DRIVER_EVIDENCE]})
+        i = max(j, i + 1)
+    for key in ("caffeine_late", "alcohol", "night_screen", "late_bed", "no_daylight", "isolated"):
+        a = [r for r in rows if (r.get("drivers") or {}).get(key)]
+        b = [r for r in rows if not (r.get("drivers") or {}).get(key)]
+        if len(a) >= 2 and len(b) >= 2:
+            avg = lambda rs, k: round(sum(float(r.get(k) or 0) for r in rs) / len(rs), 1)
+            ann.append({"kind": "contrast", "driver": key, "n_with": len(a), "n_without": len(b),
+                        "hours_with": avg(a, "hours"), "hours_without": avg(b, "hours"),
+                        "sleep_with": avg(a, "sleep"), "sleep_without": avg(b, "sleep"),
+                        "rec_with": avg(a, "rec"), "rec_without": avg(b, "rec"),
+                        "evidence": [_DRIVER_EVIDENCE.get(key, "")]})
+    # single worst / best day
+    if rows:
+        worst = min(rows, key=lambda r: r["hours"]); best = max(rows, key=lambda r: r["hours"])
+        ann.append({"kind": "extreme", "worst_day": worst["day"], "worst_hours": worst["hours"],
+                    "worst_drivers": [k for k, v in (worst.get("drivers") or {}).items() if v],
+                    "best_day": best["day"], "best_hours": best["hours"]})
+    return ann
+
+
+def _common_drivers(span: List[dict]) -> List[str]:
+    keys = list(_DRIVER_EVIDENCE)
+    need = max(2, len(span) - 1)
+    return [k for k in keys if sum(bool((r.get("drivers") or {}).get(k)) for r in span) >= need]
+
+
+def narrator_prompt(annotation: dict, pins_in_span: Optional[List[dict]] = None) -> str:
+    """Prompt for the LLM. It may only use these facts; no new numbers, no advice."""
+    import json as _j
+    return ("Write ONE sentence for a health dashboard. Use only the facts below; do not add numbers, "
+            "causes, or advice that are not in them. Name the behavior and the number it moved. Plain language, no hedging words. "
+            f"FACTS: {_j.dumps(annotation)} FRAMES_IN_SPAN: {_j.dumps(pins_in_span or [])}")
+
+
+# --------------------------------------------------------------------------- #
+# 9d. Adherence bandit + adaptive targets (the recommender learns the person)
+# --------------------------------------------------------------------------- #
+
+class Adherence:
+    """Beta-Bernoulli per lever: P(they do it when suggested). Thompson sampling ranks
+    levers by hours_gain × sampled adherence, so it explores new levers automatically."""
+    def __init__(self, state: Optional[Dict[str, List[float]]] = None):
+        self.ab: Dict[str, List[float]] = state or {}
+
+    def sample(self, key: str, rng=None) -> float:
+        a, b = self.ab.get(key, [1.0, 1.0])
+        return float((rng or np.random.default_rng()).beta(a, b))
+
+    def update(self, key: str, done: bool) -> None:
+        a, b = self.ab.setdefault(key, [1.0, 1.0])
+        self.ab[key] = [a + (1 if done else 0), b + (0 if done else 1)]
+
+    def rank(self, lv: List["Lever"], seed: Optional[int] = None) -> List["Lever"]:
+        rng = np.random.default_rng(seed)
+        return sorted(lv, key=lambda l: l.hours_gain * self.sample(l.key, rng), reverse=True)
+
+    def expected(self, key: str) -> float:
+        a, b = self.ab.get(key, [1.0, 1.0])
+        return a / (a + b)
+
+
+def adapt_target(target: float, hits_last_14: int, current_median: float, floor: float, ceiling: float) -> float:
+    """Targets follow the person: drop to a level they hit when adherence <30%, raise 10% when >80%."""
+    rate = hits_last_14 / 14.0
+    if rate < 0.3:
+        target = max(floor, current_median * 1.1)
+    elif rate > 0.8:
+        target = min(ceiling, target * 1.1)
+    return float(round(target, 1))
+
+
+# --------------------------------------------------------------------------- #
+# 9e. Registry export — the "how it's scored" page reads this, nobody types it
+# --------------------------------------------------------------------------- #
+
+def export_registry() -> dict:
+    return {
+        "pipeline": ["dose", "hazard ratio from published curve", f"× shrink by evidence grade {SHRINK}",
+                     f"capped at ±{FACTOR_CAP} log-hazard", f"correlated factors discounted within a layer {LAYER_DISCOUNT}",
+                     "summed in log-hazard space", f"Gompertz shift: years = −Σ / b, b = ln2/8 = {GOMPERTZ_B:.4f}",
+                     "today's share = years × 8766 / remaining days (microlife framing)",
+                     "95% CI propagated from each hazard ratio's interval"],
+        "leading_indicators": LEADING,
+        "factors": [{"key": f.key, "layer": LAYER_LABELS.get(f.layer, f.layer), "label": f.label, "unit": f.unit,
+                     "curve": f.points, "grade": f.grade, "shrink": SHRINK[f.grade], "reference_dose": f.ref,
+                     "best_dose": f.best_dose(), "worst_dose": f.worst_dose(), "higher_is_better": f.higher_is_better,
+                     "lever_step": f.lever_step, "lever_time_min": f.lever_time_min,
+                     "source": f.source, "note": f.note} for f in FACTORS.values()],
+        "limitations": ["Hazard ratios are observational associations, shrunk but not causal",
+                        "Factors are assumed independent after the within-layer discount",
+                        "Population curves are used until 14 days of the person's own data exist",
+                        "Melanopic light is a banded estimate from an RGB camera, not a spectral measurement",
+                        "Cold plunge is logged, not scored: no healthspan evidence"],
+    }
+
 # --------------------------------------------------------------------------- #
 # 10b. Adapter — from the app's raw episodes + wearable rows to observations
 # --------------------------------------------------------------------------- #
 
+def merge_episodes(episodes: List[dict], gap_min: float = 10.0, sighting_gap_min: float = 45.0) -> List[dict]:
+    """The pipeline emits 1–2 minute fragments. Merge consecutive same-type blocks
+    (conversation, outdoor, screen, walk, sauna) within gap_min, and collapse
+    repeated sightings (alcohol, caffeine, food) within sighting_gap_min into one
+    episode with a count. This is what stops '55 drinks' and 268 pins."""
+    blocks = {"conversation", "outdoor_block", "screen_block", "walk", "sauna", "gym"}
+    sightings = {"alcohol_sighting", "caffeine_sighting", "meal"}
+    out: List[dict] = []
+    for e in sorted(episodes, key=lambda x: x.get("start_hh") or 0):
+        t = e.get("type")
+        if out and out[-1].get("type") == t:
+            prev = out[-1]
+            prev_end = (prev.get("start_hh") or 0) + (prev.get("minutes") or 0) / 60
+            gap = ((e.get("start_hh") or 0) - prev_end) * 60
+            if t in blocks and gap <= gap_min:
+                prev["minutes"] = (prev.get("minutes") or 0) + (e.get("minutes") or 0) + max(0, gap)
+                prev["people"] = max(prev.get("people") or 0, e.get("people") or 0)
+                prev.setdefault("frame_urls", []).append(e.get("frame_url"))
+                continue
+            if t in sightings and gap <= sighting_gap_min:
+                prev["count"] = max(prev.get("count") or 1, e.get("count") or 1)
+                prev["sightings"] = (prev.get("sightings") or 1) + 1
+                continue
+        out.append(dict(e))
+    return out
+
+
 def observations_from_app(episodes: List[dict], wearable_day: dict, week_rows: List[dict],
                           bedtime_hh: float = 23.0) -> Dict[str, float]:
+    episodes = merge_episodes(episodes)
     """episodes: today's glasses episodes as emitted by the pipeline, each
       {"type": "screen_block|caffeine_sighting|meal|conversation|outdoor_block|
                 alcohol_sighting|sauna|walk", "start_hh": 12.1, "minutes": 18,
@@ -688,7 +905,7 @@ def observations_from_app(episodes: List[dict], wearable_day: dict, week_rows: L
     social = 100 * (0.6 * min(conv_min, 60) / 60 + 0.4 * min(people, 5) / 5)
     caf = [e.get("start_hh") for e in episodes if e.get("type") == "caffeine_sighting" and e.get("start_hh") is not None]
     screens_night = mins("screen_block", lambda e: (e.get("start_hh") or 0) >= 22 or (e.get("start_hh") or 0) < 5)
-    drinks = sum(max(1, int(e.get("count") or 1)) for e in episodes if e.get("type") == "alcohol_sighting")
+    drinks = min(6, sum(max(1, int(e.get("count") or 1)) for e in episodes if e.get("type") == "alcohol_sighting"))
     meals = [e for e in episodes if e.get("type") == "meal"]
     med = (sum(1 for m in meals if "mediterranean" in (m.get("tags") or []) or "plant" in (m.get("tags") or []))
            / len(meals)) if meals else None
@@ -715,6 +932,7 @@ def observations_from_app(episodes: List[dict], wearable_day: dict, week_rows: L
         "purpose": wearable_day.get("purpose"),
         "nature_min_wk": week_nature,
         "noise_night_db": wearable_day.get("night_db"),
+        "pm25": wearable_day.get("pm25"),
         "med_adherence": med,
         "alcohol_drinks": drinks,
         "smoker": wearable_day.get("smoker", 0),
@@ -729,10 +947,10 @@ def observations_from_app(episodes: List[dict], wearable_day: dict, week_rows: L
 
 
 def pins_from_episodes(episodes: List[dict], day: "DayScore", fc: "Forecast") -> List[dict]:
-    """Evidence pins: each glasses episode with a frame, tied to what it cost or earned."""
+    """Evidence pins: each merged glasses episode with a frame, tied to what it cost or earned."""
     by_key = {f.key: f for f in day.factors}
     out = []
-    for e in episodes:
+    for e in merge_episodes(episodes):
         t = e.get("type")
         hh = e.get("start_hh") or 0
         time = f"{int(hh):02d}:{int(round((hh % 1) * 60)):02d}"
@@ -799,6 +1017,17 @@ def run_from_json(req: dict) -> dict:
     payload["pins"] = pins_from_episodes(episodes, day, fc)
     payload["observations"] = obs
     payload["effects"] = [e.__dict__ for e in effects]
+    wd = req.get("wearable_day") or {}
+    u = utility_today(pvt=req.get("pvt"), check=req.get("check"), recovery_score=wd.get("recovery_score"),
+                      pain_or_illness=bool(wd.get("pain_or_illness", False)))
+    payload["experience"] = u
+    payload["currencies"] = two_currencies(day, u["utility"], req.get("utility_mean_30d"))
+    if req.get("week_table"):
+        payload["annotations"] = annotate_week(req["week_table"])
+        payload["narrator_prompts"] = [narrator_prompt(a) for a in payload["annotations"]]
+    if req.get("adherence_state") is not None:
+        ad = Adherence(req["adherence_state"])
+        payload["levers_personalized"] = [dict(l.__dict__, p_adherence=round(ad.expected(l.key), 2)) for l in ad.rank(lv, seed=7)]
     return payload
 
 
@@ -814,8 +1043,18 @@ if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
 
+    if "--registry" in sys.argv:
+        print(json.dumps(export_registry(), default=float))
+        sys.exit(0)
     if "--json" in sys.argv:
         print(json.dumps(run_from_json(json.load(sys.stdin)), default=float))
+        sys.exit(0)
+    if "--forecast" in sys.argv:
+        # stdin: {"profile": {...}, "today_obs": {...leading indicators...}, "baseline_sleep_h": 7.5}
+        req = json.load(sys.stdin)
+        fc = forecast_tonight(req.get("today_obs") or {}, baseline_sleep_h=float(req.get("baseline_sleep_h", 7.5)),
+                              profile=Profile(**(req.get("profile") or {})))
+        print(json.dumps(fc.__dict__, default=float))
         sys.exit(0)
 
     me = Profile(age=20, sex="M", goal="average", bedtime_hh=23.0)

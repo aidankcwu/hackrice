@@ -15,12 +15,18 @@ from pydantic import ValidationError
 
 from ..actions.speech import get_speak_fn
 from ..db import day_key
-from ..models import PendingCheck
+from ..models import PendingCheck, SeededRow
 from ..reasoner.prompts import DEFAULT_PERSONA
 from ..reasoner.schema import AskAction
-from ..scoring import healthspan_for_day
+from ..scoring import brian_score as bs
+from ..scoring.healthspan import (
+    MAX_WEEK_DAYS,
+    healthspan_for_day,
+    healthspan_registry,
+    healthspan_week,
+)
 from ..scoring.scorer import rollup
-from ..wearables import LIVE_METRICS
+from ..wearables import LIVE_METRICS, air
 from ..wearables.adapters import (
     health_auto_export_to_samples,
     whoop_seeded_rows,
@@ -183,12 +189,18 @@ async def seeded(request: Request, days: int = Query(7, ge=1)) -> dict:
 
 
 @router.get("/api/healthspan")
-async def healthspan(request: Request, day: str | None = None) -> dict:
+async def healthspan(request: Request, day: str | None = None,
+                     days: int | None = Query(None, ge=1, le=MAX_WEEK_DAYS)) -> dict:
     """Dose-response hazard view for one day (``scoring/healthspan.py``).
 
     Computed on request, never written. Runs off the event loop like the
     scoring loop in ``wiring.py``: up to 13 ``list_episodes`` reads under
     ``db._lock`` must not stall the pipeline's ticks.
+
+    With ``?days=N`` the answer is ``{days: [lite payload per day, oldest
+    first], today: <the full payload for ``day``>}`` -- one round trip for the
+    week chart instead of N. ``?day=`` keeps its single-day shape either way, so
+    an existing client is unaffected.
     """
 
     pipeline = _pipeline(request)
@@ -197,8 +209,25 @@ async def healthspan(request: Request, day: str | None = None) -> dict:
         date.fromisoformat(selected)
     except ValueError:
         raise HTTPException(400, "day must be YYYY-MM-DD")
+    if days is not None:
+        return await asyncio.to_thread(
+            healthspan_week, pipeline.db, pipeline.settings, selected, days,
+            now_t=_now(pipeline))
     return await asyncio.to_thread(
         healthspan_for_day, pipeline.db, pipeline.settings, selected, now_t=_now(pipeline))
+
+
+@router.get("/api/healthspan/registry")
+async def healthspan_registry_route() -> dict:
+    """Everything the "How it's scored" page renders, in one object.
+
+    ``export_registry()`` from the engine (the pipeline steps, every factor's
+    dose-response curve, evidence grade, shrink and source, and the
+    limitations) plus ``adapter``, which says which app source feeds each
+    factor's dose. Pure -- no database read, no clock read.
+    """
+
+    return healthspan_registry()
 
 
 def _now(pipeline) -> float:
@@ -340,6 +369,121 @@ async def wearables_status(request: Request) -> dict:
             for name, info in LIVE_METRICS.items()
         },
     }
+
+
+# -- air quality (wearables/air.py) ---------------------------------------
+
+
+@router.get("/api/air/status")
+async def air_status(request: Request) -> dict:
+    """Whether the air layer is configured, and the newest reading if any.
+
+    A fetch is attempted when coordinates are set, so a cold dashboard gets a
+    value on its first poll; ``air.fetch_pm25`` caches per ``AIR_POLL_S``, so
+    polling this route every second still makes one upstream request an hour.
+    ``last_value`` is ``None`` whenever nothing was measured -- never a zero,
+    never a guess -- and the route cannot fail on a dead OpenAQ.
+    """
+
+    pipeline = _pipeline(request)
+    settings = pipeline.settings
+    configured = settings.air_lat is not None and settings.air_lon is not None
+    if configured:
+        await air.poll_pm25(pipeline.db, settings.air_lat, settings.air_lon,
+                            api_key=settings.air_openaq_key, poll_s=settings.air_poll_s)
+    last = air.last_reading()
+    return {
+        "configured": configured,
+        "lat": settings.air_lat,
+        "lon": settings.air_lon,
+        "last_value": None if last is None else last[0].value,
+        "last_t": None if last is None else last[1],
+        "source": None if last is None else f"{air.PM25_SOURCE} · {last[0].station}",
+    }
+
+
+# -- PVT (the 3-minute reaction-time test, screens.md §6) -----------------
+
+#: Rows ``POST /api/pvt`` writes, body field -> (seeded metric, unit).
+PVT_ROWS: dict[str, tuple[str, str]] = {
+    "rt_z": ("pvt_rt_z", "z"),
+    "lapses": ("pvt_lapses", "count"),
+    "rt_ms_median": ("pvt_rt_ms", "ms"),
+    "energy": ("pvt_check_energy", "1-5"),
+    "mood": ("pvt_check_mood", "1-5"),
+    "clarity": ("pvt_check_clarity", "1-5"),
+}
+#: Provenance of every PVT row: the wearer took the test, nothing inferred it.
+PVT_SOURCE = "pvt"
+#: Largest plausible |z| against a person's own baseline; beyond it the test
+#: misfired (a tap storm, a pocket press) and must not become a Mind reading.
+PVT_MAX_ABS_Z = 5.0
+#: Lapses in a 3-min PVT; 100 is already every stimulus missed.
+PVT_MAX_LAPSES = 100
+
+
+def _pvt_number(body: dict[str, Any], field: str, lo: float, hi: float,
+                *, required: bool = False) -> float | None:
+    """One numeric PVT field inside ``[lo, hi]``, or ``None`` when omitted.
+
+    Booleans are rejected explicitly: ``bool`` is an ``int`` in Python, so
+    ``{"lapses": true}`` would otherwise be filed as one lapse the wearer never
+    had. A wrong type or an out-of-range number is a 400, never a clamp -- a
+    clamped reading is an invented one.
+    """
+
+    if field not in body or body[field] is None:
+        if required:
+            raise HTTPException(400, f"{field} is required")
+        return None
+    value = body[field]
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise HTTPException(400, f"{field} must be a number")
+    number = float(value)
+    if not lo <= number <= hi:
+        raise HTTPException(400, f"{field} must be between {lo:g} and {hi:g}")
+    return number
+
+
+@router.post("/api/pvt")
+async def pvt(request: Request, body: dict[str, Any]) -> dict:
+    """File a 3-minute PVT result and its three-tap check.
+
+    ``{rt_z, lapses?, rt_ms_median?, energy?, mood?, clarity?, t?}`` -> the local
+    day it was filed against and that day's ``utility_today``. The rows land in
+    the same seeded table every other daily metric uses, so the next
+    ``/api/healthspan`` reads ``rt_z`` and the self-check exactly the way it
+    reads a WHOOP row -- there is no second path into the score.
+    """
+
+    pipeline = _pipeline(request)
+    values = {
+        "rt_z": _pvt_number(body, "rt_z", -PVT_MAX_ABS_Z, PVT_MAX_ABS_Z, required=True),
+        "lapses": _pvt_number(body, "lapses", 0, PVT_MAX_LAPSES),
+        "rt_ms_median": _pvt_number(body, "rt_ms_median", 0, 10_000),
+        "energy": _pvt_number(body, "energy", 1, 5),
+        "mood": _pvt_number(body, "mood", 1, 5),
+        "clarity": _pvt_number(body, "clarity", 1, 5),
+    }
+    stamped = _pvt_number(body, "t", 0, 4e9)
+    day = day_key(_now(pipeline) if stamped is None else stamped)
+    pipeline.db.insert_seeded_rows([
+        SeededRow(day=day, metric=metric, value=values[field], unit=unit, source=PVT_SOURCE)
+        for field, (metric, unit) in PVT_ROWS.items() if values[field] is not None
+    ])
+
+    seeded_rows = {row.metric: row.value for row in pipeline.db.list_seeded(day, day)}
+    check = {key: seeded_rows[metric] for metric, key in
+             (("pvt_check_energy", "energy"), ("pvt_check_mood", "mood"),
+              ("pvt_check_clarity", "clarity")) if metric in seeded_rows}
+    recovery = seeded_rows.get("recovery_score")
+    measured_pvt = {"rt_z": values["rt_z"]}
+    if values["lapses"] is not None:
+        measured_pvt["lapses"] = values["lapses"]
+    experience = bs.utility_today(
+        pvt=measured_pvt, check=check or None,
+        recovery_score=None if recovery is None else float(recovery))
+    return {"day": day, "experience": experience}
 
 
 @router.get("/api/events")

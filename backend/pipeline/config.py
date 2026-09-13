@@ -271,6 +271,17 @@ class Settings(BaseSettings):
     #: T0 VLM budget in seconds (SPEC §2.4). None = tick_interval_s - 0.1.
     vlm_budget_s: float | None = None
 
+    # -- air quality (pipeline/wearables/air.py). Unset lat/lon is the honest
+    # default: no coordinates means no air layer, never an invented number. ----
+    air_lat: float | None = None
+    air_lon: float | None = None
+    #: OpenAQ v3 key. The API also answers a few unauthenticated calls, so a
+    #: missing key is a degraded source, not a broken one.
+    air_openaq_key: str | None = None
+    #: Seconds one OpenAQ reading is reused for. PM2.5 is a daily exposure on an
+    #: hourly reference network; polling faster buys nothing and costs quota.
+    air_poll_s: int = 3600
+
     # -- healthspan profile (scoring/brian_score.Profile). Bedtime comes from the
     # day's seeded bed_time, else thresholds.DEFAULT_BEDTIME_H. -------------------
     profile_age: int = 20
