@@ -66,7 +66,7 @@ async def test_one_open_and_same_episode(db):
 @pytest.mark.asyncio
 async def test_limiter_guards_and_speech_last(db):
     timings = replace(Timings.demo(), ask_min_gap=30, ask_max_per_hour=1,
-                      speech_min_gap=20)
+                      speech_min_gap=20, ask_speech_gap=5)
     q, _ = manager(db, timings=timings)
     q.limiter.grant(10)
     _, reason = q.ask(decision_id="d", t=20, episode_id="e",

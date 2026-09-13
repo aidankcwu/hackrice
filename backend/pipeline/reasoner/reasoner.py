@@ -215,11 +215,47 @@ class Reasoner:
                 self._busy = False
                 self._slot.release()
 
-    def try_answer(self, question: PendingQuestion, transcript: str, t: float) -> bool:
-        """Claim the shared T1 slot and schedule an answer parse, never queueing."""
+    #: How long an answer parse may wait for the T1 slot before it is given up.
+    ANSWER_WAIT_S = 20.0
 
-        if not self._slot.acquire(blocking=False):
+    def try_answer(self, question: PendingQuestion, transcript: str, t: float) -> bool:
+        """Schedule an answer parse, waiting (bounded) for the shared T1 slot.
+
+        Escalations never queue (SPEC §3), but an answer is the wearer's reply
+        to a question the system chose to ask: dropping it because a wake-up
+        happened to be in flight wastes the whole exchange (seen live: "just
+        the water" finalised as "reasoner busy"). So when the slot is taken the
+        parse waits for it, up to ``ANSWER_WAIT_S``, and is finalised as a
+        failure only if the slot never frees.
+        """
+
+        if self._slot.acquire(blocking=False):
+            return self._start_answer(question, transcript, t)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            log.error("try_answer called with no running event loop")
             return False
+        loop.create_task(self._answer_when_free(question, transcript, t))
+        return True
+
+    async def _answer_when_free(
+        self, question: PendingQuestion, transcript: str, t: float
+    ) -> None:
+        deadline = time.monotonic() + self.ANSWER_WAIT_S
+        while time.monotonic() < deadline:
+            await asyncio.sleep(0.25)
+            if self._slot.acquire(blocking=False):
+                if self._start_answer(question, transcript, t):
+                    return
+                break
+        manager = self.questions
+        if manager is not None:
+            manager.finalize_failure(question, "reasoner busy", time.time(), "t1_busy")
+
+    def _start_answer(self, question: PendingQuestion, transcript: str, t: float) -> bool:
+        """The slot is held by the caller; start the parse or release it."""
+
         claimed = False
         try:
             self._busy = True

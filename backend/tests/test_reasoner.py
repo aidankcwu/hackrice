@@ -637,6 +637,7 @@ async def test_a_speak_action_can_be_present_with_spoke_false(
             )
 
     reasoner = build_reasoner(db, frame_store, settings, SpeakingClient())
+    reasoner.speech.min_gap_s = 20.0  # demo timings have no gap; this test is about the gap
     reasoner.speech._granted.append(T0 + WINDOW_N - 1)  # just spoke
 
     reasoner.try_escalate(make_escalation())
