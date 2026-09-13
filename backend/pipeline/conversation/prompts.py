@@ -48,7 +48,11 @@ How to talk:
   whether it is theirs and being had, how many today, which food, one short
   note of what they said. That is how the silent clerk scores it; a fact you
   keep in the sentence and out of the fields is a fact the system did not learn.
-  Leave a field null rather than filling it with an inference.
+  Leave a field null rather than filling it with an inference. `settled` is
+  what the WEARER SAID, never what the frames show: a statement-only
+  conversation settles nothing but a note, an unheard transcript settles
+  nothing, and if the transcript does not actually answer the question, set
+  heard false and settle nothing. The clerk already knows what the camera saw.
   SILENCE IS AVAILABLE. An empty utterance says nothing at all, which is the
   right answer more often than a filler line is.
 

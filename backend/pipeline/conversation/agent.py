@@ -534,7 +534,25 @@ class ConversationAgent:
             "",
         )
         asked = any(x.get("kind") == "question" for x in turns)
+        heard = any(x.get("role") == "wearer" and x.get("heard") for x in turns)
         topic = (conv["topic"] or "something")[:60].strip()
+
+        # Facts come from the wearer, never from the frames: with no heard
+        # answer, the model's `confirmed`/`count`/`food_type` are inferences
+        # (seen live: a statement-only conversation "settled" a Monster energy
+        # drink as confirmed, count 1; a transcript of "Bizarre" settled wine).
+        # Keep the note, drop the fields, and write nothing to `reported`.
+        if not heard and conv.get("settled"):
+            inferred = {k: v for k, v in conv["settled"].items()
+                        if k != "note" and v is not None}
+            if inferred:
+                log.info("conversation: %s dropped inferred settled fields %s (nothing heard)",
+                         conv["id"], inferred)
+            conv["settled"] = {"note": conv["settled"].get("note")}
+            try:
+                self.db.update_conversation(conv)
+            except Exception:  # pragma: no cover - defensive
+                log.exception("could not persist the settled reset")
 
         if asked:
             line = (f'asked about {topic} -> "{wearer}"' if wearer
@@ -550,7 +568,8 @@ class ConversationAgent:
         except Exception:  # pragma: no cover - defensive
             log.exception("could not write the conversation memory line")
 
-        self._apply_settled(conv, t, wearer)
+        if heard:
+            self._apply_settled(conv, t, wearer)
 
     def _apply_settled(self, conv: dict[str, Any], t: float, wearer: str) -> None:
         """Put ``settled`` through the ordinary answer machinery (§6).

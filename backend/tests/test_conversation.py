@@ -622,3 +622,41 @@ def test_stale_active_conversations_are_closed_at_startup(tmp_path):
     assert row["state"] == "closed" and row["close_reason"] == "stale"
     assert db.active_conversation() is None
     db.close()
+
+
+def test_settled_fields_need_a_heard_answer(tmp_path):
+    """Live defect: a statement-only conversation 'settled' a drink as confirmed.
+    Without a heard wearer turn, only the note survives and nothing is reported."""
+    import asyncio
+    from pipeline.actions.speech import SpeechLimiter
+    from pipeline.config import Settings
+    from pipeline.conversation.agent import ConversationAgent
+    from pipeline.conversation.client import FakeVoiceClient
+    from pipeline.conversation.schema import VoiceReply, VoiceSettled
+    from pipeline.db import Database
+    from pipeline.frames import InMemoryFrameStore
+
+    class Inferring(FakeVoiceClient):
+        model = "inferring"
+        async def complete(self, thread):
+            return VoiceReply(utterance="", kind="statement", done=True, heard=True,
+                              settled=VoiceSettled(confirmed=True, count=1.0,
+                                                   food_type="processed", note="Monster")), {"latency_ms": 1}
+
+    settings = Settings(db_path=tmp_path / "infer.db", demo_mode=True)
+    db = Database(settings.db_path).connect().init_schema()
+
+    async def run():
+        agent = ConversationAgent(db, InMemoryFrameStore(), Inferring(), SpeechLimiter(0, 100),
+                                  settings, questions=None)
+        out = agent.request("energy drink in hand", "statement")
+        assert out.startswith("handed_off:")
+        for _ in range(50):
+            if agent.current() is None:
+                break
+            await asyncio.sleep(0.02)
+        rows = agent.list(5)
+        assert rows and rows[0]["state"] == "closed"
+        assert rows[0]["settled"] == {"note": "Monster"}
+    asyncio.run(run())
+    db.close()
