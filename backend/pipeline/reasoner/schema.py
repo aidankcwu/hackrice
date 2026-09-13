@@ -70,7 +70,14 @@ class _ActionBase(BaseModel):
 
 
 class SpeakAction(_ActionBase):
-    """An utterance proposal. Code disposes (SPEC §4.6)."""
+    """A hand-off to the voice agent, leaning statement.
+
+    Was an utterance proposal (SPEC §4.6); since
+    docs/CONVERSATION_DESIGN.md §1 the ``text`` is a topic and a reason in
+    plain words and the voice agent writes the sentence. The field keeps its
+    name because the action set is a closed schema the model is trained on
+    within a single prompt, and renaming it would cost more than it explains.
+    """
 
     type: Literal["speak"] = "speak"
     text: str
@@ -102,11 +109,12 @@ class WatchAction(_ActionBase):
 
 
 class AskAction(_ActionBase):
-    """A question for the wearer, spoken and then listened for (ASK_DESIGN §5).
+    """A hand-off to the voice agent, leaning question (ASK_DESIGN §5).
 
-    The model proposes; :class:`~pipeline.actions.questions.QuestionManager`
-    disposes, exactly as it does for ``speak``. ``fills`` names the primary
-    field the answer is expected to set.
+    The clerk proposes the topic; the voice agent writes the question and
+    :class:`~pipeline.actions.questions.QuestionManager` delivers it. ``fills``
+    names the primary field the answer is expected to set, which is still how
+    the answer reaches ``reported``.
     """
 
     type: Literal["ask"] = "ask"
@@ -177,7 +185,12 @@ def _obj(properties: dict[str, Any]) -> dict[str, Any]:
 _SPEAK = _obj(
     {
         "type": {"type": "string", "enum": ["speak"]},
-        "text": {"type": "string", "description": "What to say. One sentence."},
+        "text": {
+            "type": "string",
+            "description": "The TOPIC and the REASON in plain words, for the "
+            "voice agent that owns the mouth -- not the sentence to say. "
+            '"picked up a wine glass, ownership unknown".',
+        },
         "urgency": {"type": "string", "enum": ["low", "normal", "high"]},
     }
 )
@@ -225,7 +238,8 @@ _ASK = _obj(
         "type": {"type": "string", "enum": ["ask"]},
         "text": {
             "type": "string",
-            "description": "The question, one sentence, read aloud to the wearer.",
+            "description": "The TOPIC and the REASON in plain words, for the "
+            "voice agent -- not the question itself. It writes the wording.",
         },
         "answer_kind": {
             "type": "string",

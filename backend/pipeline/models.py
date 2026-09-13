@@ -390,6 +390,12 @@ class PendingQuestion(BaseModel):
     suppressed_reason: str | None = None
     #: Whether the phone heard anything at all in the answer window.
     heard: bool | None = None
+    #: The conversation that asked this, when the voice agent owns the
+    #: exchange (docs/CONVERSATION_DESIGN.md §5). ``None`` for the clerk's own
+    #: questions and for anything asked by hand through ``/api/ask``. When it
+    #: is set, the answer is routed to the voice agent instead of the answer
+    #: parser -- the agent is holding the thread and will settle it itself.
+    conversation_id: str | None = None
 
 
 class Score(BaseModel):

@@ -274,30 +274,45 @@ async def test_handler_drops_speak_for_ask_and_while_listening(db):
 
 @pytest.mark.asyncio
 async def test_sim_pipeline_ask_answer_end_to_end(tmp_path):
+    """The whole loop, now through the voice agent (CONVERSATION_DESIGN §1, §5).
+
+    The clerk no longer asks: its `ask` action is a hand-off, and the decision
+    row records ``handed_off:<conversation_id>`` instead of ``sent``. The
+    question on the wire is the *agent's*, so it is found through
+    ``open_question()`` rather than off the decision, and the answer still
+    lands as an ``answer:<id>`` decision and an ``answered`` question row --
+    that is the write-back path §6 deliberately reuses.
+    """
+
     settings = Settings(db_path=tmp_path / "e2e.db")
     settings.__dict__["timings"] = replace(settings.timings, ask_expire_s=10000)
     pipeline = build_pipeline(settings,
                               source="sim", reasoner_mode="fake", speed=200)
     await pipeline.start()
     try:
+        row = None
         for _ in range(2000):
             decisions = pipeline.db.list_decisions(limit=100)
             asked = next((d for d in decisions if any(
-                a.get("type") == "ask" and a.get("outcome") == "sent"
+                a.get("type") == "ask"
+                and str(a.get("outcome", "")).startswith("handed_off:")
                 for a in d.actions)), None)
-            if asked is not None:
+            row = pipeline.db.open_question()
+            if asked is not None and row is not None:
                 break
             await asyncio.sleep(.005)
-        assert asked is not None
-        action = next(a for a in asked.actions if a.get("outcome") == "sent")
-        pipeline.questions.on_answer(action["question_id"], "yeah two", True,
+        assert asked is not None and row is not None
+        action = next(a for a in asked.actions
+                      if str(a.get("outcome", "")).startswith("handed_off:"))
+        assert row.conversation_id == action["outcome"].split(":", 1)[1]
+        pipeline.questions.on_answer(row.id, "yeah two", True,
                                      pipeline.clock.wall_to_tick(__import__("time").time()))
-        for _ in range(100):
-            if any(d.trigger == f"answer:{action['question_id']}"
+        for _ in range(200):
+            if any(d.trigger == f"answer:{row.id}"
                    for d in pipeline.db.list_decisions(limit=100)):
                 break
             await asyncio.sleep(.01)
-        assert any(d.trigger == f"answer:{action['question_id']}"
+        assert any(d.trigger == f"answer:{row.id}"
                    for d in pipeline.db.list_decisions(limit=100))
         assert pipeline.questions.stats()["answered"] >= 1
     finally:

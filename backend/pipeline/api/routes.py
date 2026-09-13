@@ -677,6 +677,89 @@ async def answer(request: Request, body: dict[str, Any]) -> Any:
     return {"question_id": question_id, "accepted": True}
 
 
+# -- conversations (docs/CONVERSATION_DESIGN.md §7) -----------------------
+
+
+#: Served when the pipeline has no voice agent. Like the question manager it is
+#: optional wiring, so "not wired" is a service state and not a bad request.
+def _no_conversation() -> JSONResponse:
+    return JSONResponse(status_code=503,
+                        content={"error": "conversation unavailable"})
+
+
+def _conversation(pipeline):
+    return getattr(pipeline, "conversation", None)
+
+
+@router.get("/api/conversations")
+async def conversations(request: Request, limit: int = Query(20, ge=1)) -> Any:
+    """Every conversation, newest first, threads included."""
+
+    agent = _conversation(_pipeline(request))
+    if agent is None:
+        return _no_conversation()
+    return agent.list(limit)
+
+
+@router.get("/api/conversation/current")
+async def current_conversation(request: Request) -> Any:
+    """The running conversation, or ``null``.
+
+    Declared before ``/api/conversations/{id}`` would be reachable by it -- the
+    paths differ in their prefix, but keeping the literal route first is the
+    habit that stops a future rename from swallowing it.
+    """
+
+    agent = _conversation(_pipeline(request))
+    if agent is None:
+        return _no_conversation()
+    return agent.current()
+
+
+@router.post("/api/conversation/open")
+async def open_conversation(request: Request, body: dict[str, Any]) -> Any:
+    """Demo: hand the voice agent a topic by hand.
+
+    409 when one is already running, because "say something about the cereal"
+    arriving mid-conversation is not a queued request -- §1 drops it, and an
+    operator needs to see that rather than wonder why nothing was said.
+    """
+
+    raw = body.get("topic", "")
+    if not isinstance(raw, str):
+        raise HTTPException(400, "topic must be a string")
+    topic = raw.strip()
+    if not topic:
+        raise HTTPException(400, "topic required")
+    mode = body.get("mode", "statement")
+    if mode not in ("statement", "question"):
+        raise HTTPException(400, "mode must be 'statement' or 'question'")
+    pipeline = _pipeline(request)
+    agent = _conversation(pipeline)
+    if agent is None:
+        return _no_conversation()
+    outcome = agent.request(topic, mode, decision_id="manual", reason="manual")
+    if outcome == "conversation_active":
+        return JSONResponse(status_code=409,
+                            content={"reason": "conversation_active"})
+    conversation_id = (outcome.split(":", 1)[1]
+                       if outcome.startswith("handed_off:") else None)
+    return {"conversation_id": conversation_id, "outcome": outcome}
+
+
+@router.get("/api/conversations/{conversation_id}")
+async def conversation(request: Request, conversation_id: str) -> Any:
+    """One conversation row. 404 when there is no such id."""
+
+    agent = _conversation(_pipeline(request))
+    if agent is None:
+        return _no_conversation()
+    row = agent.get(conversation_id)
+    if row is None:
+        raise HTTPException(404, "no such conversation")
+    return row
+
+
 @router.post("/api/ask")
 async def ask(request: Request, body: dict[str, Any]) -> Any:
     """Demo/debug: ask the wearer something right now.

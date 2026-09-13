@@ -120,6 +120,17 @@ class Timings:
     #: Follow-up questions allowed per root question (§8.5).
     ask_followup_max: int
 
+    # The voice agent (docs/CONVERSATION_DESIGN.md §2) --------------------
+    #: Questions one conversation may ask before a question is coerced to a
+    #: statement (§4). Two is the whole budget: the wearer answers twice.
+    conversation_max_questions: int
+    #: Hard ceiling on a conversation's life, from open to close. Whatever
+    #: state it is in when this runs out, it closes (§2).
+    conversation_lifetime_s: float
+    #: Quiet window after a conversation closes. Hand-offs arriving inside it
+    #: are dropped with ``conversation_cooldown`` (§1).
+    conversation_cooldown_s: float
+
     # T1 reasoner (SPEC §5.4: drop on contention, never queue) -----------
     t1_max_concurrent: int
 
@@ -184,6 +195,9 @@ class Timings:
             ask_listen_s=8.0,
             ask_expire_s=25.0,
             ask_followup_max=1,
+            conversation_max_questions=2,
+            conversation_lifetime_s=90.0,
+            conversation_cooldown_s=60.0,
             t1_max_concurrent=1,
             watch_default_after_s=900.0,
             tick_interval_s=tick_interval_s,
@@ -216,6 +230,9 @@ class Timings:
             ask_listen_s=8.0,
             ask_expire_s=25.0,
             ask_followup_max=1,
+            conversation_max_questions=2,
+            conversation_lifetime_s=60.0,
+            conversation_cooldown_s=10.0,
             t1_max_concurrent=1,
             watch_default_after_s=60.0,
             tick_interval_s=tick_interval_s,

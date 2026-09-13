@@ -81,13 +81,31 @@ class QuestionManager:
         self.now_fn = now_fn
         self.limiter = AskLimiter(timings.ask_min_gap, timings.ask_max_per_hour)
         self.reasoner: Reasoner | None = None
+        #: The voice agent, when one is wired. A question carrying its
+        #: conversation id belongs to a live exchange: the answer goes to the
+        #: agent holding the thread, not to the answer parser
+        #: (docs/CONVERSATION_DESIGN.md §5).
+        self.conversation: Any | None = None
         self._expiry_task: asyncio.Task[None] | None = None
         self._decision_for: dict[str, str] = {}
 
     def ask(
         self, *, decision_id: str | None, t: float, episode_id: str | None,
         action: AskAction, followup_of: PendingQuestion | None = None,
+        conversation_id: str | None = None,
     ) -> tuple[PendingQuestion | None, str | None]:
+        """Admit one question, or say which guard refused it.
+
+        ``conversation_id`` marks a question the voice agent is asking inside a
+        live conversation (CONVERSATION_DESIGN §5). Three of the guards are
+        skipped for it, because the agent already does their job and doing it
+        twice would strand a conversation mid-thread: ``same_episode`` (the
+        agent is *deliberately* staying on one episode), the hourly/min-gap
+        limiter, and the speech gap (the agent serialises its own mouth). What
+        still applies is everything about whether the question can be delivered
+        at all -- ``ask_unsupported``, ``no_transport``, ``one_open``.
+        """
+
         try:
             reason: str | None = None
             if (followup_of is not None and (
@@ -103,6 +121,10 @@ class QuestionManager:
                 reason = "no_transport"
             elif self.db.open_question() is not None:
                 reason = "one_open"
+            elif conversation_id is not None:
+                # The mouth is still being used, so the utterance is stamped:
+                # a later plain speak waits its turn behind this question.
+                self.speech.grant(t)
             elif (followup_of is None and episode_id is not None and any(
                 q.followup_of is None and q.status != "suppressed"
                 for q in self.db.questions_for_episode(episode_id)
@@ -129,6 +151,7 @@ class QuestionManager:
                 fills=action.fills, status="suppressed" if reason else "open",
                 followup_of=followup_of.id if followup_of else None,
                 suppressed_reason=reason,
+                conversation_id=conversation_id,
             )
             self.db.insert_question(row)
             if decision_id is not None:
@@ -186,6 +209,11 @@ class QuestionManager:
                 self._report_send_failure(current)
 
     def _report_send_failure(self, row: PendingQuestion) -> None:
+        agent = self.conversation
+        if agent is not None and agent.is_active(row.conversation_id):
+            # The question never left the Mac, so no answer is ever coming:
+            # tell the agent now rather than making it wait out its lifetime.
+            agent.on_no_answer(row, self.now_fn(), reason="send_failed")
         decision_id = self._decision_for.get(row.id)
         if decision_id is None:
             return
@@ -207,6 +235,13 @@ class QuestionManager:
                 log.info("duplicate or late answer ignored: %s", question_id)
                 return
             question = self.db.get_question(question_id) or question
+            agent = self.conversation
+            if agent is not None and agent.is_active(question.conversation_id):
+                # The voice agent is holding this thread (§5): it reads the
+                # transcript itself and decides the next line. The answer
+                # parser is bypassed on purpose -- it was not in the room.
+                agent.on_answer(question, text, heard, t)
+                return
             if not heard or not text.strip():
                 question.status = "expired"
                 question.parsed = {"understood": False, "note": "nothing heard"}
@@ -233,14 +268,26 @@ class QuestionManager:
             model=getattr(self.parser, "model", ""),
         ))
 
-    def apply_parse(self, question: PendingQuestion, parse: AnswerParse, t: float) -> None:
+    def apply_parse(
+        self, question: PendingQuestion, parse: AnswerParse, t: float,
+        *, annotate: bool = True,
+    ) -> None:
+        """Write what an answer settled, and follow up if it left a gap.
+
+        ``annotate=False`` is for the voice agent, which writes its own single
+        memory line for the whole conversation (CONVERSATION_DESIGN §6); a
+        second ``wearer: ...`` line for the same exchange would say the same
+        thing twice in every later system prompt.
+        """
+
         current = self.db.get_question(question.id) or question
         current.status = "answered"
         current.parsed = parse.model_dump()
         self.db.update_question(current)
         note = parse.note
         line = f"wearer: {note}"
-        self._annotate(current, line, t)
+        if annotate:
+            self._annotate(current, line, t)
         decision = Decision(
             id=f"d_answer_{question.id[2:]}", t=t,
             trigger=f"answer:{question.id}", trigger_tick_id="",
@@ -282,8 +329,15 @@ class QuestionManager:
             count = self.db.expire_questions(now)
             for q in due:
                 current = self.db.get_question(q.id)
-                if current is not None and current.status == "expired":
-                    self._annotate(current, f"asked: {q.question} — no answer", now)
+                if current is None or current.status != "expired":
+                    continue
+                agent = self.conversation
+                if agent is not None and agent.is_active(current.conversation_id):
+                    # A conversation question that timed out is the agent's
+                    # cue to say a closing line, not a memory line of its own.
+                    agent.on_no_answer(current, now)
+                    continue
+                self._annotate(current, f"asked: {q.question} — no answer", now)
             return count
         except Exception:
             log.exception("question expiry failed")

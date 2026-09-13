@@ -14,6 +14,8 @@ from ..actions.speech import SpeechLimiter, default_speak_fn, set_speak_fn, spok
 from ..actions.questions import QuestionManager
 from ..bus import TickBus
 from ..config import Settings
+from ..conversation.agent import ConversationAgent
+from ..conversation.client import make_voice_client
 from ..db import Database, day_key
 from ..episodes.builder import EpisodeBuilder
 from ..frames import FrameStore, InMemoryFrameStore
@@ -55,6 +57,7 @@ class Pipeline:
                  bus: TickBus, scorer: Scorer, speech: SpeechLimiter,
                  reasoner: Reasoner, episodes: EpisodeBuilder, gate: TriggerGate,
                  questions: QuestionManager, source: SimSource | None,
+                 conversation: ConversationAgent | None = None,
                  capture=None, clock: Clock | None = None) -> None:
         self.settings = settings
         self.source_name = source_name
@@ -69,6 +72,8 @@ class Pipeline:
         self.episodes = episodes
         self.gate = gate
         self.questions = questions
+        #: The voice agent. The clerk hands topics to it; it owns the mouth.
+        self.conversation = conversation
         self.source = source
         self.capture = capture
         # Live capture uses wall time unchanged; simulation scales its own clock.
@@ -159,6 +164,8 @@ class Pipeline:
             return
         self._stopping = True
         await self.questions.stop()
+        if self.conversation is not None:
+            await self.conversation.stop()
         self._score_event.set()
         if self.capture is not None:
             await self.capture.stop()
@@ -205,6 +212,8 @@ class Pipeline:
             "tick_interval_s": self.settings.tick_interval_s,
             "gate": self.gate.stats(),
             "questions": self.questions.stats(),
+            "conversation": (None if self.conversation is None
+                             else self.conversation.stats()),
             "speech_spoken": len(spoken),
             "health": self._health(),
             "session": session_status,
@@ -353,6 +362,16 @@ def build_pipeline(settings: Settings, *,
     reasoner = Reasoner(db, frame_store, client, speech, settings,
                         seven_day_summary=lambda: seven_day_summary(db, end_day),
                         parser=parser, questions=questions)
+    # The third agent (docs/CONVERSATION_DESIGN.md). Built after the reasoner
+    # because it borrows `_extend_episode_label`, and attached back onto it so
+    # `speak`/`ask` become hand-offs rather than utterances.
+    conversation = ConversationAgent(
+        db, frame_store, make_voice_client(settings, reasoner_mode), speech,
+        settings, questions=questions, reasoner=reasoner,
+        now_fn=lambda: clock.wall_to_tick(time.time()),
+    )
+    reasoner.conversation = conversation
+    questions.conversation = conversation
     questions.reasoner = reasoner
     if capture is not None:
         setattr(capture.link, "on_answer", questions.on_answer)
@@ -386,5 +405,5 @@ def build_pipeline(settings: Settings, *,
                     reasoner_mode=reasoner_mode, speed=speed, db=db,
                     frame_store=frame_store, bus=bus, scorer=scorer, speech=speech,
                     reasoner=reasoner, episodes=episodes, gate=gate,
-                    questions=questions, source=sim_source,
-                    capture=capture, clock=clock)
+                    questions=questions, conversation=conversation,
+                    source=sim_source, capture=capture, clock=clock)

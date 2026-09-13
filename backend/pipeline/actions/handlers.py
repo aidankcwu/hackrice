@@ -47,17 +47,31 @@ class ActionHandler:
     def __init__(
         self, db: Database, speech: SpeechLimiter, timings: Timings,
         questions: "QuestionManager | None" = None,
+        conversation: Any | None = None,
     ) -> None:
         self.db = db
         self.speech = speech
         self.timings = timings
         self.questions = questions
+        #: The voice agent. When one is wired, ``speak`` and ``ask`` stop being
+        #: utterances and become hand-offs: the clerk names a topic and a
+        #: reason, and the agent writes the words
+        #: (docs/CONVERSATION_DESIGN.md §1). Without one -- a bare handler in a
+        #: unit test, a pipeline built before the agent existed -- the old
+        #: direct paths still apply, so nothing is silently muted.
+        self.conversation = conversation
 
     def apply(
         self, decision_id: str, t: float, resp: "T1Response", *,
-        episode_id: str | None = None,
+        episode_id: str | None = None, esc: Any | None = None,
     ) -> dict[str, Any]:
-        """Run every action. Returns a small summary for the decision row."""
+        """Run every action. Returns a small summary for the decision row.
+
+        ``result["outcomes"]`` maps an action's index in ``resp.actions`` --
+        which is also its index in ``decision.actions`` -- to the keys the
+        reasoner should merge onto that action's row (``outcome``, and
+        ``question_id`` for a question that actually went out).
+        """
 
         result: dict[str, Any] = {
             "spoke": False,
@@ -68,9 +82,10 @@ class ActionHandler:
 
         has_ask = any(action.type == "ask" for action in resp.actions)
 
-        for action in resp.actions:
+        for index, action in enumerate(resp.actions):
             try:
-                self._one(decision_id, t, action, result, episode_id, has_ask)
+                self._one(decision_id, t, action, result, episode_id, has_ask,
+                          index=index, esc=esc)
             except Exception:
                 log.exception(
                     "action %s failed for decision %s", action.type, decision_id
@@ -82,7 +97,8 @@ class ActionHandler:
 
     def _one(
         self, decision_id: str, t: float, action: Any, result: dict[str, Any],
-        episode_id: str | None, has_ask: bool,
+        episode_id: str | None, has_ask: bool, *, index: int = 0,
+        esc: Any | None = None,
     ) -> None:
         kind = action.type
 
@@ -126,6 +142,20 @@ class ActionHandler:
         elif kind == "speak":
             if has_ask:
                 log.info("speak_dropped_for_ask (decision %s)", decision_id)
+            elif self.conversation is not None:
+                # Not an utterance any more: a topic and a reason handed to the
+                # agent that owns the mouth (§1). It writes the words, and it
+                # may decide the right shape is a question.
+                outcome = self.conversation.request(
+                    action.text, "statement", decision_id=decision_id,
+                    episode_id=episode_id, esc=esc,
+                )
+                result.setdefault("outcomes", {})[index] = {"outcome": outcome}
+                if outcome.startswith("handed_off"):
+                    result["spoke"] = True
+                else:
+                    log.info("speak hand-off dropped (%s) for decision %s",
+                             outcome, decision_id)
             elif self.questions is not None and self.questions.listening():
                 log.info("speak_dropped_listening (decision %s)", decision_id)
             elif self.speech.allow(t):
@@ -138,6 +168,18 @@ class ActionHandler:
                 )
 
         elif kind == "ask":
+            if self.conversation is not None:
+                outcome = self.conversation.request(
+                    action.text, "question", decision_id=decision_id,
+                    episode_id=episode_id, esc=esc, reason=action.reason,
+                )
+                result.setdefault("outcomes", {})[index] = {"outcome": outcome}
+                if outcome.startswith("handed_off"):
+                    result["spoke"] = True
+                else:
+                    log.info("ask hand-off dropped (%s) for decision %s",
+                             outcome, decision_id)
+                return
             if self.questions is None:
                 log.info("ask skipped: no question manager (decision %s)", decision_id)
                 return
@@ -148,6 +190,9 @@ class ActionHandler:
             if row is not None:
                 payload["question_id"] = row.id
             payload["outcome"] = "sent" if reason is None else f"suppressed:{reason}"
+            result.setdefault("outcomes", {})[index] = {
+                k: payload[k] for k in ("question_id", "outcome") if k in payload
+            }
             result.setdefault("asks", []).append(payload)
 
         elif kind == "remember":

@@ -128,10 +128,35 @@ CREATE TABLE IF NOT EXISTS pending_questions (
     followup_of       TEXT,
     sent_t            REAL,
     suppressed_reason TEXT,
-    heard             INTEGER
+    heard             INTEGER,
+    -- The conversation that asked this, when the voice agent owns the
+    -- exchange (CONVERSATION_DESIGN §5). NULL for the clerk's own questions.
+    -- Added after the table shipped: init_schema also applies it to existing
+    -- files via ALTER TABLE.
+    conversation_id   TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_questions_status
     ON pending_questions(status, expires_t);
+
+-- One exchange between the voice agent and the wearer
+-- (docs/CONVERSATION_DESIGN.md §7). At most one row is `active` at a time;
+-- `turns` is the thread as it was spoken, `settled` what it established.
+CREATE TABLE IF NOT EXISTS conversations (
+    id           TEXT PRIMARY KEY,
+    opened_t     REAL NOT NULL,
+    closed_t     REAL,
+    reason       TEXT NOT NULL DEFAULT '',
+    topic        TEXT NOT NULL DEFAULT '',
+    decision_id  TEXT,
+    episode_id   TEXT,
+    state        TEXT NOT NULL DEFAULT 'active',
+    turns        TEXT NOT NULL DEFAULT '[]',
+    settled      TEXT NOT NULL DEFAULT '{}',
+    close_reason TEXT,
+    day          TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ix_conversations_day ON conversations(day, opened_t);
+CREATE INDEX IF NOT EXISTS ix_conversations_state ON conversations(state);
 
 CREATE TABLE IF NOT EXISTS scores (
     metric     TEXT NOT NULL,
@@ -281,6 +306,15 @@ class Database:
         columns = {row["name"] for row in self.conn.execute("PRAGMA table_info(episodes)")}
         if "label" not in columns:
             self.conn.execute("ALTER TABLE episodes ADD COLUMN label TEXT")
+
+        columns = {
+            row["name"]
+            for row in self.conn.execute("PRAGMA table_info(pending_questions)")
+        }
+        if "conversation_id" not in columns:
+            self.conn.execute(
+                "ALTER TABLE pending_questions ADD COLUMN conversation_id TEXT"
+            )
 
     def close(self) -> None:
         with self._lock:
@@ -944,7 +978,7 @@ class Database:
     _QUESTION_COLUMNS = (
         "id, created_t, expires_t, decision_id, episode_id, question,"
         " answer_kind, fills, status, answer_text, answer_t, parsed,"
-        " followup_of, sent_t, suppressed_reason, heard"
+        " followup_of, sent_t, suppressed_reason, heard, conversation_id"
     )
 
     @staticmethod
@@ -966,6 +1000,7 @@ class Database:
             q.sent_t,
             q.suppressed_reason,
             None if q.heard is None else (1 if q.heard else 0),
+            q.conversation_id,
         )
 
     @staticmethod
@@ -987,6 +1022,9 @@ class Database:
             sent_t=r["sent_t"],
             suppressed_reason=r["suppressed_reason"],
             heard=None if r["heard"] is None else bool(r["heard"]),
+            conversation_id=(
+                r["conversation_id"] if "conversation_id" in r.keys() else None
+            ),
         )
 
     def _write_question(self, question: PendingQuestion) -> None:
@@ -1118,6 +1156,131 @@ class Database:
             )
             self.conn.commit()
         return cur.rowcount == 1
+
+    # -- conversations (the voice agent) ---------------------------------
+    #
+    # One row per exchange (CONVERSATION_DESIGN §7). The agent owns the
+    # in-memory thread; this is the durable copy the dashboard reads and the
+    # next wake-up's "already settled today" block is built from.
+
+    _CONVERSATION_COLUMNS = (
+        "id, opened_t, closed_t, reason, topic, decision_id, episode_id,"
+        " state, turns, settled, close_reason, day"
+    )
+
+    @staticmethod
+    def _conversation_row(row: dict[str, Any]) -> tuple[Any, ...]:
+        return (
+            str(row["id"]),
+            float(row["opened_t"]),
+            row.get("closed_t"),
+            str(row.get("reason") or ""),
+            str(row.get("topic") or ""),
+            row.get("decision_id"),
+            row.get("episode_id"),
+            str(row.get("state") or "active"),
+            _json(row.get("turns") or []),
+            _json(row.get("settled") or {}),
+            row.get("close_reason"),
+            day_key(float(row["opened_t"])),
+        )
+
+    @staticmethod
+    def _conversation_from_row(r: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "id": r["id"],
+            "opened_t": r["opened_t"],
+            "closed_t": r["closed_t"],
+            "reason": r["reason"],
+            "topic": r["topic"],
+            "decision_id": r["decision_id"],
+            "episode_id": r["episode_id"],
+            "state": r["state"],
+            "turns": json.loads(r["turns"] or "[]"),
+            "settled": json.loads(r["settled"] or "{}"),
+            "close_reason": r["close_reason"],
+        }
+
+    def _write_conversation(self, row: dict[str, Any]) -> None:
+        values = self._conversation_row(row)
+        placeholders = ",".join("?" * len(values))
+        with self._lock:
+            self.conn.execute(
+                f"INSERT OR REPLACE INTO conversations"
+                f" ({self._CONVERSATION_COLUMNS}) VALUES ({placeholders})",
+                values,
+            )
+            self.conn.commit()
+
+    def insert_conversation(self, row: dict[str, Any]) -> None:
+        self._write_conversation(row)
+
+    def update_conversation(self, row: dict[str, Any]) -> None:
+        """Replace the whole row. The agent owns the read-modify-write."""
+
+        self._write_conversation(row)
+
+    def get_conversation(self, conversation_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            r = self.conn.execute(
+                "SELECT * FROM conversations WHERE id = ?", (conversation_id,)
+            ).fetchone()
+        return None if r is None else self._conversation_from_row(r)
+
+    def list_conversations(self, limit: int = 20) -> list[dict[str, Any]]:
+        """Newest first, turns included (CONVERSATION_DESIGN §7)."""
+
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT * FROM conversations"
+                " ORDER BY opened_t DESC, rowid DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [self._conversation_from_row(r) for r in rows]
+
+    def active_conversation(self) -> dict[str, Any] | None:
+        with self._lock:
+            r = self.conn.execute(
+                "SELECT * FROM conversations WHERE state = 'active'"
+                " ORDER BY opened_t DESC, rowid DESC LIMIT 1"
+            ).fetchone()
+        return None if r is None else self._conversation_from_row(r)
+
+    def conversations_today_lines(self, day: str | None = None) -> list[str]:
+        """One line per conversation closed today (CONVERSATION_DESIGN §3).
+
+        ``22:41 asked about the cereal -> "yes, mine"``. The voice agent is
+        shown these so it does not reopen a topic the wearer already settled;
+        they are deliberately one line each, because the whole point is that
+        the thread itself was discarded when the conversation closed.
+        """
+
+        import time as _time
+
+        key = day if day is not None else day_key(_time.time())
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT * FROM conversations WHERE day = ? AND state = 'closed'"
+                " ORDER BY opened_t ASC",
+                (key,),
+            ).fetchall()
+        lines: list[str] = []
+        for r in rows:
+            turns = json.loads(r["turns"] or "[]")
+            wearer = next(
+                (str(turn.get("text") or "").strip() for turn in reversed(turns)
+                 if turn.get("role") == "wearer" and str(turn.get("text") or "").strip()),
+                "",
+            )
+            asked = any(turn.get("kind") == "question" for turn in turns)
+            stamp = datetime.fromtimestamp(r["opened_t"]).astimezone().strftime("%H:%M")
+            topic = str(r["topic"] or "").strip() or "something"
+            head = f"{stamp} {'asked about' if asked else 'said something about'} {topic}"
+            if wearer:
+                lines.append(f'{head} -> "{wearer}"')
+            else:
+                lines.append(f"{head} -> {r['close_reason'] or 'nothing heard'}")
+        return lines
 
     # -- the growing persona (profile, profile_lines) ---------------------
     #

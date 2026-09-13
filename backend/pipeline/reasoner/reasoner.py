@@ -98,6 +98,7 @@ class Reasoner:
         t1_deadline_s: float = 15.0,
         parser: AnswerParser | None = None,
         questions: Any | None = None,
+        conversation: Any | None = None,
     ) -> None:
         # Cadence-aware AI freshness for the envelope (SPEC §12.2, S9).
         try:
@@ -116,8 +117,11 @@ class Reasoner:
         self.parser = parser
         self._questions = questions
 
+        self._conversation = conversation
+
         self.evidence = EvidenceStore(db)
-        self.handler = ActionHandler(db, speech, settings.timings, questions)
+        self.handler = ActionHandler(db, speech, settings.timings, questions,
+                                     conversation)
 
         #: The single T1 slot. A plain flag under a non-blocking lock -- an
         #: awaited semaphore would queue, and queueing is the one thing §5.2
@@ -169,6 +173,15 @@ class Reasoner:
     def questions(self, value: Any | None) -> None:
         self._questions = value
         self.handler.questions = value
+
+    @property
+    def conversation(self) -> Any | None:
+        return self._conversation
+
+    @conversation.setter
+    def conversation(self, value: Any | None) -> None:
+        self._conversation = value
+        self.handler.conversation = value
 
     def try_escalate(self, esc: Escalation) -> bool:
         """Claim the T1 slot for ``esc``. Synchronous, non-blocking.
@@ -485,22 +498,25 @@ class Reasoner:
                 return
 
             outcome = self.handler.apply(
-                decision_id, esc.t, norm, episode_id=esc.episode_id
+                decision_id, esc.t, norm, episode_id=esc.episode_id, esc=esc
             )
+
+            # `speak` and `ask` both record what became of them on their own
+            # action row (docs/CONVERSATION_DESIGN.md §7): `handed_off:<id>`,
+            # `conversation_active`, `conversation_cooldown`, `no_transport`,
+            # or -- with no voice agent wired -- the older `sent` /
+            # `suppressed:<guard>` shape. `decision.actions` was built from
+            # `norm.actions` in order, so the handler's index is this index.
+            outcomes = outcome.get("outcomes") or {}
+            for index, patch in outcomes.items():
+                if 0 <= index < len(decision.actions):
+                    decision.actions[index].update(patch)
 
             if outcome.get("spoke"):
                 decision.spoke = True
                 self.spoke_count += 1
-                self.db.insert_decision(decision)
 
-            if outcome.get("asks"):
-                asks = iter(outcome["asks"])
-                for action in decision.actions:
-                    if action.get("type") == "ask":
-                        result = next(asks, None)
-                        if result is not None:
-                            action.update({k: result[k] for k in ("question_id", "outcome")
-                                           if k in result})
+            if outcomes or outcome.get("spoke"):
                 self.db.insert_decision(decision)
 
             self._remember(decision_id, esc.t, norm)

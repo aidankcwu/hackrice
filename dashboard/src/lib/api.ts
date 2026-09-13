@@ -66,7 +66,11 @@ export const api = {
       return {id:null, reason:body.reason ?? "conversation_active"};
     }
     if (!response.ok) throw new Error(`/api/conversation/open -> ${response.status}`);
-    return await response.json() as OpenConversationResult;
+    // The backend answers {conversation_id, outcome}: outcome is `handed_off:<id>`
+    // on success, else the reason it did not open (cooldown, no transport).
+    const body = await response.json() as {conversation_id?: string | null; outcome?: string};
+    const id = body.conversation_id ?? null;
+    return id ? {id} : {id:null, reason:body.outcome ?? "not_opened"};
   },
   // -- the persona that grows (docs/API.md "The persona that grows"). Both
   // polls fall back to mock data like every other read, and `PersonaPanel`
