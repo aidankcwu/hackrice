@@ -1077,6 +1077,7 @@ class Database:
 
     #: A learned line is one fact, not a paragraph (mirrors
     #: ``reasoner.schema.REMEMBER_MAX_CHARS``).
+    PROFILE_ACTIVE_MAX = 200
     PROFILE_LINE_MAX_CHARS = 160
 
     def get_persona(self) -> str | None:
@@ -1144,6 +1145,13 @@ class Database:
                 "INSERT OR REPLACE INTO profile_lines"
                 " (id, t, line, source_decision_id, active) VALUES (?,?,?,?,1)",
                 (row_id, t, text, decision_id),
+            )
+            # Bounded: only the newest PROFILE_ACTIVE_MAX stay active, so a
+            # noisy model cannot grow the table (or this dedupe scan) forever.
+            self.conn.execute(
+                "UPDATE profile_lines SET active = 0 WHERE active = 1 AND id NOT IN"
+                " (SELECT id FROM profile_lines WHERE active = 1 ORDER BY t DESC, rowid DESC LIMIT ?)",
+                (self.PROFILE_ACTIVE_MAX,),
             )
             self.conn.commit()
         return row_id

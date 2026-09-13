@@ -227,6 +227,10 @@ def test_change_trigger_cooldown_and_per_minute_cap() -> None:
     trigger = change_trigger(Timings.demo())
     assert trigger.predicate([tick(0, scene="home"), tick(1, scene="street"), tick(2, scene="street")])
     trigger.enrich([tick(0, scene="home"), tick(1, scene="street"), tick(2, scene="street")])  # type: ignore[misc]
+    # Rendering the reason does not spend the budget: an escalation the gate
+    # then rejected (T1 busy, global gap) must not cost a later real change.
+    assert trigger.predicate([tick(2, scene="street"), tick(3, scene="home"), tick(4, scene="home")])
+    trigger.on_fired(2.0)  # type: ignore[misc]  # the gate accepted it
     assert not trigger.predicate([tick(2, scene="street"), tick(3, scene="home"), tick(4, scene="home")])
 
     # Five more accepted changes reach the demo cap of six inside one minute.
@@ -235,6 +239,7 @@ def test_change_trigger_cooldown_and_per_minute_cap() -> None:
         window = [tick(base, scene=prior), tick(base + 1, scene=now), tick(base + 2, scene=now)]
         assert trigger.predicate(window)
         trigger.enrich(window)  # type: ignore[misc]
+        trigger.on_fired(float(base + 2))  # type: ignore[misc]
         prior, now = now, prior
     blocked = [tick(55, scene=prior), tick(56, scene=now), tick(57, scene=now)]
     assert not trigger.predicate(blocked)

@@ -145,6 +145,8 @@ class TriggerGate:
             if self._submit(escalation):
                 self.fired[trigger.name] += 1
                 self._last_trigger_t[trigger.name] = tick.t
+                if trigger.on_fired is not None:
+                    trigger.on_fired(tick.t)
                 self.last_escalation_t = tick.t
                 if episode is not None:
                     self._escalated_episode_ids.add(episode.id)

@@ -122,6 +122,10 @@ class Trigger:
     #: extra context lines for the envelope (SPEC §14.3). Synchronous, and
     #: allowed to return empties; the gate falls back to ``reason``.
     enrich: Callable[[list[Tick]], tuple[str, list[str]]] | None = None
+    #: Optional hook the gate calls with the tick time only once the
+    #: escalation was actually accepted (not when T1 was busy or the global
+    #: gap rejected it). A trigger with its own budget spends it here.
+    on_fired: Callable[[float], None] | None = None
 
 
 def _recent(window: list[Tick], seconds: float) -> list[Tick]:
@@ -288,11 +292,12 @@ def change_trigger(timings: Timings) -> Trigger:
 
     def enrich(window: list[Tick]) -> tuple[str, list[str]]:
         reasons, transitions = changes(window)
-        if reasons:
-            fired_at.append(window[-1].t)
         return "; ".join(reasons), ["Visual transition: " + "; ".join(transitions)] if transitions else []
 
-    return Trigger("change", predicate, timings.change_cooldown_s, None, "Meaningful visual change", enrich)
+    return Trigger(
+        "change", predicate, timings.change_cooldown_s, None, "Meaningful visual change",
+        enrich, on_fired=fired_at.append,
+    )
 
 
 def _outdoor_hits(

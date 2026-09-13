@@ -110,6 +110,15 @@ def _scene(expected: str, max_age_ms: int = 3000) -> Predicate:
     return predicate
 
 
+#: Caption language that makes visible food a meal rather than a sighting.
+#: Deliberately wide (Astra: a real lunch with a misclassified activity must
+#: not be downgraded): eating verbs, meal names, and a plate or snack in use.
+_MEAL_WORDS = re.compile(
+    r"\b(?:eat(?:s|ing|en)?|bit(?:e|es|ing)|chew(?:s|ing)?|lunch|dinner|breakfast"
+    r"|brunch|meal|snacking|plate|bowl of|sandwich|fork|spoon|chopsticks)\b"
+)
+
+
 def _predicates(max_age_ms: int) -> dict[EpisodeKind, Predicate]:
     """The per-kind tri-state tag readers, at one freshness budget."""
 
@@ -121,7 +130,7 @@ def _predicates(max_age_ms: int) -> dict[EpisodeKind, Predicate]:
         if food is None:
             return None
         caption = tick.ai.caption.casefold() if tick.ai and tick.ai.caption else ""
-        return food and re.search(r"\b(?:eat(?:s|ing)?|bit(?:e|ing)|chew(?:s|ing)?)\b", caption) is not None
+        return food and re.search(_MEAL_WORDS, caption) is not None
 
     def food_sighting(tick: Tick) -> bool | None:
         food = tick.flag("food_present", max_age_ms)
