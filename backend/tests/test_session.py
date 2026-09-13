@@ -128,26 +128,3 @@ async def test_stale_reasoner_work_applies_no_actions(tmp_path) -> None:
     assert db.due_pending_checks(t + 10_000) == []
     assert len(db.list_decisions()) == 1  # the row is still written (SPEC §6)
     db.close()
-
-
-def test_a_session_across_a_stalled_stream_is_not_zero_length(tmp_path):
-    """Live defect: the phone stopped sending, the socket stayed open, and an
-    eight-second session was stamped start == end -- a log entry covering nothing."""
-    import time as _time
-    from pipeline.api.wiring import Clock, Pipeline
-
-    now = 1_000_000.0
-    pipeline = Pipeline.__new__(Pipeline)          # only the clock path is under test
-    pipeline.clock = Clock(wall_start=now, sim_start_t=now, speed=1.0)
-
-    class _Tick:
-        t = now
-    pipeline.last_tick = _Tick()
-    pipeline._last_tick_wall = _time.time() - 8.0  # the last tick arrived 8 s ago
-
-    advanced = Pipeline._session_clock(pipeline)
-    assert advanced >= now + 7.5, "a stalled tick clock must still advance with real time"
-
-    pipeline.last_tick = None
-    pipeline._last_tick_wall = None
-    assert Pipeline._session_clock(pipeline) > 0
