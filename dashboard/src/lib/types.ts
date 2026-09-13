@@ -137,3 +137,6 @@ export interface Persona { text: string; source: "default" | "custom" }
  *  system prompt, so it outlives today's summary. */
 export interface ProfileLine { id: string; t: number; line: string; source_decision_id: string | null }
 export interface ForgetResult { id: string; removed: boolean }
+
+/** One row of the Logs index — GET /api/recaps. No body: see RecapStore.list. */
+export interface RecapSummary { id: string; session_id: string | null; from_t: number; to_t: number; generated_at: number; duration_s: number }

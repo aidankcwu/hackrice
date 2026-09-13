@@ -69,9 +69,13 @@ async def end_session(request: Request) -> dict:
     The recap is the point of a session -- what the wearer was doing, scored
     and narrated -- so it is produced whenever a session ends, however it was
     ended (dashboard, curl, a script), not only from the one button that knew
-    to ask. It runs as a task because it makes a model call and speaks; the
-    caller gets the ended session at once and reads the recap from
-    ``GET /api/recap/latest`` when it lands (``recap: "generating"`` says so).
+    to ask. It runs as a task because it makes a model call; the caller gets
+    the ended session at once and reads the recap from ``GET /api/recaps``
+    when it lands (``recap: "generating"`` says so).
+
+    Not spoken. The recap is a written entry in the Logs list, and the glasses
+    have already been talking throughout the session -- reading the summary
+    aloud on top of that is noise at the moment the wearer takes them off.
     """
     pipeline = _pipeline(request)
     session = pipeline.sessions.end()
@@ -82,7 +86,7 @@ async def end_session(request: Request) -> dict:
 
     async def generate() -> None:
         try:
-            await build_recap(pipeline, session_id=session.id, speak=True)
+            await build_recap(pipeline, session_id=session.id, speak=False)
         except Exception:  # noqa: BLE001 -- a failed recap must not be silent
             log.exception("session %s ended but its recap failed", session.id)
 

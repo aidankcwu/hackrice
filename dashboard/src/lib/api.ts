@@ -1,5 +1,5 @@
 import { mockBiometrics, mockBiometricsMulti, mockDecisions, mockEpisodes, mockHealthspan, mockPending, mockPersona, mockProfileLines, mockQuestions, mockScores, mockSeeded, mockSeededRows, mockStatus, mockSummary, mockTicks, mockWearablesStatus } from "./mock";
-import type { AnswerResult, AskResult, Biometrics, BiometricsMulti, Decision, Episode, ForgetResult, Healthspan, Insight, MetricScore, PendingCheck, Persona, ProfileLine, Question, Recap, Scores, SeededDay, SeededMetricRow, Session, Status, Tick, TodaySummary, WearablesStatus } from "./types";
+import type { AnswerResult, AskResult, Biometrics, BiometricsMulti, Decision, Episode, ForgetResult, Healthspan, Insight, MetricScore, PendingCheck, Persona, ProfileLine, Question, Recap, RecapSummary, Scores, SeededDay, SeededMetricRow, Session, Status, Tick, TodaySummary, WearablesStatus } from "./types";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8010";
 export const configuredMock = process.env.NEXT_PUBLIC_MOCK === "1";
@@ -158,6 +158,22 @@ export const api = {
    *  out the glasses; the backend defaults it to true, so pass it explicitly. */
   recap: (sessionId?: string, speak = true) =>
     action<Recap>("/api/recap", sessionId ? {session_id: sessionId, speak} : {speak}),
+  /** Logs index, newest first. Empty list rather than null: no recaps yet is not an error. */
+  recaps: async (limit = 50): Promise<RecapSummary[]> => {
+    try {
+      const response = await fetch(`${API_BASE}/api/recaps?limit=${limit}`,{cache:"no-store",signal:AbortSignal.timeout(2500)});
+      if (!response.ok) return [];
+      const body = await response.json() as {recaps?: RecapSummary[]};
+      return body.recaps ?? [];
+    } catch { return []; }
+  },
+  recapById: async (id: string): Promise<Recap|null> => {
+    try {
+      const response = await fetch(`${API_BASE}/api/recaps/${encodeURIComponent(id)}`,{cache:"no-store",signal:AbortSignal.timeout(4000)});
+      if (!response.ok) return null;
+      return await response.json() as Recap;
+    } catch { return null; }
+  },
   latestRecap: async (): Promise<Recap|null> => {
     try {
       const response = await fetch(`${API_BASE}/api/recap/latest`,{cache:"no-store",signal:AbortSignal.timeout(2500)});

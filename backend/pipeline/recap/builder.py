@@ -176,6 +176,41 @@ class RecapStore:
             ).fetchone()
         return None if row is None else json.loads(row[0])
 
+    def list(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Newest first, without the bodies.
+
+        The index page draws a row per recap, and a body is the whole report
+        including every moment -- tens of kilobytes each. Listing twenty of
+        them would ship a megabyte to render twenty dates, so the columns the
+        list needs are read straight from the table and the body is fetched
+        only when one is opened.
+        """
+
+        with self._lock():
+            rows = self.db.conn.execute(
+                "SELECT id, session_id, from_t, to_t, generated_at FROM recaps"
+                " ORDER BY generated_at DESC, rowid DESC LIMIT ?",
+                (int(limit),),
+            ).fetchall()
+        return [
+            {
+                "id": row[0],
+                "session_id": row[1],
+                "from_t": float(row[2]),
+                "to_t": float(row[3]),
+                "generated_at": float(row[4]),
+                "duration_s": max(0.0, float(row[3]) - float(row[2])),
+            }
+            for row in rows
+        ]
+
+    def get(self, recap_id: str) -> dict[str, Any] | None:
+        with self._lock():
+            row = self.db.conn.execute(
+                "SELECT body FROM recaps WHERE id=?", (recap_id,)
+            ).fetchone()
+        return None if row is None else json.loads(row[0])
+
     def count(self) -> int:
         with self._lock():
             return int(self.db.conn.execute("SELECT COUNT(*) FROM recaps").fetchone()[0])
