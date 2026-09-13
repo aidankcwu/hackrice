@@ -8,7 +8,7 @@ from datetime import datetime
 import pytest
 
 from pipeline.db import Database
-from pipeline.models import Episode, Score
+from pipeline.models import Episode, PendingQuestion, Score
 from pipeline.scoring import Scorer, THRESHOLDS, rollup
 from pipeline.scoring.thresholds import by_period
 from pipeline.seed.fixtures import LATE_CAFFEINE_INDEXES, days_ending
@@ -36,6 +36,12 @@ def seeded(db):
 
 def by_metric(scores: list[Score]) -> dict[str, Score]:
     return {s.metric: s for s in scores}
+
+
+def answer(db: Database, qid: str, episode_id: str, parsed: dict, created_t: float) -> None:
+    db.insert_question(PendingQuestion(
+        id=qid, created_t=created_t, expires_t=None, episode_id=episode_id,
+        question="Yours?", status="answered", parsed=parsed))
 
 
 # -- helpers -------------------------------------------------------------
@@ -138,6 +144,47 @@ def test_metrics_with_no_data_score_zero_and_say_so(db):
     # A day with no meals cannot have a diet pattern -- that is not a zero diet.
     assert scores["diet_pattern_daily"].value is None
     assert scores["diet_pattern_daily"].note == "no data"
+
+
+def test_wearer_answers_override_live_daily_counts(db):
+    day = "2026-09-12"
+    t = datetime.fromisoformat(day + "T20:00:00").timestamp()
+    for episode in (
+        Episode(id="alc_no", kind="alcohol_sighting", start_t=t, duration_s=1),
+        Episode(id="alc_two", kind="alcohol_sighting", start_t=t + 60, duration_s=1),
+        Episode(id="meal", kind="meal", start_t=t + 120, duration_s=60,
+                dominant={"food_type": "processed"}),
+        Episode(id="conv", kind="conversation", start_t=t + 180, duration_s=60),
+    ):
+        db.upsert_episode(episode)
+    answer(db, "q1", "alc_no", {"confirmed": False}, t)
+    answer(db, "q2", "alc_two", {"confirmed": True, "count": 2.0}, t + 1)
+    answer(db, "q3", "meal", {"confirmed": True, "food_type": "fruit"}, t + 2)
+    answer(db, "q4", "conv", {"confirmed": False}, t + 3)
+
+    scores = by_metric(Scorer(db).score_day(day))
+    assert scores["alcohol_daily"].value == 2.0
+    assert "wearer reported: not mine" in scores["alcohol_daily"].note
+    assert "wearer reported: 2 drinks" in scores["alcohol_daily"].note
+    assert scores["diet_pattern_daily"].value == 1.0
+    assert "wearer reported: fruit" in scores["diet_pattern_daily"].note
+    assert scores["social_episodes_daily"].value == 0.0
+
+
+def test_unusable_question_rows_do_not_override_scoring(db):
+    day = "2026-09-12"
+    t = datetime.fromisoformat(day + "T20:00:00").timestamp()
+    db.upsert_episode(Episode(id="alc", kind="alcohol_sighting", start_t=t, duration_s=1))
+    answer(db, "q_old", "alc", {"count": 2.0}, t)
+    answer(db, "q_new", "alc", {"count": 3.0}, t + 1)
+    db.insert_question(PendingQuestion(
+        id="q_empty", created_t=t + 2, expires_t=None, episode_id="alc",
+        question="Yours?", status="answered", parsed={}))
+    db.insert_question(PendingQuestion(
+        id="q_suppressed", created_t=t + 3, expires_t=None, episode_id="alc",
+        question="Yours?", status="suppressed", parsed={"confirmed": False}))
+
+    assert by_metric(Scorer(db).score_day(day))["alcohol_daily"].value == 3.0
 
 
 # -- weekly --------------------------------------------------------------

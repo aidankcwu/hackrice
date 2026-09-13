@@ -1027,6 +1027,44 @@ class Database:
             ).fetchall()
         return [self._question_from_row(r) for r in rows]
 
+    def reported_by_episode(
+        self, day: str | None = None, limit: int = 500
+    ) -> dict[str, dict]:
+        """Project the newest usable wearer report for each episode in one query.
+
+        Reports stay on question rows because episode ``dominant`` is rewritten
+        by the builder, and because a wearer report must remain distinguishable
+        from a camera observation.  The newest answered question with a
+        non-empty parse wins: follow-ups carry the more specific answer, while
+        an answered row whose parser has not filled ``parsed`` says nothing.
+        """
+
+        where = "AND e.day = ?" if day is not None else ""
+        params: tuple[Any, ...] = ((day, limit) if day is not None else (limit,))
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT q.episode_id, q.status, q.parsed FROM pending_questions q "
+                "JOIN episodes e ON e.id = q.episode_id "
+                f"WHERE 1 = 1 {where} "
+                "ORDER BY q.created_t DESC, q.rowid DESC LIMIT ?",
+                params,
+            ).fetchall()
+        reported: dict[str, dict] = {}
+        for row in rows:
+            episode_id = row["episode_id"]
+            if row["status"] != "answered" or episode_id in reported:
+                continue
+            parsed = json.loads(row["parsed"] or "{}")
+            if not parsed:
+                continue
+            reported[episode_id] = {
+                "confirmed": parsed.get("confirmed"),
+                "count": parsed.get("count"),
+                "food_type": parsed.get("food_type"),
+                "note": parsed.get("note", ""),
+            }
+        return reported
+
     def expire_questions(self, now: float) -> int:
         """Mark open questions past their deadline ``expired``. Returns the count.
 
