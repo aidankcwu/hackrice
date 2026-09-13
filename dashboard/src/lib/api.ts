@@ -56,6 +56,8 @@ export const api = {
   conversations: async (limit=20)=>{const r=await request<Conversation[]|{conversations:Conversation[]}>(`/api/conversations?limit=${limit}`,mockConversations);return {...r,data:list(r.data,["conversations"])};},
   conversation: (id: string) => request<Conversation>(`/api/conversations/${encodeURIComponent(id)}`, mockConversations.find(c => c.id === id) ?? mockConversations[0]),
   conversationCurrent: () => request<Conversation|null>("/api/conversation/current", mockConversations.find(c => c.state === "active") ?? null),
+  /** Demo tool: say `text` through the glasses verbatim (ElevenLabs), no agent involved. */
+  speak: (text: string) => mutate<{ok: boolean}>("/api/speak", "POST", {text}),
   openConversation: async (topic: string, mode?: "question" | "statement"): Promise<OpenConversationResult> => {
     const response = await fetch(`${API_BASE}/api/conversation/open`, {
       method:"POST", cache:"no-store", headers:{"content-type":"application/json"},

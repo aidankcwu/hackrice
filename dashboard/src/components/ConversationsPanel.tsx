@@ -32,19 +32,31 @@ function OpenBar({ onOpened }: { onOpened: () => void }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ warning: boolean; text: string }>();
-  const submit = async () => {
-    const topic = text.trim();
-    if (!topic || busy) return;
+  // Two different things: "say" speaks the text verbatim through the glasses
+  // (a demo tool, no agent), "topic" hands the text to the voice agent as a
+  // topic and lets it decide the words -- or decide on silence.
+  const say = async () => {
+    const line = text.trim();
+    if (!line || busy) return;
+    setBusy(true); setNotice(undefined);
+    try { await api.speak(line); setNotice({warning:false, text:`said · "${line.slice(0, 40)}"`}); setText(""); }
+    catch (error) { setNotice({warning:true, text:error instanceof Error ? error.message : "speak failed"}); }
+    finally { setBusy(false); }
+  };
+  const topic = async () => {
+    const t = text.trim();
+    if (!t || busy) return;
     setBusy(true); setNotice(undefined);
     try {
-      const result = await api.openConversation(topic);
-      setNotice(result.reason ? {warning:true, text:`active · ${result.reason}`} : {warning:false, text:`opened · ${result.id ?? ""}`});
+      const result = await api.openConversation(t);
+      setNotice(result.reason ? {warning:true, text:`not opened · ${result.reason}`} : {warning:false, text:`handed off · ${result.id ?? ""} (the agent may stay silent)`});
       if (!result.reason) setText("");
       onOpened();
     } catch (error) { setNotice({warning:true, text:error instanceof Error ? error.message : "open failed"}); }
     finally { setBusy(false); }
   };
-  return <div className="border-b border-white/5 px-4 py-2"><div className="flex items-center gap-2"><input value={text} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === "Enter") void submit(); }} placeholder="Say something about…" aria-label="Conversation topic" className="min-w-0 flex-1 rounded-md border border-white/10 bg-black/30 px-2 py-1 text-xs text-zinc-100 placeholder:text-zinc-600 focus:border-cyan-400/40 focus:outline-none" /><button type="button" onClick={() => void submit()} disabled={busy || !text.trim()} className="shrink-0 rounded-md border border-white/10 bg-white/[.06] px-3 py-1 text-[10px] font-black uppercase tracking-[.1em] text-zinc-200 transition hover:border-white/20 hover:bg-white/[.1] disabled:opacity-40">{busy ? "…" : "say"}</button></div>{notice && <p className={`mt-1 font-mono text-[10px] font-semibold ${notice.warning ? "text-amber-300" : "text-emerald-300"}`}>{notice.text}</p>}</div>;
+  const btn = "shrink-0 rounded-md border border-white/10 bg-white/[.06] px-3 py-1 text-[10px] font-black uppercase tracking-[.1em] text-zinc-200 transition hover:border-white/20 hover:bg-white/[.1] disabled:opacity-40";
+  return <div className="border-b border-white/5 px-4 py-2"><div className="flex items-center gap-2"><input value={text} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === "Enter") void say(); }} placeholder="Type a line to say through the glasses…" aria-label="Line to say or topic to hand off" className="min-w-0 flex-1 rounded-md border border-white/10 bg-black/30 px-2 py-1 text-xs text-zinc-100 placeholder:text-zinc-600 focus:border-cyan-400/40 focus:outline-none" /><button type="button" onClick={() => void say()} disabled={busy || !text.trim()} className={btn} title="Speak this text verbatim through the glasses">{busy ? "…" : "say"}</button><button type="button" onClick={() => void topic()} disabled={busy || !text.trim()} className={btn} title="Hand this to the voice agent as a topic">topic</button></div>{notice && <p className={`mt-1 font-mono text-[10px] font-semibold ${notice.warning ? "text-amber-300" : "text-emerald-300"}`}>{notice.text}</p>}</div>;
 }
 
 export function ConversationsPanel() {
