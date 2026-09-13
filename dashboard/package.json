@@ -7,13 +7,18 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
     "dev:mock": "NEXT_PUBLIC_MOCK=1 next dev -p 3000"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4",
+    "lucide-react": "^1.45.0",
     "next": "15.5.2",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "recharts": "^3.10.1",
+    "server-only": "^0.0.1",
     "tailwindcss": "^4"
   },
   "devDependencies": {
@@ -23,6 +28,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.5.2",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   }
 }

@@ -1,4 +1,4 @@
-import type { BiometricOrigin, Biometrics, BiometricsMulti, Decision, DecisionAction, Episode, PendingCheck, Question, Scores, SeededDay, SeededMetricRow, Status, Tick, TodaySummary, WearablesStatus } from "./types";
+import type { BiometricOrigin, Biometrics, BiometricsMulti, Decision, DecisionAction, Episode, Healthspan, HealthspanFactor, PendingCheck, Provenance, Question, Scores, SeededDay, SeededMetricRow, Status, Tick, TodaySummary, WearablesStatus } from "./types";
 const now = Date.now() / 1000;
 const scenes = ["office","office","restaurant","restaurant","street","park","park","gym"];
 export const mockTicks: Tick[] = Array.from({length:30},(_,i) => { const scene=scenes[Math.floor(i/4)%scenes.length]; const missing=i%5===0; const caption=`person in ${scene}`; return {v:1,tick_id:`t_${1740+i}`,t:now-29+i,seq:1740+i,sensor:{lux_proxy:scene==="park"?510:180,cct:4100,hist_spread:.62,frame_delta:.08+(i%4)*.04,flow_mag:.04,sharpness:88,phash:`e3a91c04b7d2${i.toString().padStart(4,"0")}`},device:{accel_rms:.04,gps_speed:scene==="street"?1.2:.2},...(!missing&&{ai:{as_of:now-29+i-.3,age_ms:300,scene,activity:scene==="gym"?"exercising":"seated",food_present:scene==="restaurant",food_type:scene==="restaurant"?"mixed":"none",caffeine_visible:i===12,alcohol_visible:i===15,screen_present:scene==="office",vegetation_visible:scene==="park",people_present:["restaurant","park"].includes(scene),caption,objects:["person",scene==="office"?"laptop":"chair"],drink:i===12?"coffee":i===15?"alcohol":"none",conf:.86}}),frame_ref:`f_${1740+i}`}; });
@@ -114,3 +114,116 @@ export const mockStatus: Status={demo_mode:true,source:"glasses",uptime_s:742,ti
 }};
 export const mockSummary: TodaySummary={lines:["09:14 — focused screen work began in the office","10:47 — coffee with a colleague; social episode logged","12:31 — mixed lunch with two colleagues","14:08 — 27-minute park walk; vegetation visible","16:42 — late caffeine observed after cutoff"]};
 export const mockPending: PendingCheck[]=[{id:"w1",due_t:now+480,reason:"Check whether screen break happened",trigger:"screen_sustained"},{id:"w2",due_t:now+900,reason:"Check whether meal has ended",trigger:"food_in_frame"}];
+
+// Late Saturday 2026-09-12 as `/api/healthspan` reports it (design §C; engine
+// numbers from the seeded DB). State-exhaustive so mock mode renders every
+// branch: one factor of each provenance, all three ledger statuses, all five
+// insight kinds (the `you` line needs the ≥14-day history the seeded DB cannot
+// give, so `effects[0]` is the 30-day state), a credit and a debit pin. Frozen
+// at 14:32 on purpose — no wall clock anywhere in this payload.
+const CITE = {
+ steps:"Paluch 2022 Lancet Public Health (15 cohorts, n=47,471): vs ~3.5k, Q2 5.8k HR 0.60, Q3 7.8k 0.55, Q4 10.9k 0.47; plateau 8–10k under 60, 6–8k over 60",
+ vilpa:"Stamatakis 2022 Nature Medicine (UK Biobank, n=25,241): 3–4 min/day of vigorous bursts → 26–30% lower all-cause mortality",
+ resistance:"Momma 2022 BJSM meta-analysis (16 studies): 30–60 min/wk → 10–17% lower mortality; J-shaped above ~130 min",
+ fitness:"Mandsager 2018 JAMA Netw Open (n=122,007): low vs elite fitness adjusted HR 5.04; no upper limit of benefit. Curve here is deliberately compressed",
+ gait:"Studenski 2011 JAMA (pooled n=34,485): each +0.1 m/s ≈ HR 0.88; Dunedin: gait speed at 45 tracks biological aging",
+ sleep:"Cappuccio 2010 Sleep meta-analysis (16 studies, n=1.3M): short sleep RR 1.12, long sleep RR 1.30",
+ sri:"Windred 2024 Sleep (UK Biobank, n=60,977): top vs bottom SRI quintile 20–48% lower all-cause mortality; regularity outperformed duration",
+ dayLight:"Windred 2024 PNAS (n=88,905, wrist sensors): darkest-day deciles → ~15–20% higher mortality; Brown 2022 consensus: ≥250 lx melanopic by day",
+ nightLight:"Windred 2024 PNAS: brightest-night deciles → 21–34% higher mortality; Brown 2022: ≤1 lx melanopic during sleep",
+ social:"Holt-Lunstad 2010 PLOS Med (148 studies, n=308,849): stronger ties OR 1.50 for survival; complex integration OR 1.91",
+ purpose:"Alimujiang 2019 JAMA Netw Open (HRS, n=6,985): lowest vs highest purpose HR 2.43",
+ nature:"White 2019 Sci Rep (n≈20k): ≥120 min/wk → better health/wellbeing; Rojas-Rueda 2019 Lancet Planet Health: 4% lower mortality per 0.1 NDVI",
+ noise:"WHO 2018 Environmental Noise Guidelines: Lnight <45 dB; IHD RR ~1.08 per 10 dB Lden",
+ med:"Sofi 2010 AJCN meta-analysis: each 2-point adherence gain → 8% lower mortality; PREDIMED RCT: ~30% fewer major CV events",
+ alcohol:"Zhao 2023 JAMA Netw Open (107 studies): no protective range once abstainer bias is removed; risk rises from ~2 drinks/day",
+ smoker:"Jha 2013 NEJM (n=201,551): smokers lose ≥10 years; quitting before 40 removes ~90% of the excess",
+ sauna:"Laukkanen 2015 JAMA IM (n=2,315 Finnish men, 20.7 y): 4–7×/wk vs 1× HR 0.60 all-cause; sessions >19 min",
+ hrv:"Low HRV is a marker of autonomic strain (Framingham, Tsuji 1996); used here as a state marker, not a cause",
+ drake:"Drake 2013 J Clin Sleep Med RCT: 400 mg caffeine 6 h before bed cut total sleep time by >1 h",
+};
+// Engine order (brian_score.FACTORS): key, layer, label, dose, hr, hours, grade, source, provenance, basis, detail.
+const healthspanFactorRows: Array<[string,string,string,number|null,number|null,number,string,string,Provenance,string,string]> = [
+ ["steps","Movement","Daily steps",6100,.617,.24,"A_cohort",CITE.steps,"seeded","phone","phone steps, row 2026-09-12"],
+ ["vilpa_min","Movement","Vigorous bursts",1.8,.824,.23,"A_cohort",CITE.vilpa,"seeded","phone","phone vilpa_minutes, row 2026-09-12"],
+ ["resistance_min_wk","Movement","Strength training",0,1,-.29,"A_cohort",CITE.resistance,"derived","glasses","0 min over 6 covered days — all gym minutes counted as resistance (no lifting/cardio split from the camera)"],
+ ["fitness_pct","Movement","Cardiorespiratory fitness",77.5,.444,.97,"A_cohort",CITE.fitness,"derived","apple_watch","VO2max 51.0 → ~78th percentile, M 20s (coarse norms, ±10)"],
+ ["gait_speed","Movement","Walking speed",1.19,.486,-.02,"A_cohort",CITE.gait,"seeded","phone","phone gait_speed_ms, row 2026-09-12"],
+ ["sleep_hours","Sleep","Sleep duration",6.2,1.08,-.27,"A_cohort",CITE.sleep,"seeded","whoop","whoop row for the night starting 2026-09-12"],
+ ["sri","Sleep","Sleep regularity",63,.842,-.31,"A_cohort",CITE.sri,"seeded","whoop","whoop row for the night starting 2026-09-12"],
+ ["day_light_min","Light & clock","Bright light minutes",26,.931,-.1,"A_cohort",CITE.dayLight,"seeded","phone","phone daytime_light_minutes, row 2026-09-12"],
+ ["night_light_lux","Light & clock","Light during sleep",1,1,.09,"A_cohort",CITE.nightLight,"derived","phone","proxy: evening_light_ok=1 → 1 lx (2-point map)"],
+ ["social_index","Social","Social integration",60,.68,.2,"A_cohort",CITE.social,"derived","glasses","44 min of conversation across 2 encounters (breadth proxy: encounters, not identities)"],
+ ["purpose","Social","Purpose in life",4.75,.662,.14,"B",CITE.purpose,"derived","user","purpose_score 4 of 5 rescaled to 4.75 on the 1–6 scale"],
+ ["nature_min_wk","Environment","Time in nature",84,.972,.02,"B",CITE.nature,"live","glasses","84 min in park over 6 covered days (2026-09-06..2026-09-12)"],
+ ["noise_night_db","Environment","Night noise",44,1,0,"B",CITE.noise,"seeded","phone","phone night_noise_db, row 2026-09-12"],
+ ["med_adherence","Diet & substances","Mediterranean pattern",1,.86,.27,"A_cohort",CITE.med,"live","glasses","1/1 typed meals on-pattern (0 untyped ignored; the §8 scorer counts untyped as off-pattern)"],
+ ["alcohol_drinks","Diet & substances","Alcohol",0,1,.03,"A_cohort",CITE.alcohol,"live","glasses","no alcohol sighting today (glasses worn, 6 episodes)"],
+ ["smoker","Diet & substances","Smoking / vaping nicotine daily",null,null,0,"A_cohort",CITE.smoker,"missing","whoop","no journal_nicotine row for 2026-09-12"],
+ ["sauna_wk","Recovery","Sauna sessions",0,1,0,"B",CITE.sauna,"live","glasses","0 sessions >19 min over 6 covered days"],
+ ["recovery_ratio","Recovery","HRV vs your baseline",.86,1.047,-.11,"B",CITE.hrv,"seeded","whoop","whoop row for the night starting 2026-09-12"],
+];
+const healthspanFactors: HealthspanFactor[] = healthspanFactorRows.map(([key,layer,label,dose,hr,hours,grade,source,provenance,basis,detail])=>({key,layer,label,dose,hr,hours,grade,measured:provenance!=="missing",source,provenance,basis,detail}));
+export const mockHealthspan: Healthspan = {
+ day:"2026-09-12", as_of_hh:14.53, engine:"brian_score",
+ overall:76, layers:{"Movement":81,"Sleep":65,"Light & clock":80,"Social":69,"Environment":79,"Diet & substances":100,"Recovery":8},
+ years_delta:2.11, years_ci:[-1.72,5.95], hours_today:.91, hours_ci:[-.74,2.56],
+ measured:{count:17,total:18},
+ factors: healthspanFactors,
+ ledger:[
+  {key:"nature_min_wk",label:"Time in nature",accrued:84,target:120,projected:98,deficit:22,days_elapsed:6,status:"at_risk"},
+  {key:"resistance_min_wk",label:"Strength training",accrued:0,target:60,projected:0,deficit:60,days_elapsed:6,status:"behind"},
+  {key:"sauna_wk",label:"Sauna sessions",accrued:0,target:2.5,projected:0,deficit:2.5,days_elapsed:6,status:"behind"},
+  {key:"steps",label:"Daily steps",accrued:7600,target:8000,projected:7600,deficit:400,days_elapsed:6,status:"at_risk"},
+  {key:"day_light_min",label:"Bright light minutes",accrued:31.7,target:45,projected:31.7,deficit:13.3,days_elapsed:6,status:"at_risk"},
+  {key:"vilpa_min",label:"Vigorous bursts",accrued:2.9,target:4,projected:2.9,deficit:1.1,days_elapsed:6,status:"at_risk"},
+  {key:"social_index",label:"Social integration",accrued:72,target:70,projected:72,deficit:0,days_elapsed:6,status:"on_track"},
+ ],
+ forecast:{sleep_hours:6.34,hrv_change_pct:0,sri_change_pts:-21,melatonin_delay_min:0,drivers:["caffeine at 16:00 is inside your 9 h cutoff","bedtime +105 min vs habit"]},
+ levers:[
+  {key:"vilpa_min",label:"Vigorous bursts",action:"Vigorous bursts: 1.8 → 4.8 min/day",hours_gain:.596,time_min:3,roi_hours_per_min:.199,layers:["movement"],source:CITE.vilpa},
+  {key:"bundle_walk",label:"Outdoor walk with someone before 10:00",action:"30-min outdoor walk with a friend before 10:00",hours_gain:.858,time_min:30,roi_hours_per_min:.0286,layers:["environment","light","movement","social"],source:"Bundles steps, bright light, nature, social — one act, four layers"},
+  {key:"steps",label:"Daily steps",action:"Daily steps: 6100 → 8100 steps",hours_gain:.413,time_min:20,roi_hours_per_min:.0207,layers:["movement"],source:CITE.steps},
+  {key:"social_index",label:"Social integration",action:"Social integration: 60 → 75 index 0–100",hours_gain:.322,time_min:20,roi_hours_per_min:.0161,layers:["social"],source:CITE.social},
+  {key:"resistance_min_wk",label:"Strength training",action:"Strength training: 0 → 30 min/week",hours_gain:.445,time_min:30,roi_hours_per_min:.0148,layers:["movement"],source:CITE.resistance},
+ ],
+ levers_free:[
+  {key:"sri",label:"Sleep regularity",action:"Sleep regularity: 63 → 73 SRI 0–100",hours_gain:.257,time_min:0,roi_hours_per_min:.257,layers:["sleep"],source:CITE.sri},
+  {key:"purpose",label:"Purpose in life",action:"Purpose in life: 4.75 → 5.75 1–6",hours_gain:.195,time_min:0,roi_hours_per_min:.195,layers:["social"],source:CITE.purpose},
+ ],
+ insights:[
+  {kind:"tonight",text:"Tonight: ~6.3 h of sleep, HRV +0%. Because: caffeine at 16:00 is inside your 9 h cutoff; bedtime +105 min vs habit.",source:CITE.drake},
+  {kind:"today",text:"Today nets +0.9 healthy-life hours (±1.7): +1.0 h cardiorespiratory fitness, +0.3 h mediterranean pattern, -0.3 h sleep regularity, -0.3 h strength training.",source:"Gompertz shift + microlife framing (Spiegelhalter & Blastland, BMJ 2012)"},
+  {kind:"week",text:"Daily steps: 7600 so far, on pace for 7600 vs target 8000. You need 400 more by Sunday.",source:CITE.steps},
+  {kind:"lever",text:"Best use of your next 3 minutes: Vigorous bursts: 1.8 → 4.8 min/day. ≈ +0.6 healthy-life hours (11.9 h per hour invested).",source:CITE.vilpa},
+  {kind:"you",text:"On your own data (30 days): each unit of late caffeine seen by the glasses (0/1) moves sleep hours that night by -0.920 [90% CI -1.410, -0.430].",source:"Lagged regression with weekday and strain covariates"},
+ ],
+ pins:[
+  {time:"08:15",img:null,grade:"B",kind:"credit",seen:"Caffeine at 08:15",effect:"outside your 9 h cutoff — fine"},
+  {time:"11:30",img:null,grade:"A",kind:"credit",seen:"Conversation, 22 min",effect:"counts toward social integration · +0.2 h"},
+  {time:"12:30",img:null,grade:"A",kind:"credit",seen:"Meal: grains",effect:"tagged against the Mediterranean pattern"},
+  {time:"15:30",img:null,grade:"A",kind:"credit",seen:"Conversation, 22 min",effect:"counts toward social integration · +0.2 h"},
+  {time:"16:30",img:null,grade:"B",kind:"debit",seen:"Caffeine at 16:30",effect:"inside your 9 h cutoff (bed 00:45) — ~−1 h of sleep tonight"},
+  {time:"18:30",img:null,grade:"A",kind:"credit",seen:"Outdoors, park",effect:"nature +12 min this week · bright light already counted by the phone"},
+ ],
+ observations:{steps:6100,vilpa_min:1.8,gait_speed:1.19,sleep_hours:6.2,sri:63,noise_night_db:44,recovery_ratio:.86,fitness_pct:77.5,day_light_min:26,night_light_lux:1,purpose:4.75,social_index:60,med_adherence:1,alcohol_drinks:0,last_caffeine_hh:16.5,night_screen_min:0,nature_min_wk:84,resistance_min_wk:0,sauna_wk:0,planned_bed_shift_min:105},
+ provenance:{
+  ...Object.fromEntries(healthspanFactors.map(f=>[f.key,{source:f.provenance,basis:f.basis,detail:f.detail}])),
+  last_caffeine_hh:{source:"live",basis:"glasses",detail:"latest caffeine sighting today started 16:30"},
+  night_screen_min:{source:"live",basis:"glasses",detail:"0 min of screen_block overlapping 22:00–05:00 (6 episodes today)"},
+  planned_bed_shift_min:{source:"derived",basis:"whoop",detail:"tonight 00:45 vs habit 23:00 (lower median of 6 prior nights)"},
+  bedtime_hh:{source:"seeded",basis:"whoop",detail:"bed_time row 2026-09-12 → 00:45"},
+  baseline_sleep_h:{source:"derived",basis:"whoop",detail:"mean of 6 prior nights (2026-09-06..2026-09-11), today excluded"},
+ },
+ effects:[{exposure:"late caffeine seen by the glasses (0/1)",outcome:"sleep hours that night",beta:-.92,ci:[-1.41,-.43],n:30,blended_beta:-.93,note:"personal estimate"}],
+ profile:{age:20,sex:"M",goal:"average",cyp1a2_slow:false,height_m:null,bedtime_hh:24.75,bedtime_source:"seeded"},
+ baseline_sleep_h:6.92,
+ window:{ledger_days:["2026-09-07","2026-09-08","2026-09-09","2026-09-10","2026-09-11","2026-09-12"],factor_days:["2026-09-06","2026-09-07","2026-09-08","2026-09-09","2026-09-10","2026-09-11","2026-09-12"],uncovered_days:[],days_elapsed:6},
+ conventions:[
+  "Night rows (sleep_hours, sri, hrv_rmssd_ratio, night_noise_db, evening_light_ok, bed_time) for day D describe the night that starts on D — same row the §8 scorer uses.",
+  "Weekly hazard doses use the trailing 7 days; the ledger uses the ISO week to date.",
+  "Unmeasured factors are imputed at the population reference and earn nothing.",
+  "Untyped meals are excluded from the Mediterranean share (the §8 scorer counts them as off-pattern).",
+  "Alcohol sightings within 30 min are one drink; a journal '1' is read as one drink.",
+ ],
+};
