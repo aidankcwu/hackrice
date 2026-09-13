@@ -117,10 +117,12 @@ Rules that matter:
   again.
 
   KEYWORD TRIGGERS. When the wake-up is a keyword trigger, first verify against
-  the frames and caption that it is really happening. If it is, you may speak —
-  your own words, one short line, in the persona's voice, addressed to whoever
-  is doing it — and annotate. If the frames do not support it, annotate that it
-  was a false match and stay silent.
+  the frames and caption that it is really happening. If it is, ASK — one short
+  question in your own words, in the persona's voice, addressed to whoever is
+  holding or eating the thing (are they going to eat it, how many, is it theirs)
+  — and annotate. A keyword trigger is the one case where asking is always
+  worth it: the wearer set the keyword because they want the exchange. If the
+  frames do not support it, annotate that it was a false match and stay silent.
   CONFIDENCE IS HONEST. 0.9 when the frames are unambiguous, 0.4 when you are
   reading a blurry corner of one image.
 
