@@ -6,9 +6,11 @@ import { BrianHeader } from "./Header";
 import { BryanSaid } from "./BryanSaid";
 import { Effects } from "./Effects";
 import { Evidence } from "./Evidence";
+import { Instruments } from "./Instruments";
 import { Layers } from "./Layers";
-import { Levers } from "./Levers";
+import { NextBest } from "./NextBest";
 import { SevenDays } from "./SevenDays";
+import { WearableNumbers } from "./WearableNumbers";
 import { Today } from "./Today";
 import { Tonight } from "./Tonight";
 import { WeekLedger } from "./WeekLedger";
@@ -43,9 +45,30 @@ export function BrianDashboard({ data, goal, onGoalChange, updating = false }: B
             about), so it is not buried in the pipeline drawer. Light skin so it
             sits flush with Today and Activity. */}
         <PersonaPanel variant="light" />
-        {/* Top row: the healthspan ledger (screens.md §1.1). */}
+        {/* §1.1 beside §1.2: the ledger, then the five layers only the glasses
+            measure. `provenance` is derived from the factors the payload
+            carries: a factor the engine did not measure is `missing`, so its
+            tile says so rather than showing a number nothing produced.
+            `trailing` stays empty until the days=7 window is wired — the tiles
+            read that as "no sparkline", never a flat line at zero. */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
           <Today d={data} updating={updating} />
+          <Instruments
+            source={{
+              observations: data.observations,
+              provenance: Object.fromEntries(
+                data.factors.map((f) => [
+                  f.key,
+                  f.measured
+                    ? { source: "seeded" as const, basis: "whoop", detail: f.label }
+                    : { source: "missing" as const, basis: "glasses", detail: "Unmeasured today — scored at the population average, earns nothing." },
+                ]),
+              ),
+              forecast: data.forecast,
+              bedtime_hh: data.person.bedtime_hh,
+              trailing: [],
+            }}
+          />
         </div>
         {/* Layers carries its own `md:col-span-7`, so it gets a 7-column grid. */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-7">
@@ -62,8 +85,13 @@ export function BrianDashboard({ data, goal, onGoalChange, updating = false }: B
             observations={data.observations}
             profile={{ age: data.person.age, sex: data.person.sex, goal: data.person.goal, bedtime_hh: data.person.bedtime_hh }}
           />
-          <Levers levers={data.levers} />
+          {/* §1.6. `pAdherence` is omitted, not defaulted: with no adherence
+              log the row simply carries no "you do this N % of the time" line. */}
+          <NextBest rows={data.levers.map((l) => ({ key: l.key, action: l.action, time: l.time, gain: l.gain }))} />
         </div>
+        {/* §1.8: the wrist device's own numbers, collapsed, below the layers
+            only the glasses can see. */}
+        <WearableNumbers d={data} />
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <WeekLedger ledger={data.ledger} />
           <Effects effects={data.effects} />
