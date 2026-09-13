@@ -1,8 +1,8 @@
 diff --git a/samples/CameraAccess/CameraAccess.xcodeproj/project.pbxproj b/samples/CameraAccess/CameraAccess.xcodeproj/project.pbxproj
-index ec6cda6..1368350 100644
+index ec6cda6..bb4385d 100644
 --- a/samples/CameraAccess/CameraAccess.xcodeproj/project.pbxproj
 +++ b/samples/CameraAccess/CameraAccess.xcodeproj/project.pbxproj
-@@ -16,28 +16,32 @@
+@@ -16,28 +16,33 @@
  		8FD96B952E6F0F7D00F56AB1 /* MWDATCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8FD96B942E6F0F7D00F56AB1 /* MWDATCore */; };
  		8FD96B952E6F0F7D00F56AB2 /* MWDATCamera in Frameworks */ = {isa = PBXBuildFile; productRef = 8FD96B942E6F0F7D00F56AB2 /* MWDATCamera */; };
  		8FD96B952E6F0F7D00F56AB3 /* MWDATMockDevice in Frameworks */ = {isa = PBXBuildFile; productRef = 8FD96B942E6F0F7D00F56AB3 /* MWDATMockDevice */; };
@@ -39,11 +39,12 @@ index ec6cda6..1368350 100644
 +		F494632530554B4B00C1D468 /* MacLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = F494632430554B4B00C1D468 /* MacLink.swift */; };
 +		F49463273055546700C1D468 /* CapturePacketSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = F49463263055546700C1D468 /* CapturePacketSender.swift */; };
 +		F49463293055547400C1D468 /* PhoneSensors.swift in Sources */ = {isa = PBXBuildFile; fileRef = F49463283055547400C1D468 /* PhoneSensors.swift */; };
++		F494632B3055FD5000C1D468 /* QuestionListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = F494632A3055FD5000C1D468 /* QuestionListener.swift */; };
 +		FACE0000000000000000FA02 /* TipRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0000000000000000FA01 /* TipRow.swift */; };
  /* End PBXBuildFile section */
  
  /* Begin PBXContainerItemProxy section */
-@@ -82,13 +86,18 @@
+@@ -82,13 +87,18 @@
  		8FD96B7B2E6F0A9800F56AB1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
  		8FFD5FF22E8422580035E446 /* CircleButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircleButton.swift; sourceTree = "<group>"; };
  		8FFD5FF32E8422580035E446 /* CustomButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomButton.swift; sourceTree = "<group>"; };
@@ -63,7 +64,7 @@ index ec6cda6..1368350 100644
  		E66CC00D2F3E05D900B07379 /* CameraAccessUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CameraAccessUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
  		E66CC0182F3E1A9300B07379 /* plant.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = plant.mp4; sourceTree = "<group>"; };
  		E66CC0192F3E1A9300B07379 /* plant.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = plant.png; sourceTree = "<group>"; };
-@@ -97,12 +106,11 @@
+@@ -97,12 +107,12 @@
  		E6DA45172E79A63100E3F688 /* CardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardView.swift; sourceTree = "<group>"; };
  		E6DA45182E79A63100E3F688 /* MockDeviceCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDeviceCardView.swift; sourceTree = "<group>"; };
  		E6DA451A2E79A63100E3F688 /* MockDeviceKitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDeviceKitView.swift; sourceTree = "<group>"; };
@@ -77,11 +78,12 @@ index ec6cda6..1368350 100644
 +		F494632430554B4B00C1D468 /* MacLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacLink.swift; sourceTree = "<group>"; };
 +		F49463263055546700C1D468 /* CapturePacketSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapturePacketSender.swift; sourceTree = "<group>"; };
 +		F49463283055547400C1D468 /* PhoneSensors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSensors.swift; sourceTree = "<group>"; };
++		F494632A3055FD5000C1D468 /* QuestionListener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuestionListener.swift; sourceTree = "<group>"; };
 +		FACE0000000000000000FA01 /* TipRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipRow.swift; sourceTree = "<group>"; };
  /* End PBXFileReference section */
  
  /* Begin PBXFileSystemSynchronizedRootGroup section */
-@@ -135,6 +143,10 @@
+@@ -135,6 +145,11 @@
  		5A5A5A5A5A5A5A5A5A5A5A5A = {
  			isa = PBXGroup;
  			children = (
@@ -89,10 +91,11 @@ index ec6cda6..1368350 100644
 +				F494632430554B4B00C1D468 /* MacLink.swift */,
 +				F49463263055546700C1D468 /* CapturePacketSender.swift */,
 +				F49463283055547400C1D468 /* PhoneSensors.swift */,
++				F494632A3055FD5000C1D468 /* QuestionListener.swift */,
  				8FD96B7D2E6F0A9800F56AB1 /* CameraAccess */,
  				E66CC00E2F3E05D900B07379 /* CameraAccessUITests */,
  				8F2A14F12DDBCEB900D4E5F2 /* Frameworks */,
-@@ -170,18 +182,6 @@
+@@ -170,18 +185,6 @@
  			path = ViewModels;
  			sourceTree = "<group>";
  		};
@@ -111,7 +114,7 @@ index ec6cda6..1368350 100644
  		8FD96B762E6F0A9800F56AB1 /* Views */ = {
  			isa = PBXGroup;
  			children = (
-@@ -231,6 +231,18 @@
+@@ -231,6 +234,18 @@
  			path = MockDeviceKit;
  			sourceTree = "<group>";
  		};
@@ -130,7 +133,7 @@ index ec6cda6..1368350 100644
  		E66CC01A2F3E1A9300B07379 /* TestResources */ = {
  			isa = PBXGroup;
  			children = (
-@@ -396,6 +408,7 @@
+@@ -396,13 +411,16 @@
  			isa = PBXSourcesBuildPhase;
  			buildActionMask = 2147483647;
  			files = (
@@ -138,15 +141,16 @@ index ec6cda6..1368350 100644
  				8FD96B7F2E6F0A9800F56AB1 /* CameraAccessApp.swift in Sources */,
  				8FD96B812E6F0A9800F56AB1 /* HomeScreenView.swift in Sources */,
  				8FFD60542E849D0D0035E446 /* RegistrationView.swift in Sources */,
-@@ -403,6 +416,7 @@
+ 				8FFD60342E8434070035E446 /* MediaPickerView.swift in Sources */,
  				8FFD602C2E8433E20035E446 /* MockDeviceKitViewModel.swift in Sources */,
  				8FFD602D2E8433E20035E446 /* MockDeviceCardViewModel.swift in Sources */,
++				F494632B3055FD5000C1D468 /* QuestionListener.swift in Sources */,
  				E6DA451D2E79A63100E3F688 /* MockDeviceCardView.swift in Sources */,
 +				F49463293055547400C1D468 /* PhoneSensors.swift in Sources */,
  				E6DA451E2E79A63100E3F688 /* CardView.swift in Sources */,
  				E6DA451F2E79A63100E3F688 /* MockDeviceKitView.swift in Sources */,
  				8FD96B872E6F0A9800F56AB1 /* CameraViewModel.swift in Sources */,
-@@ -412,10 +426,12 @@
+@@ -412,10 +430,12 @@
  				E66D30242E7DA71900470B48 /* MockDeviceKitButton.swift in Sources */,
  				8F8F00782E8ACB4600A4BDAF /* WearablesViewModel.swift in Sources */,
  				D7A0000000000000000000A4 /* VideoRecorder.swift in Sources */,
@@ -159,7 +163,7 @@ index ec6cda6..1368350 100644
  				D7A0000000000000000000B2 /* CameraView.swift in Sources */,
  				8FFD5FF52E8422580035E446 /* CircleButton.swift in Sources */,
  				8FFD5FF62E8422580035E446 /* CustomButton.swift in Sources */,
-@@ -460,12 +476,11 @@
+@@ -460,12 +480,11 @@
  				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
  				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
  				CODE_SIGN_ENTITLEMENTS = CameraAccess/CameraAccess.entitlements;
@@ -175,7 +179,7 @@ index ec6cda6..1368350 100644
  				ENABLE_PREVIEWS = YES;
  				FRAMEWORK_SEARCH_PATHS = "";
  				INFOPLIST_FILE = CameraAccess/Info.plist;
-@@ -475,10 +490,9 @@
+@@ -475,10 +494,9 @@
  					"@executable_path/Frameworks",
  				);
  				MARKETING_VERSION = 1.0;
@@ -187,7 +191,7 @@ index ec6cda6..1368350 100644
  				SWIFT_VERSION = 5.0;
  				TARGETED_DEVICE_FAMILY = "1,2";
  			};
-@@ -491,12 +505,11 @@
+@@ -491,12 +509,11 @@
  				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
  				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
  				CODE_SIGN_ENTITLEMENTS = CameraAccess/CameraAccess.entitlements;
@@ -203,7 +207,7 @@ index ec6cda6..1368350 100644
  				ENABLE_PREVIEWS = YES;
  				INFOPLIST_FILE = CameraAccess/Info.plist;
  				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
-@@ -505,10 +518,9 @@
+@@ -505,10 +522,9 @@
  					"@executable_path/Frameworks",
  				);
  				MARKETING_VERSION = 1.0;
@@ -230,10 +234,10 @@ index 278173c..44c3622 100644
  </dict>
  </plist>
 diff --git a/samples/CameraAccess/CameraAccess/Info.plist b/samples/CameraAccess/CameraAccess/Info.plist
-index f0c7623..3643fcc 100644
+index f0c7623..cb940fd 100644
 --- a/samples/CameraAccess/CameraAccess/Info.plist
 +++ b/samples/CameraAccess/CameraAccess/Info.plist
-@@ -33,47 +33,44 @@
+@@ -33,47 +33,46 @@
  	</array>
  	<key>CFBundleVersion</key>
  	<string>$(CURRENT_PROJECT_VERSION)</string>
@@ -297,10 +301,12 @@ index f0c7623..3643fcc 100644
 +	<string>Uses motion to tell stillness from activity.</string>
 +	<key>NSPhotoLibraryAddUsageDescription</key>
 +	<string>This app needs access to save photos captured from your glasses.</string>
++	<key>NSSpeechRecognitionUsageDescription</key>
++	<string>Transcribes short answers to questions asked through the glasses.</string>
  	<key>UIApplicationSceneManifest</key>
  	<dict>
  		<key>UIApplicationSupportsMultipleScenes</key>
-@@ -81,14 +78,26 @@
+@@ -81,14 +80,26 @@
  	</dict>
  	<key>UIApplicationSupportsIndirectInputEvents</key>
  	<true/>
@@ -359,7 +365,7 @@ index 8c7b92a..eadde34 100644
          if UIApplication.shared.applicationState != .background,
            activePreview == nil,
 diff --git a/samples/CameraAccess/CameraAccess/Views/CameraView.swift b/samples/CameraAccess/CameraAccess/Views/CameraView.swift
-index fea2f62..721f6c6 100644
+index fea2f62..7af85e7 100644
 --- a/samples/CameraAccess/CameraAccess/Views/CameraView.swift
 +++ b/samples/CameraAccess/CameraAccess/Views/CameraView.swift
 @@ -18,6 +18,7 @@
@@ -370,17 +376,27 @@ index fea2f62..721f6c6 100644
  
  private let updateRequiredTitle = "Update required"
  
-@@ -26,6 +27,9 @@ struct CameraView: View {
+@@ -26,6 +27,19 @@ struct CameraView: View {
    @Bindable var wearablesVM: WearablesViewModel
    @State private var showSettingsMenu: Bool = false
    @State private var isLaunchingUpdate: Bool = false
 +  @State private var speechSynthesizer = AVSpeechSynthesizer()
 +  /// PERSON_A.md A11 — socket proof. Remove once A14 sends real packets.
 +  @State private var link = MacLink()
++  // INTEGRATION.md §7 — venue networks hand out new subnets; the Mac address is a
++  // runtime setting, not an Xcode rebuild. Seeded from link.host in .onAppear.
++  @State private var hostField = ""
++  @State private var portField = "8010"
++  /// `decimalPad` and `numberPad` have no return key, so without an explicit focus
++  /// binding the keyboard opens over the Connect button and cannot be closed at all.
++  @FocusState private var addressFieldFocused: Bool
++  /// Setup and debug controls live behind this. Six full-width controls plus four
++  /// status lines overflowed the bottom bar on a phone; only Connect is needed live.
++  @State private var showSetup = false
  
    init(wearables: WearablesInterface, wearablesVM: WearablesViewModel) {
      self._viewModel = State(wrappedValue: CameraViewModel(wearables: wearables))
-@@ -104,7 +108,38 @@ struct CameraView: View {
+@@ -104,7 +118,38 @@ struct CameraView: View {
      }
      .navigationBarHidden(true)
    }
@@ -419,7 +435,7 @@ index fea2f62..721f6c6 100644
    // MARK: - Preview background
  
    @ViewBuilder
-@@ -278,26 +313,116 @@ struct CameraView: View {
+@@ -278,26 +323,184 @@ struct CameraView: View {
  
    // MARK: - Bottom bar
  
@@ -439,6 +455,29 @@ index fea2f62..721f6c6 100644
 +        } else {
 +          captureRow
 +
++          // Setup + debug, collapsed by default. Live demo needs Connect and nothing else.
++          Button {
++            withAnimation(.easeInOut(duration: 0.2)) { showSetup.toggle() }
++            if !showSetup { addressFieldFocused = false }
++          } label: {
++            HStack(spacing: 6) {
++              Image(systemName: showSetup ? "chevron.down" : "chevron.right")
++              Text(showSetup ? "Hide setup" : "Setup")
++              Spacer()
++              Text("\(link.host):\(link.port)")
++                .foregroundStyle(.white.opacity(0.55))
++            }
++            .font(.system(size: 13, weight: .semibold))
++            .foregroundStyle(.white)
++            .padding(.horizontal, 14)
++            .frame(maxWidth: .infinity)
++            .frame(height: 36)
++            .background(.ultraThinMaterial)
++            .clipShape(Capsule())
++          }
++          .accessibilityIdentifier("setup_disclosure")
++
++          if showSetup {
 +          Button {
 +            speakTest()
 +          } label: {
@@ -477,6 +516,45 @@ index fea2f62..721f6c6 100644
 +          }
 +          .accessibilityIdentifier("record_corpus_button")
 +
++          HStack(spacing: 6) {
++            TextField("Mac IP", text: $hostField)
++              .textInputAutocapitalization(.never)
++              .autocorrectionDisabled()
++              .keyboardType(.decimalPad)
++              .focused($addressFieldFocused)
++            TextField("Port", text: $portField)
++              .frame(width: 64)
++              .keyboardType(.numberPad)
++              .focused($addressFieldFocused)
++            Button("Apply") {
++              link.configure(host: hostField, port: Int(portField) ?? 8010)
++              // Applying is the end of the interaction; leaving the pad up here is
++              // what made the Connect button unreachable.
++              addressFieldFocused = false
++            }
++            .font(.system(size: 14, weight: .semibold))
++          }
++          .font(.system(size: 14))
++          .padding(.horizontal, 10)
++          .padding(.vertical, 6)
++          .background(.ultraThinMaterial)
++          .clipShape(RoundedRectangle(cornerRadius: 10))
++          .foregroundStyle(.white)
++          // The only way off a numeric pad: it has no return key.
++          .toolbar {
++            ToolbarItemGroup(placement: .keyboard) {
++              Spacer()
++              Button("Done") { addressFieldFocused = false }
++            }
++          }
++
++          if let error = link.configError {
++            Text(error)
++              .font(.system(size: 11, weight: .semibold))
++              .foregroundStyle(.orange)
++          }
++          }
++
 +          // PERSON_A.md A11 — prove the socket. Tap once to connect (it auto-sends a
 +          // hello), tap again to send a ping. `Mac says:` proves the return direction.
 +          Button {
@@ -504,6 +582,7 @@ index fea2f62..721f6c6 100644
 +          VStack(spacing: 2) {
 +            Text(link.status)
 +            Text(viewModel.capture.statusLine)
++            Text(link.listener.statusLine)
 +            Text("Mac says: \(link.lastFromMac)")
 +          }
 +          .font(.system(size: 11))
@@ -524,6 +603,11 @@ index fea2f62..721f6c6 100644
 +      .frame(maxWidth: .infinity)
 +      // A14 lifecycle. `isConnected` must be true before `start()`, which immediately
 +      // emits `hello` and would otherwise have it refused.
++      .onAppear {
++        // Show what the link is actually pointed at, not a hard-coded guess.
++        if hostField.isEmpty { hostField = link.host }
++        portField = String(link.port)
++      }
 +      .onChange(of: link.connected) { _, isUp in
 +        viewModel.capture.isConnected = isUp
 +        if isUp {
@@ -556,10 +640,10 @@ index fea2f62..721f6c6 100644
    /// session button below holds a fixed Y. Hidden without a session; Preview leads as
 diff --git a/samples/CameraAccess/CapturePacketSender.swift b/samples/CameraAccess/CapturePacketSender.swift
 new file mode 100644
-index 0000000..6dd0630
+index 0000000..22daf1c
 --- /dev/null
 +++ b/samples/CameraAccess/CapturePacketSender.swift
-@@ -0,0 +1,430 @@
+@@ -0,0 +1,431 @@
 +//  CapturePacketSender.swift
 +//  PERSON_A.md A12 (sample + encode) + A13 (sensors ride along) + A14 (send the packet).
 +//  Drop into the CameraAccess target alongside MacLink.swift and PhoneSensors.swift.
@@ -972,6 +1056,7 @@ index 0000000..6dd0630
 +      "v": protocolVersion,
 +      "type": "hello",
 +      "device": "iphone",
++      "caps": ["ask"],
 +      // We do not measure skew, and claiming a number we did not measure is worse than
 +      // claiming none. The Mac falls back to arrival time past ±60 s anyway
 +      // (`ingest.MAX_CLOCK_SKEW_S`), and both machines are NTP-synced in practice.
@@ -1081,10 +1166,10 @@ index 0000000..056e046
 +}
 diff --git a/samples/CameraAccess/MacLink.swift b/samples/CameraAccess/MacLink.swift
 new file mode 100644
-index 0000000..471fce6
+index 0000000..029f28f
 --- /dev/null
 +++ b/samples/CameraAccess/MacLink.swift
-@@ -0,0 +1,192 @@
+@@ -0,0 +1,588 @@
 +//  MacLink.swift
 +//  PERSON_A.md A11 — prove the phone <-> Mac socket before any payload rides on it.
 +//
@@ -1096,69 +1181,281 @@ index 0000000..471fce6
 +//  No URLSessionWebSocketDelegate on purpose: the delegate buys only a didOpen callback,
 +//  and in exchange costs an NSObject subclass plus actor-isolation friction against the
 +//  sample's @Observable/@MainActor style. Send and receive prove both directions without it.
++//  Reconnect does not need it either — a dead socket announces itself as a receive or
++//  send failure, which is the same signal a didClose callback would carry.
 +//
 +//  A14 replaces `send(_:)`'s payload with a real capture packet. The transport stays.
++//
++//  ## Demo resilience (the two live-demo hazards this file used to own)
++//
++//  1. **Nothing reconnected.** A Wi-Fi blip set `connected = false` and stopped there;
++//     someone had to tap "Connect to Mac" again, on stage. Now `connect()` records the
++//     *intent* to be connected (`wantConnected`) and every failure path re-dials with
++//     exponential backoff until `disconnect()` withdraws that intent. The socket is
++//     also kept alive with a `ping` every 10 s, because the Mac closes sockets idle for
++//     30 s and the phone is idle for exactly as long as the glasses aren't streaming.
++//  2. **The Mac's IP was a compile-time constant.** A venue network change meant an
++//     Xcode rebuild — on a teammate's Mac, in a different building. `configure(host:port:)`
++//     now rewrites it at runtime and persists it in UserDefaults, so the defaults below
++//     are only the first guess, never the last word.
++//
++//  Failure statuses keep their old prefixes ("not connected" / "send failed" / "closed")
++//  because `CapturePacketSender.apply(macLinkStatus:)` pattern-matches exactly those to
++//  derive `isConnected`. A reconnect countdown that read "reconnecting in 4s …" with no
++//  prefix would look *connected* to that heuristic, and the sender would report failures
++//  where it should report drops. Prefer binding `link.connected` directly where you can.
 +
 +import AVFoundation
 +import Foundation
 +import Observation
 +
++private final class SpeechCompletionDelegate: NSObject, AVSpeechSynthesizerDelegate {
++  var didFinish: ((AVSpeechUtterance) -> Void)?
++  func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
++    didFinish?(utterance)
++  }
++  func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
++    didFinish?(utterance)
++  }
++}
++
++private final class AudioCompletionDelegate: NSObject, AVAudioPlayerDelegate {
++  var didFinish: ((AVAudioPlayer) -> Void)?
++  func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
++    didFinish?(player)
++  }
++  func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
++    didFinish?(player)
++  }
++}
++
 +@Observable
 +@MainActor
 +final class MacLink {
-+  /// True once the socket is resumed. A dead Mac shows up as a send/receive failure.
++  /// True once the hello send is *confirmed* by the transport, not merely when the task
++  /// is resumed: `webSocketTask.resume()` succeeds against a Mac that is switched off.
++  /// A dead Mac shows up as a send/receive failure, which is what clears this again.
 +  var connected = false
 +  /// Human-readable state for the button label — this is a debugging tool.
 +  var status = "not connected"
++  /// Last rejected `configure(host:port:)` input, or nil. Kept apart from `status` on
++  /// purpose (see `configure`).
++  var configError: String?
 +  /// Most recent message the Mac pushed to us. Proves Mac -> phone.
 +  var lastFromMac = "—"
 +  var sentCount = 0
 +  /// Utterances spoken out the glasses. A16's proof.
 +  var spokenCount = 0
 +
++  /// Where we are dialling right now. Observable so a settings field can show it.
++  private(set) var host: String
++  private(set) var port: Int
++
 +  @ObservationIgnored private let synth = AVSpeechSynthesizer()
++  @ObservationIgnored private let speechDelegate = SpeechCompletionDelegate()
++  @ObservationIgnored private let audioDelegate = AudioCompletionDelegate()
++  /// Retain every playback object until its own completion callback arrives. The order
++  /// lets an ask bind to exactly the most recently-started playback, not whichever one
++  /// happens to finish next.
++  @ObservationIgnored private var playbackIDs: [ObjectIdentifier] = []
++  @ObservationIgnored private var speechUtterances: [ObjectIdentifier: AVSpeechUtterance] = [:]
++  @ObservationIgnored private var audioPlayers: [ObjectIdentifier: AVAudioPlayer] = [:]
++
++  /// Public for the one-line SwiftUI status hookup documented in INTEGRATION.md.
++  @ObservationIgnored lazy var listener = QuestionListener { [weak self] json in
++    self?.sendRaw(json)
++  }
 +
 +  @ObservationIgnored private var task: URLSessionWebSocketTask?
-+  @ObservationIgnored let url: URL
++  /// `var` since A19: `configure(host:port:)` can move the Mac out from under us.
++  @ObservationIgnored private(set) var url: URL
++  @ObservationIgnored private let path: String
++
++  /// The user's *intent*, not the socket's state. `connected` answers "is the pipe up";
++  /// this answers "should it be". Everything self-healing hangs off the difference.
++  @ObservationIgnored private var wantConnected = false
++  /// Exactly one pending reconnect, ever. Two overlapping timers is how backoff turns
++  /// into a retry storm that hammers the Mac at the worst possible moment.
++  @ObservationIgnored private var reconnectTask: Task<Void, Never>?
++  @ObservationIgnored private var reconnectAttempt = 0
++  @ObservationIgnored private var keepaliveTask: Task<Void, Never>?
++  /// Bumped on every socket teardown. URLSession completion handlers from a socket we
++  /// already gave up on arrive *after* the replacement is live; without this they would
++  /// mark the healthy new socket dead and schedule a second reconnect on top of it.
++  @ObservationIgnored private var generation = 0
 +
 +  /// Dial the Mac's LAN IP. Never `localhost` — on the phone that resolves to the phone.
 +  ///
-+  /// EDIT THESE TWO when moving between machines. `path` differs by target: the A11
++  /// These are the *fallback*, used only until someone calls `configure(host:port:)`
++  /// once on the device; after that UserDefaults wins. `path` differs by target: the A11
 +  /// echo server (tools/echo_server.py, port 8765) accepts any path, but the real
 +  /// ingest server hard-codes `/ws/glasses` in `ingest.INGEST_PATH` and a bare `/`
 +  /// 404s at the handshake.
 +  static let defaultHost = "10.135.100.6"   // Rishi's Mac. `ipconfig getifaddr en0` to change.
 +  static let defaultPort = 8010             // ingest (t0 --port 8010); 8765 = A11 echo server
 +
++  /// UserDefaults keys. Read in `init`, written by `configure(host:port:)`.
++  static let hostKey = "macHost"
++  static let portKey = "macPort"
++
++  /// The Mac drops sockets idle for 30 s. 10 s leaves room for two lost pings before
++  /// that timer fires, which matters on venue Wi-Fi where one round trip is cheap to lose.
++  static let keepaliveInterval: TimeInterval = 10
++  /// 1, 2, 4, 8, then flat. Capped because a demo is minutes long: a 64 s hole between
++  /// attempts is indistinguishable from "it never came back".
++  static let maxBackoff: TimeInterval = 10
++
 +  init(
 +    host: String = MacLink.defaultHost,
 +    port: Int = MacLink.defaultPort,
 +    path: String = "/ws/glasses"
 +  ) {
-+    url = URL(string: "ws://\(host):\(port)\(path)")!
++    // A stored host outranks the compiled-in one: whoever typed it into the app last
++    // was standing in the room. `integer(forKey:)` returns 0 when the key is unset,
++    // which is also not a legal port, so one test covers both cases.
++    let defaults = UserDefaults.standard
++    let storedHost = defaults.string(forKey: MacLink.hostKey)
++    let storedPort = defaults.integer(forKey: MacLink.portKey)
++    let resolvedHost = (storedHost?.isEmpty == false) ? storedHost! : host
++    let resolvedPort = storedPort > 0 ? storedPort : port
++
++    self.path = path
++    self.host = resolvedHost
++    self.port = resolvedPort
++    // Force-unwrap only on the compiled-in fallback, which is known-good; a garbage
++    // string in UserDefaults must not be able to crash the app at launch.
++    url =
++      URL(string: "ws://\(resolvedHost):\(resolvedPort)\(path)")
++      ?? URL(string: "ws://\(MacLink.defaultHost):\(MacLink.defaultPort)\(path)")!
++    speechDelegate.didFinish = { [weak self] utterance in
++      Task { @MainActor in self?.playbackFinished(utterance) }
++    }
++    audioDelegate.didFinish = { [weak self] player in
++      Task { @MainActor in self?.playbackFinished(player) }
++    }
++    synth.delegate = speechDelegate
 +  }
 +
++  // MARK: - Intent
++
++  /// Declare that we want to be connected, and stay connected, until `disconnect()`.
 +  func connect() {
-+    disconnect()
-+    let t = URLSession.shared.webSocketTask(with: url)
-+    task = t
-+    t.resume()
-+    connected = true
-+    status = "connected \(url.host ?? "?"):\(url.port ?? 0)"
-+    receive()
-+    send("hello from the phone")
++    wantConnected = true
++    reconnectAttempt = 0
++    cancelReconnect()
++    openSocket()
 +  }
 +
++  /// Withdraw the intent. This is the only thing that stops the reconnect loop — a
++  /// failure never does, which is the whole point.
 +  func disconnect() {
-+    task?.cancel(with: .goingAway, reason: nil)
-+    task = nil
++    wantConnected = false
++    reconnectAttempt = 0
++    cancelReconnect()
++    listener.cancel()
++    teardownSocket()
 +    connected = false
 +    status = "not connected"
 +  }
 +
++  /// Point the link at a different Mac at runtime and remember the choice (A19).
++  ///
++  /// Venue Wi-Fi hands out a new subnet and the hard-coded `defaultHost` is suddenly
++  /// wrong; without this the fix is an Xcode rebuild on a machine that may not be in
++  /// the room. Reconnects immediately if we are supposed to be connected, so the only
++  /// gesture needed is "type the IP, tap Apply".
++  func configure(host newHost: String, port newPort: Int) {
++    let trimmed = newHost.trimmingCharacters(in: .whitespacesAndNewlines)
++    guard !trimmed.isEmpty, newPort > 0, newPort < 65536,
++      let candidate = URL(string: "ws://\(trimmed):\(newPort)\(path)")
++    else {
++      // Do not touch `status`: a bad value typed into the settings field must not read
++      // as a dropped socket to CapturePacketSender.apply(macLinkStatus:) on a link that
++      // is perfectly healthy. Surface it on its own property instead.
++      configError = "bad host/port"
++      return
++    }
++    configError = nil
++
++    host = trimmed
++    port = newPort
++    url = candidate
++    UserDefaults.standard.set(trimmed, forKey: Self.hostKey)
++    UserDefaults.standard.set(newPort, forKey: Self.portKey)
++
++    // A new address is a fresh start: the old backoff was counting failures against a
++    // machine we are no longer talking to.
++    reconnectAttempt = 0
++    cancelReconnect()
++    if wantConnected {
++      openSocket()
++    } else {
++      teardownSocket()
++      connected = false
++      status = "not connected · \(trimmed):\(newPort)"
++    }
++  }
++
++  // MARK: - Socket lifecycle
++
++  /// Open a socket and prove it with a hello. Never call this directly from the UI —
++  /// `connect()` owns the intent flag, this owns only the plumbing.
++  private func openSocket() {
++    teardownSocket()
++    // A replaced socket is not a connected one until its hello is confirmed — otherwise
++    // `configure` against an unreachable Mac reports "connected" until the new one fails.
++    connected = false
++    generation &+= 1
++    let gen = generation
++
++    let t = URLSession.shared.webSocketTask(with: url)
++    task = t
++    t.resume()
++    status = "not connected · connecting \(host):\(port)"
++    receive(gen: gen)
++    sendHello(gen: gen)
++  }
++
++  /// Drop the current socket without touching `wantConnected`, `connected` or `status`.
++  private func teardownSocket() {
++    stopKeepalive()
++    listener.cancel()
++    generation &+= 1
++    task?.cancel(with: .goingAway, reason: nil)
++    task = nil
++  }
++
++  /// A11's echo hello, now doing double duty as the connection proof: `connected` and
++  /// the backoff reset both hang off its completion, because a confirmed byte out is
++  /// the earliest honest evidence the Mac is actually there.
++  private func sendHello(gen: Int) {
++    guard let task else { return }
++    let body: [String: Any] = ["v": 1, "type": "echo", "text": "hello from the phone"]
++    guard let data = try? JSONSerialization.data(withJSONObject: body),
++      let payload = String(data: data, encoding: .utf8)
++    else { return }
++
++    task.send(.string(payload)) { [weak self] error in
++      Task { @MainActor in
++        guard let self, gen == self.generation else { return }
++        if let error {
++          self.fail("closed: \(error.localizedDescription)", gen: gen)
++        } else {
++          self.connected = true
++          self.sentCount += 1
++          // Reset here, not at `openSocket()`: resuming a task proves nothing, so a
++          // flapping link would otherwise retry every 1 s forever.
++          self.reconnectAttempt = 0
++          self.status = "connected \(self.host):\(self.port)"
++          self.startKeepalive(gen: gen)
++        }
++      }
++    }
++  }
++
 +  func send(_ text: String) {
 +    guard let task else {
-+      status = "not connected"
++      noSocket()
 +      return
 +    }
 +    let body: [String: Any] = ["v": 1, "type": "echo", "text": text]
@@ -1166,13 +1463,14 @@ index 0000000..471fce6
 +      let payload = String(data: data, encoding: .utf8)
 +    else { return }
 +
++    let gen = generation
 +    task.send(.string(payload)) { [weak self] error in
 +      Task { @MainActor in
 +        guard let self else { return }
 +        if let error {
-+          self.connected = false
-+          self.status = "send failed: \(error.localizedDescription)"
++          self.fail("send failed: \(error.localizedDescription)", gen: gen)
 +        } else {
++          guard gen == self.generation else { return }
 +          self.sentCount += 1
 +          self.status = "sent \(self.sentCount)"
 +        }
@@ -1188,18 +1486,19 @@ index 0000000..471fce6
 +  /// once, `nil` on success. URLSession fires it on a background queue, hence @Sendable.
 +  func sendRaw(_ json: String, completion: @escaping @Sendable (Error?) -> Void = { _ in }) {
 +    guard let task else {
-+      status = "not connected"
++      noSocket()
 +      completion(URLError(.notConnectedToInternet))
 +      return
 +    }
++    let gen = generation
 +    task.send(.string(json)) { [weak self] error in
 +      completion(error)
 +      Task { @MainActor in
 +        guard let self else { return }
 +        if let error {
-+          self.connected = false
-+          self.status = "send failed: \(error.localizedDescription)"
++          self.fail("send failed: \(error.localizedDescription)", gen: gen)
 +        } else {
++          guard gen == self.generation else { return }
 +          self.sentCount += 1
 +        }
 +      }
@@ -1208,30 +1507,116 @@ index 0000000..471fce6
 +
 +  /// `receive` is ONE-SHOT. Re-arming it is the classic bug here: the first message
 +  /// from the Mac arrives and every one after it is silently dropped.
-+  private func receive() {
++  private func receive(gen: Int) {
 +    task?.receive { [weak self] result in
 +      Task { @MainActor in
-+        guard let self else { return }
++        // A callback from a socket we already replaced must not re-arm on the new one
++        // (two receive chains, every message handled twice) nor kill it.
++        guard let self, gen == self.generation else { return }
 +        switch result {
 +        case .success(let message):
 +          if case .string(let text) = message {
 +            print("from Mac: \(text)")
 +            self.handle(text)
 +          }
-+          self.receive()
++          self.receive(gen: gen)
 +        case .failure(let error):
 +          print("socket closed: \(error)")
-+          self.connected = false
-+          self.status = "closed: \(error.localizedDescription)"
++          self.fail("closed: \(error.localizedDescription)", gen: gen)
 +        }
++      }
++    }
++  }
++
++  // MARK: - Self-healing
++
++  /// One funnel for every way the socket can die. Stale callbacks are dropped here, so
++  /// no caller has to think about generations beyond passing the one it captured.
++  private func fail(_ reason: String, gen: Int) {
++    guard gen == generation else { return }
++    print("MacLink failure: \(reason)")
++    connected = false
++    listener.cancel()
++    status = reason
++    teardownSocket()
++    scheduleReconnect()
++  }
++
++  /// A send attempted with no socket at all. Not a transport failure — there is nothing
++  /// to tear down — but it is evidence the link is down, so it still pokes the retry.
++  private func noSocket() {
++    connected = false
++    // Don't stomp a live countdown; the pending reconnect's status is more informative.
++    if reconnectTask == nil { status = "not connected" }
++    if wantConnected { scheduleReconnect() }
++  }
++
++  /// Exponential backoff: 1, 2, 4, 8, then flat at `maxBackoff`, plus a little jitter so
++  /// a phone and any other client that dropped at the same instant don't re-dial in
++  /// lockstep. `Task.sleep`, not DispatchQueue, so `cancelReconnect()` is instant and
++  /// the whole thing stays on the main actor with no hop to reason about.
++  private func scheduleReconnect() {
++    guard wantConnected else { return }
++    // The single-pending-attempt guard. A receive failure and a send failure routinely
++    // land within microseconds of each other for the same drop.
++    guard reconnectTask == nil else { return }
++
++    reconnectAttempt += 1
++    let attempt = reconnectAttempt
++    let base = min(Self.maxBackoff, pow(2.0, Double(attempt - 1)))
++    let delay = base + Double.random(in: 0...0.3)
++    // Keeps the "closed" prefix CapturePacketSender.apply(macLinkStatus:) matches on.
++    status = "closed · reconnecting in \(Int(base))s (attempt \(attempt))"
++
++    reconnectTask = Task { @MainActor [weak self] in
++      try? await Task.sleep(for: .seconds(delay))
++      guard !Task.isCancelled, let self else { return }
++      self.reconnectTask = nil
++      guard self.wantConnected else { return }
++      self.openSocket()
++    }
++  }
++
++  private func cancelReconnect() {
++    reconnectTask?.cancel()
++    reconnectTask = nil
++  }
++
++  /// `{"v":1,"type":"ping"}` every 10 s. The Mac accepts it quietly and, more to the
++  /// point, stops closing us for being idle — which is the normal state of this socket
++  /// between "Connect to Mac" and the first glasses frame.
++  private func startKeepalive(gen: Int) {
++    stopKeepalive()
++    keepaliveTask = Task { @MainActor [weak self] in
++      while !Task.isCancelled {
++        try? await Task.sleep(for: .seconds(MacLink.keepaliveInterval))
++        guard !Task.isCancelled, let self, self.generation == gen else { return }
++        self.sendPing(gen: gen)
++      }
++    }
++  }
++
++  private func stopKeepalive() {
++    keepaliveTask?.cancel()
++    keepaliveTask = nil
++  }
++
++  /// Deliberately does not move `sentCount` or `status`: that counter is compared
++  /// against the Mac's `received` during the demo, and keepalives would inflate it.
++  private func sendPing(gen: Int) {
++    guard let task, gen == generation else { return }
++    task.send(.string("{\"v\":1,\"type\":\"ping\"}")) { [weak self] error in
++      guard let error else { return }
++      Task { @MainActor in
++        self?.fail("closed: \(error.localizedDescription)", gen: gen)
 +      }
 +    }
 +  }
 +
 +  // MARK: - A16 · speak
 +
-+  /// Route an inbound message by `type`. A14 adds nothing here; the Mac only ever
-+  /// pushes `speak` (A16) and later `audio` (A18) down this socket.
++  /// Route all Mac -> phone messages. `ask` follows its question audio on the wire;
++  /// completion tracking below preserves that order at the hardware boundary too.
 +  private func handle(_ raw: String) {
 +    guard let data = raw.data(using: .utf8),
 +      let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -1240,9 +1625,104 @@ index 0000000..471fce6
 +      return
 +    }
 +    let type = obj["type"] as? String ?? "?"
++    let wireAudio = "audio"  // longevity.wire.AUDIO
 +    let text = obj["text"] as? String ?? ""
 +    lastFromMac = "\(type): \(text)"
 +    if type == "speak", !text.isEmpty { speak(text) }
++    // A18 — pre-rendered ElevenLabs audio. The Mac falls back to a `speak` message
++    // when synthesis fails, so both paths stay live and neither blocks the other.
++    if type == wireAudio { playAudio(obj) }
++    if type == "ask" {
++      let awaitedPlaybackID = playbackIDs.last
++      let connectionGeneration = generation
++      let listenS = obj["listen_s"] as? Double ?? 8
++      listener.receive(obj, afterPlayback: { [weak self] in
++        guard let self else { return false }
++        return await self.waitForPlayback(
++          id: awaitedPlaybackID, timeout: listenS + 10)
++      }, send: { [weak self] json in
++        guard let self else { return }
++        guard self.generation == connectionGeneration else {
++          print("dropping answer from stale connection generation \(connectionGeneration)")
++          return
++        }
++        self.sendRaw(json)
++      })
++    }
++  }
++
++  private func playbackStarted(_ utterance: AVSpeechUtterance) {
++    let id = ObjectIdentifier(utterance)
++    speechUtterances[id] = utterance
++    playbackIDs.append(id)
++  }
++
++  private func playbackStarted(_ player: AVAudioPlayer) {
++    let id = ObjectIdentifier(player)
++    audioPlayers[id] = player
++    playbackIDs.append(id)
++  }
++
++  private func playbackFinished(_ utterance: AVSpeechUtterance) {
++    playbackFinished(id: ObjectIdentifier(utterance))
++  }
++
++  private func playbackFinished(_ player: AVAudioPlayer) {
++    playbackFinished(id: ObjectIdentifier(player))
++  }
++
++  private func playbackFinished(id: ObjectIdentifier) {
++    speechUtterances[id] = nil
++    audioPlayers[id] = nil
++    playbackIDs.removeAll { $0 == id }
++  }
++
++  private func waitForPlayback(id: ObjectIdentifier?, timeout: TimeInterval) async -> Bool {
++    guard let id else {
++      try? await Task.sleep(for: .milliseconds(300))
++      return !Task.isCancelled
++    }
++    let deadline = Date().addingTimeInterval(timeout)
++    while playbackIDs.contains(id) && Date() < deadline {
++      try? await Task.sleep(for: .milliseconds(50))
++      if Task.isCancelled { return false }
++    }
++    return !playbackIDs.contains(id)
++  }
++
++  /// Play pre-rendered audio pushed by the Mac (A18, wire.audio_message).
++  private func playAudio(_ obj: [String: Any]) {
++    guard obj["format"] as? String == "mp3",
++      let encoded = obj["data"] as? String,
++      let data = Data(base64Encoded: encoded)
++    else {
++      status = "audio message malformed"
++      return
++    }
++    do {
++      let session = AVAudioSession.sharedInstance()
++      try session.setCategory(.playback, options: [.allowBluetoothA2DP])
++      try session.setActive(true)
++    } catch {
++      // Same -50 trap as speak(): never return here, the existing route is usually fine.
++      print("audio session (non-fatal): \(error)")
++    }
++    do {
++      let player = try AVAudioPlayer(data: data)
++      player.delegate = audioDelegate
++      player.prepareToPlay()
++      playbackStarted(player)
++      guard player.play() else {
++        playbackFinished(player)
++        status = "audio playback failed"
++        return
++      }
++      spokenCount += 1
++      status = "played #\(spokenCount) · \(data.count / 1024) KB mp3"
++    } catch {
++      status = "audio playback failed"
++      print("audio playback failed: \(error)")
++    }
 +  }
 +
 +  /// hardware_software.md §19 — the exact session config validated on real hardware.
@@ -1268,6 +1748,7 @@ index 0000000..471fce6
 +    let utterance = AVSpeechUtterance(string: text)
 +    utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
 +    utterance.rate = 0.48  // matches the validated speakTest()
++    playbackStarted(utterance)
 +    synth.speak(utterance)
 +    spokenCount += 1
 +    status = "spoke #\(spokenCount): \(text.prefix(28))"
@@ -1455,5 +1936,272 @@ index 0000000..d88a97b
 +      _speed = nil
 +      lock.unlock()
 +    }
++  }
++}
+diff --git a/samples/CameraAccess/QuestionListener.swift b/samples/CameraAccess/QuestionListener.swift
+new file mode 100644
+index 0000000..7791270
+--- /dev/null
++++ b/samples/CameraAccess/QuestionListener.swift
+@@ -0,0 +1,261 @@
++//  QuestionListener.swift
++//  A short, explicit microphone window for ask/answer. The window is deliberately
++//  owned here so no reconnect, interruption, or recognition exit can strand it open.
++
++import AVFoundation
++import Foundation
++import Observation
++import Speech
++
++@Observable
++@MainActor
++final class QuestionListener {
++  struct Question: Equatable {
++    let id: String
++    let listenS: TimeInterval
++    let answerKind: String
++    let text: String
++  }
++
++  enum State: Equatable {
++    case idle
++    case awaitingPlayback(Question)
++    case listening(Question)
++    case sending
++  }
++
++  private(set) var state: State = .idle
++  private(set) var lastTranscript = ""
++  private(set) var lastError: String?
++
++  var statusLine: String {
++    switch state {
++    case .idle: return lastError.map { "answer idle · \($0)" } ?? "answer idle"
++    case .awaitingPlayback: return "answer waiting for question"
++    case .listening: return lastTranscript.isEmpty ? "answer listening…" : "heard: \(lastTranscript)"
++    case .sending: return "answer sending…"
++    }
++  }
++
++  @ObservationIgnored private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
++  @ObservationIgnored private var engine: AVAudioEngine?
++  @ObservationIgnored private var request: SFSpeechAudioBufferRecognitionRequest?
++  @ObservationIgnored private var recognitionTask: SFSpeechRecognitionTask?
++  @ObservationIgnored private var deadlineTask: Task<Void, Never>?
++  @ObservationIgnored private var pauseTask: Task<Void, Never>?
++  @ObservationIgnored private var askTask: Task<Void, Never>?
++  @ObservationIgnored private var lifecycleTask: Task<Void, Never>?
++  @ObservationIgnored private var activeID: String?
++  @ObservationIgnored private var activeQuestion: Question?
++  @ObservationIgnored private var activeAnswerSend: ((String) -> Void)?
++  @ObservationIgnored private var answered = Set<String>()
++  @ObservationIgnored private var observers: [NSObjectProtocol] = []
++  @ObservationIgnored private let send: (String) -> Void
++
++  init(send: @escaping (String) -> Void) {
++    self.send = send
++    let center = NotificationCenter.default
++    // Only the *start* of an interruption (a phone call, Siri) ends the window; the
++    // `.ended` half arrives after we have already restored playback.
++    observers.append(center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
++      let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
++      guard raw == AVAudioSession.InterruptionType.began.rawValue else { return }
++      Task { @MainActor in self?.cancel(reason: "audio interrupted") }
++    })
++    // Opening the mic *is* a route change: `.playAndRecord` flips the glasses from
++    // A2DP to the hands-free profile, and restoring playback flips them back. Cancelling
++    // on every route change would therefore close the window the instant it opened.
++    // Only a device going away (glasses off, Bluetooth dropped) ends the window.
++    observers.append(center.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] note in
++      let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
++      guard raw == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue else { return }
++      Task { @MainActor in self?.cancel(reason: "audio device went away") }
++    })
++  }
++
++  deinit {
++    for observer in observers { NotificationCenter.default.removeObserver(observer) }
++  }
++
++  func receive(
++    _ obj: [String: Any], afterPlayback: @escaping () async -> Bool,
++    send answer: @escaping (String) -> Void
++  ) {
++    guard let id = obj["question_id"] as? String,
++      let listenS = obj["listen_s"] as? Double,
++      let kind = obj["answer_kind"] as? String,
++      let text = obj["text"] as? String,
++      ["yes_no", "count", "free"].contains(kind), listenS > 0
++    else { return }
++
++    let question = Question(id: id, listenS: listenS, answerKind: kind, text: text)
++    guard !answered.contains(id), activeID == nil else { return }
++    activeID = id
++    activeQuestion = question
++    activeAnswerSend = answer
++    state = .awaitingPlayback(question)
++    lastTranscript = ""
++    lastError = nil
++    lifecycleTask = Task { @MainActor [weak self] in
++      try? await Task.sleep(for: .seconds(listenS + 15))
++      guard !Task.isCancelled, let self, self.activeID == id else { return }
++      self.finish(
++        question, text: "", heard: false, error: "timed out before listening", send: answer)
++    }
++    askTask = Task { @MainActor [weak self] in
++      let playbackFinished = await afterPlayback()
++      guard !Task.isCancelled, self?.activeID == id else { return }
++      guard playbackFinished else {
++        self?.finish(question, text: "", heard: false, error: "playback timed out", send: answer)
++        return
++      }
++      let authorized = await QuestionListener.authorized()
++      guard !Task.isCancelled, let self, self.activeID == id else { return }
++      guard authorized else {
++        self.finish(question, text: "", heard: false, error: "microphone or speech denied", send: answer)
++        return
++      }
++      self.startListening(question, send: answer)
++    }
++  }
++
++  func receive(_ obj: [String: Any], afterPlayback: @escaping () async -> Bool) {
++    receive(obj, afterPlayback: afterPlayback, send: send)
++  }
++
++  func cancel() { cancel(reason: "cancelled") }
++  func stop() { cancel(reason: "stopped") }
++
++  private func cancel(reason: String) {
++    guard let question = activeQuestion else {
++      // Nothing open: leave the audio session alone. Re-applying the playback category
++      // here would itself post a route change while the DAT stream is live.
++      state = .idle
++      return
++    }
++    askTask?.cancel()
++    finish(question, text: "", heard: false, error: reason)
++  }
++
++  private nonisolated static func authorized() async -> Bool {
++    let mic: Bool
++    switch AVAudioApplication.shared.recordPermission {
++    case .granted: mic = true
++    case .denied: mic = false
++    case .undetermined: mic = await AVAudioApplication.requestRecordPermission()
++    @unknown default: mic = false
++    }
++    guard mic else { return false }
++
++    let speech: SFSpeechRecognizerAuthorizationStatus
++    if SFSpeechRecognizer.authorizationStatus() == .notDetermined {
++      speech = await withCheckedContinuation { continuation in
++        SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0) }
++      }
++    } else {
++      speech = SFSpeechRecognizer.authorizationStatus()
++    }
++    return speech == .authorized
++  }
++
++  private func startListening(_ question: Question, send: @escaping (String) -> Void) {
++    cleanupAndRestore(cancelLifecycle: false)
++    let audioEngine = AVAudioEngine()
++    let speechRequest = SFSpeechAudioBufferRecognitionRequest()
++    speechRequest.shouldReportPartialResults = true
++    if recognizer?.supportsOnDeviceRecognition == true {
++      speechRequest.requiresOnDeviceRecognition = true
++    }
++
++    do {
++      let session = AVAudioSession.sharedInstance()
++      // `allowBluetoothHFP` is the iOS 17 spelling of the contract's deprecated
++      // `.allowBluetooth` option; it is what admits the glasses microphone route.
++      try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
++      try session.setActive(true)
++      let input = audioEngine.inputNode
++      let format = input.outputFormat(forBus: 0)
++      input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, when in
++        speechRequest.append(buffer)
++      }
++      audioEngine.prepare()
++      try audioEngine.start()
++      print("listening inputs: \(session.currentRoute.inputs.map { "\($0.portName) [\($0.portType.rawValue)]" })")
++    } catch {
++      finish(question, text: "", heard: false, error: "microphone failed: \(error.localizedDescription)", send: send)
++      return
++    }
++
++    engine = audioEngine
++    request = speechRequest
++    state = .listening(question)
++    recognitionTask = recognizer?.recognitionTask(with: speechRequest) { [weak self] result, error in
++      Task { @MainActor in self?.recognitionUpdate(question, result: result, error: error, send: send) }
++    }
++    deadlineTask = Task { @MainActor [weak self] in
++      try? await Task.sleep(for: .seconds(question.listenS))
++      guard !Task.isCancelled else { return }
++      self?.finish(question, text: self?.lastTranscript ?? "", heard: !(self?.lastTranscript.isEmpty ?? true), error: nil, send: send)
++    }
++  }
++
++  private func recognitionUpdate(_ question: Question, result: SFSpeechRecognitionResult?, error: Error?, send: @escaping (String) -> Void) {
++    guard activeID == question.id else { return }
++    if let result {
++      lastTranscript = result.bestTranscription.formattedString
++      if result.isFinal {
++        finish(question, text: lastTranscript, heard: !lastTranscript.isEmpty, error: nil, send: send)
++        return
++      }
++      if !lastTranscript.isEmpty {
++        pauseTask?.cancel()
++        pauseTask = Task { @MainActor [weak self] in
++          try? await Task.sleep(for: .seconds(1.2))
++          guard !Task.isCancelled, let self else { return }
++          self.finish(question, text: self.lastTranscript, heard: !self.lastTranscript.isEmpty, error: nil, send: send)
++        }
++      }
++    }
++    if let error { finish(question, text: lastTranscript, heard: !lastTranscript.isEmpty, error: error.localizedDescription, send: send) }
++  }
++
++  private func finish(
++    _ question: Question, text: String, heard: Bool, error: String?,
++    send answer: ((String) -> Void)? = nil
++  ) {
++    guard activeID == question.id, !answered.contains(question.id) else { return }
++    answered.insert(question.id)
++    state = .sending
++    lastError = error
++    cleanupAndRestore()
++    let body: [String: Any] = [
++      "v": 1, "type": "answer", "question_id": question.id,
++      "text": text, "heard": heard, "t": Date().timeIntervalSince1970,
++    ]
++    if let data = try? JSONSerialization.data(withJSONObject: body),
++      let json = String(data: data, encoding: .utf8) { (answer ?? activeAnswerSend ?? send)(json) }
++    activeID = nil
++    activeQuestion = nil
++    activeAnswerSend = nil
++    askTask = nil
++    state = .idle
++  }
++
++  private func cleanupAndRestore(cancelLifecycle: Bool = true) {
++    if cancelLifecycle { lifecycleTask?.cancel(); lifecycleTask = nil }
++    deadlineTask?.cancel(); deadlineTask = nil
++    pauseTask?.cancel(); pauseTask = nil
++    recognitionTask?.cancel(); recognitionTask = nil
++    request?.endAudio(); request = nil
++    if let engine {
++      engine.inputNode.removeTap(onBus: 0)
++      engine.stop()
++    }
++    engine = nil
++    do {
++      let session = AVAudioSession.sharedInstance()
++      try session.setCategory(.playback, mode: .spokenAudio, options: [.allowBluetoothA2DP])
++      try session.setActive(true)
++    } catch { print("restore playback session (non-fatal): \(error)") }
 +  }
 +}
