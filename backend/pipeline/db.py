@@ -1246,6 +1246,16 @@ class Database:
             ).fetchone()
         return None if r is None else self._conversation_from_row(r)
 
+    def close_stale_conversations(self) -> int:
+        """Close conversations a previous process left active (`stale`)."""
+        with self._lock:
+            cur = self.conn.execute(
+                "UPDATE conversations SET state = 'closed', closed_t = opened_t,"
+                " close_reason = 'stale' WHERE state = 'active'"
+            )
+            self.conn.commit()
+            return int(cur.rowcount)
+
     def conversations_today_lines(self, day: str | None = None) -> list[str]:
         """One line per conversation closed today (CONVERSATION_DESIGN §3).
 

@@ -160,7 +160,11 @@ class QuestionManager:
                 log.info("ask suppressed (%s) for decision %s", reason, decision_id)
                 return row, reason
 
-            self.limiter.grant(t)
+            if conversation_id is None:
+                # Only questions the clerk's limiter admitted count against it;
+                # a conversation serialises its own questions and must not eat
+                # the clerk's min-gap or hourly quota.
+                self.limiter.grant(t)
             try:
                 asyncio.get_running_loop().create_task(self._send(row))
             except RuntimeError:

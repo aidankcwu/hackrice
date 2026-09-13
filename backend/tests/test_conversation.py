@@ -572,3 +572,53 @@ async def test_a_settled_block_of_nothing_is_not_written_back(h):
     assert agent.get(cid)["settled"] == {}
     assert h.db.reported_by_episode(day=DAY) == {}
     assert h.db.get_question(question.id).status == "answered"
+
+
+def test_a_failed_insert_releases_the_conversation_slot(tmp_path):
+    """Astra: a hand-off that cannot be persisted must not leave the slot claimed."""
+    import asyncio
+    from pipeline.config import Settings
+    from pipeline.conversation.agent import ConversationAgent, NO_TRANSPORT
+    from pipeline.conversation.client import FakeVoiceClient
+    from pipeline.db import Database
+
+    class Exploding(Database):
+        def insert_conversation(self, conv):
+            raise RuntimeError("disk full")
+
+    settings = Settings(db_path=tmp_path / "boom.db", demo_mode=True)
+    db = Exploding(settings.db_path).connect().init_schema()
+
+    from pipeline.actions.speech import SpeechLimiter
+    from pipeline.frames import InMemoryFrameStore
+
+    async def run():
+        agent = ConversationAgent(db, InMemoryFrameStore(), FakeVoiceClient(),
+                                  SpeechLimiter(0, 100), settings, questions=None)
+        assert agent.request("a drink", "statement") == NO_TRANSPORT
+        assert agent.current() is None
+        assert agent.stats()["opened"] == 0
+    asyncio.run(run())
+    db.close()
+
+
+def test_stale_active_conversations_are_closed_at_startup(tmp_path):
+    from pipeline.config import Settings
+    from pipeline.conversation.agent import ConversationAgent
+    from pipeline.conversation.client import FakeVoiceClient
+    from pipeline.db import Database
+
+    settings = Settings(db_path=tmp_path / "stale.db", demo_mode=True)
+    db = Database(settings.db_path).connect().init_schema()
+    db.insert_conversation({"id": "c_stale1", "opened_t": 10.0, "closed_t": None, "reason": "r",
+                            "topic": "t", "decision_id": None, "episode_id": None,
+                            "state": "active", "turns": [], "settled": {}, "close_reason": None})
+    from pipeline.actions.speech import SpeechLimiter
+    from pipeline.frames import InMemoryFrameStore
+
+    ConversationAgent(db, InMemoryFrameStore(), FakeVoiceClient(), SpeechLimiter(0, 100),
+                      settings, questions=None)
+    row = db.get_conversation("c_stale1")
+    assert row["state"] == "closed" and row["close_reason"] == "stale"
+    assert db.active_conversation() is None
+    db.close()
