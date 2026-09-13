@@ -251,7 +251,8 @@ def test_envelope_interleaves_a_label_before_every_image_trigger_last():
     assert content[0]["text"].startswith("Trigger: food_in_frame at ")
     assert "food_present on 3 of the last 10 ticks" in content[0]["text"]
     assert content[1]["text"].startswith("Today so far:")
-    assert content[2]["text"].startswith("Tick table (last ")
+    assert content[2]["text"].startswith("Questions you already asked (last 5)")
+    assert content[3]["text"].startswith("Tick table (last ")
     assert content[-1]["text"] == "Decide the actions."
 
     image_positions = [
@@ -367,3 +368,29 @@ def test_envelope_without_extra_text_is_unchanged():
     esc = escalation(window)
     esc.extra_text = []
     assert build_envelope(esc, frames_for(window), [], "7d", "p") == plain
+
+
+def test_envelope_carries_the_last_questions_with_what_became_of_them():
+    """The sliding window of asks: open, expired, suppressed and answered, newest
+    first, so the model sees it already asked before it asks again."""
+    from pipeline.models import PendingQuestion
+
+    window = stepped_window()
+    esc = escalation(window)
+    qs = [
+        PendingQuestion(id="q_1", created_t=esc.t - 5, question="Are you about to eat that cereal?",
+                        status="open"),
+        PendingQuestion(id="q_2", created_t=esc.t - 20, question="Is that your cereal?",
+                        status="answered", answer_text="Yes", parsed={"understood": True, "confirmed": True}),
+        PendingQuestion(id="q_3", created_t=esc.t - 40, question="Is that bottle just water?",
+                        status="expired"),
+        PendingQuestion(id="q_4", created_t=esc.t - 50, question="Whose bottle is that?",
+                        status="suppressed", suppressed_reason="one_open"),
+    ]
+    content = build_envelope(esc, frames_for(window), [], "7d", "p", recent_questions=qs)[1]["content"]
+    block = content[2]["text"]
+    assert block.startswith("Questions you already asked (last 5, newest first):")
+    assert block.index("cereal?\" → still open") < block.index("your cereal?\" → answered: \"Yes\" (confirmed True)")
+    assert "just water?\" → no answer heard" in block
+    assert "Whose bottle is that?\" → not sent (one_open)" in block
+    assert "Do not ask any of these again" in block

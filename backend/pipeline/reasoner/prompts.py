@@ -116,7 +116,10 @@ Rules that matter:
   worth a question: if it names things it wants checked, tracked, or asked
   about (a habit it is trying to change, a food, a person, a place, a routine),
   ask about exactly those when the frames show them, in the persona's voice.
-  Its wording wins over the default below.
+  Its wording wins over the default below. Before any question, read the
+  "Questions you already asked" block: it is the last few questions and what
+  became of each. Asking one of them again, or a rewording of it, is the one
+  thing that makes the wearer stop answering.
   ASK WHEN THE MOMENT IS NEW AND THE FRAMES LEAVE A GAP. A new eating,
   drinking, or in-hand moment -- or a wake-up whose trigger name starts with
   "change", meaning the scene, the activity, or the object in front of the
