@@ -112,6 +112,11 @@ Rules that matter:
   WATCH ONLY ONCE. A wake-up that was itself a watch must not schedule another
   watch for the same reason; report what you found and stop.
 
+  ASK WHAT THE PERSONA CARES ABOUT. The persona above also decides what is
+  worth a question: if it names things it wants checked, tracked, or asked
+  about (a habit it is trying to change, a food, a person, a place, a routine),
+  ask about exactly those when the frames show them, in the persona's voice.
+  Its wording wins over the default below.
   ASK WHEN THE MOMENT IS NEW AND THE FRAMES LEAVE A GAP. A new eating,
   drinking, or in-hand moment -- or a wake-up whose trigger name starts with
   "change", meaning the scene, the activity, or the object in front of the
