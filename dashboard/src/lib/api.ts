@@ -1,5 +1,5 @@
-import { mockBiometrics, mockBiometricsMulti, mockDecisions, mockEpisodes, mockPending, mockQuestions, mockScores, mockSeeded, mockSeededRows, mockStatus, mockSummary, mockTicks, mockWearablesStatus } from "./mock";
-import type { AnswerResult, AskResult, Biometrics, BiometricsMulti, Decision, Episode, Insight, MetricScore, PendingCheck, Question, Recap, Scores, SeededDay, SeededMetricRow, Session, Status, Tick, TodaySummary, WearablesStatus } from "./types";
+import { mockBiometrics, mockBiometricsMulti, mockDecisions, mockEpisodes, mockHealthspan, mockPending, mockQuestions, mockScores, mockSeeded, mockSeededRows, mockStatus, mockSummary, mockTicks, mockWearablesStatus } from "./mock";
+import type { AnswerResult, AskResult, Biometrics, BiometricsMulti, Decision, Episode, Healthspan, Insight, MetricScore, PendingCheck, Question, Recap, Scores, SeededDay, SeededMetricRow, Session, Status, Tick, TodaySummary, WearablesStatus } from "./types";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8010";
 export const configuredMock = process.env.NEXT_PUBLIC_MOCK === "1";
@@ -150,6 +150,12 @@ export const api = {
       if (!response.ok) return null;   // 404 just means nobody has asked for one yet
       return await response.json() as Recap;
     } catch { return null; }
+  },
+  // Dose-response healthspan view for one day (default: the pipeline's today).
+  // Array/object defaults only — never a mock-field spread under live data.
+  healthspan: async (day?: string) => {
+    const r = await request<Healthspan>(`/api/healthspan${day ? `?day=${encodeURIComponent(day)}` : ""}`, mockHealthspan);
+    return {...r, data: {...r.data, layers: r.data?.layers ?? {}, factors: r.data?.factors ?? [], ledger: r.data?.ledger ?? [], levers: r.data?.levers ?? [], levers_free: r.data?.levers_free ?? [], insights: r.data?.insights ?? [], pins: r.data?.pins ?? [], effects: r.data?.effects ?? [], provenance: r.data?.provenance ?? {}, conventions: r.data?.conventions ?? []} as Healthspan};
   },
 };
 export type ApiResult<T>={data:T;mock:boolean};

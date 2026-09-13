@@ -1,11 +1,69 @@
-"use client";
-import { api } from "@/lib/api"; import { usePoll } from "@/lib/usePoll";
-import { StatusBar } from "@/components/StatusBar"; import { TickStrip } from "@/components/TickStrip"; import { BiometricsStrip } from "@/components/BiometricsStrip"; import { DecisionFeed } from "@/components/DecisionFeed"; import { EpisodeTimeline } from "@/components/EpisodeTimeline"; import { ScoresPanel } from "@/components/ScoresPanel"; import { MemoryPanel,SevenDayPanel } from "@/components/MemoryPanels";
-import { CapturePanel } from "@/components/CapturePanel";
-import { JudgeSession } from "@/components/JudgeSession";
-import { QuestionsPanel } from "@/components/QuestionsPanel";
-export default function Dashboard(){
- const status=usePoll(api.status,1000),ticks=usePoll(()=>api.ticks(30),1000),decisions=usePoll(()=>api.decisions(50),500);
- const episodes=usePoll(()=>api.episodes(),5000),scores=usePoll(()=>api.scores("daily"),5000),seeded=usePoll(()=>api.seeded(7),5000);
- const summary=usePoll(api.summaryToday,5000),pending=usePoll(api.pendingChecks,5000); const isMock=[status,ticks,decisions,episodes,scores,seeded,summary,pending].some(x=>x.mock);
- return <main className="mx-auto max-w-[1800px] p-3 lg:p-5">{isMock&&<div className="mb-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-semibold text-amber-200">API offline — mock data</div>}<StatusBar status={status.data}/><JudgeSession/><CapturePanel status={status.data}/><div className="mt-3"><TickStrip ticks={ticks.data}/></div><div className="mt-3"><BiometricsStrip/></div><div className="mt-3 grid items-start gap-3 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,.75fr)_minmax(320px,.85fr)]"><div className="space-y-3"><DecisionFeed decisions={decisions.data}/><EpisodeTimeline episodes={episodes.data}/></div><div className="space-y-3"><QuestionsPanel/><MemoryPanel summary={summary.data} pending={pending.data}/><SevenDayPanel rows={seeded.data}/></div><ScoresPanel scores={scores.data}/></div><footer className="py-4 text-center text-[10px] uppercase tracking-[.2em] text-zinc-700">Always writes · rarely speaks · never queues</footer></main>}
+import { BrianLive } from "@/components/brian/BrianLive";
+import { PipelineDrawer } from "@/components/brian/PipelineDrawer";
+import { BackendOffline } from "@/lib/score/backend";
+import { EngineError } from "@/lib/score/engine";
+import { loadDashboardData } from "@/lib/score/loader";
+import { GOALS, type DashboardData, type Goal } from "@/lib/score/types";
+
+// Every request re-runs the engine on the pipeline's current day; nothing here is cacheable.
+export const dynamic = "force-dynamic";
+
+type SearchParams = Record<string, string | string[] | undefined>;
+
+const isGoal = (value: unknown): value is Goal => GOALS.some((g) => g.value === value);
+
+function parseGoal(raw: string | string[] | undefined): Goal {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return isGoal(value) ? value : "average";
+}
+
+type Loaded = { ok: true; data: DashboardData } | { ok: false; error: unknown };
+
+async function load(goal: Goal): Promise<Loaded> {
+  try {
+    return { ok: true, data: await loadDashboardData({ goal }) };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+
+/**
+ * Honest failure state: every number on this page comes from an engine run over
+ * the pipeline's own data, so when either is missing there is nothing to show
+ * and nothing is estimated in its place.
+ */
+function EngineDown({ error }: { error: unknown }) {
+  const offline = error instanceof BackendOffline;
+  const message = error instanceof Error ? error.message : String(error);
+  const stderr = error instanceof EngineError ? error.stderr.trim() : "";
+  return (
+    <main className="mx-auto w-full max-w-6xl px-6 py-10">
+      <section className="rounded-panel bg-surface p-6 md:p-8" aria-labelledby="engine-down-title">
+        <h1 id="engine-down-title" className="text-2xl font-bold text-ink">
+          {offline ? "The backend is unreachable" : "The scoring engine did not respond"}
+        </h1>
+        <p className="mt-2 text-muted">
+          {offline
+            ? "Bryan reads every number from the pipeline backend — glasses episodes and connected wearables. With the backend down there is no measurement behind a score, so no numbers can be shown. Start the backend and reload."
+            : "Nothing on this page is estimated without an engine run, so there is no score to show."}{" "}
+          The pipeline drawer below still reflects the live capture feed.
+        </p>
+        <pre className="mt-4 overflow-x-auto rounded-pin bg-bg p-4 text-sm whitespace-pre-wrap text-text">
+          {stderr ? `${message}\n\n${stderr}` : message}
+        </pre>
+      </section>
+    </main>
+  );
+}
+
+export default async function Page({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  const sp = await searchParams;
+  const loaded = await load(parseGoal(sp.goal));
+
+  return (
+    <div className="brian min-h-dvh bg-bg text-text">
+      {loaded.ok ? <BrianLive initial={loaded.data} /> : <EngineDown error={loaded.error} />}
+      <PipelineDrawer />
+    </div>
+  );
+}

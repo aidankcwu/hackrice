@@ -66,7 +66,7 @@ without the other." That second read caught most of the bugs below.
 A full glasses-to-dashboard pipeline, wired end to end, the same night it
 was designed. A system quiet by design and still fully legible — every
 silent decision is a readable line, not a black box. A biometric-anomaly
-feature that genuinely needs both wearable and camera. 885 backend tests,
+feature that genuinely needs both wearable and camera. 1087 backend tests,
 and a two-reviewer process that caught real bugs before the demo touched
 real data.
 

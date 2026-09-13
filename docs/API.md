@@ -61,6 +61,7 @@ The `scene` / `activity` / `food_type` / `drink` menus live in `src/longevity/ai
 | `GET /api/pending_checks` | open `watch` rows |
 | `GET /api/summary/today` | annotate lines accumulated today (part 4 of the T1 envelope) |
 | `GET /api/seeded?days=7` | seeded integration rows (for the "7-day" panel) |
+| `GET /api/healthspan?day=YYYY-MM-DD` | dose-response hazard view for one day (default today; `pipeline/scoring/brian_score.py` + `healthspan.py`): `overall` 0–100, 7 `layers`, `hours_today`/`hours_ci`, `years_delta`/`years_ci`, `factors[{key, dose, hr, hours, grade, measured, provenance: live\|seeded\|derived\|missing, basis, detail, source}]`, `levers` (ranked by hours per minute, timed only) + `levers_free`, `forecast` tonight from leading indicators, `ledger` (ISO week to date), `insights[{kind, text, source}]`, `pins`, `effects`, `profile`, `window`, `conventions`. Computed on request, never written; `400` on a malformed day |
 | `POST /api/wearables/ingest` | canonical live samples `{device, samples:[{t, metric, value, unit}]}` → `{accepted, rejected, reasons}`; header `X-Ingest-Token` when `WEARABLE_INGEST_TOKEN` is set (SPEC §15) |
 | `POST /api/wearables/ingest/health-auto-export` | Health Auto Export JSON → canonical |
 | `POST /api/wearables/ingest/whoop` | WHOOP v2 objects → canonical |
@@ -171,6 +172,72 @@ finishes, then for at most `listen_s` seconds. The phone's `t` on an answer is
 metadata — the Mac stamps its own receipt time (§8.4).
 
 Ask/answer request bodies are strictly typed: `question_id` (if present) and `text` must be strings, `heard` (if present) a boolean, `episode_id` (if present) a string; anything else is a 400, never a silent fallback to the open question.
+Healthspan shape (`GET /api/healthspan`, seeded Sunday; lists trimmed to one
+entry each — the real payload has 18 factors, up to 5 levers, 7 ledger lines,
+3–5 insights and 23 `provenance` entries):
+
+```json
+{
+  "day": "2026-09-13", "as_of_hh": 10.42, "engine": "brian_score",
+  "overall": 74,
+  "layers": {"Movement": 78, "Sleep": 95, "Light & clock": 54, "Social": 62, "Environment": 79, "Diet & substances": 94, "Recovery": 16},
+  "years_delta": 2.2, "years_ci": [-1.52, 5.92],
+  "hours_today": 0.95, "hours_ci": [-0.65, 2.55],
+  "measured": {"count": 16, "total": 18},
+  "factors": [
+    {"key": "fitness_pct", "layer": "Movement", "label": "Cardiorespiratory fitness", "dose": 77.5, "hr": 0.444, "hours": 0.97,
+     "grade": "A_cohort", "measured": true, "source": "Mandsager 2018 ...",
+     "provenance": "derived", "basis": "apple_watch", "detail": "VO2max 51.0 -> ~78th percentile, M 20s (coarse norms, +-10)"}
+  ],
+  "ledger": [
+    {"key": "nature_min_wk", "label": "Time in nature", "accrued": 84.0, "target": 120, "projected": 84.0, "deficit": 36.0, "days_elapsed": 7, "status": "at_risk"}
+  ],
+  "forecast": {"sleep_hours": 6.8, "hrv_change_pct": 0.0, "sri_change_pts": 0.0, "melatonin_delay_min": 0.0, "drivers": []},
+  "levers": [
+    {"key": "vilpa_min", "label": "Vigorous bursts", "action": "Vigorous bursts: 1.4 -> 4.4 min/day", "hours_gain": 0.684, "time_min": 3,
+     "roi_hours_per_min": 0.228, "layers": ["movement"], "source": "Stamatakis 2022 ..."}
+  ],
+  "levers_free": [],
+  "insights": [
+    {"kind": "lever", "text": "Best use of your next 3 minutes: Vigorous bursts: 1.4 -> 4.4 min/day. ~ +0.7 healthy-life hours.", "source": "Stamatakis 2022 ..."}
+  ],
+  "pins": [],
+  "observations": {"steps": 5500.0, "fitness_pct": 77.5, "nature_min_wk": 84.0},
+  "provenance": {"steps": {"source": "seeded", "basis": "phone", "detail": "phone steps, row 2026-09-13"}},
+  "effects": [
+    {"exposure": "late caffeine seen by the glasses (0/1)", "outcome": "sleep hours that night", "beta": null, "ci": [null, null],
+     "n": 6, "blended_beta": -1.0, "note": "fewer than 14 days — showing population prior"}
+  ],
+  "profile": {"age": 20, "sex": "M", "goal": "average", "cyp1a2_slow": false, "height_m": null, "bedtime_hh": 23.0, "bedtime_source": "seeded"},
+  "baseline_sleep_h": 6.8,
+  "window": {"ledger_days": ["2026-09-07", "...", "2026-09-13"], "factor_days": ["2026-09-07", "...", "2026-09-13"], "uncovered_days": ["2026-09-13"], "days_elapsed": 7},
+  "conventions": ["Night rows for day D describe the night that starts on D — same row the §8 scorer uses.", "..."]
+}
+```
+
+`provenance` on a factor is a label, not proof: `live` is a direct sum/count
+over the glasses' episodes, `seeded` an integration row used as-is (`basis`
+carries the row's `source`), `derived` a proxy or conversion of either, and
+`missing` means there was no measurement at all.
+
+**Nothing is ever invented to fill a gap.** A factor with no data is absent from
+`observations` entirely; the engine imputes it at the **population reference**,
+which by construction contributes a hazard ratio of 1.0 and `hours: 0`. So an
+unmeasured factor earns nothing, costs nothing, and moves neither `overall` nor
+`hours_today` — it is not a zero, not a guess, and not a neutral-looking
+mid-range number. It is labelled `measured: false`, `provenance: "missing"`,
+`dose: null`, `hr: null`, and `measured.count` counts only the rest (16 of 18 on
+the seeded Sunday above). `detail` always says *why* it is missing, e.g.
+`"no episodes on 2026-09-13 — glasses not worn yet"`.
+
+The dashboard honours the same rule: where a factor is `measured: false` the
+table renders **"not measured — imputed at the population reference"** and the
+numeric cells show an em dash, never a number. When no device is connected at
+all the panel is em dashes end to end rather than a plausible-looking score, and
+the health score is simply the sum over the factors that *were* measured.
+
+`PROFILE_CYP1A2_SLOW=1` widens this view's caffeine cutoff to 12 h
+while the §8 scorer keeps 9 h, so the two panels can disagree on "late".
 
 ## Feed line format (dashboard)
 

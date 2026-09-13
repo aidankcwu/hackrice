@@ -259,6 +259,16 @@ class Settings(BaseSettings):
     #: T0 VLM budget in seconds (SPEC §2.4). None = tick_interval_s - 0.1.
     vlm_budget_s: float | None = None
 
+    # -- healthspan profile (scoring/brian_score.Profile). Bedtime comes from the
+    # day's seeded bed_time, else thresholds.DEFAULT_BEDTIME_H. -------------------
+    profile_age: int = 20
+    #: "M" or "F"; any case accepted (the engine does sex.upper().startswith("F")).
+    profile_sex: str = "M"
+    profile_goal: Literal["average", "athlete", "shift", "genetic_risk"] = "average"
+    #: Reserved for the engine's cadence -> gait model; unused by the adapter today.
+    profile_height_m: float | None = None
+    profile_cyp1a2_slow: bool = False
+
     @cached_property
     def timings(self) -> Timings:
         factory = Timings.demo if self.demo_mode else Timings.production
