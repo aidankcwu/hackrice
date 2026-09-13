@@ -24,6 +24,7 @@ from pipeline.models import (
     OUTDOOR_SCENES,
     Episode,
     EpisodeKind,
+    PendingQuestion,
     SCENES,
     SeededRow,
 )
@@ -85,6 +86,12 @@ def add(db: Database, eid: str, kind: str, day: str, hour: float, minutes: float
         end_t=None if open else start + minutes * 60.0, duration_s=minutes * 60.0,
         dominant=dominant or {}, open=open,
     ))
+
+
+def report(db: Database, qid: str, episode_id: str, parsed: dict, created_t: float) -> None:
+    db.insert_question(PendingQuestion(
+        id=qid, created_t=created_t, expires_t=None, episode_id=episode_id,
+        question="Yours?", status="answered", parsed=parsed))
 
 
 def delete_seeded(db: Database, day: str, *metrics: str) -> None:
@@ -431,6 +438,27 @@ def test_med_adherence_ignores_untyped_meals(seeded, settings):
     assert body["observations"]["med_adherence"] == pytest.approx(1.0)
     assert body["provenance"]["med_adherence"]["source"] == "live"
     assert "1/1 typed meals on-pattern (1 untyped ignored" in body["provenance"]["med_adherence"]["detail"]
+
+
+def test_wearer_reports_override_healthspan_alcohol_and_food(seeded, settings):
+    add(seeded, "e_report_alc", "alcohol_sighting", END_DAY, 20.0, 1.0)
+    add(seeded, "e_report_meal", "meal", END_DAY, 19.0, 30.0,
+        {"food_type": "processed"})
+    report(seeded, "q_alc", "e_report_alc", {"confirmed": True, "count": 2.0},
+           ts(END_DAY, 20.1))
+    report(seeded, "q_meal", "e_report_meal",
+           {"confirmed": True, "food_type": "fruit"}, ts(END_DAY, 20.2))
+
+    body = healthspan_for_day(seeded, settings, END_DAY)
+    assert body["observations"]["alcohol_drinks"] == 2.0
+    assert "wearer reported: 2 drinks" in body["provenance"]["alcohol_drinks"]["detail"]
+    assert body["observations"]["med_adherence"] == 1.0
+    assert "wearer reported: fruit" in body["provenance"]["med_adherence"]["detail"]
+
+    report(seeded, "q_alc_no", "e_report_alc", {"confirmed": False}, ts(END_DAY, 20.3))
+    body = healthspan_for_day(seeded, settings, END_DAY)
+    assert body["observations"]["alcohol_drinks"] == 0.0
+    assert "wearer reported: not mine" in body["provenance"]["alcohol_drinks"]["detail"]
 
 
 # -- ledger and attribution ------------------------------------------------

@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import pytest
 
-from pipeline.db import Database
-from pipeline.models import PendingQuestion
+from pipeline.db import Database, day_key
+from pipeline.models import Episode, PendingQuestion
 
 T0 = 1_757_700_000.0
 
@@ -223,6 +223,25 @@ def test_list_questions_is_newest_first_and_honours_the_limit(db: Database) -> N
 
     assert [q.id for q in db.list_questions()] == ["q_4", "q_3", "q_2", "q_1", "q_0"]
     assert [q.id for q in db.list_questions(limit=2)] == ["q_4", "q_3"]
+
+
+def test_reported_by_episode_projects_newest_usable_answer(db: Database) -> None:
+    db.upsert_episode(Episode(id="ep_1", kind="meal", start_t=T0, duration_s=1.0))
+    db.insert_question(make_question(
+        "q_old", created_t=T0, status="answered",
+        parsed={"confirmed": True, "food_type": "processed", "note": "old"}))
+    db.insert_question(make_question(
+        "q_empty", created_t=T0 + 1, status="answered", parsed={}))
+    db.insert_question(make_question(
+        "q_new", created_t=T0 + 2, status="answered",
+        parsed={"confirmed": True, "count": 2.0, "food_type": "fruit"}))
+    db.insert_question(make_question(
+        "q_suppressed", created_t=T0 + 3, status="suppressed",
+        parsed={"confirmed": False}))
+
+    assert db.reported_by_episode(day=day_key(T0)) == {
+        "ep_1": {"confirmed": True, "count": 2.0, "food_type": "fruit", "note": ""}
+    }
 
 
 def test_stats_still_reports_the_same_counters(db: Database) -> None:

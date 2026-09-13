@@ -199,6 +199,7 @@ class _DayData:
     seeded: dict[str, float]
     #: ``{metric: source}`` for the same rows (``whoop``, ``phone``, ...).
     sources: dict[str, str]
+    reported: dict[str, dict]
 
     @property
     def covered(self) -> bool:
@@ -230,8 +231,9 @@ def _load(db: Database, days: list[str], history: list[str]) -> dict[str, _DayDa
     wanted = set(days) | {
         d for d in history if {"sleep_hours", "strain"} <= seeded[d].keys()
     }
+    reported = db.reported_by_episode()
     return {
-        d: _DayData(d, db.list_episodes(d) if d in wanted else [], seeded[d], sources[d])
+        d: _DayData(d, db.list_episodes(d) if d in wanted else [], seeded[d], sources[d], reported)
         for d in everything
     }
 
@@ -393,27 +395,51 @@ def _day_obs(d: _DayData, profile: bs.Profile) -> dict[str, Obs]:
     else:
         out["purpose"] = Obs(None, "missing", "user", f"no seeded purpose_score row for {d.day}")
 
-    meals = d.of_kind("meal")
-    typed = [m for m in meals if "food_type" in m.dominant]
+    raw_meals = d.of_kind("meal")
+    meals = [m for m in raw_meals if d.reported.get(m.id, {}).get("confirmed") is not False]
+    typed = [(m, d.reported.get(m.id, {}).get("food_type") or m.dominant.get("food_type"))
+             for m in meals if (d.reported.get(m.id, {}).get("food_type") is not None
+                                or "food_type" in m.dominant)]
     if typed:
-        on = sum(1 for m in typed if m.dominant["food_type"] in HEALTHY_FOOD_TYPES)
+        on = sum(1 for _, food_type in typed if food_type in HEALTHY_FOOD_TYPES)
+        reports = [f"wearer reported: {food_type}" for m, food_type in typed
+                   if d.reported.get(m.id, {}).get("food_type") is not None
+                   and food_type != m.dominant.get("food_type")]
+        reports.extend("wearer reported: not mine" for m in raw_meals
+                       if d.reported.get(m.id, {}).get("confirmed") is False)
         out["med_adherence"] = Obs(
-            on / len(typed), "live", "glasses",
+            on / len(typed), "live", "glasses + wearer report" if reports else "glasses",
             f"{on}/{len(typed)} typed meals on-pattern ({len(meals) - len(typed)} untyped ignored; "
-            "the §8 scorer counts untyped as off-pattern)")
+            "the §8 scorer counts untyped as off-pattern)" + ("; " + "; ".join(reports) if reports else ""))
     else:
         out["med_adherence"] = Obs(None, "missing", "glasses", f"no typed meal seen on {d.day}")
 
-    sightings = d.of_kind("alcohol_sighting")
+    raw_sightings = d.of_kind("alcohol_sighting")
+    sightings = [e for e in raw_sightings if d.reported.get(e.id, {}).get("confirmed") is not False]
     if sightings:
-        occasions = _clusters(sightings, ALCOHOL_CLUSTER_GAP_S)
-        drinks = min(MAX_DRINKS_PER_DAY, occasions)
-        detail = (f"{len(sightings)} sighting(s) in {occasions} occasion(s) "
+        # The wearer's own answer beats the camera: a reported count replaces the
+        # cluster estimate for that sighting, and "not mine" drops it entirely.
+        specified = [e for e in sightings if d.reported.get(e.id, {}).get("count") is not None]
+        unspecified = [e for e in sightings if e not in specified]
+        occasions = _clusters(unspecified, ALCOHOL_CLUSTER_GAP_S)
+        counted = float(occasions) + sum(float(d.reported[e.id]["count"]) for e in specified)
+        drinks = min(float(MAX_DRINKS_PER_DAY), counted)
+        reports = [f"wearer reported: {float(d.reported[e.id]['count']):g} drinks" for e in specified
+                   if float(d.reported[e.id]["count"]) != 1.0]
+        reports.extend("wearer reported: not mine" for e in raw_sightings
+                       if d.reported.get(e.id, {}).get("confirmed") is False)
+        detail = (f"{len(unspecified)} sighting(s) in {occasions} occasion(s) "
                   "(≤30 min apart = one drink, a floor)")
-        if occasions > MAX_DRINKS_PER_DAY:
+        if counted > MAX_DRINKS_PER_DAY:
             detail += (f"; read as {MAX_DRINKS_PER_DAY} — the hazard curve ends there "
                        "and a higher count is a camera re-seeing one table")
-        out["alcohol_drinks"] = Obs(float(drinks), "live", "glasses", detail)
+        out["alcohol_drinks"] = Obs(
+            drinks, "live", "glasses + wearer report" if reports else "glasses",
+            detail + ("; " + "; ".join(reports) if reports else ""))
+    elif raw_sightings:
+        out["alcohol_drinks"] = Obs(
+            0.0, "live", "glasses + wearer report",
+            f"wearer reported: not mine ({len(raw_sightings)} sighting(s) excluded)")
     elif "journal_alcohol" in s:
         j = float(s["journal_alcohol"])
         out["alcohol_drinks"] = Obs(

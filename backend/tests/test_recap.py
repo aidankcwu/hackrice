@@ -869,3 +869,25 @@ async def test_recap_is_not_spoken_when_the_hook_declines_it(tmp_path):
         speech.set_speak_fn(previous)
         speech.clear_spoken()
         await pipeline.stop()
+
+
+async def test_ending_a_session_generates_its_recap(tmp_path):
+    """Ending a session by any route produces its recap without a second call."""
+    pipeline = await running_pipeline(tmp_path, "session_end")
+    speech.clear_spoken()
+    try:
+        async with client_for(pipeline) as client:
+            started = (await client.post("/api/session/start", json={"name": "judge"})).json()
+            await asyncio.sleep(0.2)
+            ended = (await client.post("/api/session/end", json={})).json()
+            assert ended["id"] == started["id"] and ended["recap"] == "generating"
+            for _ in range(200):
+                latest = (await client.get("/api/recap/latest")).json()
+                if latest and latest.get("session", {}).get("id") == started["id"]:
+                    break
+                await asyncio.sleep(0.05)
+            else:
+                raise AssertionError("no recap landed for the ended session")
+            assert set(latest) == RECAP_KEYS
+    finally:
+        await pipeline.stop()

@@ -153,7 +153,7 @@ class Scorer:
         return sum(e.duration_s for e in episodes if e.kind == "screen_block") / 3600.0
 
     def _caffeine(
-        self, episodes: list[Episode], seeded: dict[str, float]
+        self, episodes: list[Episode], seeded: dict[str, float], reported: dict[str, dict]
     ) -> tuple[float, str]:
         """``(late sightings, note)`` against the bedtime - 9 h cutoff."""
 
@@ -170,21 +170,62 @@ class Scorer:
         late = [
             e
             for e in self._of_kind(episodes, "caffeine_sighting")
-            if _hour_of_day(e.start_t) > cutoff_h
+            if reported.get(e.id, {}).get("confirmed") is not False
+            and _hour_of_day(e.start_t) > cutoff_h
         ]
         note = f"cutoff {_fmt_hour(cutoff_h)} ({provenance} − 9 h)"
         if late:
             note += f"; last sighting {_fmt_hour(_hour_of_day(late[-1].start_t))}"
-        return float(len(late)), note
+        value = sum(float(reported.get(e.id, {}).get("count") or 1.0) for e in late)
+        changed = [e for e in self._of_kind(episodes, "caffeine_sighting")
+                   if _hour_of_day(e.start_t) > cutoff_h
+                   and (reported.get(e.id, {}).get("confirmed") is False
+                        or reported.get(e.id, {}).get("count") is not None)]
+        if changed:
+            fragments = []
+            for e in changed:
+                r = reported[e.id]
+                fragments.append("wearer reported: not mine" if r.get("confirmed") is False
+                                 else f"wearer reported: {r['count']:g} servings")
+            note = _join(note, *fragments) or note
+        return value, note
 
     @staticmethod
-    def _diet_pattern(meals: list[Episode]) -> tuple[float | None, str | None]:
+    def _diet_pattern(meals: list[Episode], reported: dict[str, dict]) -> tuple[float | None, str | None]:
         if not meals:
             return None, None
-        on_pattern = sum(
-            1 for m in meals if m.dominant.get("food_type") in HEALTHY_FOOD_TYPES
-        )
-        return on_pattern / len(meals), f"{on_pattern}/{len(meals)} meals on-pattern"
+        on_pattern = sum(1 for m in meals if
+                         (reported.get(m.id, {}).get("food_type") or
+                          m.dominant.get("food_type")) in HEALTHY_FOOD_TYPES)
+        changed = [f"wearer reported: {reported[m.id]['food_type']}" for m in meals
+                   if reported.get(m.id, {}).get("food_type") is not None
+                   and reported[m.id]["food_type"] != m.dominant.get("food_type")]
+        return on_pattern / len(meals), _join(
+            f"{on_pattern}/{len(meals)} meals on-pattern", *changed)
+
+    @staticmethod
+    def _confirmed(episodes: list[Episode], reported: dict[str, dict]) -> list[Episode]:
+        return [e for e in episodes if reported.get(e.id, {}).get("confirmed") is not False]
+
+    @staticmethod
+    def _report_note(episodes: list[Episode], reported: dict[str, dict]) -> str | None:
+        return _join(*("wearer reported: not mine" for e in episodes
+                       if reported.get(e.id, {}).get("confirmed") is False))
+
+    @staticmethod
+    def _alcohol(episodes: list[Episode], reported: dict[str, dict]) -> tuple[float, str | None]:
+        value = 0.0
+        notes: list[str] = []
+        for e in episodes:
+            r = reported.get(e.id, {})
+            if r.get("confirmed") is False:
+                notes.append("wearer reported: not mine")
+            else:
+                count = r.get("count")
+                value += float(count if count is not None else 1.0)
+                if count is not None and float(count) != 1.0:
+                    notes.append(f"wearer reported: {float(count):g} drinks")
+        return value, _join(*notes)
 
     # -- daily -----------------------------------------------------------
 
@@ -192,23 +233,25 @@ class Scorer:
         """Score every daily metric for ``day`` and upsert the rows."""
 
         episodes = self._episodes(day)
+        reported = self.db.reported_by_episode(day)
         seeded = self._seeded(day)
-        meals = self._of_kind(episodes, "meal")
-        diet_value, diet_note = self._diet_pattern(meals)
-        late_caffeine, caffeine_note = self._caffeine(episodes, seeded)
+        raw_meals = self._of_kind(episodes, "meal")
+        meals = self._confirmed(raw_meals, reported)
+        diet_value, diet_note = self._diet_pattern(meals, reported)
+        late_caffeine, caffeine_note = self._caffeine(episodes, seeded, reported)
+        alcohol, alcohol_note = self._alcohol(self._of_kind(episodes, "alcohol_sighting"), reported)
 
         live_values: dict[str, tuple[float | None, str | None]] = {
             "social_episodes_daily": (
-                float(len(self._of_kind(episodes, "conversation"))),
-                None,
+                float(len(self._confirmed(self._of_kind(episodes, "conversation"), reported))),
+                self._report_note(self._of_kind(episodes, "conversation"), reported),
             ),
             "screen_hours_daily": (self._screen_hours(episodes), None),
-            "meals_logged_daily": (float(len(meals)), None),
+            "meals_logged_daily": (float(len(meals)), self._report_note(raw_meals, reported)),
             "diet_pattern_daily": (diet_value, diet_note),
             "caffeine_cutoff_daily": (late_caffeine, caffeine_note),
             "alcohol_daily": (
-                float(len(self._of_kind(episodes, "alcohol_sighting"))),
-                None,
+                alcohol, alcohol_note,
             ),
         }
 
@@ -296,10 +339,13 @@ class Scorer:
         period_key = f"{int(t0)}-{int(t1)}"
 
         episodes = self._window_episodes(t0, t1)
+        reported = self.db.reported_by_episode()
         seeded = self._seeded(day)
-        meals = self._of_kind(episodes, "meal")
-        diet_value, diet_note = self._diet_pattern(meals)
-        late_caffeine, caffeine_note = self._caffeine(episodes, seeded)
+        raw_meals = self._of_kind(episodes, "meal")
+        meals = self._confirmed(raw_meals, reported)
+        diet_value, diet_note = self._diet_pattern(meals, reported)
+        late_caffeine, caffeine_note = self._caffeine(episodes, seeded, reported)
+        alcohol, alcohol_note = self._alcohol(self._of_kind(episodes, "alcohol_sighting"), reported)
         observed = f"observed in a {minutes}-minute session"
 
         screen_h = self._screen_hours(episodes)
@@ -313,13 +359,14 @@ class Scorer:
 
         live_values: dict[str, tuple[float | None, str | None]] = {
             "social_episodes_daily": (
-                float(len(self._of_kind(episodes, "conversation"))), observed),
+                float(len(self._confirmed(self._of_kind(episodes, "conversation"), reported))),
+                _join(observed, self._report_note(self._of_kind(episodes, "conversation"), reported))),
             "screen_hours_daily": (projected, screen_note),
-            "meals_logged_daily": (float(len(meals)), observed),
+            "meals_logged_daily": (float(len(meals)), _join(observed, self._report_note(raw_meals, reported))),
             "diet_pattern_daily": (diet_value, diet_note),
             "caffeine_cutoff_daily": (late_caffeine, caffeine_note),
             "alcohol_daily": (
-                float(len(self._of_kind(episodes, "alcohol_sighting"))), observed),
+                alcohol, _join(observed, alcohol_note)),
         }
 
         scores: list[Score] = []
