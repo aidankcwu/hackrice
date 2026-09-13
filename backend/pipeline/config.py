@@ -232,7 +232,7 @@ class Timings:
             ask_followup_max=1,
             conversation_max_questions=2,
             conversation_lifetime_s=60.0,
-            conversation_cooldown_s=5.0,
+            conversation_cooldown_s=2.0,
             t1_max_concurrent=1,
             watch_default_after_s=60.0,
             tick_interval_s=tick_interval_s,
