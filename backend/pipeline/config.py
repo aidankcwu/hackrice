@@ -247,6 +247,9 @@ class Settings(BaseSettings):
     elevenlabs_voice_id: str = "SAz9YHcvj6GT2YYXdXww"
     speech_mode: Literal["auto", "text", "elevenlabs"] = "auto"
     demo_mode: bool = True
+    #: A session opens on the first frame of a stream and closes when the
+    #: frames stop (env AUTO_SESSION=0 to drive sessions by hand instead).
+    auto_session: bool = True
     db_path: Path = Path("./data/pipeline.db")
     #: Frame ring-buffer TTL in seconds (SPEC §2.5 / §12.3).
     frame_ttl_s: float = 90.0

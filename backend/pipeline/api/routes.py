@@ -82,18 +82,7 @@ async def end_session(request: Request) -> dict:
     if session is None:
         raise HTTPException(status_code=404, detail="no open session")
 
-    from ..recap.builder import build_recap  # local: recap imports scoring, not api
-
-    async def generate() -> None:
-        try:
-            await build_recap(pipeline, session_id=session.id, speak=False)
-        except Exception:  # noqa: BLE001 -- a failed recap must not be silent
-            log.exception("session %s ended but its recap failed", session.id)
-
-    task = asyncio.create_task(generate())
-    pipeline.background_tasks = getattr(pipeline, "background_tasks", set())
-    pipeline.background_tasks.add(task)
-    task.add_done_callback(pipeline.background_tasks.discard)
+    pipeline.spawn_recap(session.id)
     return {**session.model_dump(), "recap": "generating"}
 
 

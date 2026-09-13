@@ -49,6 +49,13 @@ class Clock:
         return self.wall_start + (tick_t - self.sim_start_t) / self.speed
 
 
+#: A session opens on the first tick of a stream and closes once the ticks have
+#: stopped for this long -- the wearer took the glasses off, or the phone
+#: stopped sending. Longer than a dropped frame or two, shorter than a pause
+#: anyone would sit through in a demo.
+AUTO_SESSION_IDLE_S = 25.0
+
+
 class Pipeline:
     """The live objects and lifecycle of one pipeline instance."""
 
@@ -84,6 +91,7 @@ class Pipeline:
         self.clock = clock
         self.biometrics_start_t = clock.sim_start_t
         self.started_at: float | None = None
+        self.background_tasks: set = set()
         self.last_tick: Tick | None = None
         self.sessions = SessionManager(
             db, gate, speech, episodes,
@@ -119,6 +127,65 @@ class Pipeline:
         drift = max(0.0, time.time() - self._last_tick_wall)
         return tick.t + drift * self.clock.speed
 
+    def spawn_recap(self, session_id: str) -> None:
+        """Generate one session's recap on a task. Never raises into the caller."""
+
+        from ..recap.builder import build_recap  # local: recap imports scoring
+
+        async def generate() -> None:
+            try:
+                await build_recap(self, session_id=session_id, speak=False)
+            except Exception:  # noqa: BLE001 -- a failed recap must not be silent
+                log.exception("session %s ended but its recap failed", session_id)
+
+        try:
+            task = asyncio.create_task(generate())
+        except RuntimeError:  # pragma: no cover - no loop (unit tests)
+            log.error("cannot generate a recap for %s: no running loop", session_id)
+            return
+        self.background_tasks.add(task)
+        task.add_done_callback(self.background_tasks.discard)
+
+    def _auto_session_open(self) -> None:
+        """Open a session on the first tick of a stream, if none is open.
+
+        The glasses are the control: a session is exactly the stretch the
+        wearer was streaming. Nobody should have to remember a button on a
+        dashboard, and in a demo nobody does.
+        """
+
+        if not getattr(self.settings, "auto_session", True):
+            return
+        try:
+            if self.sessions.current() is not None:
+                return
+            session = self.sessions.start(time.strftime("%H:%M", time.localtime()))
+            log.info("session: %s auto-started on the first frame", session.id)
+        except Exception:  # pragma: no cover - defensive
+            log.exception("could not auto-start a session")
+
+    def _auto_session_close(self) -> None:
+        """Close the open session once the frames have stopped, and recap it."""
+
+        if not getattr(self.settings, "auto_session", True):
+            return
+        if self._last_tick_wall is None:
+            return
+        if time.time() - self._last_tick_wall < AUTO_SESSION_IDLE_S:
+            return
+        try:
+            if self.sessions.current() is None:
+                return
+            ended = self.sessions.end()
+        except Exception:  # pragma: no cover - defensive
+            log.exception("could not auto-end the session")
+            return
+        if ended is None:
+            return
+        log.info("session: %s auto-ended after %.0f s without a frame",
+                 ended.id, AUTO_SESSION_IDLE_S)
+        self.spawn_recap(ended.id)
+
     async def start(self) -> None:
         if self._tasks:
             return
@@ -134,8 +201,10 @@ class Pipeline:
 
         async def downstream() -> None:
             async for tick in downstream_sub:
-                self._ai_window.append((tick.t, tick.ai is not None))
                 self._last_tick_wall = time.time()
+                self.last_tick = tick
+                self._auto_session_open()
+                self._ai_window.append((tick.t, tick.ai is not None))
                 while self._ai_window and tick.t - self._ai_window[0][0] > 60.0:
                     self._ai_window.popleft()
                 self.db.insert_tick(tick)
@@ -150,6 +219,13 @@ class Pipeline:
                              stats["tick_count"], stats["decision_count"],
                              stats["ai_tick_count"] / stats["tick_count"]
                              if stats["tick_count"] else 0.0)
+
+        async def auto_session_watchdog() -> None:
+            while True:
+                await asyncio.sleep(5.0)
+                if self._stopping:
+                    return
+                self._auto_session_close()
 
         async def score_periodically() -> None:
             while True:
@@ -169,6 +245,7 @@ class Pipeline:
         self._tasks = [
             asyncio.create_task(downstream(), name="pipeline-downstream"),
             asyncio.create_task(score_periodically(), name="pipeline-scorer"),
+            asyncio.create_task(auto_session_watchdog(), name="pipeline-auto-session"),
         ]
         self.questions.start()
         if self.capture is not None:
