@@ -118,9 +118,10 @@ class TriggerGate:
             if last is not None and tick.t - last < trigger.cooldown_s:
                 self.suppressed[trigger.name] += 1
                 continue
-            if self.last_escalation_t is not None and tick.t - self.last_escalation_t < self.timings.global_escalation_min_gap:
+            if (not trigger.bypass_gap and self.last_escalation_t is not None
+                    and tick.t - self.last_escalation_t < self.timings.global_escalation_min_gap):
                 self.suppressed[trigger.name] += 1
-                return None
+                continue
 
             window = list(self.window)
             extra_text: list[str] = []

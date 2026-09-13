@@ -126,6 +126,9 @@ class Trigger:
     #: escalation was actually accepted (not when T1 was busy or the global
     #: gap rejected it). A trigger with its own budget spends it here.
     on_fired: Callable[[float], None] | None = None
+    #: Skip the gate's global escalation gap and run before every other
+    #: trigger: a fixed demo line must not queue behind a change wake-up.
+    bypass_gap: bool = False
 
 
 def _recent(window: list[Tick], seconds: float) -> list[Tick]:
@@ -177,6 +180,7 @@ def keyword_trigger(
     cooldown_s: float,
     reason: str,
     extra_line: str,
+    bypass_gap: bool = False,
 ) -> Trigger:
     """Trigger on fresh, repeated keyword matches in captions or objects."""
 
@@ -208,7 +212,7 @@ def keyword_trigger(
                 ]
         return reason, []
 
-    return Trigger(name, predicate, cooldown_s, None, reason, enrich)
+    return Trigger(name, predicate, cooldown_s, None, reason, enrich, bypass_gap=bypass_gap)
 
 
 def change_trigger(timings: Timings) -> Trigger:
@@ -606,11 +610,16 @@ def default_triggers(
         )
         triggers.append(keyword_trigger(
             name, list(entry["keywords"]), timings,
+            min_hits=int(entry.get("min_hits", 2)),
             cooldown_s=float(entry.get("cooldown_s", timings.trigger_cooldown_default)),
             reason="Keyword '{kw}' seen in caption/objects", extra_line=line,
+            bypass_gap=bool(entry.get("say")),
         ))
     if feed is not None:
         # Last: a camera trigger that fires on the same tick explains itself,
         # and this one costs a feed read.
         triggers.append(biometric_anomaly_trigger(timings, feed))
+    # Fixed-line keyword triggers go first: the gate takes one escalation per
+    # tick, and a demo line must win the tick over a change wake-up.
+    triggers.sort(key=lambda trig: not trig.bypass_gap)
     return triggers

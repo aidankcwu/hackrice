@@ -150,6 +150,9 @@ class ConversationAgent:
         try:
             text = (topic or "").strip()
             t = self.now_fn()
+            if getattr(self.settings, "fixed_lines_only", False):
+                log.info("conversation: hand-off dropped · fixed_lines_only · \"%s\"", text[:80])
+                return "fixed_lines_only"
             if self._active is not None:
                 self.dropped_active += 1
                 log.info("conversation: hand-off dropped · conversation_active · \"%s\"", text[:80])

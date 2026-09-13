@@ -752,7 +752,7 @@ def test_a_keyword_trigger_with_a_fixed_line_speaks_it_without_a_model_call(db, 
     agent = FakeAgent()
     reasoner._conversation = agent
     assert reasoner.try_escalate(make_escalation(trigger="rice_krispy"))
-    assert agent.calls == [("Put down the rice krispy.", make_escalation(trigger="rice_krispy").reason or "rice_krispy")]
+    assert agent.calls == [("PUT THE RICE KRISPY DOWN!", make_escalation(trigger="rice_krispy").reason or "rice_krispy")]
     rows = db.list_decisions()
     assert rows and rows[-1].model == "fixed" and rows[-1].spoke
     assert rows[-1].actions[0]["outcome"] == "handed_off:c_fixed01"

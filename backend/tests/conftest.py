@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+import os
+
+# The local backend/.env is a demo switchboard (FIXED_LINES_ONLY=1 etc.);
+# Settings reads it, and environment variables win over the file. Pin the
+# demo-only switches off so the suite tests the code, not tonight's demo.
+os.environ.setdefault("FIXED_LINES_ONLY", "0")
+
 import time
 
 import pytest
