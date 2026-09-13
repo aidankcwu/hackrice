@@ -245,6 +245,48 @@ def _today_block(lines: list[TodaySummaryLine]) -> str:
     return "Today so far:\n" + body
 
 
+RECENT_QUESTIONS = 5
+
+
+def _questions_block(questions: list[Any]) -> str:
+    """The sliding window of what was just asked, newest first (ASK_DESIGN).
+
+    Today's memory only carries a question once it was *answered*; an open,
+    expired or suppressed one left no trace, so three wake-ups in thirty
+    seconds each asked about the same cereal box afresh. This block is the
+    short-term memory of the mouth: the last few questions with what became
+    of each, so the model can see it already asked before it asks again.
+    """
+
+    if not questions:
+        return "Questions you already asked (last 5):\nnone yet"
+    rows = []
+    for q in list(questions)[:RECENT_QUESTIONS]:
+        status = getattr(q, "status", "")
+        if status == "answered":
+            parsed = getattr(q, "parsed", None) or {}
+            settled = ", ".join(
+                f"{key} {parsed[key]}" for key in ("confirmed", "count", "food_type")
+                if parsed.get(key) is not None
+            )
+            what = f"answered: \"{getattr(q, 'answer_text', '') or ''}\""
+            if settled:
+                what += f" ({settled})"
+        elif status == "open":
+            what = "still open — waiting for the answer"
+        elif status == "expired":
+            what = "no answer heard"
+        else:
+            what = f"not sent ({getattr(q, 'suppressed_reason', None) or status})"
+        rows.append(f"  {local_time(q.created_t, '%H:%M')} \"{q.question}\" → {what}")
+    return (
+        "Questions you already asked (last 5, newest first):\n" + "\n".join(rows)
+        + "\nDo not ask any of these again, or a rewording of one, unless the "
+        "frames show the answer has changed. An unanswered one may be asked once "
+        "more only if the moment is still in front of the wearer."
+    )
+
+
 def _window_span_s(window: list[Tick], origin: float) -> int:
     if not window:
         return 0
@@ -266,6 +308,7 @@ def build_envelope(
     persona: str,
     k: int = 4,
     learned: list[str] | None = None,
+    recent_questions: list[Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Build the Responses API ``input`` for one escalation.
 
@@ -289,6 +332,7 @@ def build_envelope(
             ),
         },
         {"type": "input_text", "text": _today_block(today_lines)},
+        {"type": "input_text", "text": _questions_block(recent_questions or [])},
         {
             "type": "input_text",
             "text": (

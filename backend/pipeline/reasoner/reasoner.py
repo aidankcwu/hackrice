@@ -32,7 +32,7 @@ from ..db import Database, day_key
 from ..frames import FrameStore
 from ..models import Decision, Escalation, PendingQuestion
 from .client import AnswerParser, ReasonerClient
-from .envelope import build_envelope, local_time, select_frames
+from .envelope import build_envelope, local_time, select_frames, RECENT_QUESTIONS
 from .evidence import EvidenceStore
 from .prompts import DEFAULT_PERSONA, LEARNED_MAX, NO_SEVEN_DAY
 from .schema import normalize
@@ -549,6 +549,12 @@ class Reasoner:
             except Exception:
                 log.exception("7-day summary callable raised; using the placeholder")
 
+        try:
+            recent_questions = self.db.list_questions(limit=RECENT_QUESTIONS)
+        except Exception:  # pragma: no cover - defensive
+            log.exception("could not read recent questions; sending none")
+            recent_questions = []
+
         return build_envelope(
             esc,
             frames,
@@ -557,6 +563,7 @@ class Reasoner:
             self.current_persona(),
             k=FRAMES_PER_ESCALATION,
             learned=self.learned_lines(),
+            recent_questions=recent_questions,
         )
 
     # -- the growing persona ----------------------------------------------
