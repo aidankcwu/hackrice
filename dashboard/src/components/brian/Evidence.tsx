@@ -71,7 +71,8 @@ function Pin({ p, fluid }: { p: PinRow; fluid: boolean }) {
 function EvidenceStrip({ pins }: { pins: PinRow[] }) {
   const [full, setFull] = useState(false);
   const capped = !full && pins.length > STRIP_LIMIT;
-  const shown = capped ? pins.slice(-STRIP_LIMIT) : pins;
+  // Newest first: the frame from a minute ago is the one you look for.
+  const shown = (capped ? pins.slice(-STRIP_LIMIT) : pins).slice().reverse();
 
   return (
     <Panel id="evidence" labelledBy="evidence-title">
