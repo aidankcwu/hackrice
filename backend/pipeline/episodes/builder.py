@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from collections import Counter, deque
 from dataclasses import dataclass, field
 import re
@@ -11,8 +13,12 @@ from ..config import Timings
 from ..db import Database
 from ..models import OUTDOOR_SCENES, Episode, EpisodeKind, Tick
 
+log = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True, slots=True)
+
+
 class EpisodeParams:
     entry_min_hits: int
     entry_window_s: float
@@ -181,6 +187,14 @@ class EpisodeBuilder:
                 count = db.conn.execute("SELECT COUNT(*) FROM episodes").fetchone()[0]
         self._counter = int(count)
         self._states = {kind: _State() for kind in self._kind_predicates}
+        # A restart must not inherit open episodes from the process before it:
+        # they would stay open forever (nothing in memory owns them) and the
+        # scorer would clip them to every window it looks at.
+        stale = getattr(db, "close_stale_open_episodes", None)
+        if stale is not None:
+            closed = stale()
+            if closed:
+                log.info("episodes: closed %d left open by a previous process", closed)
 
     def open_episodes(self) -> dict[EpisodeKind, Episode]:
         return {

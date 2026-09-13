@@ -441,6 +441,23 @@ class Database:
             self.conn.commit()
             return int(cur.rowcount)
 
+    def close_stale_open_episodes(self) -> int:
+        """Close rows a previous process left open, at their own last update.
+
+        ``duration_s`` is rewritten on every tick, so ``start_t + duration_s``
+        is the last moment the episode was actually seen. Closing at "now"
+        instead (``close_open_episodes``) would credit a screen block from a
+        process that died four hours ago with four hours of screen time -- and
+        did: a 28-minute recap scored 65 h/day of screen time from six such
+        rows overlapping the window.
+        """
+        with self._lock:
+            cur = self.conn.execute(
+                "UPDATE episodes SET open = 0, end_t = start_t + duration_s WHERE open = 1"
+            )
+            self.conn.commit()
+            return int(cur.rowcount)
+
     def list_episodes(self, day: str | None = None) -> list[Episode]:
         sql = "SELECT * FROM episodes"
         args: tuple[Any, ...] = ()

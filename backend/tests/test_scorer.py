@@ -402,3 +402,18 @@ def test_the_live_source_set_is_shared_with_the_healthspan_adapter():
     assert row_provenance("fitbit") == "live"
     assert row_provenance("whoop") == "seeded" and row_provenance("phone") == "seeded"
     assert row_provenance("") == "seeded"
+
+
+def test_screen_hours_is_the_union_of_overlapping_blocks():
+    """Six overlapping screen blocks in a 28-minute window cover 28 minutes, not 115."""
+    from pipeline.models import Episode
+    from pipeline.scoring.scorer import Scorer
+
+    def block(i, start, end):
+        return Episode(id=f"e_{i}", kind="screen_block", start_t=start, end_t=end,
+                       duration_s=end - start, open=False, day="2026-09-12")
+
+    overlapping = [block(i, 1000 + i * 100, 1000 + 28 * 60) for i in range(6)]
+    assert abs(Scorer._screen_hours(overlapping) - 28 * 60 / 3600) < 1e-9
+    apart = [block(1, 0, 600), block(2, 1200, 1800)]
+    assert abs(Scorer._screen_hours(apart) - 1200 / 3600) < 1e-9

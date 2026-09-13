@@ -168,3 +168,20 @@ def test_sightings_and_gym_sauna(tmp_path) -> None:
             builder.on_tick(tick(base + offset, scene="home"))
         assert kind not in builder.open_episodes()
     db.close()
+
+
+def test_a_new_builder_closes_episodes_a_previous_process_left_open(tmp_path):
+    """A restart must not inherit open rows: they close at their last update."""
+    from pipeline.config import Timings
+    from pipeline.db import Database
+    from pipeline.episodes.builder import EpisodeBuilder
+    from pipeline.models import Episode
+
+    db = Database(tmp_path / "stale.db").connect().init_schema()
+    db.upsert_episode(Episode(id="e_0001", kind="screen_block", start_t=1000.0, end_t=None,
+                              duration_s=90.0, open=True, day="2026-09-12"))
+    EpisodeBuilder(db, Timings.demo(1.5))
+    rows = db.list_episodes()
+    assert len(rows) == 1 and not rows[0].open
+    assert rows[0].end_t == 1090.0 and rows[0].duration_s == 90.0
+    db.close()

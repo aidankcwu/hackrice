@@ -206,7 +206,29 @@ class Scorer:
 
     @staticmethod
     def _screen_hours(episodes: Iterable[Episode]) -> float:
-        return sum(e.duration_s for e in episodes if e.kind == "screen_block") / 3600.0
+        """Hours covered by screen blocks: the union of their intervals.
+
+        Two blocks that overlap (a stale open row beside a live one, or the
+        builder flapping) cover the same seconds once. Summing durations
+        counted them twice and more, which is how a 28-minute window once
+        scored 65 h/day.
+        """
+        spans = sorted(
+            (e.start_t, (e.end_t if e.end_t is not None else e.start_t + e.duration_s))
+            for e in episodes if e.kind == "screen_block"
+        )
+        total = 0.0
+        cur_start = cur_end = None
+        for start, end in spans:
+            if cur_end is None or start > cur_end:
+                if cur_end is not None:
+                    total += cur_end - cur_start
+                cur_start, cur_end = start, end
+            else:
+                cur_end = max(cur_end, end)
+        if cur_end is not None:
+            total += cur_end - cur_start
+        return max(0.0, total) / 3600.0
 
     def _caffeine(
         self, episodes: list[Episode], seeded: dict[str, float], reported: dict[str, dict]
