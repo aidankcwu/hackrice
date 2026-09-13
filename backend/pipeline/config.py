@@ -40,14 +40,14 @@ DEFAULT_KEYWORD_TRIGGERS = [
         #: model call (demo). Omit `say` and the clerk hands the sighting to
         #: the voice agent instead.
         "say": "Put down the rice krispy.",
-        "cooldown_s": 20,
+        "cooldown_s": 5,
     },
     {
         "name": "lettuce",
         "keywords": ["lettuce", "romaine", "iceberg", "salad greens", "head of lettuce"],
         "note": "the wearer wants approval whenever they pick up lettuce",
         "say": "That's a great healthy choice!",
-        "cooldown_s": 20,
+        "cooldown_s": 5,
     },
 ]
 
