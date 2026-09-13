@@ -3,7 +3,7 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { T } from "@/lib/tokens";
 import type { DashboardData, WearableStat } from "@/lib/score/types";
-import { provenanceOf } from "@/lib/score/provenance";
+import { provenanceOf, contextFor } from "@/lib/score/provenance";
 import { fmtInt } from "./format";
 import { ProvenanceChip } from "./Panel";
 
@@ -65,7 +65,7 @@ export function wearableStats(d: DashboardData): WearableStat[] {
       value,
       unit: stat.unit,
       digits: stat.digits,
-      provenance: provenanceOf(stat.key, value !== null, { wearable }),
+      provenance: provenanceOf(stat.key, value !== null, contextFor(stat.key, d.source.wearable_sources, wearable)),
     };
   });
 }

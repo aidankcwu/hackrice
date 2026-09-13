@@ -71,6 +71,7 @@ export function daysEnding(dateIso: string, n = WINDOW_DAYS): string[] {
 // ---------------------------------------------------------------------------
 
 interface SeededRow {
+  source?: string;
   day: string;
   metric: string;
   value: number;
@@ -97,6 +98,16 @@ const finite = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value) ? value : undefined;
 
 /** Long rows `{day, metric, value}` → `date -> metric -> value`. */
+/** `day -> metric -> source`: which stream wrote each row (the demo seed, or a device such as `fitbit`). */
+export function pivotSeededSources(rows: SeededRow[]): Record<string, Record<string, string>> {
+  const out: Record<string, Record<string, string>> = {};
+  for (const r of rows) {
+    if (typeof r.day !== "string" || typeof r.metric !== "string" || typeof r.source !== "string") continue;
+    (out[r.day] ??= {})[r.metric] = r.source;
+  }
+  return out;
+}
+
 export function pivotSeeded(rows: SeededRow[]): Record<string, Record<string, number>> {
   const byDay: Record<string, Record<string, number>> = {};
   for (const row of rows) {
@@ -237,6 +248,7 @@ export async function loadDayInputs(base: string = apiBase()): Promise<{ days: D
     fetchJson<unknown>(base, "/api/wearables/status").catch((): unknown => null),
   ]);
   const seeded = pivotSeeded(asList<SeededRow>(seededRaw, "rows"));
+  const seededSources = pivotSeededSources(asList<SeededRow>(seededRaw, "rows"));
   const episodes = episodesRaw.map((raw) => asList<PipelineEpisode>(raw, "episodes").sort(byStart));
   const frameUrls = await frameUrlsFor(base, episodes[todayIndex], asList<Partial<Decision>>(decisionsRaw, "decisions"));
 
@@ -248,6 +260,7 @@ export async function loadDayInputs(base: string = apiBase()): Promise<{ days: D
     capture_source: typeof status.source === "string" ? status.source : undefined,
     demo_mode: typeof status.demo_mode === "boolean" ? status.demo_mode : undefined,
     last_tick_t: nowT,
+    wearable_sources: seededSources[today] ?? {},
     ...readWearables(wearablesRaw),
   };
   const days: DayInputs[] = dates.map((date, i) => ({

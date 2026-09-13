@@ -465,6 +465,8 @@ export interface DataSource {
   capture_source?: string;
   demo_mode?: boolean;
   last_tick_t?: number;
+  /** Today's `seeded` rows by metric -> the `source` that wrote each (`fitbit`, `whoop`, `phone`...). */
+  wearable_sources?: Record<string, string>;
 }
 
 /**

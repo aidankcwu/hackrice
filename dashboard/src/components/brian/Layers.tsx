@@ -1,6 +1,6 @@
 import { T, fmtH, tone } from "@/lib/tokens";
 import type { DashboardData, EngineFactor, IconName } from "@/lib/score/types";
-import { provenanceOf } from "@/lib/score/provenance";
+import { provenanceOf, contextFor } from "@/lib/score/provenance";
 import type { Provenance } from "@/lib/score/provenance";
 import { Icon } from "./icons";
 import { doseNote } from "@/lib/score/shape";
@@ -95,7 +95,7 @@ export function layerViewRows(d: DashboardData): LayerViewRow[] {
       note: measured.length > 0 ? doseNote(measured) : "Unmeasured today — scored at the population average, earns nothing.",
       measured: measured.length,
       total: factors.length,
-      provenance: lead === undefined ? "imputed" : provenanceOf(lead.key, true, { wearable }),
+      provenance: lead === undefined ? "imputed" : provenanceOf(lead.key, true, contextFor(lead.key, d.source.wearable_sources, wearable)),
     };
   });
 }
