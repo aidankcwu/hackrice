@@ -59,8 +59,11 @@ OPENING_WINDOW_S = 20.0
 OPENING_FRAMES = 1  # the trigger frame only: every extra image is ~200-300 ms of model time
 #: Frames since the question went out (§3).
 REPLY_FRAMES = 1
-#: A statement already spoken this recently is not spoken again ("say it once").
-REPEAT_WINDOW_S = 300.0
+#: A line already spoken this recently is not spoken again ("say it once").
+#: Short on purpose: it exists to stop the same remark twice inside one moment
+#: (seen live: "Stand up and look away" twice in twelve seconds), not to mute a
+#: rehearsal or a second person trying the glasses a minute later.
+REPEAT_WINDOW_S = 45.0
 #: Longest a single turn may take before the conversation is abandoned.
 TURN_DEADLINE_S = 15.0
 
