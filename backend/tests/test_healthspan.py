@@ -150,7 +150,7 @@ def test_payload_shape_and_json_roundtrip(seeded, settings):
                                 "total": 20}
     assert body["window"]["days_elapsed"] == 7
     assert body["window"]["uncovered_days"] == [END_DAY]
-    assert len(body["conventions"]) == 8
+    assert len(body["conventions"]) == 9
     assert set(body["driver_rules"]) == {"caffeine_late", "alcohol", "night_screen",
                                          "late_bed", "no_daylight", "isolated"}
 
@@ -1068,3 +1068,74 @@ def test_empty_database_scores_with_everything_missing(db, settings):
     assert body["ledger"]  # weekly accruals of zero, daily keys absent
     assert 0 <= body["overall"] <= 100
     json.dumps(body, allow_nan=False)
+
+
+# -- live device rows vs the demo seed ------------------------------------
+
+
+def set_source(db: Database, day: str, metric: str, source: str) -> None:
+    db.conn.execute("UPDATE seeded SET source = ? WHERE day = ? AND metric = ?",
+                    (source, day, metric))
+    db.conn.commit()
+
+
+def test_a_fitbit_row_is_live_and_a_whoop_row_stays_seeded(seeded, settings):
+    """The By-layer panel must not call a connected Fitbit's night "Seeded"."""
+
+    day = DAYS[0]
+    before = healthspan_for_day(seeded, settings, day)["provenance"]["sleep_hours"]
+    assert before["source"] == "seeded" and before["basis"] == "whoop"
+
+    set_source(seeded, day, "sleep_hours", "fitbit")
+    after = healthspan_for_day(seeded, settings, day)["provenance"]["sleep_hours"]
+    assert after["source"] == "live"
+    assert after["basis"] == "fitbit"
+    assert after["detail"] == f"fitbit sleep_hours, row {day} (device)"
+
+    # The same metric from the demo seed is untouched: steps is still the phone.
+    steps = healthspan_for_day(seeded, settings, day)["provenance"]["steps"]
+    assert steps["source"] == "seeded" and steps["basis"] == "phone"
+
+
+def test_a_fitbit_steps_row_makes_movement_live(seeded, settings):
+    day = DAYS[0]
+    set_source(seeded, day, "steps", "fitbit")
+    body = healthspan_for_day(seeded, settings, day)
+    assert body["provenance"]["steps"] == {
+        "source": "live", "basis": "fitbit",
+        "detail": f"fitbit steps, row {day} (device)"}
+    row = next(f for f in body["factors"] if f["key"] == "steps")
+    assert row["provenance"] == "live" and row["basis"] == "fitbit"
+
+
+def test_a_fitbit_bed_time_row_is_live_too(seeded, settings):
+    day = DAYS[0]
+    set_source(seeded, day, "bed_time", "fitbit")
+    bedtime = healthspan_for_day(seeded, settings, day)["provenance"]["bedtime_hh"]
+    assert bedtime["source"] == "live" and bedtime["basis"] == "fitbit"
+
+
+def test_a_day_the_device_missed_keeps_the_seeded_row_and_says_so(seeded, settings):
+    """No suppression: the wearer did not sleep last night, so the seed still applies."""
+
+    set_source(seeded, DAYS[0], "sleep_hours", "fitbit")
+    missed = healthspan_for_day(seeded, settings, DAYS[1])["provenance"]["sleep_hours"]
+    assert missed["source"] == "seeded" and missed["basis"] == "whoop"
+    assert missed["detail"] == f"whoop sleep_hours, row {DAYS[1]}"
+
+
+def test_the_live_source_set_is_one_object_and_is_not_the_device_catalogue():
+    """``DEVICES`` says a device *could* send this; it is also the demo's cast."""
+
+    from pipeline.scoring import scorer as sc
+    from pipeline.wearables import DEVICES
+
+    # One definition, shared by both panels.
+    assert hs.LIVE_DAILY_SOURCES is sc.LIVE_DAILY_SOURCES
+    assert "fitbit" in hs.LIVE_DAILY_SOURCES
+    # Deriving it from DEVICES would relabel the whole demo seed as live: the
+    # seed's own sources are names DEVICES lists.
+    assert set(SEEDED_SOURCES.values()) & set(DEVICES)
+    assert not set(SEEDED_SOURCES.values()) & hs.LIVE_DAILY_SOURCES
+    assert hs.row_provenance("whoop") == "seeded"
+    assert hs.row_provenance("fitbit") == "live"

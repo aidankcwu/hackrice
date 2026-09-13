@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 import pytest
 
@@ -342,3 +342,63 @@ def test_scores_are_upserted_and_readable(seeded):
     before = [s.model_dump() for s in seeded.list_scores()]
     scorer.score_all(DAYS[0], DAYS)
     assert [s.model_dump() for s in seeded.list_scores()] == before
+
+
+# -- live device rows vs the demo seed ------------------------------------
+
+
+def set_source(db: Database, day: str, metric: str, source: str) -> None:
+    db.conn.execute("UPDATE seeded SET source = ? WHERE day = ? AND metric = ?",
+                    (source, day, metric))
+    db.conn.commit()
+
+
+def test_a_seeded_row_from_a_connected_device_scores_as_live(seeded):
+    """§8 must not print "Seeded" next to a night a Fitbit actually measured."""
+
+    day = DAYS[0]
+    before = by_metric(Scorer(seeded).score_day(day))["sleep_hours"]
+    assert before.source == "seeded" and "live from" not in (before.note or "")
+
+    set_source(seeded, day, "sleep_hours", "fitbit")
+    after = by_metric(Scorer(seeded).score_day(day))["sleep_hours"]
+    assert after.source == "live"
+    assert "live from fitbit" in (after.note or "")
+    # Same value, same score -- only the label changed.
+    assert after.value == before.value and after.score == before.score
+
+    # A demo-seed row on the same day is untouched.
+    assert by_metric(Scorer(seeded).score_day(day))["steps"].source == "seeded"
+
+
+def test_a_whoop_row_stays_seeded_and_keeps_the_hrv_flag(seeded):
+    day = LATE_DAYS[0]
+    scores = by_metric(Scorer(seeded).score_day(day))
+    assert scores["hrv_rmssd_ratio"].source == "seeded"
+    assert "below baseline" in (scores["hrv_rmssd_ratio"].note or "")
+
+    set_source(seeded, day, "hrv_rmssd_ratio", "fitbit")
+    live = by_metric(Scorer(seeded).score_day(day))["hrv_rmssd_ratio"]
+    assert live.source == "live"
+    assert "live from fitbit" in (live.note or "") and "below baseline" in (live.note or "")
+
+
+def test_a_session_window_labels_the_device_row_live_too(seeded):
+    day = DAYS[0]
+    set_source(seeded, day, "sleep_hours", "fitbit")
+    midnight = datetime.combine(date.fromisoformat(day), datetime.min.time())
+    t1 = (midnight + timedelta(hours=12)).timestamp()
+    rows = by_metric(Scorer(seeded).score_window(t1 - 120, t1))
+    assert rows["sleep_hours"].source == "live"
+    assert rows["sleep_hours"].period == "session"
+    assert rows["screen_hours_daily"].source == "live"  # episodes, as before
+
+
+def test_the_live_source_set_is_shared_with_the_healthspan_adapter():
+    from pipeline.scoring import healthspan as hs
+    from pipeline.scoring.scorer import LIVE_DAILY_SOURCES, row_provenance
+
+    assert hs.LIVE_DAILY_SOURCES is LIVE_DAILY_SOURCES
+    assert row_provenance("fitbit") == "live"
+    assert row_provenance("whoop") == "seeded" and row_provenance("phone") == "seeded"
+    assert row_provenance("") == "seeded"

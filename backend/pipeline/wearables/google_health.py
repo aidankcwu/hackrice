@@ -205,8 +205,15 @@ def oxygen_saturation_to_payload(point: dict) -> dict:
     value = point.get("oxygenSaturation", {}); stamp = value.get("sampleTime", {}).get("physicalTime")
     return {"device": "fitbit", "samples": [_sample(_ts(stamp), "spo2", value["percentage"], "%", _model(point))] if stamp and value.get("percentage") is not None else [], "daily": []}
 def steps_to_payload(point: dict) -> dict:
-    value = point.get("steps", {}); stamp = value.get("interval", {}).get("startTime")
-    return {"device": "fitbit", "samples": [_sample(_ts(stamp), "steps_delta", int(value["count"]), "steps", _model(point))] if stamp and value.get("count") is not None else [], "daily": []}
+    value = point.get("steps", {}); interval = value.get("interval", {}); stamp = interval.get("startTime")
+    if not stamp or value.get("count") is None:
+        return {"device": "fitbit", "samples": [], "daily": []}
+    row = _sample(_ts(stamp), "steps_delta", int(value["count"]), "steps", _model(point))
+    # Carried for daily_steps_rows only; the ingest reads t/metric/value/unit
+    # and ignores the rest, exactly as it already does for source_model.
+    if interval.get("startUtcOffset"):
+        row["utc_offset"] = interval["startUtcOffset"]
+    return {"device": "fitbit", "samples": [row], "daily": []}
 
 
 _DAILY = {
@@ -216,9 +223,27 @@ _DAILY = {
     "daily-sleep-temperature-derivations": ("dailySleepTemperatureDerivations", "skin_temp_c", "°C", ("nightlyTemperatureCelsius",)),
     "daily-oxygen-saturation": ("dailyOxygenSaturation", "spo2", "%", ("average", "percentage")),
 }
+#: The ``daily-*`` kinds that are derivations of one night's main sleep rather
+#: than whole-day values. Google dates these by the sleep session's own date,
+#: which is its **wake** date: in the live DB they line up day-for-day with the
+#: wake-dated sleep rows the poller used to write (the 5.3 h night that ended
+#: 11:22 on the 12th arrives as respiratory_rate 20.2 dated the 12th, next to
+#: the 8.7 h night that ended 09:56 on the 11th and its 17.6). The seed's
+#: convention files a night under the evening it began, so their day is walked
+#: back one -- the whole-day shift ``NIGHT_LOOKBACK`` performs on a wake instant,
+#: with only a date to work from.
+#:
+#: ``daily-resting-heart-rate`` is a per-day value, not a nightly one, and is
+#: deliberately absent: its date is already the day it describes.
+_NIGHTLY_DAILY = frozenset({
+    "daily-heart-rate-variability", "daily-respiratory-rate",
+    "daily-sleep-temperature-derivations", "daily-oxygen-saturation",
+})
 def daily_to_payload(data_type: str, point: dict) -> dict:
     field, metric, unit, hints = _DAILY[data_type]; obj = point.get(field, {}); day = _day(obj.get("date", {}))
     value = _probe(data_type, obj, hints)
+    if day and data_type in _NIGHTLY_DAILY:
+        day = (date.fromisoformat(day) - timedelta(days=1)).isoformat()
     return {"device": "fitbit", "samples": [], "daily": [_daily(day, metric, value, unit, _model(point))] if day and value is not None else []}
 
 
@@ -237,6 +262,25 @@ def _parse_offset(offset: str | None) -> timedelta | None:
         return sign * timedelta(hours=hh, minutes=mm)
     except (ValueError, IndexError):
         return None
+
+
+#: Hours walked back from the moment a sleep ends to find the evening it began.
+#: ``seed/fixtures.py`` files a night under the day it **starts**, so the row
+#: for day D is the night of D->D+1; Google files a sleep session by its end.
+#: Half a day is the whole rule: a night that ends at 09:56 and one that ends at
+#: 06:30 after a 22:30 bedtime both land on the previous day, and only a sleep
+#: ending after noon local is filed on its own date.
+NIGHT_LOOKBACK = timedelta(hours=12)
+
+
+def night_day(end: datetime) -> str:
+    """``YYYY-MM-DD`` of the evening a night ending at ``end`` belongs to.
+
+    ``end`` must already carry the wearer's own offset (see :func:`_offset_dt`);
+    the shift is applied in that offset, never in UTC.
+    """
+
+    return (end - NIGHT_LOOKBACK).date().isoformat()
 
 
 def _offset_dt(text: str, offset: str | None) -> datetime:
@@ -261,7 +305,7 @@ def sleep_to_payload(points: list[dict] | dict) -> dict:
         metric = next((m for needle, m in (("deep", "deep_min"), ("rem", "rem_min"), ("light", "light_min"), ("awake", "awake_min"), ("wake", "awake_min")) if needle in name), None)
         if metric and stage.get("startTime") and stage.get("endTime"):
             totals[metric] += (_ts(stage["endTime"]) - _ts(stage["startTime"])) / 60
-    day = end.date().isoformat(); model = _model(point)
+    day = night_day(end); model = _model(point)
     vals = [("sleep_hours", duration / 3600, "hours"), *[(k, v, "min") for k, v in totals.items()],
             ("bed_time", start.hour + start.minute / 60 + start.second / 3600, "hour"),
             ("wake_time", end.hour + end.minute / 60 + end.second / 3600, "hour")]
@@ -285,6 +329,48 @@ def exercise_to_payload(points: list[dict] | dict) -> dict:
     return {"device": "fitbit", "samples": [], "daily": daily}
 
 
+def _sample_day(row: dict[str, Any]) -> str:
+    """Local day of an intraday sample.
+
+    The wearer's own offset when Google sent one on the interval, else this
+    Mac's zone -- the poller and the wearer are the same person here, and a
+    naive ``astimezone()`` is the Mac's zone including its DST rules.
+    """
+
+    dt = datetime.fromtimestamp(float(row["t"]), timezone.utc)
+    delta = _parse_offset(row.get("utc_offset"))
+    return (dt.astimezone(timezone(delta)) if delta is not None else dt.astimezone()).date().isoformat()
+
+
+def daily_steps_rows(samples: list[dict[str, Any]], min_day: str | None = None) -> list[dict[str, Any]]:
+    """One ``steps`` daily row per local day the ``steps_delta`` samples cover.
+
+    The poller stores step deltas into ``biometric_series``, but the engine and
+    the §8 scorer read a daily ``steps`` row out of the ``seeded`` table -- with
+    none from the device they fall back to the demo phone row while a Fitbit is
+    on the wrist. Summing the deltas here is the whole fix.
+
+    ``min_day`` drops any day the pulled window only partly covers: a total is
+    only honest when the window holds the whole local day, and the row is
+    INSERT-OR-REPLACEd, so a partial sum would clobber a complete one.
+    """
+
+    totals: dict[str, float] = {}
+    models: dict[str, str | None] = {}
+    for row in samples:
+        if row.get("metric") != "steps_delta" or row.get("value") is None:
+            continue
+        try:
+            day = _sample_day(row)
+        except (KeyError, TypeError, ValueError, OSError, OverflowError):
+            continue
+        if min_day and day < min_day:
+            continue
+        totals[day] = totals.get(day, 0.0) + float(row["value"])
+        models.setdefault(day, row.get("source_model"))
+    return [_daily(day, "steps", total, "steps", models.get(day)) for day, total in sorted(totals.items())]
+
+
 def merge(payloads: list[dict]) -> dict:
     return {"device": "fitbit", "samples": [r for p in payloads for r in p.get("samples", [])],
             "daily": [r for p in payloads for r in p.get("daily", [])]}
@@ -302,6 +388,12 @@ class GoogleHealthSync:
         now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
         start = datetime.fromtimestamp(self.last_sync_t, timezone.utc) - timedelta(seconds=120) if self.last_sync_t else now - timedelta(hours=6)
         days_start = datetime.combine(now.date() - timedelta(days=1), datetime.min.time(), timezone.utc)
+        # Steps are pulled over whole *local* days, not the short incremental
+        # window: daily_steps_rows rebuilds the day's total from the deltas, and
+        # one poll's worth of them would overwrite a day's steps with five
+        # minutes of walking. Local midnight yesterday, in the Mac's own zone.
+        local_yesterday = (now.astimezone() - timedelta(days=1)).date()
+        steps_start = datetime.combine(local_yesterday, datetime.min.time()).astimezone()
         payloads: list[dict] = []; before = self.client.requests_last_hour
         try:
             failures: list[str] = []
@@ -320,7 +412,8 @@ class GoogleHealthSync:
 
             for kind, converter in (("heart-rate", heart_rate_to_payload), ("heart-rate-variability", hrv_to_payload),
                                     ("oxygen-saturation", oxygen_saturation_to_payload), ("steps", steps_to_payload)):
-                payloads.extend(converter(p) for p in await pull(kind, start))
+                since = min(start, steps_start) if kind == "steps" else start
+                payloads.extend(converter(p) for p in await pull(kind, since))
             for kind in _DAILY:
                 payloads.extend(daily_to_payload(kind, p) for p in await pull(kind, days_start))
             def _since(points: list[dict[str, Any]], key: str) -> list[dict[str, Any]]:
@@ -343,7 +436,11 @@ class GoogleHealthSync:
                 except Exception as exc:  # noqa: BLE001
                     failures.append(f"{label} convert: {str(exc)[:160]}")
                     log.warning("google health: %s conversion failed: %s", label, str(exc)[:200])
-            result = merge(payloads); sent = self.sink(result)
+            result = merge(payloads)
+            # Same store path as every other daily row: the sink turns
+            # result["daily"] into SeededRow(source="fitbit") upserts.
+            result["daily"].extend(daily_steps_rows(result["samples"], local_yesterday.isoformat()))
+            sent = self.sink(result)
             if inspect.isawaitable(sent): await sent
             self.last_sync_t, self.connected = now.timestamp(), True
             self.last_error = ("partial: " + "; ".join(failures)) if failures else None

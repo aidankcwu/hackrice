@@ -28,7 +28,31 @@ from .thresholds import (
     by_period,
 )
 
-__all__ = ["Scorer", "rollup"]
+__all__ = ["LIVE_DAILY_SOURCES", "Scorer", "row_provenance", "rollup"]
+
+#: ``seeded``-table sources that are a **live wearable reporting now**, not the
+#: SPEC §6 demo seed. A daily row written by one of these is provenance
+#: ``live``: the number came off the wearer's own device this morning, and
+#: neither the §8 panel nor the By-layer panel may call it "Seeded".
+#:
+#: Defined here rather than in :mod:`.healthspan` because that module imports
+#: this one; ``healthspan`` re-exports the name, so there is still exactly one
+#: definition. It is deliberately *not* derived from
+#: :data:`pipeline.wearables.DEVICES`: that tuple is the catalogue of devices
+#: this backend will *accept* samples from, and it lists ``apple_watch``,
+#: ``whoop`` and ``oura`` -- which are exactly the names ``seed/fixtures.py``
+#: writes into the ``seeded`` table for the demo. Membership there means "a real
+#: device could send this", not "this row did come from one", so the two sets
+#: cannot be the same object. Add a name here when a poller starts writing daily
+#: rows under it.
+LIVE_DAILY_SOURCES: frozenset[str] = frozenset({"fitbit", "apple_watch_live"})
+
+
+def row_provenance(source: str) -> str:
+    """``live`` when a ``seeded``-table row's own source is a live device."""
+
+    return "live" if source in LIVE_DAILY_SOURCES else "seeded"
+
 
 #: SPEC §8: sauna sessions count only above 19 minutes.
 SAUNA_MIN_SECONDS = 19 * 60
@@ -106,13 +130,44 @@ class Scorer:
 
     # -- reads -----------------------------------------------------------
 
-    def _seeded(self, day: str) -> dict[str, float]:
-        return {row.metric: row.value for row in self.db.list_seeded(day, day)}
+    def _seeded(self, day: str) -> tuple[dict[str, float], dict[str, str]]:
+        """``({metric: value}, {metric: source})`` for the day's integration rows.
+
+        The sources ride along because a row's own ``source`` is what decides
+        whether it is a live device reading or the demo seed.
+        """
+
+        rows = self.db.list_seeded(day, day)
+        return ({r.metric: r.value for r in rows}, {r.metric: r.source for r in rows})
 
     def _episodes(self, day: str) -> list[Episode]:
         return self.db.list_episodes(day)
 
     # -- row construction ------------------------------------------------
+
+    def _seeded_daily(
+        self, spec: MetricSpec, seeded: dict[str, float], sources: dict[str, str]
+    ) -> tuple[float | None, str | None, str]:
+        """``(value, note, provenance)`` for one seeded daily spec.
+
+        A row written by a connected device is labelled ``live`` and says which
+        device, so the §8 panel stops calling a Fitbit night "Seeded". A row the
+        demo seed wrote stays ``seeded``; a day with no device row still falls
+        back to the seed and is reported as the seed, honestly.
+        """
+
+        raw = seeded.get(spec.metric)
+        value = None if raw is None else float(raw)
+        note: str | None = None
+        if spec.metric == "hrv_rmssd_ratio" and value is not None and value < HRV_FLAG_BELOW:
+            note = "below baseline (<0.90) — recovery flag"
+        if value is None:
+            return value, note, spec.source
+        row_source = sources.get(spec.metric, "")
+        provenance = row_provenance(row_source)
+        if provenance == "live":
+            note = _join(f"live from {row_source}", note)
+        return value, note, provenance
 
     def _emit(
         self,
@@ -121,6 +176,7 @@ class Scorer:
         value: float | None,
         note: str | None = None,
         score_override: float | None = None,
+        source_override: str | None = None,
     ) -> Score:
         score, base_note = spec.evaluate(value)
         if score_override is not None:
@@ -137,7 +193,7 @@ class Scorer:
             value=value,
             target=spec.target_text,
             score=score,
-            source=spec.source,
+            source=source_override or spec.source,
             grade=spec.grade,
             note=final_note,
         )
@@ -234,7 +290,7 @@ class Scorer:
 
         episodes = self._episodes(day)
         reported = self.db.reported_by_episode(day)
-        seeded = self._seeded(day)
+        seeded, sources = self._seeded(day)
         raw_meals = self._of_kind(episodes, "meal")
         meals = self._confirmed(raw_meals, reported)
         diet_value, diet_note = self._diet_pattern(meals, reported)
@@ -259,17 +315,10 @@ class Scorer:
         for spec in by_period("daily"):
             if spec.source == "live":
                 value, note = live_values.get(spec.metric, (None, None))
+                provenance = spec.source
             else:
-                raw = seeded.get(spec.metric)
-                value = None if raw is None else float(raw)
-                note = None
-                if (
-                    spec.metric == "hrv_rmssd_ratio"
-                    and value is not None
-                    and value < HRV_FLAG_BELOW
-                ):
-                    note = "below baseline (<0.90) — recovery flag"
-            score = self._emit(spec, day, value, note)
+                value, note, provenance = self._seeded_daily(spec, seeded, sources)
+            score = self._emit(spec, day, value, note, source_override=provenance)
             self.db.upsert_score(score)
             scores.append(score)
         return scores
@@ -340,7 +389,7 @@ class Scorer:
 
         episodes = self._window_episodes(t0, t1)
         reported = self.db.reported_by_episode()
-        seeded = self._seeded(day)
+        seeded, sources = self._seeded(day)
         raw_meals = self._of_kind(episodes, "meal")
         meals = self._confirmed(raw_meals, reported)
         diet_value, diet_note = self._diet_pattern(meals, reported)
@@ -373,17 +422,10 @@ class Scorer:
         for spec in by_period("daily"):
             if spec.source == "live":
                 value, note = live_values.get(spec.metric, (None, None))
+                provenance = spec.source
             else:
-                raw = seeded.get(spec.metric)
-                value = None if raw is None else float(raw)
-                note = None
-                if (
-                    spec.metric == "hrv_rmssd_ratio"
-                    and value is not None
-                    and value < HRV_FLAG_BELOW
-                ):
-                    note = "below baseline (<0.90) — recovery flag"
-            row = self._emit(spec, period_key, value, note)
+                value, note, provenance = self._seeded_daily(spec, seeded, sources)
+            row = self._emit(spec, period_key, value, note, source_override=provenance)
             # ``Score.period`` is a Literal["daily", "weekly"] owned by
             # ``pipeline.models``; ``model_copy`` re-labels the row without
             # widening that contract or re-validating it.
@@ -503,22 +545,32 @@ class Scorer:
         for spec in by_period("weekly"):
             if spec.source == "live":
                 value, note = live_values.get(spec.metric, (None, None))
+                provenance = spec.source
             else:
                 # No weekly seeded metric exists today; a future one would be a
                 # mean over the window's rows.
-                values = [
-                    row.value
+                rows = [
+                    row
                     for row in self.db.list_seeded(days[0], days[-1])
                     if row.metric == spec.metric
                 ] if days else []
+                values = [row.value for row in rows]
                 value = sum(values) / len(values) if values else None
                 note = f"mean of {len(values)} days" if values else None
+                # A week is only ``live`` when every day of it came off a
+                # device; one seeded day in the window and the mean is a mix,
+                # which the dashboard must not show as a device reading.
+                devices = {row.source for row in rows}
+                provenance = spec.source
+                if rows and all(row_provenance(src) == "live" for src in devices):
+                    provenance = "live"
+                    note = _join(f"live from {'/'.join(sorted(devices))}", note)
             score_override = (
                 sighting_values[spec.metric][2]
                 if spec.metric in sighting_values
                 else None
             )
-            score = self._emit(spec, week_key, value, note, score_override)
+            score = self._emit(spec, week_key, value, note, score_override, provenance)
             self.db.upsert_score(score)
             scores.append(score)
         return scores

@@ -11,6 +11,10 @@ Honesty rules of the adapter (the engine's own are listed in its docstring):
 
 * every observation carries a provenance (``live`` / ``seeded`` / ``derived`` /
   ``missing``) and a one-line ``detail`` saying how it was made;
+* an integration row is ``live`` when a connected device wrote it (its ``source``
+  is in :data:`~.scorer.LIVE_DAILY_SOURCES`) and ``seeded`` when the SPEC §6 demo
+  seed did -- a Fitbit night is never labelled "Seeded", and a day the device
+  missed still falls back to the seed and still says so;
 * a factor with no data is *absent* from ``obs`` and imputed by the engine at
   the population reference, so it can never earn credit;
 * a zero from the glasses is a measurement only on a day that has episodes
@@ -38,11 +42,25 @@ from ..config import Settings
 from ..db import Database, day_key
 from ..models import HEALTHY_FOOD_TYPES, Episode
 from . import brian_score as bs
-from .scorer import SAUNA_MIN_SECONDS, Scorer, _fmt_hour, _hour_of_day
+from .scorer import (
+    LIVE_DAILY_SOURCES,
+    SAUNA_MIN_SECONDS,
+    Scorer,
+    _fmt_hour,
+    _hour_of_day,
+    row_provenance,
+)
 from .thresholds import DEFAULT_BEDTIME_H
 
+# ``LIVE_DAILY_SOURCES`` is re-exported, not redefined: it is the one place that
+# says which ``seeded``-table sources are a live device, and it lives in
+# ``scorer`` only because this module imports that one (the other direction
+# would be a cycle). Both panels read the same frozenset, so a device added for
+# the §8 scores is a device the By-layer panel stops calling "Seeded" in the
+# same edit. See that constant for why it is not ``wearables.DEVICES``.
 __all__ = ["healthspan_for_day", "healthspan_registry", "healthspan_week", "lite_payload",
-           "profile_from_settings", "MAX_WEEK_DAYS", "NATURE_SCENES"]
+           "profile_from_settings", "LIVE_DAILY_SOURCES", "MAX_WEEK_DAYS", "NATURE_SCENES"]
+
 
 # Known engine quirks (brian_score.py stays verbatim; each is handled or
 # documented here rather than patched there):
@@ -150,7 +168,10 @@ _CHECK_METRICS = {"pvt_check_energy": "energy", "pvt_check_mood": "mood",
 
 CONVENTIONS = [
     "Night rows (sleep_hours, sri, hrv_rmssd_ratio, night_noise_db, evening_light_ok, bed_time) "
-    "for day D describe the night that starts on D — same row the §8 scorer uses.",
+    "for day D describe the night that starts on D — same row the §8 scorer uses, and the same "
+    "day the Fitbit poller files a night under (it walks the wake instant back 12 h).",
+    "An integration row is live when a connected device wrote it (source fitbit) and seeded when "
+    "the demo seed did; a day the device has no row for keeps the seeded row, labelled seeded.",
     "Weekly hazard doses use the trailing 7 days; the ledger uses the ISO week to date.",
     "Unmeasured factors are imputed at the population reference and earn nothing.",
     "Untyped meals are excluded from the Mediterranean share (the §8 scorer counts them as off-pattern).",
@@ -183,8 +204,9 @@ class Obs:
     value: float | None
     #: ``live`` | ``seeded`` | ``derived`` | ``missing`` (design §0 U13).
     source: str
-    #: ``glasses`` | ``phone`` | ``whoop`` | ``oura`` | ``apple_watch`` | ``user`` |
-    #: ``assumed`` -- for seeded rows, the row's own ``source`` string.
+    #: ``glasses`` | ``phone`` | ``whoop`` | ``oura`` | ``apple_watch`` | ``fitbit`` |
+    #: ``user`` | ``assumed`` -- for integration rows, the row's own ``source``
+    #: string, which is also what decides ``live`` vs ``seeded`` above.
     basis: str
     detail: str
 
@@ -330,9 +352,21 @@ def _daylight_fallback(d: _DayData) -> float:
 
 
 def _seeded_obs(d: _DayData, metric: str, default_basis: str) -> Obs:
+    """One integration row as an :class:`Obs`, provenance from the row's source.
+
+    A row a connected device wrote (``fitbit``) is ``live`` and says ``(device)``
+    out loud; a row the SPEC §6 demo seed wrote stays ``seeded``. When the device
+    has no row for a day the seed still applies -- the wearer did not sleep last
+    night, so today's sleep is legitimately the demo seed -- and it is reported
+    as the seed rather than dressed up as a reading.
+    """
+
     if metric in d.seeded:
         basis = d.sources.get(metric, default_basis)
-        return Obs(float(d.seeded[metric]), "seeded", basis, f"{basis} {metric}, row {d.day}")
+        provenance = row_provenance(basis)
+        suffix = " (device)" if provenance == "live" else ""
+        return Obs(float(d.seeded[metric]), provenance, basis,
+                   f"{basis} {metric}, row {d.day}{suffix}")
     return Obs(None, "missing", default_basis, f"no seeded {metric} row for {d.day}")
 
 
@@ -442,8 +476,9 @@ def _day_obs(d: _DayData, profile: bs.Profile) -> dict[str, Obs]:
             f"wearer reported: not mine ({len(raw_sightings)} sighting(s) excluded)")
     elif "journal_alcohol" in s:
         j = float(s["journal_alcohol"])
+        basis = d.sources.get("journal_alcohol", "whoop")
         out["alcohol_drinks"] = Obs(
-            1.0 if j >= 1.0 else 0.0, "seeded", d.sources.get("journal_alcohol", "whoop"),
+            1.0 if j >= 1.0 else 0.0, row_provenance(basis), basis,
             f"whoop journal answer filed on {d.day}: "
             + ("1 → at least one drink (coarse)" if j >= 1.0 else "0 → none"))
     elif d.covered:
@@ -455,12 +490,12 @@ def _day_obs(d: _DayData, profile: bs.Profile) -> dict[str, Obs]:
 
     if out["smoker"].value is not None:
         out["smoker"] = Obs(
-            out["smoker"].value, "seeded", out["smoker"].basis,
+            out["smoker"].value, out["smoker"].source, out["smoker"].basis,
             f"whoop journal answer filed on {d.day}")
 
     if out["pm25"].value is not None:
         out["pm25"] = Obs(
-            out["pm25"].value, "seeded", out["pm25"].basis,
+            out["pm25"].value, out["pm25"].source, out["pm25"].basis,
             f"{out['pm25'].value:g} µg/m³ from the nearest reference station on {d.day}")
     else:
         out["pm25"] = Obs(None, "missing", "openaq",
@@ -776,7 +811,7 @@ def _engine_episode(e: Episode) -> dict | None:
 
 
 def _reconcile_pins(pins: list[dict], engine_eps: list[dict], profile: bs.Profile,
-                    light_source: str) -> list[dict]:
+                    day_light: Obs) -> list[dict]:
     """Structural field edits after ``pins_from_episodes`` (matched positionally).
 
     The engine emits pins in input order and skips only a screen_block outside
@@ -794,10 +829,12 @@ def _reconcile_pins(pins: list[dict], engine_eps: list[dict], profile: bs.Profil
             pin["effect"] = (
                 f"inside your {cutoff:g} h cutoff (bed {bed}) — ~−1 h of sleep tonight"
                 if late else f"outside your {cutoff:g} h cutoff — fine")
-        elif e["type"] == "outdoor_block" and light_source == "seeded":
+        elif e["type"] == "outdoor_block" and day_light.source in ("seeded", "live"):
+            # A bright-light row exists, so the outdoor block must not be
+            # double-counted as light -- whoever wrote the row, phone or device.
             green = e["scene"] in NATURE_SCENES or e["scene"] == UNTAGGED_SCENE
             pin["effect"] = ((f"nature +{e['minutes']:.0f} min this week · " if green else "")
-                             + "bright light already counted by the phone")
+                             + f"bright light already counted by the {day_light.basis}")
     return pins
 
 
@@ -877,7 +914,8 @@ def healthspan_for_day(db: Database, settings: Settings, day: str, *,
 
     bed = _bed_h(today.seeded)
     if bed is not None:
-        bedtime = Obs(bed, "seeded", today.sources.get("bed_time", "whoop"),
+        bed_basis = today.sources.get("bed_time", "whoop")
+        bedtime = Obs(bed, row_provenance(bed_basis), bed_basis,
                       f"bed_time row {day} → {_fmt_hour(bed)}")
     else:
         bedtime = Obs(DEFAULT_BEDTIME_H, "missing", "assumed",
@@ -922,7 +960,7 @@ def healthspan_for_day(db: Database, settings: Settings, day: str, *,
 
     engine_eps = [ep for ep in (_engine_episode(e) for e in today.episodes) if ep is not None]
     all_pins = _reconcile_pins(bs.pins_from_episodes(engine_eps, day_score, forecast), engine_eps,
-                               profile, all_obs["day_light_min"].source)
+                               profile, all_obs["day_light_min"])
     # Today shows at most MAX_PINS_TODAY of the merged episodes; the count says
     # how many there were so the strip can offer the full day instead of
     # silently dropping evidence.
@@ -1048,8 +1086,10 @@ def healthspan_registry() -> dict:
     registry["adapter"] = {
         "engine": ENGINE,
         "provenance_labels": {
-            "live": "a direct sum or count over the glasses' episodes for that day",
-            "seeded": "an integration row used as-is; basis carries the row's own source",
+            "live": "a direct sum or count over the glasses' episodes for that day, or an "
+                    "integration row a connected device wrote (basis names the device)",
+            "seeded": "an integration row from the demo seed, used as-is; basis carries the "
+                      "row's own source",
             "derived": "a proxy or conversion of either",
             "missing": "no measurement at all — imputed at the population reference, earns nothing",
         },
