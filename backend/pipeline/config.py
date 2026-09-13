@@ -28,35 +28,9 @@ __all__ = ["DEFAULT_KEYWORD_TRIGGERS", "Timings", "Settings", "get_settings"]
 
 log = logging.getLogger(__name__)
 
-DEFAULT_KEYWORD_TRIGGERS = [
-    {
-        "name": "rice_krispy",
-        #: Wide on purpose: Gemini calls the thing a "snack bar" or "treat"
-        #: for a few ticks before it says "Rice Krispies", and the demo cannot
-        #: wait for that.
-        "keywords": [
-            "rice krispy", "rice krispie", "rice krispies", "krispy", "krispie",
-            "krispies", "crispy treat", "rice crispy", "cereal bar", "snack bar",
-            "treat bar", "marshmallow", "packaged treat", "wrapped treat",
-        ],
-        "note": "the wearer wants the glasses to react whenever someone is holding or eating a Rice Krispy treat",
-        #: A fixed line: spoken verbatim the moment the keyword is seen, no
-        #: model call (demo). Omit `say` and the clerk hands the sighting to
-        #: the voice agent instead. Caps and the exclamation make the voice
-        #: hit it harder.
-        "say": "PUT THE RICE KRISPY DOWN!",
-        "min_hits": 1,
-        "cooldown_s": 5,
-    },
-    {
-        "name": "lettuce",
-        "keywords": ["lettuce", "romaine", "iceberg", "salad", "greens", "leafy", "cabbage"],
-        "note": "the wearer wants approval whenever they pick up lettuce",
-        "say": "That's a great healthy choice!",
-        "min_hits": 1,
-        "cooldown_s": 5,
-    },
-]
+#: No keyword triggers by default. Set KEYWORD_TRIGGERS_JSON to add some:
+#: [{"name": ..., "keywords": [...], "note": ..., "min_hits": 2, "cooldown_s": 20}].
+DEFAULT_KEYWORD_TRIGGERS: list[dict[str, Any]] = []
 
 
 def _parse_keyword_triggers(value: Any) -> Any:
@@ -273,9 +247,6 @@ class Settings(BaseSettings):
     elevenlabs_voice_id: str = "SAz9YHcvj6GT2YYXdXww"
     speech_mode: Literal["auto", "text", "elevenlabs"] = "auto"
     demo_mode: bool = True
-    #: Demo switch (env FIXED_LINES_ONLY=1): the voice agent speaks nothing
-    #: but the fixed keyword lines; every clerk hand-off is dropped.
-    fixed_lines_only: bool = False
     db_path: Path = Path("./data/pipeline.db")
     #: Frame ring-buffer TTL in seconds (SPEC §2.5 / §12.3).
     frame_ttl_s: float = 90.0

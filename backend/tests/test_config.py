@@ -50,7 +50,7 @@ def test_keyword_triggers_json_env_and_invalid_fallback(monkeypatch, caplog) -> 
     monkeypatch.setenv("KEYWORD_TRIGGERS_JSON", "not json")
     with caplog.at_level("WARNING"):
         settings = Settings(_env_file=None)  # type: ignore[call-arg]
-    assert settings.keyword_triggers[0]["name"] == "rice_krispy"
+    assert settings.keyword_triggers == []
     assert "using default" in caplog.text
 
 

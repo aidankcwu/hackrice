@@ -297,8 +297,6 @@ class FakeReasonerClient:
 
         if any(line.startswith("Keyword trigger ") for line in text.splitlines()):
             spoken_name = base.replace("_", " ")
-            if base == "rice_krispy":
-                spoken_name += " treats"
             return T1Response(
                 interpretation=f"keyword trigger: {spoken_name}",
                 confidence=0.75,

@@ -613,13 +613,9 @@ def default_triggers(
             min_hits=int(entry.get("min_hits", 2)),
             cooldown_s=float(entry.get("cooldown_s", timings.trigger_cooldown_default)),
             reason="Keyword '{kw}' seen in caption/objects", extra_line=line,
-            bypass_gap=bool(entry.get("say")),
         ))
     if feed is not None:
         # Last: a camera trigger that fires on the same tick explains itself,
         # and this one costs a feed read.
         triggers.append(biometric_anomaly_trigger(timings, feed))
-    # Fixed-line keyword triggers go first: the gate takes one escalation per
-    # tick, and a demo line must win the tick over a change wake-up.
-    triggers.sort(key=lambda trig: not trig.bypass_gap)
     return triggers

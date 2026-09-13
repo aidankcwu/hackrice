@@ -194,24 +194,6 @@ class Reasoner:
 
         self.escalations += 1
 
-        fixed = self._fixed_line_for(esc.trigger)
-        if fixed is not None and self._conversation is not None:
-            # A keyword trigger with a fixed demo line: say it now, verbatim,
-            # and skip both model calls. The clerk's silent work is not needed
-            # for a line whose words were decided in advance.
-            outcome = self._conversation.request_fixed(
-                fixed, esc.reason or esc.trigger, decision_id=None
-            )
-            decision = Decision(
-                id=self._next_decision_id(), t=esc.t, trigger=esc.trigger,
-                trigger_tick_id=esc.tick.tick_id, episode_id=esc.episode_id,
-                interpretation=f'keyword line: "{fixed}"', confidence=1.0,
-                actions=[{"type": "speak", "text": fixed, "urgency": "normal", "outcome": outcome}],
-                spoke=outcome.startswith("handed_off"), latency_ms=0, model="fixed",
-            )
-            self.db.insert_decision(decision)
-            log.info("%s · %s · fixed line · \"%s\" · %s", local_time(esc.t, "%H:%M"), esc.trigger, fixed, outcome)
-            return True
 
         if not self._slot.acquire(blocking=False):
             self._drop(esc, "t1_busy")
@@ -246,15 +228,6 @@ class Reasoner:
             if not claimed:
                 self._busy = False
                 self._slot.release()
-
-    def _fixed_line_for(self, trigger: str) -> str | None:
-        """The `say` of a keyword trigger named ``trigger``, if it has one."""
-
-        for entry in getattr(self.settings, "keyword_triggers", None) or []:
-            if isinstance(entry, dict) and entry.get("name") == trigger:
-                say = entry.get("say")
-                return str(say).strip() if say else None
-        return None
 
     #: How long an answer parse may wait for the T1 slot before it is given up.
     ANSWER_WAIT_S = 20.0
