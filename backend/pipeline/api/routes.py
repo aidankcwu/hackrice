@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import base64
 import os
 import time
@@ -31,6 +32,8 @@ from ..wearables.ingest import ingest, ingest_samples
 #: A live sample newer than this counts as "a wearable is connected right now".
 LIVE_FRESH_S = 15 * 60
 
+log = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
@@ -55,10 +58,33 @@ async def start_session(request: Request, body: dict[str, Any] | None = None) ->
 
 @router.post("/api/session/end")
 async def end_session(request: Request) -> dict:
-    session = _pipeline(request).sessions.end()
+    """End the open session and generate its recap in the background.
+
+    The recap is the point of a session -- what the wearer was doing, scored
+    and narrated -- so it is produced whenever a session ends, however it was
+    ended (dashboard, curl, a script), not only from the one button that knew
+    to ask. It runs as a task because it makes a model call and speaks; the
+    caller gets the ended session at once and reads the recap from
+    ``GET /api/recap/latest`` when it lands (``recap: "generating"`` says so).
+    """
+    pipeline = _pipeline(request)
+    session = pipeline.sessions.end()
     if session is None:
         raise HTTPException(status_code=404, detail="no open session")
-    return session.model_dump()
+
+    from ..recap.builder import build_recap  # local: recap imports scoring, not api
+
+    async def generate() -> None:
+        try:
+            await build_recap(pipeline, session_id=session.id, speak=True)
+        except Exception:  # noqa: BLE001 -- a failed recap must not be silent
+            log.exception("session %s ended but its recap failed", session.id)
+
+    task = asyncio.create_task(generate())
+    pipeline.background_tasks = getattr(pipeline, "background_tasks", set())
+    pipeline.background_tasks.add(task)
+    task.add_done_callback(pipeline.background_tasks.discard)
+    return {**session.model_dump(), "recap": "generating"}
 
 
 @router.get("/api/session/current")

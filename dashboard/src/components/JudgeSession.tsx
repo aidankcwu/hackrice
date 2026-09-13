@@ -112,9 +112,16 @@ export function JudgeSession() {
     try {
       const ended = await api.sessionEnd();
       setSession(null);
-      // The recap is the point of the session, so generate it without a second click.
+      // The server generates the recap the moment a session ends; wait for it
+      // to land rather than asking for a second one (which would also speak twice).
       setBusy("generating");
-      setRecap(await api.recap(ended.id, true));
+      let landed: Recap|null = null;
+      for (let i = 0; i < 45 && !landed; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const r = await api.latestRecap();
+        if (r && r.session.id === ended.id) landed = r;
+      }
+      setRecap(landed ?? await api.recap(ended.id, false));
     } catch (e) { setError(e instanceof Error ? e.message : "could not end session"); }
     finally { setBusy(""); }
   }, []);
