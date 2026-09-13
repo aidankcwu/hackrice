@@ -16,7 +16,7 @@ export type DecisionAction =
   | { type: "annotate"; line: string }
   | { type: "log_insight"; category: string; text: string }
   | { type: "watch"; after_s: number; reason: string }
-  | { type: "speak"; text: string; urgency: "low" | "normal" | "high" }
+  | { type: "speak"; text: string; urgency: "low" | "normal" | "high"; outcome?: string | null }
   /** A question for the wearer (docs/ASK_DESIGN.md §5). The reasoner proposes
    *  `text`/`answer_kind`/`fills`/`reason`; the QuestionManager stamps
    *  `question_id` and `outcome` ("sent" | "suppressed:<reason>") onto the row
@@ -115,6 +115,35 @@ export interface Question {
 export interface AnswerResult { question_id: string; accepted: boolean }
 /** `question_id` is null when a guard suppressed the ask; `suppressed_reason` says which. */
 export interface AskResult { question_id: string | null; suppressed_reason: string | null }
+
+// --- Voice-agent conversations (docs/CONVERSATION_DESIGN.md) ---
+export interface ConversationTurn {
+  t: number;
+  role: "agent" | "wearer";
+  text: string;
+  kind?: "question" | "statement";
+  heard?: boolean;
+}
+export interface ConversationSettled {
+  confirmed: boolean | null;
+  count: number | null;
+  food_type: string | null;
+  note: string | null;
+}
+export interface Conversation {
+  id: string;
+  opened_t: number;
+  closed_t: number | null;
+  reason: string;
+  topic: string;
+  decision_id: string | null;
+  episode_id: string | null;
+  state: "active" | "closed";
+  turns: ConversationTurn[];
+  settled: ConversationSettled | null;
+  close_reason: string | null;
+}
+export interface OpenConversationResult { id: string | null; reason?: string }
 /** Where a healthspan number came from: `live` = episodes summed as-is, `seeded` = integration row as-is, `derived` = a proxy or conversion of either, `missing` = imputed at the population reference and never credited. */
 export type Provenance = "live" | "seeded" | "derived" | "missing";
 export interface HealthspanFactor { key: string; layer: string; label: string; dose: number | null; hr: number | null; hours: number; grade: string; measured: boolean; source: string; provenance: Provenance; basis: string; detail: string }

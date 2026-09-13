@@ -79,9 +79,16 @@ function ActionRow({ action, spoke }: { action: DecisionAction; spoke: boolean }
             <span className={`rounded-full border px-1.5 text-[10px] font-bold uppercase tracking-[.08em] ${URGENCY[action.urgency] ?? URGENCY.low}`}>
               {action.urgency}
             </span>
+            {/* Since the voice agent owns the mouth, a speak is a hand-off: its
+                `outcome` says whether a conversation opened or why it did not. */}
+            {action.outcome && action.outcome.startsWith("handed_off") && (
+              <span className="text-[10px] font-semibold uppercase tracking-[.08em] text-violet-300/90">
+                handed off
+              </span>
+            )}
             {!spoke && (
               <span className="text-[10px] font-semibold uppercase tracking-[.08em] text-amber-300/80">
-                proposed, suppressed by limiter
+                {action.outcome ? action.outcome.replace(":", " · ") : "proposed, suppressed by limiter"}
               </span>
             )}
           </span>

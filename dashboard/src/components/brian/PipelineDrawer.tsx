@@ -15,6 +15,7 @@ import { HealthspanPanel } from "@/components/HealthspanPanel";
 import { MemoryPanel, SevenDayPanel } from "@/components/MemoryPanels";
 import { JudgeSession } from "@/components/JudgeSession";
 import { QuestionsPanel } from "@/components/QuestionsPanel";
+import { ConversationsPanel } from "@/components/ConversationsPanel";
 import { PersonaPanel } from "@/components/PersonaPanel";
 
 /**
@@ -98,6 +99,7 @@ function PipelinePanels() {
           <EpisodeTimeline episodes={episodes.data} />
         </div>
         <div className="space-y-3">
+          <ConversationsPanel />
           <QuestionsPanel />
           <MemoryPanel summary={summary.data} pending={pending.data} />
           <SevenDayPanel rows={seeded.data} />

@@ -83,6 +83,10 @@ The `scene` / `activity` / `food_type` / `drink` menus live in `src/longevity/ai
 | `GET /api/questions?limit=20` | `pending_questions` rows, newest first (docs/ASK_DESIGN.md §5) |
 | `POST /api/answer` | `{question_id?, text, heard?=true}` → `{question_id, accepted}`; answers by hand what the phone would have transcribed |
 | `POST /api/ask` | `{text, answer_kind?="yes_no", fills?="confirmed", episode_id?}` → `{question_id, suppressed_reason}`; demo/debug ask |
+| `GET /api/conversations?limit=20` | conversation rows newest first, including turns |
+| `GET /api/conversations/{id}` | one `Conversation` row |
+| `GET /api/conversation/current` | the active `Conversation` or `null` |
+| `POST /api/conversation/open` | `{topic, mode?}` → `{id}`; `409 {reason}` when one is active |
 
 Decision row shape:
 
@@ -108,6 +112,32 @@ Decision row shape:
 
 `spoke` is what actually reached `speak()` after the rate limiter; a `speak`
 action can be present with `spoke: false`.
+
+## Conversations (docs/CONVERSATION_DESIGN.md)
+
+The voice agent owns one conversation at a time. `turns` preserves the ordered
+agent/wearer thread; `settled` contains only the facts resolved by that thread.
+
+```json
+{
+  "id": "c_3f2a91c4", "opened_t": 1757700842.0, "closed_t": 1757700870.0,
+  "reason": "food ownership", "topic": "the drink on the desk",
+  "decision_id": "d_0007", "episode_id": "e_0003", "state": "closed",
+  "turns": [
+    {"t": 1757700844.0, "role": "agent", "text": "Is that drink yours?", "kind": "question"},
+    {"t": 1757700851.2, "role": "wearer", "text": "Yes, two.", "heard": true},
+    {"t": 1757700853.0, "role": "agent", "text": "Got it.", "kind": "statement"}
+  ],
+  "settled": {"confirmed": true, "count": 2, "food_type": null, "note": null},
+  "close_reason": "done"
+}
+```
+
+`POST /api/conversation/open` accepts `mode: "question" | "statement"`; omit it
+to let the voice agent choose. A `409` returns `{"reason":"conversation_active"}`
+as a normal guarded outcome. Decision `ask` and `speak` actions may carry an
+`outcome` of `handed_off:<conversation_id>`, `conversation_active`,
+`conversation_cooldown`, or `no_transport`.
 
 ## Ask / answer (docs/ASK_DESIGN.md)
 

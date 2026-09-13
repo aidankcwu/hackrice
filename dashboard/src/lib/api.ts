@@ -1,5 +1,5 @@
-import { mockBiometrics, mockBiometricsMulti, mockDecisions, mockEpisodes, mockHealthspan, mockPending, mockPersona, mockProfileLines, mockQuestions, mockScores, mockSeeded, mockSeededRows, mockStatus, mockSummary, mockTicks, mockWearablesStatus } from "./mock";
-import type { AnswerResult, AskResult, Biometrics, BiometricsMulti, Decision, Episode, ForgetResult, Healthspan, Insight, MetricScore, PendingCheck, Persona, ProfileLine, Question, Recap, RecapSummary, Scores, SeededDay, SeededMetricRow, Session, Status, Tick, TodaySummary, WearablesStatus } from "./types";
+import { mockBiometrics, mockBiometricsMulti, mockConversations, mockDecisions, mockEpisodes, mockHealthspan, mockPending, mockPersona, mockProfileLines, mockQuestions, mockScores, mockSeeded, mockSeededRows, mockStatus, mockSummary, mockTicks, mockWearablesStatus } from "./mock";
+import type { AnswerResult, AskResult, Biometrics, BiometricsMulti, Conversation, Decision, Episode, ForgetResult, Healthspan, Insight, MetricScore, OpenConversationResult, PendingCheck, Persona, ProfileLine, Question, Recap, RecapSummary, Scores, SeededDay, SeededMetricRow, Session, Status, Tick, TodaySummary, WearablesStatus } from "./types";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8010";
 export const configuredMock = process.env.NEXT_PUBLIC_MOCK === "1";
@@ -53,6 +53,21 @@ export const api = {
     action<AnswerResult>("/api/answer", questionId ? {question_id: questionId, text} : {text}),
   /** Demo/debug ask. Still passes the §4 guards, so `question_id` may be null. */
   ask: (text: string) => action<AskResult>("/api/ask", {text}),
+  conversations: async (limit=20)=>{const r=await request<Conversation[]|{conversations:Conversation[]}>(`/api/conversations?limit=${limit}`,mockConversations);return {...r,data:list(r.data,["conversations"])};},
+  conversation: (id: string) => request<Conversation>(`/api/conversations/${encodeURIComponent(id)}`, mockConversations.find(c => c.id === id) ?? mockConversations[0]),
+  conversationCurrent: () => request<Conversation|null>("/api/conversation/current", mockConversations.find(c => c.state === "active") ?? null),
+  openConversation: async (topic: string, mode?: "question" | "statement"): Promise<OpenConversationResult> => {
+    const response = await fetch(`${API_BASE}/api/conversation/open`, {
+      method:"POST", cache:"no-store", headers:{"content-type":"application/json"},
+      body:JSON.stringify(mode ? {topic, mode} : {topic}),
+    });
+    if (response.status === 409) {
+      const body = await response.json() as {reason?: string};
+      return {id:null, reason:body.reason ?? "conversation_active"};
+    }
+    if (!response.ok) throw new Error(`/api/conversation/open -> ${response.status}`);
+    return await response.json() as OpenConversationResult;
+  },
   // -- the persona that grows (docs/API.md "The persona that grows"). Both
   // polls fall back to mock data like every other read, and `PersonaPanel`
   // disables saving while they do -- writing the mock persona over the real
