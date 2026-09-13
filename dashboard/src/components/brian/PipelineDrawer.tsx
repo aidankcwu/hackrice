@@ -48,10 +48,11 @@ async function stampedStatus() {
   return { ...r, data: { ...r.data, fetched_t: Date.now() / 1000 } as StampedStatus };
 }
 
-function statusLine(status: StampedStatus | undefined, mock: boolean): string {
+function statusLine(status: StampedStatus | undefined, offline: boolean): string {
   if (!status) return "connecting…";
-  // Mock data would print fabricated tick counts; say "offline" instead.
-  if (mock) return "offline — backend unreachable";
+  // A poll that threw leaves the last good status on screen; say "offline"
+  // rather than print a stale tick count as if it were current.
+  if (offline) return "offline — backend unreachable";
   const age = Math.max(0, Math.round(status.fetched_t - status.last_tick_t));
   return `${status.source} · ${status.tick_count.toLocaleString("en-US")} ticks · AI ${Math.round(status.ai_coverage * 100)}% · last tick ${age}s ago`;
 }
@@ -67,12 +68,16 @@ function PipelinePanels() {
     healthspan = usePoll(() => api.healthspan(), 5000);
   const summary = usePoll(api.summaryToday, 5000),
     pending = usePoll(api.pendingChecks, 5000);
-  const isMock = [status, ticks, decisions, episodes, scores, seeded, healthspan, summary, pending].some((x) => x.mock);
+  // A read that fails now throws instead of serving a fixture (product rule R1),
+  // so "offline" is `error`, and `mock` only means NEXT_PUBLIC_MOCK=1 was set.
+  const polls = [status, ticks, decisions, episodes, scores, seeded, healthspan, summary, pending];
+  const offline = polls.some((x) => x.error);
+  const isMock = polls.some((x) => x.mock);
   return (
     <div className="mx-auto max-w-[1800px]">
-      {isMock && (
+      {(offline || isMock) && (
         <div className="mb-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-semibold text-amber-200">
-          API offline — mock data
+          {isMock ? "NEXT_PUBLIC_MOCK=1 — these panels are sample data, not your pipeline" : "API offline — panels hold the last answer the backend gave"}
         </div>
       )}
       <StatusBar status={status.data} />
@@ -140,7 +145,7 @@ export function PipelineDrawer() {
           <Chevron aria-hidden="true" size={18} strokeWidth={2} />
         </span>
         <span id={statusId} className="tnum ml-auto text-sm text-muted">
-          {statusLine(status.data, status.mock)}
+          {statusLine(status.data, status.error !== undefined)}
         </span>
       </button>
       {open && (

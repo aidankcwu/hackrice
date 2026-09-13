@@ -11,3 +11,4 @@ data/
 
 # Claude Code agent worktrees (local scratch, never commit)
 .claude/worktrees/
+runs/

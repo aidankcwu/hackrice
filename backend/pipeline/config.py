@@ -35,7 +35,7 @@ DEFAULT_KEYWORD_TRIGGERS = [
             "rice krispy", "rice krispie", "krispy treat", "krispie treat",
             "crispy treat", "rice crispy",
         ],
-        "note": "the wearer wants a reaction when someone is eating Rice Krispy treats",
+        "note": "the wearer wants the glasses to ask a question whenever someone is holding or eating a Rice Krispy treat",
         "cooldown_s": 60,
     }
 ]

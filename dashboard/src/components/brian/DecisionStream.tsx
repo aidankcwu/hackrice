@@ -253,8 +253,9 @@ export interface DecisionStreamProps {
  * The decision stream: every T1 escalation, newest first, including the silent
  * ones (SPEC §6 — always writes, rarely speaks). Expanding a row shows the
  * annotation it wrote and, where a pinned frame sits at the same minute, what
- * that frame earned or cost. With no decisions yet the panel says so; it never
- * shows an example row (product rule R1).
+ * that frame earned or cost. With no decisions yet -- or with a pipeline that
+ * did not answer -- the panel says so; it never passes an example row off as a
+ * measurement (product rule R1), and a NEXT_PUBLIC_MOCK=1 build labels itself.
  */
 export function DecisionStream({ pins, intervalMs = POLL_MS }: DecisionStreamProps) {
   const poll = usePoll(useCallback(() => api.decisions(LIMIT), []), intervalMs);
@@ -276,12 +277,13 @@ export function DecisionStream({ pins, intervalMs = POLL_MS }: DecisionStreamPro
             </span>
           )}
         </p>
-        {/* `api.decisions` falls back to a fixture when the pipeline is
-            unreachable. Rows that did not come off the running reasoner have to
-            say so on the panel, not only in the console (product rule R1). */}
+        {/* `api.decisions` throws when the pipeline is unreachable, so rows on
+            screen always came off the running reasoner. The one exception is an
+            explicit NEXT_PUBLIC_MOCK=1 build, which has to say so on the panel
+            and not only in the console (product rule R1). */}
         {poll.mock && rows.length > 0 && (
           <p className="m-0 mt-2 text-sm font-medium" style={{ color: T.ink }}>
-            Not live — the pipeline did not answer, so these rows are the built-in sample, not your reasoner.
+            Not live — this build runs with NEXT_PUBLIC_MOCK=1, so these rows are the built-in sample, not your reasoner.
           </p>
         )}
       </div>

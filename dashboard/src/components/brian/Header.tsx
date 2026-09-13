@@ -26,7 +26,7 @@ const SECTIONS = [
 const isGoal = (v: string): v is Goal => GOALS.some((g) => g.value === v);
 
 function sourceChip(source: DataSource): string {
-  if (source.mode !== "live") return "backend offline · fixture data";
+  if (source.mode !== "live") return "backend offline · nothing measured";
   const parts = ["live"];
   if (source.capture_source) parts.push(source.capture_source);
   if (source.tick_count !== undefined) parts.push(`${source.tick_count.toLocaleString("en-US")} ticks`);
