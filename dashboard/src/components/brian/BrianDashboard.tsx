@@ -70,10 +70,9 @@ export function BrianDashboard({ data, goal, onGoalChange, updating = false }: B
             }}
           />
         </div>
-        {/* Layers carries its own `md:col-span-7`, so it gets a 7-column grid. */}
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-7">
-          <Layers d={data} />
-        </div>
+        {/* Full width: the panel no longer carries a column span (design-system
+            pass), so a 7-column wrapper left it one seventh wide. */}
+        <Layers d={data} />
         {/* §1.3 then §1.4: what Bryan said, then the frames it said it about.
             `generated_at` is the minute the payload was scored at, so an
             outcome window that has not elapsed yet stays Pending. */}
