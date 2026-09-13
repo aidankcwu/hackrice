@@ -81,6 +81,12 @@ async def test_limiter_guards_and_speech_last(db):
     _, reason = q.ask(decision_id="d", t=101, episode_id="y",
                       action=AskAction(text="Speech?"))
     assert reason == "speech_gap"
+    # Asks bypass the 20 s speech gap; only the 5 s overlap gap applies.
+    q.limiter._granted.clear()
+    _, reason = q.ask(decision_id="d", t=106, episode_id="z",
+                      action=AskAction(text="Now?"))
+    assert reason is None
+    assert q.speech.last_spoken_t == 106
 
 
 @pytest.mark.asyncio

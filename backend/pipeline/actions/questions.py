@@ -111,10 +111,16 @@ class QuestionManager:
             else:
                 reason = self.limiter.reason(t, skip_min_gap=followup_of is not None)
                 if reason is None:
-                    if followup_of is not None:
-                        self.speech.grant(t)
-                    elif not self.speech.allow(t):
+                    # A question is the point of the exchange, so it is not held
+                    # to the speech gap -- only to a short overlap gap so it
+                    # never talks over an utterance still playing. It still
+                    # stamps the limiter, so the next plain speak waits its turn.
+                    last_spoken = self.speech.last_spoken_t
+                    if (followup_of is None and last_spoken is not None
+                            and t - last_spoken < self.timings.ask_speech_gap):
                         reason = "speech_gap"
+                    else:
+                        self.speech.grant(t)
 
             row = PendingQuestion(
                 id=f"q_{uuid4().hex[:8]}", created_t=t, expires_t=None,

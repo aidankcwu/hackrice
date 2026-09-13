@@ -108,6 +108,9 @@ class Timings:
     ask_min_gap: float
     #: Hourly cap on questions, counted like utterances.
     ask_max_per_hour: int
+    #: An ask bypasses the speech gap (it is the point of the exchange) but
+    #: still waits this long after the last utterance so audio never overlaps.
+    ask_speech_gap: float
     #: Answer window the phone is told to open, in seconds.
     ask_listen_s: float
     #: Seconds after the ask went out before an unanswered row expires.
@@ -176,6 +179,7 @@ class Timings:
             speech_min_gap=600.0,
             speech_max_per_hour=6,
             ask_min_gap=300.0,
+            ask_speech_gap=5.0,
             ask_max_per_hour=6,
             ask_listen_s=8.0,
             ask_expire_s=25.0,
@@ -207,6 +211,7 @@ class Timings:
             speech_min_gap=20.0,
             speech_max_per_hour=20,
             ask_min_gap=30.0,
+            ask_speech_gap=5.0,
             ask_max_per_hour=10,
             ask_listen_s=8.0,
             ask_expire_s=25.0,
