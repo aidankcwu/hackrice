@@ -16,6 +16,7 @@ import { Tonight } from "./Tonight";
 import { WeekLedger } from "./WeekLedger";
 import { Logs } from "./Logs";
 import { PersonaPanel } from "@/components/PersonaPanel";
+import { JudgeSession } from "@/components/JudgeSession";
 
 export interface BrianDashboardProps {
   data: DashboardData;
@@ -45,6 +46,12 @@ export function BrianDashboard({ data, goal, onGoalChange, updating = false }: B
             operator edits mid-demo (include or exclude what the glasses care
             about), so it is not buried in the pipeline drawer. Light skin so it
             sits flush with Today and Activity. */}
+        {/* The session control is the first thing used in a demo -- start it,
+            hand over the glasses, end it, read the log entry -- so it is not
+            buried in the collapsed pipeline drawer where it was missed. */}
+        <div className="lifeos-dark rounded-panel p-3">
+          <JudgeSession />
+        </div>
         <PersonaPanel variant="light" />
         {/* Logs: recorded sessions, newest first. Above Today because a judge
             session is the thing being demonstrated, and its report is the

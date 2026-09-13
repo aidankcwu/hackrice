@@ -87,7 +87,7 @@ class Pipeline:
         self.last_tick: Tick | None = None
         self.sessions = SessionManager(
             db, gate, speech, episodes,
-            lambda: self.last_tick.t if self.last_tick is not None else time.time(),
+            self._session_clock,
             reasoner=reasoner,
         )
         self._tasks: list[asyncio.Task[None]] = []
@@ -101,6 +101,23 @@ class Pipeline:
         self._last_tick_wall: float | None = None
         self._t1_error_snapshot = (0, 0)
         self._t1_snapshot_at = time.monotonic()
+
+    def _session_clock(self) -> float:
+        """The tick clock, advanced by real elapsed time when ticks have stalled.
+
+        Sessions are stamped on the tick clock so a recap's window lines up
+        with the ticks inside it. But ``last_tick.t`` freezes the instant the
+        stream stalls, and a session started and ended across a stall was
+        stamped with the same moment twice -- a zero-length window, and a log
+        entry covering nothing. Seen live: the phone stopped sending while its
+        socket stayed open, and an eight-second session recorded 0.0 s.
+        """
+
+        tick = self.last_tick
+        if tick is None or self._last_tick_wall is None:
+            return self.clock.wall_to_tick(time.time())
+        drift = max(0.0, time.time() - self._last_tick_wall)
+        return tick.t + drift * self.clock.speed
 
     async def start(self) -> None:
         if self._tasks:

@@ -13,7 +13,6 @@ import { EpisodeTimeline } from "@/components/EpisodeTimeline";
 import { ScoresPanel } from "@/components/ScoresPanel";
 import { HealthspanPanel } from "@/components/HealthspanPanel";
 import { MemoryPanel, SevenDayPanel } from "@/components/MemoryPanels";
-import { JudgeSession } from "@/components/JudgeSession";
 import { QuestionsPanel } from "@/components/QuestionsPanel";
 import { ConversationsPanel } from "@/components/ConversationsPanel";
 import { PersonaPanel } from "@/components/PersonaPanel";
@@ -85,7 +84,6 @@ function PipelinePanels() {
         </div>
       )}
       <StatusBar status={status.data} />
-      <JudgeSession />
       <CapturePanel status={status.data} />
       <div className="mt-3">
         <TickStrip ticks={ticks.data} />
