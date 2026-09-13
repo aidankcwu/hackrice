@@ -38,11 +38,9 @@ export function BrianDashboard({ data, goal, onGoalChange, updating = false }: B
       <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
         {/* The persona T1 is briefed with, first: it is the one thing the
             operator edits mid-demo (include or exclude what the glasses care
-            about), so it is not buried in the pipeline drawer. Dark chrome
-            because the panel is shared with the drawer. */}
-        <div className="lifeos-dark rounded-panel p-3">
-          <PersonaPanel />
-        </div>
+            about), so it is not buried in the pipeline drawer. Light skin so it
+            sits flush with Today and Activity. */}
+        <PersonaPanel variant="light" />
         {/* Top row: the healthspan number beside the day's activity rings.
             One column on phones, so neither can overflow. */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-12">

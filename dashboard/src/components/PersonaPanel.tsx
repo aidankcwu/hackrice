@@ -19,7 +19,58 @@ const time = (t: number) =>
  *  is disabled for exactly as long as that lasts — writing the placeholder
  *  persona over the real one because a poll blinked is the one mistake here
  *  that would outlive the demo. */
-export function PersonaPanel() {
+/** Two skins for one panel: the dark chrome of the pipeline drawer, and the
+ *  light card language of the Bryan page (`rounded-panel bg-surface`, ink
+ *  headings, muted captions) so it sits flush with Today and Activity. */
+const SKIN = {
+  dark: {
+    section: "panel overflow-hidden",
+    head: "section-title border-b border-white/5 px-4 py-3",
+    headSub: "muted",
+    body: "px-4 py-3",
+    textarea: "w-full resize-y rounded-md border border-white/10 bg-black/30 px-2 py-1.5 text-xs leading-relaxed text-zinc-100 placeholder:text-zinc-600 focus:border-cyan-400/40 focus:outline-none disabled:opacity-50",
+    pillOn: "border-violet-400/45 bg-violet-500/20 text-violet-200",
+    pillOff: "border-white/10 bg-white/[.04] text-zinc-500",
+    pill: "inline-flex items-center rounded-full border px-2 text-[10px] font-black uppercase tracking-[.12em]",
+    unsaved: "font-mono text-[10px] font-semibold text-amber-300",
+    save: "ml-auto shrink-0 rounded-md bg-cyan-600 px-3 py-1 text-[10px] font-black uppercase tracking-[.1em] text-white transition hover:bg-cyan-500 disabled:opacity-40",
+    hint: "mt-1 text-[10px] leading-relaxed text-zinc-600",
+    ok: "text-emerald-300", bad: "text-rose-300", notice: "mt-1 font-mono text-[10px] font-semibold",
+    subhead: "section-title border-y border-white/5 px-4 py-2",
+    list: "max-h-[240px] divide-y divide-white/5 overflow-y-auto",
+    row: "flex items-start gap-2 px-4 py-2",
+    rowTime: "mt-[.15rem] font-mono text-[10px] text-zinc-600",
+    rowText: "min-w-0 flex-1 text-[12px] leading-snug text-zinc-200",
+    rowId: "mt-[.15rem] font-mono text-[10px] text-zinc-700",
+    forget: "shrink-0 rounded border border-white/10 px-1.5 text-[11px] leading-5 text-zinc-500 transition hover:border-rose-400/40 hover:text-rose-300 disabled:opacity-30",
+    empty: "px-4 py-5 text-xs text-zinc-600",
+  },
+  light: {
+    section: "rounded-panel bg-surface p-6 text-text md:p-8",
+    head: "flex items-baseline justify-between gap-3 text-xl font-bold leading-tight text-ink",
+    headSub: "text-sm font-medium text-muted",
+    body: "mt-4",
+    textarea: "w-full resize-y rounded-pin border border-line bg-bg px-4 py-3 text-sm leading-relaxed text-text placeholder:text-muted focus:border-ink focus:outline-none disabled:opacity-50",
+    pillOn: "bg-earn-soft text-earn",
+    pillOff: "bg-surface-2 text-muted",
+    pill: "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
+    unsaved: "text-xs font-medium text-cost",
+    save: "ml-auto shrink-0 rounded-full bg-ink px-4 py-1.5 text-sm font-medium text-bg transition hover:opacity-80 disabled:opacity-30",
+    hint: "mt-2 text-sm text-muted",
+    ok: "text-earn", bad: "text-cost", notice: "mt-1 text-sm font-medium",
+    subhead: "mt-6 flex items-baseline justify-between gap-3 border-t border-line pt-5 text-base font-medium text-ink",
+    list: "mt-2 max-h-[240px] divide-y divide-line overflow-y-auto",
+    row: "flex items-start gap-3 py-2",
+    rowTime: "tnum mt-[.15rem] text-xs text-muted",
+    rowText: "min-w-0 flex-1 text-sm leading-snug text-text",
+    rowId: "tnum mt-[.15rem] text-xs text-muted",
+    forget: "shrink-0 rounded-full border border-line px-2 text-sm leading-5 text-muted transition hover:border-cost hover:text-cost disabled:opacity-30",
+    empty: "py-4 text-sm text-muted",
+  },
+} as const;
+
+export function PersonaPanel({ variant = "dark" }: { variant?: "dark" | "light" }) {
+  const c = SKIN[variant];
   const persona = usePoll(useCallback(() => api.persona(), []), 10000);
   const profile = usePoll(useCallback(() => api.profile(50), []), 5000);
 
@@ -68,15 +119,15 @@ export function PersonaPanel() {
   const lines = profile.data ?? [];
 
   return (
-    <section className="panel overflow-hidden">
-      <div className="section-title border-b border-white/5 px-4 py-3">
+    <section className={c.section}>
+      <div className={c.head}>
         <span>Persona</span>
-        <span className="muted">
+        <span className={c.headSub}>
           {offline ? "backend unreachable" : source === "custom" ? "custom" : "default"}
         </span>
       </div>
 
-      <div className="px-4 py-3">
+      <div className={c.body}>
         <textarea
           value={draft}
           onChange={e => { setDraft(e.target.value); setDirty(true); }}
@@ -84,51 +135,47 @@ export function PersonaPanel() {
           disabled={offline}
           aria-label="The persona T1 is briefed with"
           placeholder="Who the glasses are working for…"
-          className="w-full resize-y rounded-md border border-white/10 bg-black/30 px-2 py-1.5 text-xs leading-relaxed text-zinc-100 placeholder:text-zinc-600 focus:border-cyan-400/40 focus:outline-none disabled:opacity-50"
+          className={c.textarea}
         />
         <div className="mt-2 flex items-center gap-2">
-          <span className={`inline-flex items-center rounded-full border px-2 text-[10px] font-black uppercase tracking-[.12em] ${
-            source === "custom"
-              ? "border-violet-400/45 bg-violet-500/20 text-violet-200"
-              : "border-white/10 bg-white/[.04] text-zinc-500"
-          }`}>
+          <span className={`${c.pill} ${source === "custom" ? c.pillOn : c.pillOff}`}>
             {source}
           </span>
           {dirty && !offline && (
-            <span className="font-mono text-[10px] font-semibold text-amber-300">unsaved</span>
+            <span className={c.unsaved}>unsaved</span>
           )}
           <button
             type="button"
             onClick={() => void save()}
             disabled={busy || offline || !dirty}
-            className="ml-auto shrink-0 rounded-md bg-cyan-600 px-3 py-1 text-[10px] font-black uppercase tracking-[.1em] text-white transition hover:bg-cyan-500 disabled:opacity-40"
+            className={c.save}
           >
             {busy ? "…" : "save"}
           </button>
         </div>
-        <p className="mt-1 text-[10px] leading-relaxed text-zinc-600">
+        <p className={c.hint}>
           {offline
             ? "Showing the placeholder persona — saving is off until the API answers."
             : "Saved empty clears the override and goes back to the built-in persona."}
         </p>
         {notice && (
-          <p className={`mt-1 font-mono text-[10px] font-semibold ${notice.tone === "ok" ? "text-emerald-300" : "text-rose-300"}`}>
+          <p className={`${c.notice} ${notice.tone === "ok" ? c.ok : c.bad}`}>
             {notice.text}
           </p>
         )}
       </div>
 
-      <div className="section-title border-y border-white/5 px-4 py-2">
+      <div className={c.subhead}>
         <span>Learned today</span>
-        <span className="muted">{lines.length ? `${lines.length} line${lines.length === 1 ? "" : "s"}` : "remember"}</span>
+        <span className={c.headSub}>{lines.length ? `${lines.length} line${lines.length === 1 ? "" : "s"}` : "remember"}</span>
       </div>
-      <div className="max-h-[240px] divide-y divide-white/5 overflow-y-auto">
+      <div className={c.list}>
         {lines.map(line => (
-          <div key={line.id} className="flex items-start gap-2 px-4 py-2">
-            <span className="mt-[.15rem] font-mono text-[10px] text-zinc-600">{time(line.t)}</span>
-            <span className="min-w-0 flex-1 text-[12px] leading-snug text-zinc-200">{line.line}</span>
+          <div key={line.id} className={c.row}>
+            <span className={c.rowTime}>{time(line.t)}</span>
+            <span className={c.rowText}>{line.line}</span>
             {line.source_decision_id && (
-              <span className="mt-[.15rem] font-mono text-[10px] text-zinc-700">{line.source_decision_id}</span>
+              <span className={c.rowId}>{line.source_decision_id}</span>
             )}
             <button
               type="button"
@@ -136,14 +183,14 @@ export function PersonaPanel() {
               disabled={offline}
               aria-label={`Forget: ${line.line}`}
               title="Forget this"
-              className="shrink-0 rounded border border-white/10 px-1.5 text-[11px] leading-5 text-zinc-500 transition hover:border-rose-400/40 hover:text-rose-300 disabled:opacity-30"
+              className={c.forget}
             >
               ×
             </button>
           </div>
         ))}
         {lines.length === 0 && (
-          <p className="px-4 py-5 text-xs text-zinc-600">Nothing learned yet today.</p>
+          <p className={c.empty}>Nothing learned yet today.</p>
         )}
       </div>
     </section>
