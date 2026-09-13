@@ -8,8 +8,10 @@ const time = (t: number) => new Date(t * 1000).toLocaleTimeString([], { hour: "2
 
 function SettledChips({ settled }: { settled: ConversationSettled }) {
   const chips: Array<[string, string]> = [];
-  if (settled.confirmed !== null) chips.push(["confirmed", settled.confirmed ? "yes" : "no"]);
-  if (settled.count !== null) chips.push(["count", String(settled.count)]);
+  // The backend omits fields it never settled (`{}` or `{note}`), so a strict
+  // null check rendered "confirmed no · count undefined" on every silent card.
+  if (settled.confirmed != null) chips.push(["confirmed", settled.confirmed ? "yes" : "no"]);
+  if (settled.count != null) chips.push(["count", String(settled.count)]);
   if (settled.food_type) chips.push(["food", settled.food_type]);
   if (settled.note) chips.push(["note", settled.note]);
   if (!chips.length) return null;
