@@ -19,6 +19,10 @@ const TAB_BAR_BOTTOM = "max(16px, env(safe-area-inset-bottom))";
 
 export interface ShellProps {
   screen: ScreenId;
+  /** A detail pushed from `screen` (e.g. a ledger row): its own title, a back button, no tab bar. */
+  pushed?: boolean;
+  /** Overrides the screen's title, for a pushed detail. */
+  title?: string;
   /** Fixtures mode only: pins the appearance for screenshots. */
   theme?: "light" | "dark";
   /** Fixtures mode only: text size multiplier (2 = accessibility XXXL). */
@@ -31,9 +35,9 @@ export interface ShellProps {
  * the large title, the screen's content, and the two-tab bar. Settings is a
  * pushed screen: a back button instead of the gear, and no tab bar.
  */
-export function Shell({ screen, theme, scale, children }: ShellProps) {
-  const { title } = SCREENS[screen];
-  const pushed = !TABS.includes(screen);
+export function Shell({ screen, pushed: pushedDetail, title: titleOverride, theme, scale, children }: ShellProps) {
+  const title = titleOverride ?? SCREENS[screen].title;
+  const pushed = pushedDetail || !TABS.includes(screen);
   const headerRef = useRef<HTMLElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const titleHidden = useScrolledUnder(titleRef, headerRef);

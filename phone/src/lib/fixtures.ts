@@ -11,7 +11,15 @@
  *
  * A screenshot URL (one that carries `?screen=`) reads the design set; any other
  * URL reads the captures. Loaded on first use, so a live build never downloads them.
+ *
+ * Two screenshot states change what the design set answers, by the `?screen=` suffix:
+ *
+ *   `-empty`  nothing seen yet today: no session, no episodes, no decisions, and the
+ *             glasses app not connected. The hero keeps the design payload.
+ *   `-error`  the backend never answers (`fixtureUnreachable()`).
  */
+import type { Status } from "./types";
+
 type Loader = () => Promise<{ default: unknown }>;
 export type FixtureSet = "capture" | "design";
 
@@ -30,14 +38,47 @@ const SETS: Record<FixtureSet, Record<string, Loader>> = {
   },
 };
 
+/** The `?screen=` value of the current page, lower-cased; empty outside a screenshot URL. */
+function screenParam(): string {
+  if (typeof window === "undefined") return "";
+  return (new URLSearchParams(window.location.search).get("screen") ?? "").toLowerCase();
+}
+
 /** The set the current page reads: `design` for a screenshot URL (`?screen=`), else `capture`. */
 export function fixtureSet(): FixtureSet {
   if (typeof window === "undefined") return "capture";
   return new URLSearchParams(window.location.search).has("screen") ? "design" : "capture";
 }
 
+/** True on a `?screen=…-error` URL: every request fails as if the backend were off the network. */
+export function fixtureUnreachable(): boolean {
+  return screenParam().endsWith("-error");
+}
+
+/** The `-empty` state's answer for `route`, or `undefined` to serve the set's file unchanged. */
+function emptyAnswer(route: string, data: unknown): unknown {
+  if (route === "/api/episodes" || route === "/api/decisions") return [];
+  if (route === "/api/session/current") return null;
+  if (route === "/api/status") {
+    const status = data as Status;
+    return {
+      ...status,
+      source: "glasses",
+      session: null,
+      health: { ...status.health, phone: null, ok: false, problems: ["phone_disconnected"] },
+    } satisfies Status;
+  }
+  return data;
+}
+
 /** The captured payload for `path` (query string ignored), or `undefined` when none was captured. */
 export async function loadFixture(path: string): Promise<unknown> {
-  const load = SETS[fixtureSet()][path.split("?")[0]];
-  return load ? (await load()).default : undefined;
+  const route = path.split("?")[0];
+  const set = SETS[fixtureSet()];
+  // `/api/session/current` is the `session` object inside the same set's `/api/status`.
+  const load = route === "/api/session/current" ? set["/api/status"] : set[route];
+  if (!load) return undefined;
+  let data = (await load()).default;
+  if (route === "/api/session/current") data = (data as Status).session ?? null;
+  return screenParam().endsWith("-empty") ? emptyAnswer(route, data) : data;
 }

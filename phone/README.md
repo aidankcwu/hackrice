@@ -14,7 +14,9 @@ Environment: `NEXT_PUBLIC_API_BASE` (default `http://localhost:8010`), `NEXT_PUB
 
 Fixtures mode serves `fixtures/*.json` (copies of `ios/Brian/Fixtures/`). Screenshot URLs,
 `/?screen=<name>&mode=<light|dark>&scale=<1|2>`, read `fixtures/design/*.json` instead.
-`node scripts/shot.mjs "<url>" <out.png>` takes a true 390 x 844 screenshot with headless Chrome.
+`node scripts/shot.mjs "/?screen=today&mode=light" <out.png>` takes a true 390 x 844 screenshot with
+headless Chrome; a path is resolved against `PHONE_URL` (default `http://localhost:3100`, the fixtures
+dev server: `NEXT_PUBLIC_FIXTURES=1 npx next dev -p 3100`).
 
 On the iPhone: `npm run dev -- -H 0.0.0.0`, open `http://<this PC's Wi-Fi IP>:3000` in Safari,
 Share → Add to Home Screen.

@@ -47,3 +47,18 @@ export function readFixtureView(params: SearchParams): FixtureView {
     scale: scale >= 1 && scale <= 3 ? scale : undefined,
   };
 }
+
+/**
+ * Fixtures mode only: the screenshot params (`screen`, `mode`, `scale`) as a query
+ * string, e.g. `?screen=today&mode=dark`, so a pushed detail keeps the same
+ * fixtures, appearance and text size. Empty when there are none.
+ */
+export function fixtureQuery(params: SearchParams): string {
+  const query = new URLSearchParams();
+  for (const key of ["screen", "mode", "scale"]) {
+    const value = first(params[key]);
+    if (value) query.set(key, value);
+  }
+  const text = query.toString();
+  return text ? `?${text}` : "";
+}

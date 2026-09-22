@@ -5,8 +5,10 @@
 // crops it. This drives Chrome over the DevTools protocol instead and emulates
 // the phone's viewport. No dependencies: Node 22+ (global WebSocket) and Chrome.
 //
-//   node scripts/shot.mjs "http://localhost:3000/?screen=today&mode=dark&scale=1" design/shots/today-dark.png
+//   node scripts/shot.mjs "/?screen=today&mode=dark&scale=1" design/shots/today-dark.png
 //
+// A URL that starts with `/` or `?` is resolved against `PHONE_URL`, the phone
+// fixtures dev server (default http://localhost:3100); a full URL is used as is.
 // Optional third and fourth arguments: width and height (default 390 844).
 // `CHROME` overrides the browser path.
 import { spawn } from "node:child_process";
@@ -14,11 +16,13 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
-const [url, out, width = "390", height = "844"] = process.argv.slice(2);
-if (!url || !out) {
-  console.error('usage: node scripts/shot.mjs "<url>" <out.png> [width] [height]');
+const [target, out, width = "390", height = "844"] = process.argv.slice(2);
+if (!target || !out) {
+  console.error('usage: node scripts/shot.mjs "</path?query | url>" <out.png> [width] [height]');
   process.exit(2);
 }
+const PHONE_URL = process.env.PHONE_URL || "http://localhost:3100";
+const url = /^[/?]/.test(target) ? new URL(target, PHONE_URL).href : target;
 
 const CHROME =
   process.env.CHROME ??

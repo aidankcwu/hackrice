@@ -168,6 +168,16 @@ button {
   outline-offset: 2px;
 }
 
+/* The connect sheet rises from the bottom edge (off under Reduce Motion, below). */
+dialog.sheet[open] {
+  animation: sheet-rise 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes sheet-rise {
+  from {
+    transform: translateY(100%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

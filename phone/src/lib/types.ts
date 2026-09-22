@@ -12,8 +12,20 @@ export interface Session {
   /** Epoch seconds on the backend's clock (simulated under `--source sim`, not the phone's). */
   started_t: number;
   ended_t: number | null;
-  /** Seconds watched so far, by the backend's clock. "Watching N min" reads this, never `Date.now() - started_t`. */
-  elapsed_s: number;
+  /**
+   * Seconds watched so far, by the backend's clock. "Watching N min" reads this, never
+   * `Date.now() - started_t`. Only `/api/status` carries it; `/api/session/current` does not.
+   */
+  elapsed_s?: number;
+}
+
+/** `health.phone` inside `/api/status`: the glasses app's socket, `null` when no capture link exists. */
+export interface PhoneLink {
+  /** Open sockets from the glasses app; 0 when it is not connected. */
+  connected: number;
+  /** Seconds since the last frame arrived, `null` before the first one. */
+  latest_age_s?: number | null;
+  connected_for_s?: number | null;
 }
 
 /** `GET /api/status` (fixture: `status.json`). */
@@ -43,14 +55,16 @@ export interface Status {
   conversation: unknown;
   speech_spoken: number;
   health: {
-    phone: unknown;
+    phone: PhoneLink | null;
     t0: unknown;
     t1: unknown;
     speech: unknown;
     ok: boolean;
-    problems: unknown[];
+    /** `phone_disconnected`, `no_packets_10s`, `no_ticks_60s`, `ai_coverage_low`, `vlm_errors`, `t1_errors`, `tts_failing`. */
+    problems: string[];
   };
-  session: Session | null;
+  /** The open session, `null` when none. Absent from a backend older than sessions. */
+  session?: Session | null;
 }
 
 /** Where a number came from. `missing` is unmeasured: scored at the reference, earns nothing. */
@@ -128,9 +142,28 @@ export interface Episode {
   dominant: { scene: string; activity: string; food_type: string };
   tick_count: number;
   open: boolean;
-  /** What the wearer said about it, when they answered a question. */
-  reported: unknown;
-  label: string;
+  /** What the wearer said about it, when they answered a question; `null` otherwise. */
+  reported: Reported | null;
+  /** `null` until the reasoner names the episode. */
+  label: string | null;
+}
+
+/** The wearer's answer to a question about an episode (the backend's parse of it). */
+export interface Reported {
+  confirmed: boolean | null;
+  count: number | null;
+  food_type: string | null;
+  note: string;
+  question_id: string;
+  answered_t: number | null;
+}
+
+/** One item of `GET /api/evidence/{decision_id}`: frame metadata, no bytes. */
+export interface EvidenceFrame {
+  decision_id: string;
+  frame_ref: string;
+  t: number;
+  bytes: number;
 }
 
 export type DecisionAction =
@@ -138,7 +171,9 @@ export type DecisionAction =
   | { type: "log_insight"; category: string; text: string }
   | { type: "watch"; after_s: number; condition: string | null; reason: string }
   | { type: "speak"; text: string; urgency: string; outcome?: string }
-  | { type: "ask"; text: string; answer_kind: string; fills: string; reason: string; outcome?: string };
+  | { type: "ask"; text: string; answer_kind: string; fills: string; reason: string; outcome?: string }
+  /** Job 4: something the phone did on the backend's behalf (calendar, Screen Time). */
+  | { type: "act"; kind: string; args?: unknown; outcome?: string };
 
 /** One item of `GET /api/decisions?limit=50` (fixture: `today_decisions.json`). */
 export interface Decision {
