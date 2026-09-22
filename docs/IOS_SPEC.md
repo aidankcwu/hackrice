@@ -1,5 +1,22 @@
 # IOS_SPEC.md — the Brian iPhone app
 
+## Vocabulary (settled in F.0 with the human; wins over any other string in this file)
+
+- **Hours**: the hero number, `hours_today`, rounded to 0.1, always with its sign and "h":
+  "+1.0 h", "−1.1 h", "0.0 h" (no sign at zero). Label: "healthy life earned today";
+  when negative, "healthy life cost today".
+- **Score**: the 0–100 `overall`, just "Score": "Score 76". Its line under the hero:
+  "Score 76 · −0.1 healthy years" (`years_delta`, signed).
+- **Whisper**: the line the glasses say in the ear. Noun and verb: "whisper",
+  "whispered". Voice toggle: "Whisper through the glasses".
+- **Outcomes** (ledger, trailing): "whispered" · "asked" · "acted" · "held back".
+  Held back: no symbol, muted words, the whole row greyed.
+- **Watching**: the session state. "Watching 14 min" / "Not watching"; primary button
+  "Start watching" / "Stop".
+- **Seeded**: data no live device produced. Provenance chip: Glasses · WHOOP · Health ·
+  Seeded. The word "demo" never appears on screen.
+- Every gain or loss number carries its sign and a word; colour only repeats them.
+
 What the app is: the thing the wearer opens. It pairs the glasses, streams to the backend,
 plays whispers, and shows what the system handled today. The Mac (backend) still makes
 every decision. The phone adds three things the Mac cannot: it is on the body, it holds
@@ -8,8 +25,8 @@ Apple Health, and it can act on the phone (calendar, Screen Time).
 Look and copy: `.claude/skills/brian-ios-design/SKILL.md`. It wins over this file on
 anything visual or any string. The dashboard in `dashboard/` and everything under
 `design-system/` are not references; nothing is inherited from them. Vocabulary (the name
-of the score, of a whisper, of an outcome) is settled in task F.0 with the human; the
-words in this file are placeholders until then.
+of the score, of a whisper, of an outcome) was settled in task F.0 with the human and is
+the list above.
 
 ## Structure
 
@@ -91,15 +108,16 @@ Order, top to bottom:
    Start = DAT stream start (2 fps) + `MacLink.connect()` + `CapturePacketSender.start`.
    Stop = reverse. The backend opens and closes its own session from the frames
    (`reactive-glasses`), the phone never calls `/api/session/*`.
-3. **Hero panel**: `hours_today` as `SignedHours(font: .hero)`, label "healthy‑life hours
-   today". Second line: "Score 71 · +0.3 years" (`overall`, `years_delta`). Source:
+3. **Hero panel**: `hours_today` as `SignedHours(font: .hero)`, label `Hours.word`:
+   "healthy life earned today" / "healthy life cost today". Second line:
+   "Score 71 · +0.3 healthy years" (`overall`, `years_delta`). Source:
    `GET /api/healthspan`, polled every 30 s while watching and on foreground.
    A provenance chip sits beside the label: Glasses · WHOOP · Health · Seeded, from the
    payload's `provenance`/`measured` fields. All seeded → chip "Seeded", no other change.
-4. **Ledger panel**: "Today" title. Rows = episodes (`GET /api/episodes`) merged with
+4. **Ledger** (a timed log on the page): "Today" title. Rows = episodes (`GET /api/episodes`) merged with
    decisions (`GET /api/decisions?limit=50`), newest first, deduped on episode id.
-   Row: family symbol · time · `label` · outcome chip ("held back" muted, "said", "asked",
-   "acted"; placeholder words). Panel footer: "Held back N today" (restraint is visible). Tap → **DecisionDetailView**: interpretation text, actions taken, evidence
+   Row: time · family symbol · `label` · outcome ("whispered", "asked", "acted"; "held
+   back" muted with the row greyed). Footer: "Held back N today" (restraint is visible). Tap → **DecisionDetailView**: interpretation text, actions taken, evidence
    thumbnail from `GET /api/evidence/{decision_id}` when present, "wearer reported" note
    when `reported` is set.
    Empty: "Put the glasses on. Counting starts the moment the camera is up." with the
@@ -118,7 +136,7 @@ Empty: "No items yet. Add the first dose window."
 
 ### SettingsView
 
-Grouped list. **Mac**: address field + Test. **Voice**: "Speak through the glasses" toggle
+Grouped list. **Mac**: address field + Test. **Voice**: "Whisper through the glasses" toggle
 (off = local notification only). **Health** (Job 3): "Sync Apple Health" toggle + last
 sync time. **Wind‑down** (Job 4): time picker; "Shield apps at wind‑down" toggle with the
 app picker, shown only when the entitlement is provisioned, otherwise a muted line "Needs an

@@ -6,8 +6,9 @@ description: The look, feel and copy of the Brian phone app (phone/ on the web, 
 # Brian on iOS
 
 The brief: the calm of a medical instrument, the restraint of the best health apps, and
-nothing that reads as generated. Colour is reserved for data. The exact palette, type
-and spacing come from task F.0.
+nothing that reads as generated. Colour is reserved for data. Palette, type and spacing
+were picked in task F.0: direction C · Instrument (`phone/design/directions.html`), with
+A's green/red pair for the sign.
 
 The app has one job: show the user what the system handled for them today, and make
 starting it a single tap. It is not a chat app, not a dashboard, not a coaching feed.
@@ -16,9 +17,8 @@ starting it a single tap. It is not a chat app, not a dashboard, not a coaching 
 
 Nothing that existed before this plan is a reference: not the judges' dashboard in
 `dashboard/`, not `design-system/brian/`, not the `brian-ui` skill. Do not read them for
-look, layout, components or copy. The look is decided in task F.0 with the human and
-written into the Tokens section below; until F.0 has run, the values there are
-placeholders and the section says so.
+look, layout, components or copy. The look was decided in task F.0 with the human and is
+written into the Tokens section below.
 
 ## Non-negotiables
 
@@ -45,41 +45,53 @@ Hero illustrations, mascots, blobs. Onboarding carousels with dots. Confetti, ce
 streak flames. Skeleton shimmer. Floating action buttons. Five-tab bars. Chat bubbles or
 an "assistant" persona. Greetings ("Welcome back!"). Exclamation marks. ALL‑CAPS labels.
 Monospace anywhere except nothing (numbers use tabular figures, not monospace). Lorem
-ipsum. Placeholder avatars. Toasts that stack. Custom fonts.
+ipsum. Stock or generic avatars. Toasts that stack. Custom fonts.
 
-## Tokens (PLACEHOLDER until F.0 replaces this section; then paste as `ios/Brian/Sources/Theme/Theme.swift` and mirror in `phone/src/app/globals.css`)
+## Tokens (F.0: direction C · Instrument, A's green/red pair; paste as `ios/Brian/Sources/Theme/Theme.swift`, mirrored in `phone/src/app/globals.css`)
 
 ```swift
 import SwiftUI
 import UIKit
 
-/// Brian palette. Placeholder values; F.0 writes the real ones here.
-/// Data colours only ever appear next to a sign or a word that carries the meaning too.
+/// Brian palette: direction C · Instrument, picked in F.0, with A's green/red pair for the sign.
+/// Data colours only ever appear next to a sign and a word that carry the meaning too.
 enum Brian {
     static let page     = Color(light: 0xFFFFFF, dark: 0x000000)
-    static let surface  = Color(light: 0xF4F4F5, dark: 0x1C1C1E)   // panels, 20 pt radius
-    static let surface2 = Color(light: 0xEAEAEC, dark: 0x2C2C2E)   // tracks, pressed rows
-    static let ink      = Color(light: 0x111111, dark: 0xF5F5F7)   // headings, primary numbers
-    static let text     = Color(light: 0x1F1F23, dark: 0xE5E5EA)   // body
-    static let muted    = Color(light: 0x6B6B73, dark: 0x9A9AA3)   // secondary text
-    static let line     = Color(light: 0xE2E2E6, dark: 0x2C2C2E)   // dividers
-    static let earn     = Color(light: 0x15803D, dark: 0x4ADE80)   // positive hours only
-    static let earnSoft = Color(light: 0xE8F5EC, dark: 0x0F2A1A)   // "Earned" chip fill
-    static let cost     = Color(light: 0xC62828, dark: 0xF87171)   // negative hours only
-    static let costSoft = Color(light: 0xFBEAEA, dark: 0x2A1010)   // "Cost" chip fill
+    static let surface  = Color(light: 0xF5F5F7, dark: 0x1A1A1C)   // panels (the hero), 20 pt radius
+    static let surface2 = Color(light: 0xE8E8ED, dark: 0x29292C)   // capsule chips, pressed rows
+    static let ink      = Color(light: 0x0A0A0A, dark: 0xF5F5F7)   // headings, 0.0 h, primary button fill
+    static let text     = Color(light: 0x1D1D1F, dark: 0xE3E3E8)   // body
+    static let muted    = Color(light: 0x636368, dark: 0x939399)   // secondary text, times, held-back rows
+    static let line     = Color(light: 0xE3E3E8, dark: 0x2C2C2E)   // hairlines between ledger rows
+    static let earn     = Color(light: 0x047857, dark: 0x4ADE80)   // positive hours only
+    static let earnSoft = Color(light: 0xE3F2EB, dark: 0x0E2A1C)   // fill behind a signed gain chip
+    static let cost     = Color(light: 0xC81E1E, dark: 0xF87171)   // negative hours only
+    static let costSoft = Color(light: 0xFBE7E7, dark: 0x301313)   // fill behind a signed cost chip
 
     static let panelRadius: CGFloat = 20
-    static let tileRadius: CGFloat = 16
+}
+
+/// Spacing in points, on the 4 / 8 / 16 / 24 / 32 grid.
+enum Space {
+    static let gutter: CGFloat = 24       // screen edges
+    static let section: CGFloat = 32      // between status strip, button, hero, ledger
+    static let panel: CGFloat = 24        // panel padding
+    static let statusRow: CGFloat = 28    // status strip line, min height
+    static let logRow: CGFloat = 52       // ledger row, min height
+    static let timeColumn: CGFloat = 40   // ledger time column; then 8 · symbol 18 · 16 · title · 8 · outcome
 }
 
 enum BrianType {
     /// Today's hours. The one fixed-size number in the app; everything else is a text style.
-    static let hero = Font.system(size: 64, weight: .bold).monospacedDigit()
-    static let number = Font.title2.weight(.bold).monospacedDigit()
-    static let title = Font.title3.weight(.semibold)
-    static let body = Font.body
-    static let secondary = Font.subheadline
-    static let caption = Font.footnote
+    static let hero = Font.system(size: 80, weight: .semibold).monospacedDigit()
+    static let heroTracking: CGFloat = -2.5
+    static let number = Font.title2.weight(.semibold).monospacedDigit()
+    static let title = Font.title3.weight(.semibold)     // 20
+    static let body = Font.body                          // 17
+    static let secondary = Font.subheadline              // 15; ledger times add .monospacedDigit()
+    static let caption = Font.footnote                   // 13
+    static let outcome = Font.footnote.weight(.medium)   // 13, symbol + word, no capsule
+    static let chip = Font.caption.weight(.medium)       // 12, capsule
 }
 
 extension Color {
@@ -103,7 +115,7 @@ extension UIColor {
 struct Panel: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .padding(20)
+            .padding(Space.panel)
             .background(Brian.surface, in: RoundedRectangle(cornerRadius: Brian.panelRadius, style: .continuous))
     }
 }
@@ -112,32 +124,49 @@ extension View {
     func panel() -> some View { modifier(Panel()) }
 }
 
-/// Signed hours: "+1.4 h" in earn green, "−0.6 h" in cost red, "0.0 h" in ink.
+/// Hours are rounded to 0.1 before anything else, so −0.02 reads "0.0 h", never "−0.0 h".
+enum Hours {
+    static func rounded(_ hours: Double) -> Double { (hours * 10).rounded() / 10 }
+    /// The word next to the hero number. The sign and this word carry the meaning; colour repeats it.
+    static func word(_ hours: Double) -> String {
+        rounded(hours) < 0 ? "healthy life cost today" : "healthy life earned today"
+    }
+}
+
+/// Signed hours: "+1.0 h" in earn green, "−1.1 h" in cost red, "0.0 h" in ink.
 struct SignedHours: View {
     let hours: Double
     var font: Font = BrianType.number
 
     var body: some View {
-        let sign = hours > 0 ? "+" : (hours < 0 ? "−" : "")
-        Text("\(sign)\(abs(hours), specifier: "%.1f") h")
+        let r = Hours.rounded(hours)
+        let sign = r > 0 ? "+" : (r < 0 ? "−" : "")
+        let magnitude = String(format: "%.1f", abs(r))
+        Text(sign + magnitude + " h")
             .font(font)
-            .foregroundStyle(hours > 0 ? Brian.earn : (hours < 0 ? Brian.cost : Brian.ink))
-            .accessibilityLabel(hours >= 0 ? "plus \(abs(hours), specifier: "%.1f") hours" : "minus \(abs(hours), specifier: "%.1f") hours")
+            .foregroundStyle(r > 0 ? Brian.earn : (r < 0 ? Brian.cost : Brian.ink))
+            .accessibilityLabel(r > 0 ? "plus \(magnitude) hours" : (r < 0 ? "minus \(magnitude) hours" : "\(magnitude) hours"))
     }
 }
 ```
 
 ## Layout rules
 
-- Screen background is `Brian.page`. Panels are `Brian.surface` with `Brian.panelRadius`.
-  Rows inside a panel are white tiles (`Brian.page`, `Brian.tileRadius`) or a plain `List`.
-- Spacing: 4 / 8 / 16 / 24 / 32. Section gaps 24. Panel padding 20.
-- One hero number per screen (Today only). Label under it in `BrianType.secondary`,
-  `Brian.muted`: "healthy‑life hours today".
-- Lists: leading SF Symbol 18 pt `.secondary`, title in `.body`, detail in
-  `.subheadline` muted, trailing outcome chip. Chips are capsules, 12 pt text, fill
-  `surface2` (neutral), `earnSoft` (earned), `costSoft` (cost). Never green/red text in
-  body copy.
+- Screen background is `Brian.page`, gutters `Space.gutter` (24). Section gaps 32.
+  One panel on Today: the hero (`Brian.surface`, `Brian.panelRadius`, padding 24). The
+  status strip and the ledger sit on the page, not in panels.
+- Spacing: 4 / 8 / 16 / 24 / 32.
+- One hero number per screen (Today only): `BrianType.hero` with `heroTracking`. Label
+  under it in `BrianType.secondary`, `Brian.muted`: `Hours.word(hours)`, i.e. "healthy
+  life earned today" or "healthy life cost today". Provenance capsule beside the label.
+- Status strip: three lines, symbol 16 pt muted, text `.subheadline`, min height 28.
+- Ledger is a timed log: time (`.subheadline`, muted, tabular, 40 pt column) · SF Symbol
+  18 pt muted · title in `.body` · trailing outcome in `BrianType.outcome` (symbol +
+  word, no capsule). Full-width `Brian.line` hairlines between rows, min height 52.
+  Held-back rows go grey: title in `Brian.muted`, muted words "held back", no symbol.
+- Capsule chips (12 pt, `BrianType.chip`) are for provenance and signed values only:
+  fill `surface2` (neutral), `earnSoft` (gain), `costSoft` (cost). Never green/red text
+  in body copy.
 - Toolbar and the primary button use Liquid Glass (`.glass`, `.glassProminent`). Content
   surfaces never use glass. Never glass on glass.
 - Icons: SF Symbols only. Trigger families map to exactly these symbols:
@@ -145,7 +174,7 @@ struct SignedHours: View {
   outdoor `sun.max.fill`, screen `display`, people `person.2.fill`, biometric
   `heart.fill`, medication `pills.fill`, wind‑down `moon.fill`, walk `figure.walk`,
   glasses `eyeglasses`, backend `desktopcomputer`, watching `record.circle`.
-  Outcomes: said `waveform`, asked `questionmark.bubble`, acted `checkmark.seal.fill`,
+  Outcomes: whispered `waveform`, asked `questionmark.bubble`, acted `checkmark.seal.fill`,
   held back: no icon, muted words "held back".
 
 ## Copy rules
@@ -157,8 +186,8 @@ Status lines are noun + state: "Glasses connected", "Backend 10.0.0.5", "Watchin
 Errors: one sentence of cause, one button of fix.
 Empty states are instructions, not consolation. Today, nothing yet: "Put the glasses on.
 Counting starts the moment the camera is up." with the button right under it. Never "No
-data available", never an illustration. Vocabulary is settled in F.0 with the human
-(what the score is called, what a whisper is called, earned/cost or something better).
+data available", never an illustration. Vocabulary was settled in F.0 with the human
+and is the list at the top of `docs/IOS_SPEC.md`; it wins over any other string.
 Whisper text comes from the backend and is never rewritten on the phone.
 
 ## The design-critic rubric (score each 0–2, report total /20)
