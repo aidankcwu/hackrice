@@ -42,6 +42,26 @@ You are the ORCHESTRATOR. You run on Opus with effort high. Rules:
 10. Effort: scout and verifier low, backend-builder medium, ios-builder high,
     design-critic medium. Set in the agent files; do not override.
 
+## Windows session status (2026-09-22, read before Job 1)
+
+Run on Windows (no Mac), back to back in one session, one commit per task.
+- Done: Job 0 (0.1, 0.2, tag `job0-done`); backend/dashboard tasks 2.1, 2.2, 2.4, 4.1, 3.3;
+  Task C (not in this plan: Dockerfile, fly.toml, `API_TOKEN` gate, `docs/DEPLOY.md`);
+  a provenance fix for the dashboard instrument tiles.
+- Skipped, need the Mac: STOP gate 0 on the Mac (confirm the no-key run command), all of
+  Job 1, and every (ios-builder) / (design-critic) task in Jobs 2-4 (2.3, 2.5, 3.1, 3.2,
+  4.2, 4.3, 4.4, 4.5), plus the per-job verifier runs 2.6, 3.4, 1.10.
+- Verifier (Windows): root 132 passed; backend 1702 passed + 5 Windows-only failures
+  (docs/STATE.md §2); dashboard 126 passed, tsc/eslint clean, build clean. iOS not run.
+- Known: `tests/test_reasoner_answer.py::test_answer_timeout_finalises_and_releases_slot`
+  is a pre-existing timing flake (~1 in 15, with or without these changes).
+- The Dockerfile has never been built (no Docker on the Windows machine).
+- Open for the human: persona veto for `act` is an empty hook (4.1); missed-dose line
+  goes through the speech limiter and can be held back (2.2); backend and dashboard
+  live-source lists differ on `whoop_live` (3.3); the clock tile reads
+  `night_screen_min`, which is not an engine factor, so it always shows unmeasured;
+  the glasses-mic rule in ios/README.md contradicts ios/QuestionListener.swift.
+
 ## Effort and time (what this costs)
 
 | Job | Agents | Claude Code wall time | Human time | Human does |
