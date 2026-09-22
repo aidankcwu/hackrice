@@ -9,6 +9,7 @@ tolerate any optional field being absent, in particular the whole ``ai`` block
 
 from __future__ import annotations
 
+import re
 import time
 from typing import Any, Literal, get_args
 
@@ -30,6 +31,7 @@ __all__ = [
     "EXERTION_ACTIVITIES",
     "HEALTHY_FOOD_TYPES",
     "UNHEALTHY_FOOD_TYPES",
+    "MEDICATION_HELD_WORDS",
     "EpisodeKind",
     "SensorBlock",
     "DeviceBlock",
@@ -158,6 +160,25 @@ UNHEALTHY_FOOD_TYPES: frozenset[str] = frozenset({
     "fast_food", "dessert", "burger", "pizza",
 })
 
+#: Words in ``in_hand`` that make the held thing a dose (PLAN 2.2). Whole words,
+#: a plural ``s`` allowed, so "pill bottle" and "insulin pens" count and
+#: "pencil" does not. The ``medication_seen`` trigger and the
+#: ``medication_sighting`` episode both read them through
+#: :meth:`Tick.medication_in_view`.
+MEDICATION_HELD_WORDS: frozenset[str] = frozenset({
+    "vial", "pen", "syringe", "injector", "pill", "capsule", "tablet", "bottle",
+})
+
+_HELD_WORD = re.compile(r"[a-z]+")
+
+
+def _names_medication(text: str) -> bool:
+    return any(
+        word in MEDICATION_HELD_WORDS
+        or (word.endswith("s") and word[:-1] in MEDICATION_HELD_WORDS)
+        for word in _HELD_WORD.findall(text.casefold())
+    )
+
 EpisodeKind = Literal[
     "meal",
     "food_sighting",
@@ -169,6 +190,7 @@ EpisodeKind = Literal[
     # Point observations (short episodes), not sustained states.
     "caffeine_sighting",
     "alcohol_sighting",
+    "medication_sighting",
 ]
 
 _TICK_BLOCK_CONFIG = ConfigDict(extra="allow")
@@ -302,6 +324,24 @@ class Tick(BaseModel):
             return None
         value = getattr(self.ai, "in_hand", None)
         return value if isinstance(value, str) and value else None
+
+    def medication_in_view(self, max_age_ms: int = 3000) -> bool | None:
+        """Tri-state: is a dose in view on this tick?
+
+        True when ``medication_visible`` is, or when ``in_hand`` names one of
+        :data:`MEDICATION_HELD_WORDS`. False when the flag says no or the hands
+        hold something else; ``None`` when neither was reported. The gate's
+        ``medication_seen`` and the ``medication_sighting`` episode both read
+        this, so a sighting and its escalation agree (SPEC §10).
+        """
+
+        visible = self.flag("medication_visible", max_age_ms)
+        held = self.held(max_age_ms)
+        if visible is True or (held is not None and _names_medication(held)):
+            return True
+        if visible is False or held is not None:
+            return False
+        return None
 
 
 class Escalation(BaseModel):

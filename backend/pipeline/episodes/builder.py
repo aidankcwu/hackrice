@@ -63,6 +63,7 @@ class EpisodeParams:
             "sauna_session": (hits(3), 10.0),
             "caffeine_sighting": (max(1, hits(2)), 10.0),
             "alcohol_sighting": (max(1, hits(2)), 10.0),
+            "medication_sighting": (max(1, hits(2)), 10.0),
         }
         common = dict(
             entry=entry,
@@ -163,13 +164,15 @@ def _predicates(max_age_ms: int) -> dict[EpisodeKind, Predicate]:
         "sauna_session": _scene("sauna", max_age_ms),
         "caffeine_sighting": _flag("caffeine_visible", max_age_ms),
         "alcohol_sighting": _flag("alcohol_visible", max_age_ms),
+        "medication_sighting": lambda tick: tick.medication_in_view(max_age_ms),
     }
 
 
 class EpisodeBuilder:
     """Collapse noisy tick tags into persisted episodes."""
 
-    _SIGHTINGS = {"food_sighting", "caffeine_sighting", "alcohol_sighting"}
+    _SIGHTINGS = {"food_sighting", "caffeine_sighting", "alcohol_sighting",
+                  "medication_sighting"}
 
     def __init__(self, db: Database, timings: Timings) -> None:
         self.db = db

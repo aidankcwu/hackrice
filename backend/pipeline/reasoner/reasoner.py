@@ -140,6 +140,11 @@ class Reasoner:
         self._conversation = conversation
 
         self.evidence = EvidenceStore(db)
+        #: Called as ``(escalation, decision_id, frames)`` right after an
+        #: escalation's frames are copied, so a consumer can point at them
+        #: (``<decision_id>/<frame_ref>``) -- the protocol's adherence matcher
+        #: (PLAN 2.2). Synchronous; an exception is logged, never raised.
+        self.on_evidence: Callable[[Escalation, str, dict[str, bytes]], None] | None = None
         self.handler = ActionHandler(db, speech, settings.timings, questions,
                                      conversation)
 
@@ -284,6 +289,11 @@ class Reasoner:
                 [(tick.frame_ref, tick.t) for tick in selected],
                 self.frame_store,
             )
+            if self.on_evidence is not None:
+                try:
+                    self.on_evidence(esc, decision_id, frames)
+                except Exception:  # an observer must never cost the escalation
+                    log.exception("evidence observer failed for %s", decision_id)
 
             try:
                 loop = asyncio.get_running_loop()

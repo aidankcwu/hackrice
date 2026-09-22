@@ -22,6 +22,7 @@ from ..frames import FrameStore, InMemoryFrameStore
 from ..gate.gate import TriggerGate
 from ..gate.triggers import CallableBiometricFeed, default_triggers
 from ..models import Tick
+from ..protocol.adherence import AdherenceMatcher
 from ..reasoner.client import make_answer_parser, make_client
 from ..reasoner.reasoner import Reasoner
 from ..scoring.scorer import Scorer
@@ -65,7 +66,8 @@ class Pipeline:
                  reasoner: Reasoner, episodes: EpisodeBuilder, gate: TriggerGate,
                  questions: QuestionManager, source: SimSource | None,
                  conversation: ConversationAgent | None = None,
-                 capture=None, clock: Clock | None = None) -> None:
+                 capture=None, clock: Clock | None = None,
+                 adherence: AdherenceMatcher | None = None) -> None:
         self.settings = settings
         self.source_name = source_name
         self.reasoner_mode = reasoner_mode
@@ -83,6 +85,9 @@ class Pipeline:
         self.conversation = conversation
         self.source = source
         self.capture = capture
+        #: Closes dose windows on the tick clock (PLAN 2.2); its sightings
+        #: arrive through ``reasoner.on_evidence``.
+        self.adherence = adherence
         # Live capture uses wall time unchanged; simulation scales its own clock.
         if clock is None:
             assert source is not None
@@ -224,6 +229,8 @@ class Pipeline:
                 # adds the new evidence; the gate replaces it in its window.
                 self.episodes.on_tick(tick)
                 self.gate.on_tick(tick)
+                if self.adherence is not None:
+                    self.adherence.on_tick(tick.t)
                 if not resend:
                     self.questions.expire(tick.t)
                 self.last_tick = tick
@@ -479,6 +486,8 @@ def build_pipeline(settings: Settings, *,
     reasoner = Reasoner(db, frame_store, client, speech, settings,
                         seven_day_summary=lambda: seven_day_summary(db, end_day),
                         parser=parser, questions=questions)
+    adherence = AdherenceMatcher(db, speech)
+    reasoner.on_evidence = adherence.on_evidence
     # The third agent (docs/CONVERSATION_DESIGN.md). Built after the reasoner
     # because it borrows `_extend_episode_label`, and attached back onto it so
     # `speak`/`ask` become hand-offs rather than utterances.
@@ -538,7 +547,8 @@ def build_pipeline(settings: Settings, *,
                         frame_store=frame_store, bus=bus, scorer=scorer, speech=speech,
                         reasoner=reasoner, episodes=episodes, gate=gate,
                         questions=questions, conversation=conversation,
-                        source=sim_source, capture=capture, clock=clock)
+                        source=sim_source, capture=capture, clock=clock,
+                        adherence=adherence)
     pipeline._speech_warm = speech_warm
     # Re-warm on every conversation open as well, on the real glasses only
     # (replay and webcam runs have no phone and must not reach the network).

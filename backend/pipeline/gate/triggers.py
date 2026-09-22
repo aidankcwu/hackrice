@@ -48,6 +48,10 @@ _HR_LINE_POINTS = 12
 
 _BIOMETRIC_REASON = "Heart rate {hr:.0f} vs resting {rest:.0f} while not exercising"
 
+#: ``medication_seen`` cooldown (PLAN 2.2): one dose is one sighting, not one
+#: per 20 s while the bottle sits in view.
+MEDICATION_COOLDOWN_S = 20 * 60.0
+
 
 @runtime_checkable
 class BiometricFeed(Protocol):
@@ -1222,7 +1226,7 @@ def default_triggers(
 
     # Kept as a named mapping so deployments can trivially override individual
     # entries while every unspecified trigger uses the configured fallback.
-    cooldowns: dict[str, float] = {}
+    cooldowns: dict[str, float] = {"medication_seen": MEDICATION_COOLDOWN_S}
     cooldown = lambda name: cooldowns.get(name, timings.trigger_cooldown_default)
     # Every `*_min_hits` on Timings is a 1 Hz reference count; the stream runs
     # at `timings.tick_interval_s`, so a window holds fewer ticks than seconds
@@ -1252,6 +1256,9 @@ def default_triggers(
             or tick.enum("activity", max_age_ms) == "talking"
         )
 
+    def medication(tick: Tick) -> bool | None:
+        return tick.medication_in_view(max_age_ms)
+
     specs = [
         ("food_in_frame", _condition_hits(meal, timings.food_window, hits(timings.food_min_hits)), "meal", "Eating persisted in the recent frame window"),
         ("screen_sustained", _flag_hits("screen_present", timings.screen_sustained_window, hits(timings.screen_sustained_min_hits), max_age_ms), "screen_block", "Screen presence was sustained"),
@@ -1259,6 +1266,7 @@ def default_triggers(
         ("outdoor_sustained", _outdoor_hits(timings.outdoor_sustained_window, hits(timings.outdoor_min_hits), max_age_ms), "outdoor_block", "Outdoor context was sustained"),
         ("caffeine_seen", _flag_hits("caffeine_visible", 10.0, sighting_hits, max_age_ms), "caffeine_sighting", "Caffeine was seen repeatedly"),
         ("alcohol_seen", _flag_hits("alcohol_visible", 10.0, sighting_hits, max_age_ms), "alcohol_sighting", "Alcohol was seen repeatedly"),
+        ("medication_seen", _condition_hits(medication, 10.0, sighting_hits), "medication_sighting", "Medication was seen repeatedly"),
         ("stillness", _stillness(timings.stillness_window), None, "Low frame motion was sustained"),
     ]
     # The cue trigger runs first and, in the demo, skips the global gap: a
