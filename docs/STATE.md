@@ -4,7 +4,7 @@
 `cd backend && uv run python -m pipeline.main --source sim --speed 3 --port 8010`
 (`pipeline/main.py:77-96`; `--vlm fake --reasoner fake` also avoid keys).
 `scripts/preflight.py --offline` SKIPs Gemini/OpenAI/ElevenLabs (`scripts/preflight.py:97-98`).
-Confirmed live: `/health`=404; equivalent `/api/status` (`pipeline/api/routes.py`) returned `"ok":true,"problems":[]`.
+Confirmed live: `/health`=404 on :8010. Its only definition is the standalone `src/longevity/server/app.py:59`, which the backend never mounts (it takes just `ingest`/`frames` routers, `backend/pipeline/api/app.py:51-59`). Use `/api/status` (`backend/pipeline/api/routes.py:54-56`) → `"ok":true,"problems":[]`.
 
 ## 2. Test commands
 - Root: `cd backend && PYTHONIOENCODING=utf-8 uv run --directory . pytest -q -p no:cacheprovider ../tests`
@@ -86,15 +86,14 @@ columns need an additive step in `_migrate()` (:288-309), guarded by
 `PRAGMA table_info(<table>)`: `biometric_series.origin` — `ADD COLUMN origin TEXT
 NOT NULL DEFAULT 'seed'` only if absent (:296-304); same for `episodes.label` (:306-308).
 
-## 10. Stale claims in old CLAUDE.md (`git show origin/reactive-glasses:CLAUDE.md`; full copy → `docs/CLAUDE_OLD.md` is task 0.2)
-- "Nothing reconnects" — false; `ios/MacLink.swift` has reconnect handling (also `CapturePacketSender.swift`, `QuestionListener.swift`).
-- "Corpus is 143 frames... at night" — early hardware run; default mode now `--source sim`, no camera corpus dependency.
-- "67 tests pass" — stale by an order of magnitude (now 132 root + 1640/5 backend).
-- "Two speak paths coexist" — undercounts: now three layers (`actions/speech.py` limiter → `capture/speak.py` → `src/longevity/speak.py` standalone CLI duplicate).
-- "Person A / Person B" role split — superseded by `PLAN.md` job/subagent workflow on branch `brian-ios`.
+## 10. Stale claims in old CLAUDE.md (`docs/CLAUDE_OLD.md`; still-true ones moved to Hardware gotchas)
+- "Nothing reconnects" (`docs/CLAUDE_OLD.md:32`): fixed by merge d94e3a1. `ios/MacLink.swift` `fail()`→`scheduleReconnect()` (:363-371), backoff 1-2-4-8-10 s (:134,:386-406), only `disconnect()` stops it (:177-187), 10 s ping vs the Mac's 30 s idle close (:131,:416-442; `src/longevity/server/ingest.py:48`); hello re-sent on reconnect (`ios/CapturePacketSender.swift:158-163`).
+- "67 tests pass" (`docs/CLAUDE_OLD.md:18`): now 132 root + 1640 backend (`docs/STATE.md:11,13`).
+- "Person A / Person B" (`docs/CLAUDE_OLD.md:50-57`): replaced by orchestrator + subagents (`PLAN.md:14-31`, `CLAUDE.md:15-16`).
+- VLM budget "`tick_interval_s - 0.1` integrated" (`docs/CLAUDE_OLD.md:76`): now the full interval (`backend/pipeline/capture/bridge.py:56,64`).
 
 ## Hardware gotchas
-Audited from `docs/CLAUDE_OLD.md` against `brian-ios`; stale claims stay in §10.
+Still-true claims from `docs/CLAUDE_OLD.md`, audited against `brian-ios`; stale ones are in §10.
 - Physical iPhone only for DAT (`docs/CLAUDE_OLD.md:94`, `hardware_software.md:183`); the simulator runs only `-demo` fixtures (`ios/Brian/project.yml:24-25,94`).
 - DAT availability is transient: "Device unavailable" / CoreBluetooth `API MISUSE` ≠ broken build; power-cycle the glasses (`docs/CLAUDE_OLD.md:95-96`, `hardware_software.md:700,712,726`).
 - `AVAudioSession.setCategory` throws `OSStatus -50` if a session exists: log, speak anyway, never return early (`docs/CLAUDE_OLD.md:97-98`; honored at `ios/MacLink.swift:530-537,563-574`).
@@ -103,7 +102,9 @@ Audited from `docs/CLAUDE_OLD.md` against `brian-ios`; stale claims stay in §10
 - Keep `NSLocalNetworkUsageDescription` + `NSAllowsLocalNetworking`, or `ws://` fails silently like a backend bug (`docs/CLAUDE_OLD.md:92-93`; `ios/Brian/project.yml:50-53`).
 - `xcode-select -p` must be `/Applications/Xcode.app/Contents/Developer` (`docs/CLAUDE_OLD.md:103`; checked by `setup.sh:28-32`).
 - T0 VLM stays on `gemini-2.5-flash-lite`; `gemini-flash-lite-latest` 400s (`docs/CLAUDE_OLD.md:105`; `src/longevity/vlm.py:64`, `FINDINGS.md:5`).
-- Flash-Lite lands ~800–1100 ms, so ticks are 1.5 s not 1 Hz (`docs/CLAUDE_OLD.md:25-29`; `backend/pipeline/config.py:332`, `FINDINGS.md:36,52`); VLM budget is now the full interval, not `interval - 0.1` (`backend/pipeline/capture/bridge.py:56,64`).
+- Flash-Lite lands ~800–1100 ms, so ticks are 1.5 s not 1 Hz (`docs/CLAUDE_OLD.md:25-29`; `backend/pipeline/config.py:332`, `FINDINGS.md:36,52`).
+- Outdoor/daylight/vegetation T0 tags are unvalidated on real frames; the only corpus was 143 indoor night frames (`docs/CLAUDE_OLD.md:22-24`; `FINDINGS.md:102-103` indoor only; no daylight corpus in git). Demo default is `--source sim` (`backend/pipeline/main.py:77-78`).
+- Two speak paths still coexist: backend `backend/pipeline/capture/speak.py` (behind the §8 limiter) and standalone `src/longevity/speak.py`, used only by `src/longevity/main.py:34` and `src/longevity/server/app.py:25` (`docs/CLAUDE_OLD.md:33-35`).
 - Mac-side Python never imports Meta SDK types (`docs/CLAUDE_OLD.md:107`; `git grep "VideoFrame\|MWDAT" -- '*.py'` = 0 hits).
 - The running iOS app still lives outside the repo; `ios/xcode-project.patch` is its only backup and goes stale silently (`docs/CLAUDE_OLD.md:36-37`; `ios/README.md:3-5,42-48`). `ios/Brian/` has only `project.yml`, `Sources/` is empty.
 - `MacLink.playAudio` (`ios/MacLink.swift:522`) has no recorded on-device run of real ElevenLabs mp3 (`docs/CLAUDE_OLD.md:30-31`; no hit in `FINDINGS.md` / `hardware_software.md`).
