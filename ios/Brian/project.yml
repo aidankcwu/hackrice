@@ -14,6 +14,9 @@ packages:
   MWDAT:
     url: https://github.com/facebook/meta-wearables-dat-ios
     from: "0.9.0"                         # CHECK: newest tag from `git ls-remote --tags <url>`
+  SnapshotTesting:
+    url: https://github.com/pointfreeco/swift-snapshot-testing
+    from: "1.19.4"
 
 targets:
   Brian:
@@ -81,6 +84,8 @@ targets:
     sources: [Tests]
     dependencies:
       - target: Brian
+      - package: SnapshotTesting
+        product: SnapshotTesting
 
 schemes:
   Brian:

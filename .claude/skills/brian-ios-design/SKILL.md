@@ -20,7 +20,9 @@ healthy‑life hours, "Bryan said" / "held back" (never spoke / silent / the mod
 seeded (never demo, fake, mock on a user-facing surface), unmeasured (never N/A).
 Every number carries its provenance chip: Glasses · WHOOP · Health · Entered · Seeded.
 The one accent with one meaning, `clock` blue, is reserved for the circadian instrument
-exactly as on the dashboard. This file adds what is iOS-specific and wins only there.
+exactly as on the dashboard. This file adds what is phone-specific and wins there: the native
+app in `ios/Brian` and the web front end at `dashboard/src/app/phone` alike (same tokens, the
+web uses the CSS variables in `dashboard/src/app/globals.css`).
 
 ## Non-negotiables
 

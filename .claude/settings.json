@@ -44,7 +44,16 @@
       "Bash(rg *)",
       "Bash(sleep *)",
       "Bash(pkill -f pipeline.main)",
-      "Bash(gh pr create *)"
+      "Bash(gh pr create *)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(start *)",
+      "Bash(open *)",
+      "Bash(*chrome* --headless*)",
+      "Bash(cd dashboard && npm run *)",
+      "Bash(taskkill *)",
+      "Bash(netstat *)",
+      "Bash(ipconfig*)"
     ],
     "ask": [
       "Bash(git push *)",

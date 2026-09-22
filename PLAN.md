@@ -39,8 +39,9 @@ You are the ORCHESTRATOR. You run on Opus with effort high. Rules:
    human: "Job N done. Run the STOP gate. Then `/clear` and send: Start Job N+1."
    Never continue into the next Job in the same session.
 9. STOP gates need a human. Do not skip one because it looks fine.
-10. Effort: scout and verifier low, backend-builder medium, ios-builder high,
+10. Effort: scout and verifier low, backend-builder medium, web-builder and ios-builder high,
     design-critic medium. Set in the agent files; do not override.
+11. Job F (the web front end) runs before Job 1 and needs no Mac. It ends only when the human says "freeze". Job 1 then has two shapes, chosen by the human at gate F: (A) native port matching the frozen screens, or (B) native shell = glasses link + WKWebView of `/phone`. Shape B is the fast path: tasks 1.1–1.3 and 1.7 only, with 1.6 replaced by a WKWebView screen.
 
 ## Effort and time (what this costs)
 
@@ -52,13 +53,14 @@ You are the ORCHESTRATOR. You run on Opus with effort high. Rules:
 | 3 Apple Health | ios-builder ×2, backend-builder ×1 | 1–2 h | 30 min | grant Health access, check dashboard chips |
 | 4 Autopilot | backend-builder ×2, ios-builder ×3 | 2–4 h | 1 h | calendar + shield test |
 | 5 Ship | verifier, design-critic, scout | 1 h | 1 h | run the Bryan demo end to end |
+| F Front end on the web (no Mac needed) | web-builder ×4, design-critic | 3–5 h to first full version, then per round | as long as you want | look in Chrome and on the phone, say what is wrong, say "freeze" |
 
 Token discipline that keeps this affordable: orchestrator reads nothing, one job per
 session, `/clear` between jobs, logs go to files, reports are short.
 
 ## Job 0 — Recon (scout)
 
-- [x] 0.1 Write `docs/STATE.md` (≤ 100 lines, every fact with `path:line`):
+- [ ] 0.1 Write `docs/STATE.md` (≤ 100 lines, every fact with `path:line`):
   1. Backend run command that needs **no API keys** (look at `backend/scripts/preflight.py --offline`, `backend/pipeline/main.py` flags, `--source sim`). Confirm it starts and `curl localhost:8010/health` answers. Record the exact command.
   2. Test commands for the root `tests/` and `backend/tests/` (root `pytest.ini`, `backend/pyproject.toml`), and the dashboard test/build command. Run them; record pass/fail counts and failing names only.
   3. The wire contract: every message type in `src/longevity/wire.py` with its fields, up and down.
@@ -70,9 +72,48 @@ session, `/clear` between jobs, logs go to files, reports are short.
   9. `db.py`: how a table is declared and migrated (one existing table as the example).
   10. What is stale in the old `CLAUDE.md` (now at `docs/CLAUDE_OLD.md`): list claims that are no longer true on this branch (e.g. "nothing reconnects").
   Acceptance: `docs/STATE.md` exists with all 10 sections; the four fixture files exist and are valid JSON (`python3 -m json.tool`).
-- [x] 0.2 (scout) `docs/CLAUDE_OLD.md` = the pre-bundle CLAUDE.md from git (`git show origin/reactive-glasses:CLAUDE.md > docs/CLAUDE_OLD.md`). Hardware gotchas from it that are still true go into a "Hardware gotchas" section at the end of `docs/STATE.md`.
+- [ ] 0.2 (scout) `docs/CLAUDE_OLD.md` = the pre-bundle CLAUDE.md from git (`git show origin/reactive-glasses:CLAUDE.md > docs/CLAUDE_OLD.md`). Hardware gotchas from it that are still true go into a "Hardware gotchas" section at the end of `docs/STATE.md`.
   Acceptance: file exists; STATE.md has the section.
-- STOP gate 0: human reads STATE.md (10 minutes) and confirms the no-key run command works on their Mac.
+- STOP gate 0: human reads STATE.md (10 minutes) and confirms the no-key run command works on their machine.
+
+## Job F — The front end, for real (web, runs on Windows, no Mac; the human owns it)
+
+The phone UI is built now as a mobile web app inside the team's Next.js dashboard, at the
+route `/phone`, using the dashboard's own tokens (`dashboard/src/app/globals.css`,
+`dashboard/src/lib/tokens.ts`), components (`dashboard/src/components/brian/`), API client
+(`dashboard/src/lib/api.ts`, `usePoll.ts`) and mock mode (`npm run dev:mock`). It hits the
+real backend, installs on the iPhone from Safari (Add to Home Screen), and is the design
+of record: when a Mac appears, Job 1 either wraps it (native shell = glasses link +
+WKWebView of `/phone`) or ports it screen for screen. The human picks at STOP gate F.
+
+Tools for every F task: `brian-ui` (the dashboard's own design and voice skill, read its
+`references/screens.md` and `voice.md`), `brian-ios-design` (phone-specific rules and the
+rubric; it applies to `/phone` unchanged), `ui-ux-pro-max` (`python
+.claude/skills/ui-ux-pro-max/scripts/search.py "<outcome>" --domain ux`, and `--stack nextjs`
+or `--stack html-tailwind` for implementation; never `--design-system`), `ux-writing`,
+`sf-symbols` is replaced on the web by lucide-react with the same one-icon-per-meaning map,
+`accessibility-audit` (principles apply), `settings-screen` and `onboarding-generator`
+(structure only). Reference screenshots the human drops into `ios/Brian/Design/references/`
+are taste, never copied. Optional plugins the human may have installed
+(`frontend-design`, `impeccable`): use their critique commands on `/phone` when present.
+
+Constraints: no new dependencies beyond what `dashboard/package.json` has, unless a task
+names one. Everything mobile-first at 390 px, works to 430 px, never a desktop layout.
+Dark mode via `prefers-color-scheme` with the dark twins from `brian-ios-design`. Safe-area
+insets respected (`env(safe-area-inset-*)`). No frames or thumbnails cached client-side.
+
+- [ ] F.1 (web-builder) Scaffold. `dashboard/src/app/phone/layout.tsx` (mobile shell: 390–430 px column, page white, system font stack `-apple-system, "SF Pro Text", system-ui, sans-serif`, bottom tab bar with two tabs Today · Protocol and a Settings gear in the top bar, Liquid-Glass-style translucency on the tab bar and the one primary button only), `manifest.webmanifest` + icons + `apple-mobile-web-app-*` meta so Add to Home Screen gives a standalone app, `?fixtures=1` query (or `NEXT_PUBLIC_MOCK=1`) serving `ios/Brian/Fixtures/*.json` through the existing mock path. Run the three ui-ux-pro-max searches: `"one primary action mobile" --domain ux`, `"status visibility error recovery" --domain ux`, `"mobile tab bar safe area" --stack nextjs`; log hits to `.claude/logs/F.1.log`.
+  Acceptance: `cd dashboard && npm run typecheck && npm run lint && npm test` green; `npm run dev:mock` serves `/phone` with the shell and empty tabs.
+- [ ] F.2 (web-builder) Today. Per `docs/IOS_SPEC.md` TodayView, with one web substitution: the primary button reflects the backend session (`/api/session/current`, `/api/status`): a live session shows "Watching · 14 min" and "Stop" is not offered (the glasses app owns the stream until Job 1); no session shows "Connect glasses" opening a sheet with the three steps from SetupView's Glasses row. Status strip from `/api/status` (source, tick_count climbing = glasses connected; backend reachable = the fetch succeeded). Hero from `/api/healthspan` with the provenance chip. Ledger from `/api/episodes` + `/api/decisions`, "Held back N today" footer, tap → detail with evidence thumbnail from `/api/evidence/{id}`. Empty and error states as the spec. Poll 30 s via `usePoll`.
+  Acceptance: typecheck/lint/test green; screenshots `today-light.png`, `today-dark.png`, `today-empty.png`, `today-error.png`, `today-xxxl.png` (body text scaled 2×) under `dashboard/design/phone/`, taken with headless Chrome at 390×844 against `npm run dev:mock`.
+- [ ] F.3 (web-builder) Protocol + Add item. Per the spec's ProtocolView and AddItemView against `/api/protocol/today`, `/api/protocol`, `/done`, `/undo`, `DELETE` (built in Job B). Swipe actions become a row tap → action sheet with Undo / Mark done / Delete; the sheet is the only overlay in the app. Thumbnails from `/api/evidence`.
+  Acceptance: green; screenshots `protocol-light.png`, `protocol-dark.png`, `protocol-empty.png`, `additem.png`.
+- [ ] F.4 (web-builder) Settings. Voice toggle (stored in `localStorage`, read by nothing yet, labelled "Speak through the glasses"), Wind‑down time (writes `PUT /api/persona` only if Job B exposed a field for it, otherwise stored locally and labelled "not connected yet" in muted text), About with version and backend URL. No debug section on the web.
+  Acceptance: green; screenshot `settings-light.png`, `settings-dark.png`.
+- [ ] F.5 (design-critic) Grade every screenshot in `dashboard/design/phone/` with the rubric; the human then iterates with the web-builder in plain words, one change per message, as many rounds as they like; the critic re-grades on request.
+- [ ] F.6 (web-builder) On "freeze": copy the final screenshots to `ios/Brian/Design/` (same names), write `ios/Brian/Design/README.md` (one line of intent per screen), and add to PLAN.md task 1.8: "compare each simulator screenshot to its twin in `ios/Brian/Design/`; a visible difference in layout, colour or copy scores item 10 as 0."
+- [ ] F.7 (human) Install on the iPhone: `cd dashboard && npm run dev -- -H 0.0.0.0` with `NEXT_PUBLIC_API_BASE` pointing at the backend; open `http://<this PC's Wi‑Fi IP>:3000/phone` in Safari; Share → Add to Home Screen. Once Task C's cloud backend exists, point `NEXT_PUBLIC_API_BASE` at it and deploy the dashboard to Vercel so the phone app works off Wi‑Fi.
+- STOP gate F: the human says "freeze", and the app is on their home screen.
 
 ## Job 1 — iOS foundation (ios-builder unless noted)
 
@@ -93,24 +134,25 @@ debugging, sample-app-guide). Do not guess the SDK; read them or use the
 - [ ] 1.4 API + models + demo mode. `Sources/API/APIClient.swift`, `Models.swift` per `docs/IOS_SPEC.md`, field names taken from `ios/Brian/Fixtures/*.json`. `-demo` launch argument serves fixtures. `Tests/ModelsTests.swift` decodes every fixture.
   Acceptance: tests green; a test asserts `hoursToday` and `overall` decode to non-nil from the fixture.
 - [ ] 1.5 Setup screen. `Sources/Screens/SetupView.swift` + `PermissionRow.swift` per the spec table. `AppState` holds setup state. Deep link `fb-viewapp://` via `LSApplicationQueriesSchemes` (already in plist). "Test" hits `/health`.
-  Skills: ux-writing, sf-symbols.
+  Skills: ux-writing, sf-symbols, onboarding-generator (value-first, no carousel). Match `ios/Brian/Design/setup-*.png`.
   Acceptance: build green; simulator `-demo` shows all rows green; without `-demo` the Mac row shows "Not set" and Test against a wrong address shows "Unreachable" with the fix sentence (screenshot both to `ios/Brian/Screenshots/setup-demo.png`, `setup-unreachable.png` via `xcrun simctl io booted screenshot`).
 - [ ] 1.6 Today screen. `StatusStrip`, primary button wiring (`GlassesSession` + `MacLink` + `CapturePacketSender` per `ios/INTEGRATION.md` section 3, which is now `ios/Brian/Sources/Link`), hero panel, ledger with `DecisionDetailView`, 30 s polling, pull to refresh, empty state.
-  Skills: swiftui-liquid-glass (primary button, tab bar), swiftui-design-skill.
+  Skills: swiftui-liquid-glass (primary button, tab bar), swiftui-design-skill, typography, animation-patterns (state changes only, 200 ms, none under Reduce Motion). Match `ios/Brian/Design/today-*.png` from Job F.
   Acceptance: build + tests green; screenshots `today-demo-light.png`, `today-demo-dark.png` (`xcrun simctl ui booted appearance dark`), `today-empty.png`, `today-xxxl.png` (`xcrun simctl ui booted content_size accessibility-extra-extra-extra-large`).
-- [ ] 1.7 Settings + notifications. `SettingsView` per spec (Mac, Voice, Debug, About). `speak`/`audio` routing: glasses connected and Voice on → speak; otherwise `UNUserNotificationCenter` local notification. Notifications permission row in Setup.
+- [ ] 1.7 Settings + notifications. `SettingsView` per spec (Mac, Voice, Debug, About); skill `settings-screen`, then `accessibility-audit` across every screen built so far. `speak`/`audio` routing: glasses connected and Voice on → speak; otherwise `UNUserNotificationCenter` local notification. Notifications permission row in Setup.
   Acceptance: build + tests green; in `-demo`, "Say a test line" produces a notification in the simulator (screenshot `settings-debug.png`).
-- [ ] 1.8 (design-critic) Grade every screenshot in `ios/Brian/Screenshots/` with the rubric in `brian-ios-design`. Report per screenshot: score /20 and the fixes, most damaging first.
+- [ ] 1.8 (design-critic) Grade every screenshot in `ios/Brian/Screenshots/` with the rubric in `brian-ios-design`, and compare each to its twin in `ios/Brian/Design/` (frozen in Job F): a visible difference in layout, colour or copy scores item 10 as 0. Report per screenshot: score /20 and the fixes, most damaging first.
   Then (orchestrator): dispatch ios-builder with the fix list as task 1.9; re-run 1.8. Maximum two rounds. Ships at ≥ 16/20 per screen, no zeros.
-- [ ] 1.10 (verifier) full run.
+- [ ] 1.10 (ios-builder) Snapshot tests: add `pointfreeco/swift-snapshot-testing` (from 1.19.4, already in `project.yml`) to `BrianTests`; one recorded snapshot per screen in light and dark from `-demo` fixtures, `Tests/SnapshotTests.swift`. These are the regression net for Jobs 2–4; a changed screen must re-record on purpose.
+  Acceptance: `xcodebuild test` green with snapshots recorded and committed under `Tests/__Snapshots__/`.
+- [ ] 1.11 (verifier) full run.
 - STOP gate 1 (human, on the real device): open `ios/Brian/Brian.xcodeproj`, set Team under Signing & Capabilities, run on the iPhone. Setup → Register → Test → Done. Start watching with the glasses on. On the Mac: `curl localhost:8010/ingest/stats` shows `received` climbing and `malformed 0`. Hold a coffee cup in view: a ledger row appears within a minute. Confirm a `speak` plays in the glasses (Settings → Debug → Say a test line, with the backend's echo-to-speak, or wait for a spoken decision).
 
 ## Job 2 — Dose by sight (the feature Bryan asked for on the call)
 
-- [x] 2.1 (backend-builder) Protocol table and routes. `ProtocolItem {id, name, kind: dose|meal|winddown|walk, window_start "HH:MM", window_end, days [0-6], created_t}` in `backend/pipeline/db.py` following the pattern STATE.md §9 names. `ProtocolStatus` per item per day: `waiting|seen|done|missed|undone`, `seen_t`, `evidence_ref`. Routes in `backend/pipeline/api/routes.py`: `GET /api/protocol`, `POST /api/protocol`, `PUT /api/protocol/{id}`, `DELETE /api/protocol/{id}`, `GET /api/protocol/today` (items + today's status), `POST /api/protocol/{id}/done`, `POST /api/protocol/{id}/undo`, `GET /api/protocol/export.csv?days=14`. Seed on first run: "Morning dose" 07:00–10:00, "Evening dose" 19:00–22:00, "Lunch window" 11:30–14:00, "Wind‑down" 21:30–23:00, "Daylight walk" 07:00–16:00. Document in `docs/API.md`.
+- [ ] 2.1 (backend-builder) Protocol table and routes. `ProtocolItem {id, name, kind: dose|meal|winddown|walk, window_start "HH:MM", window_end, days [0-6], created_t}` in `backend/pipeline/db.py` following the pattern STATE.md §9 names. `ProtocolStatus` per item per day: `waiting|seen|done|missed|undone`, `seen_t`, `evidence_ref`. Routes in `backend/pipeline/api/routes.py`: `GET /api/protocol`, `POST /api/protocol`, `PUT /api/protocol/{id}`, `DELETE /api/protocol/{id}`, `GET /api/protocol/today` (items + today's status), `POST /api/protocol/{id}/done`, `POST /api/protocol/{id}/undo`, `GET /api/protocol/export.csv?days=14`. Seed on first run: "Morning dose" 07:00–10:00, "Evening dose" 19:00–22:00, "Lunch window" 11:30–14:00, "Wind‑down" 21:30–23:00, "Daylight walk" 07:00–16:00. Document in `docs/API.md`.
   Acceptance: `backend/tests/test_protocol.py` covers create/list/today/done/undo/csv; all pre-existing tests still green.
-  Conventions fixed by 2.1 (2.2 and 2.3 must follow): `days` uses 0 = Monday … 6 = Sunday (Python `weekday()`; Swift `Calendar` weekday is 1 = Sunday, so convert on the phone). `evidence_ref` = `<decision_id>/<frame_ref>`; a thumbnail is `GET /api/evidence/<evidence_ref>`.
-- [x] 2.2 (backend-builder) `medication_seen` trigger in `backend/pipeline/gate/triggers.py`, modelled on `caffeine_seen` (STATE.md §6): fires on 2 ticks within 10 s where `medication_visible` is true OR `in_hand` contains any of `vial, pen, syringe, injector, pill, capsule, tablet, bottle`; cooldown 20 min; opens episode `medication_sighting` with evidence saved through the existing evidence path (STATE.md §7). Adherence matcher (new `backend/pipeline/protocol/adherence.py`): a `medication_sighting` inside an open `dose` window marks that item `seen` with `evidence_ref`; a `dose` window that closes with no sighting marks `missed` and calls the speak path (STATE.md §8) once with: "Your <name> window just closed. Take it now, or mark it skipped in Brian." Meal/walk/winddown kinds only get `seen` from their existing triggers (`food_in_frame`, `outdoor_sustained`, `screen_sustained` after wind-down start) — no new whispers for them in this job.
+- [ ] 2.2 (backend-builder) `medication_seen` trigger in `backend/pipeline/gate/triggers.py`, modelled on `caffeine_seen` (STATE.md §6): fires on 2 ticks within 10 s where `medication_visible` is true OR `in_hand` contains any of `vial, pen, syringe, injector, pill, capsule, tablet, bottle`; cooldown 20 min; opens episode `medication_sighting` with evidence saved through the existing evidence path (STATE.md §7). Adherence matcher (new `backend/pipeline/protocol/adherence.py`): a `medication_sighting` inside an open `dose` window marks that item `seen` with `evidence_ref`; a `dose` window that closes with no sighting marks `missed` and calls the speak path (STATE.md §8) once with: "Your <name> window just closed. Take it now, or mark it skipped in Brian." Meal/walk/winddown kinds only get `seen` from their existing triggers (`food_in_frame`, `outdoor_sustained`, `screen_sustained` after wind-down start) — no new whispers for them in this job.
   Acceptance: `backend/tests/test_adherence.py`: sighting in window → seen with evidence; sighting outside any window → episode only, no status change; window close without sighting → missed and exactly one speak call; a second close event does not speak again. Gate tests still green.
 - [ ] 2.3 [P] (ios-builder) `ProtocolView`, `AddItemView`, swipe Undo / Mark done, thumbnails from `/api/evidence/...`, per `docs/IOS_SPEC.md`. `Fixtures/protocol_today.json` captured from the running backend after 2.1. `Tests/AdherenceStateTests.swift` for status → row rendering.
   Skills: ux-writing, sf-symbols.
