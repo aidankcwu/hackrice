@@ -370,6 +370,20 @@ class Settings(BaseSettings):
     google_health_token_path: Path = Path("./data/google_health_token.json")
     google_health_poll_s: int = 300
     wearable_ingest_token: str | None = None
+
+    # -- deployment (docs/DEPLOY.md). ------------------------------------------
+    #: Bearer token for every /api/* route and /ws/glasses; unset or blank = auth
+    #: off. Read per request from os.environ by ``api.app.BearerAuth`` (like
+    #: WEARABLE_INGEST_TOKEN); declared so .env.example stays in sync.
+    api_token: str | None = None
+    #: Comma-separated browser origins allowed to call the API (the dashboard's).
+    cors_origins: str = "http://localhost:3000"
+    #: The CLI's --source/--reasoner/--vlm/--port defaults, so a container runs
+    #: ``python -m pipeline.main`` with no flags. A flag still wins.
+    source: Literal["sim", "glasses", "webcam", "replay"] = "sim"
+    reasoner: Literal["openai", "fake"] = "fake"
+    vlm: Literal["gemini", "fake", "off"] = "gemini"
+    port: int = 8010
     #: T0 VLM budget in seconds (SPEC §2.4). None = tick_interval_s.
     vlm_budget_s: float | None = None
 

@@ -6,6 +6,10 @@ import os
 # Settings reads it, and environment variables win over the file. Pin the
 # demo-only switches off so the suite tests the code, not tonight's demo.
 os.environ.setdefault("FIXED_LINES_ONLY", "0")
+# Auth off for the suite even if the shell exports a deploy token; blank (not
+# absent) so a later load_dotenv(override=False) cannot turn it back on.
+# test_auth.py turns it on per test.
+os.environ["API_TOKEN"] = ""
 
 import time
 

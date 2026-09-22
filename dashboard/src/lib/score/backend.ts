@@ -22,6 +22,23 @@ export function apiBase(): string {
   return process.env.NEXT_PUBLIC_API_BASE ?? DEFAULT_API_BASE;
 }
 
+/** The backend's API_TOKEN (docs/DEPLOY.md), or "" when unset: auth off, nothing sent. */
+export function apiToken(): string {
+  return process.env.NEXT_PUBLIC_API_TOKEN ?? "";
+}
+
+/** Spread into a fetch init: `Authorization: Bearer` when a token is set, else nothing. */
+export function authInit(): { headers?: Record<string, string> } {
+  const token = apiToken();
+  return token ? { headers: { authorization: `Bearer ${token}` } } : {};
+}
+
+/** For URLs that cannot carry a header (`<img src>`, download links): `?token=`. */
+export function withToken(url: string): string {
+  const token = apiToken();
+  return token ? `${url}${url.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}` : url;
+}
+
 /** Network error, timeout, non-2xx, or a body that is not JSON. */
 export class BackendOffline extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -35,7 +52,7 @@ const describe = (e: unknown): string => (e instanceof Error ? e.message : Strin
 export async function fetchJson<T>(base: string, path: string, timeoutMs = 2500): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${base}${path}`, { cache: "no-store", signal: AbortSignal.timeout(timeoutMs) });
+    response = await fetch(`${base}${path}`, { cache: "no-store", signal: AbortSignal.timeout(timeoutMs), ...authInit() });
   } catch (cause) {
     throw new BackendOffline(`${path}: ${describe(cause)}`, { cause });
   }
@@ -149,7 +166,7 @@ async function evidenceFrameUrl(base: string, decisionId: string): Promise<strin
   const last = rows.length > 0 ? rows[rows.length - 1] : undefined;
   const url =
     last !== undefined && typeof last.frame_ref === "string"
-      ? `${base}/api/evidence/${id}/${encodeURIComponent(last.frame_ref)}`
+      ? withToken(`${base}/api/evidence/${id}/${encodeURIComponent(last.frame_ref)}`)
       : null;
   evidenceCache.set(decisionId, url);
   return url;

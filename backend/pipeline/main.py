@@ -72,14 +72,16 @@ async def run_headless(args: argparse.Namespace, settings: Settings) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    # Defaults come from Settings, i.e. the environment (SOURCE, REASONER, VLM,
+    # PORT, DB_PATH, ...), so a container needs no flags (docs/DEPLOY.md).
     defaults = Settings()
     parser = argparse.ArgumentParser(prog="pipeline", description=__doc__)
     parser.add_argument("--source", choices=["sim", "glasses", "webcam", "replay"],
-                        default="sim")
+                        default=defaults.source)
     parser.add_argument("--dir", help="frame corpus directory for replay")
     parser.add_argument("--loop", action="store_true", help="loop a replay corpus")
     parser.add_argument("--camera", type=int, default=0, help="webcam device index")
-    parser.add_argument("--vlm", choices=["gemini", "fake", "off"], default="gemini",
+    parser.add_argument("--vlm", choices=["gemini", "fake", "off"], default=defaults.vlm,
                         help="T0 tagger; fake/off need no Gemini key")
     parser.add_argument("--flow", choices=["numpy", "opencv", "off"], default=None)
     parser.add_argument("--speed", type=float, default=1.0)
@@ -88,10 +90,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tick-interval", dest="tick_interval_s", type=float,
                         default=defaults.tick_interval_s,
                         help="seconds between ticks (glasses emit every 1.5 s)")
-    parser.add_argument("--reasoner", choices=["openai", "fake"], default="fake")
+    parser.add_argument("--reasoner", choices=["openai", "fake"], default=defaults.reasoner)
     parser.add_argument("--db", default=str(defaults.db_path))
     parser.add_argument("--fresh", action="store_true", help="delete the DB and WAL files before startup")
-    parser.add_argument("--port", type=int, default=8010)
+    parser.add_argument("--port", type=int, default=defaults.port)
     parser.add_argument("--no-seed", action="store_true")
     parser.add_argument("--headless", action="store_true")
     parser.add_argument("--demo-mode", dest="demo_mode", action="store_true",

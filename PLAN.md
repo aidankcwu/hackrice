@@ -43,6 +43,26 @@ You are the ORCHESTRATOR. You run on Opus with effort high. Rules:
     design-critic medium. Set in the agent files; do not override.
 11. Job F (the web front end) runs before Job 1 and needs no Mac. It ends only when the human says "freeze". Job 1 then has two shapes, chosen by the human at gate F: (A) native port matching the frozen screens, or (B) native shell = glasses link + WKWebView of the deployed `phone/` app. Shape B is the fast path: tasks 1.1–1.3 and 1.7 only, with 1.6 replaced by a WKWebView screen.
 
+## Windows session status (2026-09-22, read before Job 1)
+
+Run on Windows (no Mac), back to back in one session, one commit per task.
+- Done: Job 0 (0.1, 0.2, tag `job0-done`); backend/dashboard tasks 2.1, 2.2, 2.4, 4.1, 3.3;
+  Task C (not in this plan: Dockerfile, fly.toml, `API_TOKEN` gate, `docs/DEPLOY.md`);
+  a provenance fix for the dashboard instrument tiles.
+- Skipped, need the Mac: STOP gate 0 on the Mac (confirm the no-key run command), all of
+  Job 1, and every (ios-builder) / (design-critic) task in Jobs 2-4 (2.3, 2.5, 3.1, 3.2,
+  4.2, 4.3, 4.4, 4.5), plus the per-job verifier runs 2.6, 3.4, 1.10.
+- Verifier (Windows): root 132 passed; backend 1702 passed + 5 Windows-only failures
+  (docs/STATE.md §2); dashboard 126 passed, tsc/eslint clean, build clean. iOS not run.
+- Known: `tests/test_reasoner_answer.py::test_answer_timeout_finalises_and_releases_slot`
+  is a pre-existing timing flake (~1 in 15, with or without these changes).
+- The Dockerfile has never been built (no Docker on the Windows machine).
+- Open for the human: persona veto for `act` is an empty hook (4.1); missed-dose line
+  goes through the speech limiter and can be held back (2.2); backend and dashboard
+  live-source lists differ on `whoop_live` (3.3); the clock tile reads
+  `night_screen_min`, which is not an engine factor, so it always shows unmeasured;
+  the glasses-mic rule in ios/README.md contradicts ios/QuestionListener.swift.
+
 ## Effort and time (what this costs)
 
 | Job | Agents | Claude Code wall time | Human time | Human does |
