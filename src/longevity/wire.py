@@ -200,3 +200,53 @@ def hello_message(device: str = "phone", caps: list[str] | None = None) -> str:
             "t": round(time.time(), 3),
         }
     )
+
+
+# --- act / act_result (PLAN 4.1) ----------------------------------------------
+#
+# The system acts instead of nagging: the Mac decides, the phone executes one
+# thing it was asked to do and says whether it worked. The phone decides nothing
+# about health (invariant 5); it never sends an `act_result` it was not asked for.
+#
+# `kind` and its `args`, as the Mac sends them today:
+#   calendar_block  {"minutes": 20, "earliest": <unix s>, "latest": <unix s>}
+#                   find the first free `minutes` between the two, add the event
+#   screen_shield   {"until": "HH:MM"}  shield the chosen apps until local HH:MM
+
+# Mac -> phone
+ACT = "act"                # do one thing for the wearer
+# phone -> Mac
+ACT_RESULT = "act_result"  # whether it happened
+
+
+def act_message(act_id: str, kind: str, args: dict[str, Any] | None = None) -> str:
+    """Mac->phone. Execute `kind` with `args`, then reply `act_result` with `id`.
+
+    `id` is how the Mac matches the result to the decision that asked for it; a
+    phone must echo it unchanged and never invent one.
+    """
+    return json.dumps(
+        {
+            "v": PROTOCOL_VERSION,
+            "type": ACT,
+            "id": act_id,
+            "kind": kind,
+            "args": dict(args or {}),
+        }
+    )
+
+
+def act_result_message(act_id: str, ok: bool, detail: str = "") -> str:
+    """phone->Mac. `ok` is the phone's verdict; `detail` says what it did or why not.
+
+    Written here for the tests and `tools/fake_phone.py`; the real producer is Swift.
+    """
+    return json.dumps(
+        {
+            "v": PROTOCOL_VERSION,
+            "type": ACT_RESULT,
+            "id": act_id,
+            "ok": bool(ok),
+            "detail": detail,
+        }
+    )
