@@ -1,5 +1,6 @@
 import { mockBiometrics, mockBiometricsMulti, mockConversations, mockDecisions, mockEpisodes, mockHealthspan, mockPending, mockPersona, mockProfileLines, mockQuestions, mockScores, mockSeeded, mockSeededRows, mockStatus, mockSummary, mockTicks, mockWearablesStatus } from "./mock";
-import type { AnswerResult, AskResult, Biometrics, BiometricsMulti, Conversation, Decision, Episode, ForgetResult, Healthspan, Insight, MetricScore, OpenConversationResult, PendingCheck, Persona, ProfileLine, Question, Recap, RecapSummary, Scores, SeededDay, SeededMetricRow, Session, Status, Tick, TodaySummary, WearablesStatus } from "./types";
+import type { AnswerResult, AskResult, Biometrics, BiometricsMulti, Conversation, Decision, Episode, ForgetResult, Healthspan, Insight, MetricScore, OpenConversationResult, PendingCheck, Persona, ProfileLine, ProtocolDayRow, ProtocolToday, Question, Recap, RecapSummary, Scores, SeededDay, SeededMetricRow, Session, Status, Tick, TodaySummary, WearablesStatus } from "./types";
+import { parseProtocolCsv } from "./protocol";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8010";
 export const configuredMock = process.env.NEXT_PUBLIC_MOCK === "1";
@@ -208,5 +209,22 @@ export const api = {
     const r = await request<Healthspan>(`/api/healthspan${day ? `?day=${encodeURIComponent(day)}` : ""}`, mockHealthspan);
     return {...r, data: {...r.data, layers: r.data?.layers ?? {}, factors: r.data?.factors ?? [], ledger: r.data?.ledger ?? [], levers: r.data?.levers ?? [], levers_free: r.data?.levers_free ?? [], insights: r.data?.insights ?? [], pins: r.data?.pins ?? [], effects: r.data?.effects ?? [], provenance: r.data?.provenance ?? {}, conventions: r.data?.conventions ?? []} as Healthspan};
   },
+  // -- the protocol (docs/API.md "The protocol"). No mock, not even with
+  // NEXT_PUBLIC_MOCK=1: a grid of statuses nobody recorded is the fabrication
+  // R1 forbids, so a backend that does not answer throws and the panel says so.
+  protocolToday: async (): Promise<ProtocolToday> => {
+    const response = await fetch(`${API_BASE}/api/protocol/today`,{cache:"no-store",signal:AbortSignal.timeout(2500)});
+    if (!response.ok) throw new Error(`/api/protocol/today -> ${response.status}`);
+    const body = await response.json() as Partial<ProtocolToday>;
+    if (typeof body.day !== "string") throw new Error("/api/protocol/today -> no day");
+    return {day: body.day, items: body.items ?? []};
+  },
+  /** The last `days` local days, from the same CSV the Export button downloads. */
+  protocolHistory: async (days = 14): Promise<ProtocolDayRow[]> => {
+    const response = await fetch(`${API_BASE}/api/protocol/export.csv?days=${days}`,{cache:"no-store",signal:AbortSignal.timeout(2500)});
+    if (!response.ok) throw new Error(`/api/protocol/export.csv -> ${response.status}`);
+    return parseProtocolCsv(await response.text());
+  },
+  protocolExportUrl: (days = 14) => `${API_BASE}/api/protocol/export.csv?days=${days}`,
 };
 export type ApiResult<T>={data:T;mock:boolean};

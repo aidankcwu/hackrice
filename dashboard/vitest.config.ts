@@ -2,6 +2,9 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  // tsconfig says `jsx: preserve` for Next; a test that renders a component
+  // needs the automatic runtime, as Next's own compiler uses.
+  esbuild: { jsx: "automatic" },
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],

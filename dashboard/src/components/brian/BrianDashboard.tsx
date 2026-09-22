@@ -9,6 +9,7 @@ import { Evidence } from "./Evidence";
 import { Instruments } from "./Instruments";
 import { Layers } from "./Layers";
 import { NextBest } from "./NextBest";
+import { Protocol } from "./Protocol";
 import { SevenDays } from "./SevenDays";
 import { WearableNumbers } from "./WearableNumbers";
 import { Today } from "./Today";
@@ -83,6 +84,10 @@ export function BrianDashboard({ data, goal, onGoalChange, updating = false }: B
             outcome window that has not elapsed yet stays Pending. */}
         <BryanSaid pins={data.pins} nowMinute={minutesOfInstant(data.generated_at)} />
         <Evidence pins={data.pins} />
+        {/* PLAN 2.4: dose by sight, per protocol item over 14 days. It polls
+            the protocol routes itself, like Logs, so an unreachable backend
+            empties this panel and nothing else. */}
+        <Protocol />
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <Tonight
             f={data.forecast}

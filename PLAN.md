@@ -115,7 +115,7 @@ debugging, sample-app-guide). Do not guess the SDK; read them or use the
 - [ ] 2.3 [P] (ios-builder) `ProtocolView`, `AddItemView`, swipe Undo / Mark done, thumbnails from `/api/evidence/...`, per `docs/IOS_SPEC.md`. `Fixtures/protocol_today.json` captured from the running backend after 2.1. `Tests/AdherenceStateTests.swift` for status → row rendering.
   Skills: ux-writing, sf-symbols.
   Acceptance: build + tests green; screenshots `protocol-demo-light.png`, `protocol-demo-dark.png`, `protocol-empty.png`, `additem.png`.
-- [ ] 2.4 [P] (backend-builder) Dashboard adherence panel in `dashboard/src` using the existing Bryan design system (`design-system/brian/MASTER.md`): per item, 14-day grid of seen / done / missed / waiting, plus "Export CSV" linking to `/api/protocol/export.csv`. Follow the existing panel components; no new tokens.
+- [x] 2.4 [P] (backend-builder) Dashboard adherence panel in `dashboard/src` using the existing Bryan design system (`design-system/brian/MASTER.md`): per item, 14-day grid of seen / done / missed / waiting, plus "Export CSV" linking to `/api/protocol/export.csv`. Follow the existing panel components; no new tokens.
   Acceptance: dashboard test/build command from STATE.md green; a vitest renders the grid from a fixture with 3 days of statuses.
 - [ ] 2.5 (design-critic) grade Job 2 screenshots; one fix round via ios-builder.
 - [ ] 2.6 (verifier) full run.

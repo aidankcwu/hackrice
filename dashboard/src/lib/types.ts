@@ -169,3 +169,14 @@ export interface ForgetResult { id: string; removed: boolean }
 
 /** One row of the Logs index — GET /api/recaps. No body: see RecapStore.list. */
 export interface RecapSummary { id: string; session_id: string | null; from_t: number; to_t: number; generated_at: number; duration_s: number }
+
+// --- The protocol (docs/API.md "The protocol", PLAN 2.1) ---
+/** `days` are weekdays, 0 = Monday (Python `weekday()`); windows are local "HH:MM". */
+export type ProtocolKind = "dose" | "meal" | "winddown" | "walk";
+export type ProtocolStatus = "waiting" | "seen" | "done" | "missed" | "undone";
+export interface ProtocolItem { id: string; name: string; kind: ProtocolKind; window_start: string; window_end: string; days: number[]; created_t: number }
+/** GET /api/protocol/today: the items scheduled today, each with today's status. */
+export interface ProtocolTodayItem extends ProtocolItem { status: ProtocolStatus; seen_t: number | null; evidence_ref: string | null; updated_t: number | null }
+export interface ProtocolToday { day: string; items: ProtocolTodayItem[] }
+/** One row of GET /api/protocol/export.csv: one item on one local day. Empty cells are null. */
+export interface ProtocolDayRow { day: string; item_id: string; name: string; kind: string; window_start: string; window_end: string; status: string; seen_t: number | null; evidence_ref: string | null; updated_t: number | null }
