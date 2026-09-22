@@ -78,6 +78,7 @@ simulated time (never wall-clock, :13-14): `min_gap_s` (:91-98) + hourly cap via
 dispatches via `get_speak_fn()`/`set_speak_fn()` (:53-61), wired to ElevenLabs at
 startup. `pipeline/capture/speak.py:242-279` `make_speak_fn()` is the actual
 glasses-socket sender (mouth-busy bookkeeping :91-100) — no hourly cap itself.
+Two speak paths still coexist: backend `backend/pipeline/capture/speak.py` (behind the §8 limiter) and standalone `src/longevity/speak.py`, used only by `src/longevity/main.py:34` and `src/longevity/server/app.py:25` (`docs/CLAUDE_OLD.md:33-35`).
 
 ## 9. `db.py` table + migration example
 Tables = raw SQL in `SCHEMA` (`pipeline/db.py:41-54` = `ticks`), applied by
@@ -104,8 +105,7 @@ Still-true claims from `docs/CLAUDE_OLD.md`, audited against `brian-ios`; stale 
 - T0 VLM stays on `gemini-2.5-flash-lite`; `gemini-flash-lite-latest` 400s (`docs/CLAUDE_OLD.md:105`; `src/longevity/vlm.py:64`, `FINDINGS.md:5`).
 - Flash-Lite lands ~800–1100 ms, so ticks are 1.5 s not 1 Hz (`docs/CLAUDE_OLD.md:25-29`; `backend/pipeline/config.py:332`, `FINDINGS.md:36,52`).
 - Outdoor/daylight/vegetation T0 tags are unvalidated on real frames; the only corpus was 143 indoor night frames (`docs/CLAUDE_OLD.md:22-24`; `FINDINGS.md:102-103` indoor only; no daylight corpus in git). Demo default is `--source sim` (`backend/pipeline/main.py:77-78`).
-- Two speak paths still coexist: backend `backend/pipeline/capture/speak.py` (behind the §8 limiter) and standalone `src/longevity/speak.py`, used only by `src/longevity/main.py:34` and `src/longevity/server/app.py:25` (`docs/CLAUDE_OLD.md:33-35`).
 - Mac-side Python never imports Meta SDK types (`docs/CLAUDE_OLD.md:107`; `git grep "VideoFrame\|MWDAT" -- '*.py'` = 0 hits).
-- The running iOS app still lives outside the repo; `ios/xcode-project.patch` is its only backup and goes stale silently (`docs/CLAUDE_OLD.md:36-37`; `ios/README.md:3-5,42-48`). `ios/Brian/` has only `project.yml`, `Sources/` is empty.
+- The running iOS app still lives outside the repo; `ios/xcode-project.patch` is its only backup and goes stale silently (`docs/CLAUDE_OLD.md:36-37`; `ios/README.md:3-5,45-51`). `ios/Brian/` has only `project.yml`, `Sources/` is empty.
 - `MacLink.playAudio` (`ios/MacLink.swift:522`) has no recorded on-device run of real ElevenLabs mp3 (`docs/CLAUDE_OLD.md:30-31`; no hit in `FINDINGS.md` / `hardware_software.md`).
-- Free Apple Personal Team provisioning expires after 7 days (`ios/README.md:63`; not in `docs/CLAUDE_OLD.md`).
+- Free Apple Personal Team provisioning expires after 7 days (`ios/README.md:66`; not in `docs/CLAUDE_OLD.md`).

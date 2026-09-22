@@ -43,4 +43,4 @@ Architecture in one line: glasses → iPhone (Swift, Meta DAT) → WebSocket ove
   (hardware-validated, trust it), `FINDINGS.md` (measured facts), `docs/API.md` (routes),
   `docs/CONVERSATION_DESIGN.md`, `docs/WEARABLES.md`, `ios/README.md` (the old gotchas,
   still true: physical iPhone only, DAT availability is transient, ignore `OSStatus -50`,
-  never open the glasses microphone, free provisioning expires after 7 days).
+  open the glasses mic only in QuestionListener's answer window and restore A2DP after (its "Glasses microphone" section), free provisioning expires after 7 days).
