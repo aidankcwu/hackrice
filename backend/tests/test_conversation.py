@@ -701,7 +701,7 @@ def test_a_line_said_minutes_ago_is_not_said_again(tmp_path):
 
     settings = Settings(db_path=tmp_path / "repeat.db", demo_mode=True)
     db = Database(settings.db_path).connect().init_schema()
-    clock = [1000.0]
+    clock = [T0]  # a real wall-clock instant, as now_fn gives in production (wiring.py)
 
     async def run():
         agent = ConversationAgent(db, InMemoryFrameStore(), SameLine(), SpeechLimiter(0, 100),

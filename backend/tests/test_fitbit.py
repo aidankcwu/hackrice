@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import os
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -55,7 +56,11 @@ async def test_pkce_exchange_and_secure_store(tmp_path):
         await client.exchange_code("code", verifier)
     assert seen["request"].headers["Authorization"] == "Basic " + base64.b64encode(b"id:secret").decode()
     assert store.load()["refresh_token"] == "r"
-    assert (tmp_path / "token.json").stat().st_mode & 0o777 == 0o600
+    token_file = tmp_path / "token.json"
+    assert json.loads(token_file.read_text())["access_token"] == "a"
+    assert not token_file.with_suffix(".json.tmp").exists()  # written atomically, no stray copy
+    if os.name != "nt":  # Windows has no POSIX mode bits (chmod only toggles read-only)
+        assert token_file.stat().st_mode & 0o777 == 0o600
 
 
 @pytest.mark.asyncio

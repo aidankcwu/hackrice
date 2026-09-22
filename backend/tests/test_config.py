@@ -3,7 +3,24 @@ from __future__ import annotations
 from dataclasses import fields
 from pathlib import Path
 
+import pytest
+from pydantic import AliasChoices
+
 from pipeline.config import Settings, Timings
+
+
+@pytest.fixture(autouse=True)
+def _no_ambient_settings_env(monkeypatch) -> None:
+    """``Settings(_env_file=None)`` here means the shipped defaults. Earlier tests
+    can leave the developer's real backend/.env in os.environ (the capture
+    bridge calls load_dotenv, which nothing undoes), so drop every key Settings
+    reads; a test that wants one sets it with monkeypatch."""
+
+    for name, field in Settings.model_fields.items():
+        alias = field.validation_alias
+        choices = alias.choices if isinstance(alias, AliasChoices) else [alias]
+        for env in {name, *(c for c in choices if isinstance(c, str))}:
+            monkeypatch.delenv(env.upper(), raising=False)
 
 
 def test_defaults() -> None:
