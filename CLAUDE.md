@@ -16,8 +16,9 @@ Architecture in one line: glasses → iPhone (Swift, Meta DAT) → WebSocket ove
   `.claude/agents/`; builders never commit, the orchestrator does. One job per session.
 - `docs/STATE.md` is the map of the code with `path:line` refs (written in Job 0).
   Read it before touching anything. `docs/IOS_SPEC.md` is the phone app spec.
-- `.claude/skills/brian-ui` is the dashboard's design and voice; `brian-ios-design` extends
-  it for the phone and wins there. Strings follow `brian-ui/references/voice.md` everywhere.
+- `.claude/skills/brian-ios-design` is the phone app's look and rubric. The phone app
+  (`phone/` on the web, `ios/Brian` native) inherits nothing from `dashboard/` or
+  `design-system/`; those belong to the judges' dashboard and are not references.
 - Branch `brian-ios`. Commits are `task <id>: <one line>`. Never push, never force.
 
 ## Commands (verify against docs/STATE.md "Commands" once Job 0 has run)

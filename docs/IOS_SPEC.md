@@ -5,10 +5,11 @@ plays whispers, and shows what the system handled today. The Mac (backend) still
 every decision. The phone adds three things the Mac cannot: it is on the body, it holds
 Apple Health, and it can act on the phone (calendar, Screen Time).
 
-Look and copy: `.claude/skills/brian-ios-design/SKILL.md`, which inherits the dashboard's
-`brian-ui` skill and its `references/voice.md`. They win over this file on anything visual
-or any string. Vocabulary: earned / cost, healthy‑life hours, "Bryan said" / "held back",
-seeded (never "demo" on screen), unmeasured.
+Look and copy: `.claude/skills/brian-ios-design/SKILL.md`. It wins over this file on
+anything visual or any string. The dashboard in `dashboard/` and everything under
+`design-system/` are not references; nothing is inherited from them. Vocabulary (the name
+of the score, of a whisper, of an outcome) is settled in task F.0 with the human; the
+words in this file are placeholders until then.
 
 ## Structure
 
@@ -98,11 +99,11 @@ Order, top to bottom:
 4. **Ledger panel**: "Today" title. Rows = episodes (`GET /api/episodes`) merged with
    decisions (`GET /api/decisions?limit=50`), newest first, deduped on episode id.
    Row: family symbol · time · `label` · outcome chip ("held back" muted, "said", "asked",
-   "acted"). Panel footer: "Held back N today" (brian-ui law 4: restraint is visible). Tap → **DecisionDetailView**: interpretation text, actions taken, evidence
+   "acted"; placeholder words). Panel footer: "Held back N today" (restraint is visible). Tap → **DecisionDetailView**: interpretation text, actions taken, evidence
    thumbnail from `GET /api/evidence/{decision_id}` when present, "wearer reported" note
    when `reported` is set.
-   Empty: "Put the glasses on. Bryan starts counting light, people, and air the moment the
-   camera is up." (voice.md's exact string), with the primary button directly above it.
+   Empty: "Put the glasses on. Counting starts the moment the camera is up." with the
+   primary button directly above it.
 5. Pull to refresh. Nothing else on this screen.
 
 ### ProtocolView (Job 2)

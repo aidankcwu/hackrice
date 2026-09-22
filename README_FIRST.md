@@ -42,29 +42,26 @@ Five jobs. Job 1 is the big one (3–5 hours of Claude Code time). The whole thi
 about two working days of Claude Code and one day of your time, mostly waiting and
 testing on the phone.
 
-## 3b. Job F: the front end, built for real on Windows
+## 3b. Job F: the front end, from scratch, on Windows
 
-After Job 0, paste `Read PLAN.md. You are the orchestrator. Follow section 0. Start Job F.`
-Claude Code builds the phone app as a mobile web app inside the team's Next.js dashboard
-(`/phone`), with the dashboard's own tokens and the design skills above, against the real
-backend. You look at it in Chrome (device mode, iPhone) and on your iPhone over Wi‑Fi
-(Safari → Add to Home Screen), and talk to it in plain words: "hero too big", "status
-above the button", "less grey". One change per message. Drop screenshots of apps you want
-it to feel like into `ios/Brian/Design/references/` first. When it looks right, say
-"freeze". Whoever gets a Mac later wraps it with the glasses link (Job 1, shape B) or ports
-it natively; the critic fails anything that drifts from your frozen screens.
+Paste `Read PLAN.md. You are the orchestrator. Follow section 0. Start Job F.` First it
+shows you three design directions side by side in Chrome (F.0); you pick one. Then it
+builds the phone app as a standalone mobile web app in `phone/` against the real backend.
+It inherits nothing from the old dashboard. You look at it in Chrome (F12 → phone icon →
+iPhone) and on your iPhone over Wi‑Fi (Safari → Add to Home Screen), and talk to it in
+plain words, one change per message. Drop screenshots of apps you want it to feel like
+into `phone/design/references/` before F.0. When it looks right, say "freeze".
 
-Optional heavy hitters for the web front end, typed inside Claude Code once:
+Optional heavy hitters, typed inside Claude Code once:
 - Anthropic's official design skill: `/plugin marketplace add anthropics/claude-code` then `/plugin install frontend-design@claude-code-plugins`
 - Impeccable (70k stars, 24 critique/polish commands): `/plugin marketplace add pbakaus/impeccable` then `/plugin` → install impeccable
-- Figma, if anyone designs there: `claude mcp add --transport http figma https://mcp.figma.com/mcp`
 
 ## 4. What each job leaves you with
 
 | Job | You get |
 |---|---|
 | 0 | `docs/STATE.md` (the map), fixtures captured from the real backend |
-| F | The phone app on your home screen (web), and the approved screens frozen as PNGs in `ios/Brian/Design/` |
+| F | Your chosen design direction, the phone app on your home screen (web, `phone/`), and the approved screens frozen as PNGs in `ios/Brian/Design/` |
 | 1 | `ios/Brian/Brian.xcodeproj`: Setup, Today (status, Start watching, hours, ledger), Settings, whispers + notifications. Streams to the Mac like the old app did. Screenshots graded ≥ 16/20 |
 | 2 | Protocol tab; vial in hand inside a window = dose logged with a thumbnail, no tap; missed window = one whisper; dashboard 14-day grid + CSV for the clinician |
 | 3 | Apple Health (sleep, HRV, steps) feeding the score. No Fitbit needed |
@@ -89,8 +86,7 @@ CLAUDE.md                    replaces the old one (the old one said "I am Person
 docs/IOS_SPEC.md             every screen, state, and line of copy
 .claude/settings.json        effort high, pre-approved build/test commands, push and rm ask first
 .claude/agents/              scout · web-builder · ios-builder · backend-builder · verifier · design-critic
-.claude/skills/brian-ios-design/   the look: palette, type, banned list, the 20-point rubric.
-                             Inherits the repo's existing brian-ui skill and its voice.md
+.claude/skills/brian-ios-design/   the rules, banned list and 20-point rubric; palette and type are chosen with you in F.0
 .claude/skills/              vendored, verified today, licences included:
                              ui-ux-pro-max (130k stars; the repo's copy was missing its data folder, this one is complete)
                              swiftui-design-skill (anti-AI-slop rules for SwiftUI) · swiftui-expert-skill (Xcode 27 aware)

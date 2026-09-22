@@ -41,7 +41,7 @@ You are the ORCHESTRATOR. You run on Opus with effort high. Rules:
 9. STOP gates need a human. Do not skip one because it looks fine.
 10. Effort: scout and verifier low, backend-builder medium, web-builder and ios-builder high,
     design-critic medium. Set in the agent files; do not override.
-11. Job F (the web front end) runs before Job 1 and needs no Mac. It ends only when the human says "freeze". Job 1 then has two shapes, chosen by the human at gate F: (A) native port matching the frozen screens, or (B) native shell = glasses link + WKWebView of `/phone`. Shape B is the fast path: tasks 1.1–1.3 and 1.7 only, with 1.6 replaced by a WKWebView screen.
+11. Job F (the web front end) runs before Job 1 and needs no Mac. It ends only when the human says "freeze". Job 1 then has two shapes, chosen by the human at gate F: (A) native port matching the frozen screens, or (B) native shell = glasses link + WKWebView of the deployed `phone/` app. Shape B is the fast path: tasks 1.1–1.3 and 1.7 only, with 1.6 replaced by a WKWebView screen.
 
 ## Effort and time (what this costs)
 
@@ -53,7 +53,7 @@ You are the ORCHESTRATOR. You run on Opus with effort high. Rules:
 | 3 Apple Health | ios-builder ×2, backend-builder ×1 | 1–2 h | 30 min | grant Health access, check dashboard chips |
 | 4 Autopilot | backend-builder ×2, ios-builder ×3 | 2–4 h | 1 h | calendar + shield test |
 | 5 Ship | verifier, design-critic, scout | 1 h | 1 h | run the Bryan demo end to end |
-| F Front end on the web (no Mac needed) | web-builder ×4, design-critic | 3–5 h to first full version, then per round | as long as you want | look in Chrome and on the phone, say what is wrong, say "freeze" |
+| F Front end on the web (no Mac needed) | web-builder ×6, design-critic | 1 h to the direction pick, 3–5 h to first full version, then per round | as long as you want | look in Chrome and on the phone, say what is wrong, say "freeze" |
 
 Token discipline that keeps this affordable: orchestrator reads nothing, one job per
 session, `/clear` between jobs, logs go to files, reports are short.
@@ -78,41 +78,41 @@ session, `/clear` between jobs, logs go to files, reports are short.
 
 ## Job F — The front end, for real (web, runs on Windows, no Mac; the human owns it)
 
-The phone UI is built now as a mobile web app inside the team's Next.js dashboard, at the
-route `/phone`, using the dashboard's own tokens (`dashboard/src/app/globals.css`,
-`dashboard/src/lib/tokens.ts`), components (`dashboard/src/components/brian/`), API client
-(`dashboard/src/lib/api.ts`, `usePoll.ts`) and mock mode (`npm run dev:mock`). It hits the
-real backend, installs on the iPhone from Safari (Add to Home Screen), and is the design
-of record: when a Mac appears, Job 1 either wraps it (native shell = glasses link +
-WKWebView of `/phone`) or ports it screen for screen. The human picks at STOP gate F.
+From scratch. The phone app is a new standalone Next.js app in `phone/` at the repo root.
+It imports nothing from `dashboard/`, reads nothing from `design-system/`, and never opens
+the `brian-ui`, `design-system`, `ui-styling`, `design`, `brand` or `slides` skills that
+were in the repo before this plan. Its only inputs are: the thesis at the top of this
+file, `docs/IOS_SPEC.md`, `brian-ios-design`, the backend's JSON (fixtures from Job 0,
+routes from Job B), the human's reference screenshots in `phone/design/references/`, and
+the design tools below. It hits the real backend, installs on the iPhone from Safari
+(Add to Home Screen), and is the design of record for Job 1.
 
-Tools for every F task: `brian-ui` (the dashboard's own design and voice skill, read its
-`references/screens.md` and `voice.md`), `brian-ios-design` (phone-specific rules and the
-rubric; it applies to `/phone` unchanged), `ui-ux-pro-max` (`python
-.claude/skills/ui-ux-pro-max/scripts/search.py "<outcome>" --domain ux`, and `--stack nextjs`
-or `--stack html-tailwind` for implementation; never `--design-system`), `ux-writing`,
-`sf-symbols` is replaced on the web by lucide-react with the same one-icon-per-meaning map,
-`accessibility-audit` (principles apply), `settings-screen` and `onboarding-generator`
-(structure only). Reference screenshots the human drops into `ios/Brian/Design/references/`
-are taste, never copied. Optional plugins the human may have installed
-(`frontend-design`, `impeccable`): use their critique commands on `/phone` when present.
+Tools: `ui-ux-pro-max` (`python .claude/skills/ui-ux-pro-max/scripts/search.py …`:
+`--design-system` once in F.0 to generate directions, then `--domain ux` for outcomes and
+`--stack nextjs` / `--stack html-tailwind` for implementation), `brian-ios-design` (rules
+and rubric), `swiftui-design-skill` (its anti-slop rules apply to any screen),
+`ux-writing`, `accessibility-audit`, `settings-screen` and `onboarding-generator`
+(structure only). Icons: lucide-react, one icon per meaning. Optional plugins the human
+may have installed (`frontend-design`, `impeccable`): use their critique commands when present.
 
-Constraints: no new dependencies beyond what `dashboard/package.json` has, unless a task
-names one. Everything mobile-first at 390 px, works to 430 px, never a desktop layout.
-Dark mode via `prefers-color-scheme` with the dark twins from `brian-ios-design`. Safe-area
-insets respected (`env(safe-area-inset-*)`). No frames or thumbnails cached client-side.
+Constraints: mobile-first at 390 px, works to 430 px, never a desktop layout. Dark mode
+via `prefers-color-scheme`. Safe-area insets. No client-side caching of frames or
+thumbnails. Dependencies: next, react, tailwindcss, lucide-react; nothing else unless a
+task names it.
 
-- [ ] F.1 (web-builder) Scaffold. `dashboard/src/app/phone/layout.tsx` (mobile shell: 390–430 px column, page white, system font stack `-apple-system, "SF Pro Text", system-ui, sans-serif`, bottom tab bar with two tabs Today · Protocol and a Settings gear in the top bar, Liquid-Glass-style translucency on the tab bar and the one primary button only), `manifest.webmanifest` + icons + `apple-mobile-web-app-*` meta so Add to Home Screen gives a standalone app, `?fixtures=1` query (or `NEXT_PUBLIC_MOCK=1`) serving `ios/Brian/Fixtures/*.json` through the existing mock path. Run the three ui-ux-pro-max searches: `"one primary action mobile" --domain ux`, `"status visibility error recovery" --domain ux`, `"mobile tab bar safe area" --stack nextjs`; log hits to `.claude/logs/F.1.log`.
-  Acceptance: `cd dashboard && npm run typecheck && npm run lint && npm test` green; `npm run dev:mock` serves `/phone` with the shell and empty tabs.
-- [ ] F.2 (web-builder) Today. Per `docs/IOS_SPEC.md` TodayView, with one web substitution: the primary button reflects the backend session (`/api/session/current`, `/api/status`): a live session shows "Watching · 14 min" and "Stop" is not offered (the glasses app owns the stream until Job 1); no session shows "Connect glasses" opening a sheet with the three steps from SetupView's Glasses row. Status strip from `/api/status` (source, tick_count climbing = glasses connected; backend reachable = the fetch succeeded). Hero from `/api/healthspan` with the provenance chip. Ledger from `/api/episodes` + `/api/decisions`, "Held back N today" footer, tap → detail with evidence thumbnail from `/api/evidence/{id}`. Empty and error states as the spec. Poll 30 s via `usePoll`.
-  Acceptance: typecheck/lint/test green; screenshots `today-light.png`, `today-dark.png`, `today-empty.png`, `today-error.png`, `today-xxxl.png` (body text scaled 2×) under `dashboard/design/phone/`, taken with headless Chrome at 390×844 against `npm run dev:mock`.
-- [ ] F.3 (web-builder) Protocol + Add item. Per the spec's ProtocolView and AddItemView against `/api/protocol/today`, `/api/protocol`, `/done`, `/undo`, `DELETE` (built in Job B). Swipe actions become a row tap → action sheet with Undo / Mark done / Delete; the sheet is the only overlay in the app. Thumbnails from `/api/evidence`.
+- [ ] F.0 (web-builder) Design direction, decided with the human. Run `python .claude/skills/ui-ux-pro-max/scripts/search.py "longevity healthspan phone app wearer glasses calm medical instrument restraint" --design-system -p "Brian"` three times with different dials (variance 2 / density 6, variance 4 / density 5, variance 6 / density 4; the SKILL.md documents the slider flags). Also read every image in `phone/design/references/` if any. Produce `phone/design/directions.html`: three side-by-side 390×844 renderings of the Today screen with fixture data, one per direction, each with its palette, type scale and spacing written under it, plus a fourth column "none of these, because: ___". Nothing else. Stop and tell the human to open it and pick one (or describe what is off). When they pick: write the chosen tokens into the Tokens section of `.claude/skills/brian-ios-design/SKILL.md` (Swift) and as CSS variables in `phone/src/app/globals.css`, settle the vocabulary (score name, whisper name, outcome words) as a short list at the top of `docs/IOS_SPEC.md`, and remove the word PLACEHOLDER from both files.
+  Acceptance: the human has picked; both files updated; `.claude/logs/F.0.log` holds the three ui-ux-pro-max outputs.
+- [ ] F.1 (web-builder) Scaffold. `npx create-next-app@latest phone --ts --tailwind --app --eslint --src-dir --no-import-alias` (approve the install), then: mobile shell (390–430 px column, safe areas, bottom tab bar Today · Protocol, Settings gear in the top bar, translucent-blur treatment on the tab bar and the one primary button only), `manifest.webmanifest` + icons + `apple-mobile-web-app-*` meta so Add to Home Screen gives a standalone app, `src/lib/api.ts` (fetch + `NEXT_PUBLIC_API_BASE` + a bearer token header read from `NEXT_PUBLIC_API_TOKEN` when set), `src/lib/types.ts` typed from the fixtures, and a fixtures mode (`NEXT_PUBLIC_FIXTURES=1`) serving `ios/Brian/Fixtures/*.json` copied into `phone/fixtures/`. Query params `screen`, `mode`, `scale` honoured in fixtures mode for screenshots. ui-ux-pro-max searches: `"one primary action mobile" --domain ux`, `"status visibility error recovery" --domain ux`, `"mobile tab bar safe area" --stack nextjs`; hits to `.claude/logs/F.1.log`.
+  Acceptance: `cd phone && npm run lint && npx tsc --noEmit && npm run build` green; `NEXT_PUBLIC_FIXTURES=1 npm run dev` serves `/` with the shell and empty tabs.
+- [ ] F.2 (web-builder) Today. Per `docs/IOS_SPEC.md` TodayView, with one web substitution: the primary button reflects the backend session (`/api/session/current`, `/api/status`): a live session shows "Watching · 14 min"; no session shows "Connect glasses" opening a sheet with the three steps from SetupView's Glasses row (the glasses app owns the stream until Job 1). Status strip from `/api/status`. Hero from `/api/healthspan` with the provenance chip. Ledger from `/api/episodes` + `/api/decisions`, "held back" footer, tap → detail with evidence thumbnail from `/api/evidence/{id}`. Empty and error states per the spec. Poll every 30 s.
+  Acceptance: lint/tsc/build green; screenshots `today-light.png`, `today-dark.png`, `today-empty.png`, `today-error.png`, `today-xxxl.png` (text scaled 2×) in `phone/design/shots/`, headless Chrome at 390×844 in fixtures mode.
+- [ ] F.3 (web-builder) Protocol + Add item. Per the spec against `/api/protocol/today`, `/api/protocol`, `/done`, `/undo`, `DELETE` (built in Job B; merge `brian-ios` first). Row tap → action sheet with Undo / Mark done / Delete; the only overlay in the app. Thumbnails from `/api/evidence`.
   Acceptance: green; screenshots `protocol-light.png`, `protocol-dark.png`, `protocol-empty.png`, `additem.png`.
-- [ ] F.4 (web-builder) Settings. Voice toggle (stored in `localStorage`, read by nothing yet, labelled "Speak through the glasses"), Wind‑down time (writes `PUT /api/persona` only if Job B exposed a field for it, otherwise stored locally and labelled "not connected yet" in muted text), About with version and backend URL. No debug section on the web.
-  Acceptance: green; screenshot `settings-light.png`, `settings-dark.png`.
-- [ ] F.5 (design-critic) Grade every screenshot in `dashboard/design/phone/` with the rubric; the human then iterates with the web-builder in plain words, one change per message, as many rounds as they like; the critic re-grades on request.
+- [ ] F.4 (web-builder) Settings. Voice toggle (localStorage, labelled "Speak through the glasses"), Wind‑down time (`PUT /api/persona` if Job B exposed a field, else local and labelled "not connected yet" in muted text), About with version and backend URL.
+  Acceptance: green; `settings-light.png`, `settings-dark.png`.
+- [ ] F.5 (design-critic) Grade every screenshot in `phone/design/shots/` with the rubric. Then the human iterates with the web-builder in plain words, one change per message, as many rounds as they like; the critic re-grades on request.
 - [ ] F.6 (web-builder) On "freeze": copy the final screenshots to `ios/Brian/Design/` (same names), write `ios/Brian/Design/README.md` (one line of intent per screen), and add to PLAN.md task 1.8: "compare each simulator screenshot to its twin in `ios/Brian/Design/`; a visible difference in layout, colour or copy scores item 10 as 0."
-- [ ] F.7 (human) Install on the iPhone: `cd dashboard && npm run dev -- -H 0.0.0.0` with `NEXT_PUBLIC_API_BASE` pointing at the backend; open `http://<this PC's Wi‑Fi IP>:3000/phone` in Safari; Share → Add to Home Screen. Once Task C's cloud backend exists, point `NEXT_PUBLIC_API_BASE` at it and deploy the dashboard to Vercel so the phone app works off Wi‑Fi.
+- [ ] F.7 (human) On the iPhone: `cd phone && npm run dev -- -H 0.0.0.0` with `NEXT_PUBLIC_API_BASE` at the backend; open `http://<this PC's Wi‑Fi IP>:3000` in Safari; Share → Add to Home Screen. Once Task C's cloud backend exists, deploy `phone/` to Vercel with `NEXT_PUBLIC_API_BASE` and `NEXT_PUBLIC_API_TOKEN` set, and the phone app works off Wi‑Fi.
 - STOP gate F: the human says "freeze", and the app is on their home screen.
 
 ## Job 1 — iOS foundation (ios-builder unless noted)

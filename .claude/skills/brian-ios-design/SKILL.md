@@ -1,28 +1,24 @@
 ---
 name: brian-ios-design
-description: The look, feel and copy of the Brian iOS app (ios/Brian). Load before writing or reviewing any SwiftUI view. When another design skill disagrees with this one, this one wins. Also the rubric the design-critic grades screenshots against.
+description: The look, feel and copy of the Brian phone app (phone/ on the web, ios/Brian native). Load before writing or reviewing any screen. When another design skill disagrees with this one, this one wins. Also the rubric the design-critic grades screenshots against.
 ---
 
 # Brian on iOS
 
-Brian is the native sibling of the dashboard in `design-system/brian/MASTER.md`. Same
-brief: WHOOP-grade restraint. White page, soft grey panels, one sans, and colour
-reserved for data. Green earns, red costs. Everything else is ink or grey.
+The brief: the calm of a medical instrument, the restraint of the best health apps, and
+nothing that reads as generated. Colour is reserved for data. The exact palette, type
+and spacing come from task F.0.
 
 The app has one job: show the user what the system handled for them today, and make
 starting it a single tap. It is not a chat app, not a dashboard, not a coaching feed.
 
-## Inherits from `brian-ui` (the dashboard's skill, already in this repo)
+## Starting point: none
 
-Its five laws and its vocabulary apply here unchanged. Before writing any string, read
-`.claude/skills/brian-ui/references/voice.md` and use its words: earned / cost,
-healthy‑life hours, "Bryan said" / "held back" (never spoke / silent / the model),
-seeded (never demo, fake, mock on a user-facing surface), unmeasured (never N/A).
-Every number carries its provenance chip: Glasses · WHOOP · Health · Entered · Seeded.
-The one accent with one meaning, `clock` blue, is reserved for the circadian instrument
-exactly as on the dashboard. This file adds what is phone-specific and wins there: the native
-app in `ios/Brian` and the web front end at `dashboard/src/app/phone` alike (same tokens, the
-web uses the CSS variables in `dashboard/src/app/globals.css`).
+Nothing that existed before this plan is a reference: not the judges' dashboard in
+`dashboard/`, not `design-system/brian/`, not the `brian-ui` skill. Do not read them for
+look, layout, components or copy. The look is decided in task F.0 with the human and
+written into the Tokens section below; until F.0 has run, the values there are
+placeholders and the section says so.
 
 ## Non-negotiables
 
@@ -51,13 +47,13 @@ an "assistant" persona. Greetings ("Welcome back!"). Exclamation marks. ALL‑CA
 Monospace anywhere except nothing (numbers use tabular figures, not monospace). Lorem
 ipsum. Placeholder avatars. Toasts that stack. Custom fonts.
 
-## Tokens (paste as `ios/Brian/Sources/Theme/Theme.swift`)
+## Tokens (PLACEHOLDER until F.0 replaces this section; then paste as `ios/Brian/Sources/Theme/Theme.swift` and mirror in `phone/src/app/globals.css`)
 
 ```swift
 import SwiftUI
 import UIKit
 
-/// Brian palette. Mirrors design-system/brian/MASTER.md (light) with a dark twin.
+/// Brian palette. Placeholder values; F.0 writes the real ones here.
 /// Data colours only ever appear next to a sign or a word that carries the meaning too.
 enum Brian {
     static let page     = Color(light: 0xFFFFFF, dark: 0x000000)
@@ -71,7 +67,6 @@ enum Brian {
     static let earnSoft = Color(light: 0xE8F5EC, dark: 0x0F2A1A)   // "Earned" chip fill
     static let cost     = Color(light: 0xC62828, dark: 0xF87171)   // negative hours only
     static let costSoft = Color(light: 0xFBEAEA, dark: 0x2A1010)   // "Cost" chip fill
-    static let clock    = Color(light: 0x1D4ED8, dark: 0x60A5FA)   // circadian instrument only, nothing else
 
     static let panelRadius: CGFloat = 20
     static let tileRadius: CGFloat = 16
@@ -150,8 +145,6 @@ struct SignedHours: View {
   outdoor `sun.max.fill`, screen `display`, people `person.2.fill`, biometric
   `heart.fill`, medication `pills.fill`, wind‑down `moon.fill`, walk `figure.walk`,
   glasses `eyeglasses`, backend `desktopcomputer`, watching `record.circle`.
-  Layers, matching the dashboard's lucide set one for one: Clock `clock`, Light
-  `sun.max`, People `person.2`, Outside `tree`, Air `wind`, Mind `brain`, Body `figure.walk`.
   Outcomes: said `waveform`, asked `questionmark.bubble`, acted `checkmark.seal.fill`,
   held back: no icon, muted words "held back".
 
@@ -163,9 +156,9 @@ Say what happened, not what the system "thinks". Verbs on buttons: "Start watchi
 Status lines are noun + state: "Glasses connected", "Backend 10.0.0.5", "Watching 14 min".
 Errors: one sentence of cause, one button of fix.
 Empty states are instructions, not consolation. Today, nothing yet: "Put the glasses on.
-Bryan starts counting light, people, and air the moment the camera is up." (voice.md's
-exact string) with the button right under it. Never "No data available", never an
-illustration.
+Counting starts the moment the camera is up." with the button right under it. Never "No
+data available", never an illustration. Vocabulary is settled in F.0 with the human
+(what the score is called, what a whisper is called, earned/cost or something better).
 Whisper text comes from the backend and is never rewritten on the phone.
 
 ## The design-critic rubric (score each 0–2, report total /20)
@@ -181,7 +174,7 @@ Whisper text comes from the backend and is never rewritten on the phone.
 9. Spacing on the 4/8/16/24/32 grid; panels 20 pt radius; targets ≥ 44 pt.
 10. Would this screenshot pass as a screen from a shipping Apple-designed app? If it
     reads as "AI made this" in any way, say which element and why. A string that breaks
-    `brian-ui/references/voice.md` (spoke, silent, demo, N/A, an exclamation mark) scores
-    this item 0.
+    the vocabulary settled in F.0, or says demo, N/A, or carries an exclamation mark,
+    scores this item 0.
 
 A screen ships at ≥ 16/20 with no item scored 0.

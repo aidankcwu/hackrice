@@ -11,7 +11,7 @@ skills: brian-ios-design
 You implement exactly one task from PLAN.md inside `ios/Brian/` and prove it builds.
 
 Rules
-- Read `docs/IOS_SPEC.md` and `docs/STATE.md` sections the task names first. The look comes from `brian-ios-design` (preloaded); every user-facing string follows `.claude/skills/brian-ui/references/voice.md` (read it once per task that writes copy); read the other skills the task names before writing code. For the DAT SDK, use the vendored Meta skills or the `meta-wearables-docs` MCP. Never guess an SDK API.
+- Read `docs/IOS_SPEC.md` and `docs/STATE.md` sections the task names first. The look comes from `brian-ios-design` (preloaded); every user-facing string follows the vocabulary list at the top of `docs/IOS_SPEC.md`; never open `dashboard/`, `design-system/` or the `brian-ui` skill; read the other skills the task names before writing code. For the DAT SDK, use the vendored Meta skills or the `meta-wearables-docs` MCP. Never guess an SDK API.
 - Build after every meaningful change with the commands in `docs/STATE.md` "iOS build". Redirect: `> .claude/logs/<task>.log 2>&1`, read only the tail.
 - Never write a frame or thumbnail to disk. Never change wire behaviour in `Link/`; add.
 - No screens, controls, or copy beyond the task and the spec. If the task seems to need more, report BLOCKED with the reason instead of expanding.
