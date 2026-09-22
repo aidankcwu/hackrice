@@ -93,8 +93,18 @@ NOT NULL DEFAULT 'seed'` only if absent (:296-304); same for `episodes.label` (:
 - "Two speak paths coexist" — undercounts: now three layers (`actions/speech.py` limiter → `capture/speak.py` → `src/longevity/speak.py` standalone CLI duplicate).
 - "Person A / Person B" role split — superseded by `PLAN.md` job/subagent workflow on branch `brian-ios`.
 
-## Hardware gotchas (still true; full audit is task 0.2)
-- Physical iPhone only, simulator can't do DAT; DAT availability transient — "Device
-  unavailable" / CoreBluetooth `API MISUSE` ≠ broken build.
-- `AVAudioSession.setCategory` throws `OSStatus -50` if session exists — ignore,
-  speak anyway, don't return early. Free Apple Personal Team provisioning expires after 7 days.
+## Hardware gotchas
+Audited from `docs/CLAUDE_OLD.md` against `brian-ios`; stale claims stay in §10.
+- Physical iPhone only for DAT (`docs/CLAUDE_OLD.md:94`, `hardware_software.md:183`); the simulator runs only `-demo` fixtures (`ios/Brian/project.yml:24-25,94`).
+- DAT availability is transient: "Device unavailable" / CoreBluetooth `API MISUSE` ≠ broken build; power-cycle the glasses (`docs/CLAUDE_OLD.md:95-96`, `hardware_software.md:700,712,726`).
+- `AVAudioSession.setCategory` throws `OSStatus -50` if a session exists: log, speak anyway, never return early (`docs/CLAUDE_OLD.md:97-98`; honored at `ios/MacLink.swift:530-537,563-574`).
+- Never add `Access Wi-Fi Information` / `Hotspot Configuration`; a free Personal Team can't provision them (`docs/CLAUDE_OLD.md:88-89`; removed `ios/xcode-project.patch:230,232`; none in `ios/Brian/project.yml:66-68`).
+- Keep `UIBackgroundModes` external-accessory + `UISupportedExternalAccessoryProtocols = com.meta.ar.wearable` (`docs/CLAUDE_OLD.md:90-91`; `ios/Brian/project.yml:41-42`).
+- Keep `NSLocalNetworkUsageDescription` + `NSAllowsLocalNetworking`, or `ws://` fails silently like a backend bug (`docs/CLAUDE_OLD.md:92-93`; `ios/Brian/project.yml:50-53`).
+- `xcode-select -p` must be `/Applications/Xcode.app/Contents/Developer` (`docs/CLAUDE_OLD.md:103`; checked by `setup.sh:28-32`).
+- T0 VLM stays on `gemini-2.5-flash-lite`; `gemini-flash-lite-latest` 400s (`docs/CLAUDE_OLD.md:105`; `src/longevity/vlm.py:64`, `FINDINGS.md:5`).
+- Flash-Lite lands ~800–1100 ms, so ticks are 1.5 s not 1 Hz (`docs/CLAUDE_OLD.md:25-29`; `backend/pipeline/config.py:332`, `FINDINGS.md:36,52`); VLM budget is now the full interval, not `interval - 0.1` (`backend/pipeline/capture/bridge.py:56,64`).
+- Mac-side Python never imports Meta SDK types (`docs/CLAUDE_OLD.md:107`; `git grep "VideoFrame\|MWDAT" -- '*.py'` = 0 hits).
+- The running iOS app still lives outside the repo; `ios/xcode-project.patch` is its only backup and goes stale silently (`docs/CLAUDE_OLD.md:36-37`; `ios/README.md:3-5,42-48`). `ios/Brian/` has only `project.yml`, `Sources/` is empty.
+- `MacLink.playAudio` (`ios/MacLink.swift:522`) has no recorded on-device run of real ElevenLabs mp3 (`docs/CLAUDE_OLD.md:30-31`; no hit in `FINDINGS.md` / `hardware_software.md`).
+- Free Apple Personal Team provisioning expires after 7 days (`ios/README.md:63`; not in `docs/CLAUDE_OLD.md`).

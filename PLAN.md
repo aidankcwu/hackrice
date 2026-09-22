@@ -70,7 +70,7 @@ session, `/clear` between jobs, logs go to files, reports are short.
   9. `db.py`: how a table is declared and migrated (one existing table as the example).
   10. What is stale in the old `CLAUDE.md` (now at `docs/CLAUDE_OLD.md`): list claims that are no longer true on this branch (e.g. "nothing reconnects").
   Acceptance: `docs/STATE.md` exists with all 10 sections; the four fixture files exist and are valid JSON (`python3 -m json.tool`).
-- [ ] 0.2 (scout) `docs/CLAUDE_OLD.md` = the pre-bundle CLAUDE.md from git (`git show origin/reactive-glasses:CLAUDE.md > docs/CLAUDE_OLD.md`). Hardware gotchas from it that are still true go into a "Hardware gotchas" section at the end of `docs/STATE.md`.
+- [x] 0.2 (scout) `docs/CLAUDE_OLD.md` = the pre-bundle CLAUDE.md from git (`git show origin/reactive-glasses:CLAUDE.md > docs/CLAUDE_OLD.md`). Hardware gotchas from it that are still true go into a "Hardware gotchas" section at the end of `docs/STATE.md`.
   Acceptance: file exists; STATE.md has the section.
 - STOP gate 0: human reads STATE.md (10 minutes) and confirms the no-key run command works on their Mac.
 
