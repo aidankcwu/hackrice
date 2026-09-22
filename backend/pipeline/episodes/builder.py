@@ -187,6 +187,8 @@ class EpisodeBuilder:
                 count = db.conn.execute("SELECT COUNT(*) FROM episodes").fetchone()[0]
         self._counter = int(count)
         self._states = {kind: _State() for kind in self._kind_predicates}
+        #: The last tick seen, to recognise T0's publish-on-landing re-send.
+        self._last_tick_id: str | None = None
         # A restart must not inherit open episodes from the process before it:
         # they would stay open forever (nothing in memory owns them) and the
         # scorer would clip them to every window it looks at.
@@ -273,8 +275,20 @@ class EpisodeBuilder:
         return episode
 
     def on_tick(self, tick: Tick) -> list[Episode]:
+        """Fold one tick into every episode kind.
+
+        T0 re-sends the newest tick with its ai block once Gemini lands
+        (publish-on-landing): same tick_id, first without ai, then with it.
+        The first pass counted it as an unknown tick; the re-send adds only
+        what is new -- the evidence -- and never counts the tick a second time
+        (``tick_count``, ``candidate_ticks``). Without this every landed result
+        either doubled the tick counts or, skipped, never reached an episode.
+        """
+
         changed: list[Episode] = []
         p = self.params
+        resend = tick.tick_id == self._last_tick_id
+        self._last_tick_id = tick.tick_id
         for kind, predicate in self._kind_predicates.items():
             state = self._states[kind]
             value = predicate(tick)
@@ -295,7 +309,7 @@ class EpisodeBuilder:
                     if state.candidate_t is None or state.candidate_t < tick.t - entry_window:
                         state.candidate_t = state.positives[0]
                         state.candidate_ticks = 1
-                    else:
+                    elif not resend:  # the first pass already counted this tick
                         state.candidate_ticks += 1
                     state.last_hit_t = tick.t
                     if len(state.positives) >= entry_hits:
@@ -307,14 +321,15 @@ class EpisodeBuilder:
                     state.positives.clear()
                     state.candidate_t = None
                     state.candidate_ticks = 0
-                elif state.candidate_t is not None:
+                elif state.candidate_t is not None and not resend:
                     # Unknown observations do not affect debounce evidence, but
                     # they are still ticks within the episode once it opens.
                     state.candidate_ticks += 1
                 continue
 
             episode = state.episode
-            episode.tick_count += 1
+            if not resend:
+                episode.tick_count += 1
             episode.duration_s = max(0.0, tick.t - episode.start_t)
             if value is True:
                 state.last_hit_t = tick.t

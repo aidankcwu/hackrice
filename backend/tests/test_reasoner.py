@@ -19,7 +19,7 @@ from pipeline.db import Database
 from pipeline.frames import InMemoryFrameStore
 from pipeline.models import AiBlock, Escalation, SensorBlock, Tick
 from pipeline.reasoner.client import FakeReasonerClient, OpenAIReasonerClient, make_client
-from pipeline.reasoner.reasoner import Reasoner
+from pipeline.reasoner.reasoner import FRAMES_PER_ESCALATION, Reasoner
 from pipeline.reasoner.schema import (
     T1_JSON_SCHEMA,
     AnnotateAction,
@@ -507,8 +507,8 @@ async def test_escalation_copies_at_most_four_frames_before_inference(
 
     # The copy is durable *before* the model answers (SPEC §2.5).
     rows = reasoner.evidence.list("d_0001")
-    assert 1 <= len(rows) <= 4
-    assert len(rows) == 4
+    assert FRAMES_PER_ESCALATION == 2, "one change frame and the trigger frame"
+    assert len(rows) == FRAMES_PER_ESCALATION
     assert rows[-1]["frame_ref"] == f"f_{WINDOW_N - 1:08d}", "trigger frame included"
     assert reasoner.evidence.get("d_0001", rows[0]["frame_ref"]) is not None
     assert all("jpeg" not in row for row in rows), "list() returns no bytes"
@@ -520,7 +520,7 @@ async def test_escalation_copies_at_most_four_frames_before_inference(
         db.conn.execute(
             "SELECT COUNT(*) FROM escalated_frames WHERE decision_id = 'd_0001'"
         ).fetchone()[0]
-        == 4
+        == FRAMES_PER_ESCALATION
     )
 
 
@@ -534,7 +534,7 @@ async def test_missing_frames_are_skipped_not_fatal(db, settings):
     (decision,) = db.list_decisions()
     assert decision.dropped is False
     assert reasoner.evidence.list("d_0001") == []
-    assert reasoner.stats()["frames_missing"] == 4
+    assert reasoner.stats()["frames_missing"] == FRAMES_PER_ESCALATION
 
 
 async def test_a_timeout_writes_a_dropped_decision(db, frame_store, settings):

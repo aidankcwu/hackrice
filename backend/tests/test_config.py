@@ -133,3 +133,116 @@ def test_env_example_matches_settings_fields() -> None:
         if line.strip() and not line.startswith("#")
     }
     assert keys <= set(Settings.model_fields)
+
+
+def test_demo_timings_are_tuned_for_reactive_glasses() -> None:
+    """The fast-path timings: a 2 s global gap (was 5, i.e. 6 at 1.5 s ticks),
+    8 s between changes (props go through the cue trigger now, so `change`
+    only wakes the clerk on scene flips), no quiet window after a conversation
+    (relies on the mouth-busy guard), and a 6 s listen (was 8; 5 left only
+    ~0.4 s over the one real "yes" on record)."""
+
+    demo = Timings.demo(tick_interval_s=1.5)
+    assert demo.global_escalation_min_gap == 2.0
+    assert demo.change_cooldown_s == 8.0
+    assert demo.conversation_cooldown_s == 0.0
+    assert demo.ask_listen_s == 6.0
+
+
+def test_the_demo_preset_is_frozen() -> None:
+    """Every latency number in the plan was measured against these values.
+    Changing one is a deliberate act: update this test with the reason."""
+
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert s.demo_mode is True and s.tick_interval_s == 1.5
+    assert s.t1_model == "gpt-5.4-mini"
+    assert s.keyword_triggers == []
+    demo = s.timings
+    assert demo.tick_interval_s == 1.5 and demo.ai_max_age_ms == 3750
+    assert (demo.trigger_cooldown_default, demo.global_escalation_min_gap,
+            demo.change_cooldown_s, demo.change_max_per_min) == (20.0, 2.0, 8.0, 6)
+    assert (demo.ask_listen_s, demo.ask_expire_s, demo.conversation_cooldown_s,
+            demo.conversation_lifetime_s, demo.conversation_max_questions) == (
+                6.0, 25.0, 0.0, 60.0, 2)
+    assert demo.t1_max_concurrent == 1
+
+
+BOOL_SWITCHES = ("FAST_PATH", "CUE_TRIGGER", "PUBLISH_ON_LANDING",
+                 "MOUTH_BUSY_GUARD", "VOICE_OPEN_SCHEMA")
+
+
+def test_kill_switches_default_on(monkeypatch) -> None:
+    for name in (*BOOL_SWITCHES, "VLM_MAX_IN_FLIGHT", "T0_MAX_IN_FLIGHT"):
+        monkeypatch.delenv(name, raising=False)
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert (s.fast_path, s.cue_trigger, s.vlm_max_in_flight) == (True, True, 2)
+    assert (s.publish_on_landing, s.mouth_busy_guard, s.voice_open_schema) == (True, True, True)
+    assert s.switches_line() == (
+        "FAST_PATH=1 CUE_TRIGGER=1 VLM_MAX_IN_FLIGHT=2 "
+        "PUBLISH_ON_LANDING=1 MOUTH_BUSY_GUARD=1 VOICE_OPEN_SCHEMA=1")
+
+
+def test_kill_switches_turn_off_from_the_environment(monkeypatch) -> None:
+    for name in BOOL_SWITCHES:
+        monkeypatch.setenv(name, "0")
+    monkeypatch.setenv("VLM_MAX_IN_FLIGHT", "1")
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert (s.fast_path, s.cue_trigger, s.vlm_max_in_flight) == (False, False, 1)
+    assert (s.publish_on_landing, s.mouth_busy_guard, s.voice_open_schema) == (False, False, False)
+    assert s.switches_line() == (
+        "FAST_PATH=0 CUE_TRIGGER=0 VLM_MAX_IN_FLIGHT=1 "
+        "PUBLISH_ON_LANDING=0 MOUTH_BUSY_GUARD=0 VOICE_OPEN_SCHEMA=0")
+
+
+def test_a_switch_set_in_dotenv_reaches_settings_without_load_dotenv(tmp_path, monkeypatch) -> None:
+    """MOUTH_BUSY_GUARD and VOICE_OPEN_SCHEMA used to be read from os.environ,
+    so a value in .env only worked if load_dotenv had already run (not in sim
+    mode). As Settings fields they are read from .env directly."""
+
+    for name in BOOL_SWITCHES:
+        monkeypatch.delenv(name, raising=False)
+    env = tmp_path / ".env"
+    env.write_text("MOUTH_BUSY_GUARD=0\nVOICE_OPEN_SCHEMA=off\nPUBLISH_ON_LANDING=no\n")
+    s = Settings(_env_file=env)  # type: ignore[call-arg]
+    assert (s.mouth_busy_guard, s.voice_open_schema, s.publish_on_landing) == (False, False, False)
+
+
+def test_a_typo_in_a_boolean_switch_falls_back_to_on(monkeypatch, caplog) -> None:
+    """FAST_PATH=of used to raise a ValidationError and stop the backend. Like
+    VLM_MAX_IN_FLIGHT, a venue typo now falls back to the rehearsed default."""
+
+    for value, expected in (("of", True), ("nope", True), ("O", True), ("flase", True),
+                            ("off", False), ("No", False), ("FALSE", False), (" 0 ", False),
+                            ("yes", True), ("ON", True), ("1", True)):
+        monkeypatch.setenv("FAST_PATH", value)
+        monkeypatch.setenv("CUE_TRIGGER", value)
+        s = Settings(_env_file=None)  # type: ignore[call-arg]
+        assert (s.fast_path, s.cue_trigger) == (expected, expected), value
+    monkeypatch.setenv("FAST_PATH", "of")
+    monkeypatch.setenv("CUE_TRIGGER", "nope")
+    with caplog.at_level("WARNING"):
+        Settings(_env_file=None)  # type: ignore[call-arg]
+    assert "'of'" in caplog.text and "'nope'" in caplog.text
+
+
+def test_vlm_max_in_flight_alias_and_lenient_parse(monkeypatch, caplog) -> None:
+    """The audit's T0_MAX_IN_FLIGHT spelling works too, and a typo at the venue
+    falls back to a sane value instead of stopping the backend."""
+
+    monkeypatch.delenv("VLM_MAX_IN_FLIGHT", raising=False)
+    monkeypatch.setenv("T0_MAX_IN_FLIGHT", "1")
+    assert Settings(_env_file=None).vlm_max_in_flight == 1  # type: ignore[call-arg]
+    monkeypatch.setenv("T0_MAX_IN_FLIGHT", "5")
+    assert Settings(_env_file=None).vlm_max_in_flight == 2  # type: ignore[call-arg]
+    monkeypatch.setenv("T0_MAX_IN_FLIGHT", "two")
+    with caplog.at_level("WARNING"):
+        assert Settings(_env_file=None).vlm_max_in_flight == 2  # type: ignore[call-arg]
+    assert "VLM_MAX_IN_FLIGHT" in caplog.text
+
+
+def test_the_production_preset_stays_conservative() -> None:
+    production = Timings.production(tick_interval_s=1.5)
+    assert production.global_escalation_min_gap == 60.0
+    assert production.change_cooldown_s == 20.0
+    assert production.conversation_cooldown_s == 60.0
+    assert production.ask_listen_s == 8.0

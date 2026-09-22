@@ -257,9 +257,46 @@ def test_system_prompt_carries_the_learned_lines() -> None:
     assert LEARNED_HEADING in prompt
     assert "- Drinks his coffee black." in prompt
     assert "- Runs on the bayou trail." in prompt
-    # Order: persona, learned, 7-day, objective.
-    assert (prompt.index("persona text") < prompt.index(LEARNED_HEADING)
-            < prompt.index("seven day text") < prompt.index("You are T1"))
+    # Order, most stable first for the prompt cache: objective, persona,
+    # learned, 7-day.
+    assert (prompt.index("You are T1") < prompt.index("persona text")
+            < prompt.index(LEARNED_HEADING) < prompt.index("seven day text"))
+
+
+def test_system_prompt_prefix_is_byte_stable_across_volatile_sections() -> None:
+    """The cache needs >= 1024 identical leading tokens on every call.
+
+    Two prompts that differ in everything that changes during a session --
+    persona, learned lines, the 7-day episode count -- must still share the
+    whole objective as their leading bytes, and that shared prefix must be
+    long enough to clear the minimum even at a pessimistic 5 chars/token.
+    """
+
+    from os.path import commonprefix
+
+    from pipeline.reasoner.prompts import OBJECTIVE
+
+    a = build_system_prompt("persona A", "7d (40 seeded rows, 3 live episodes)", None)
+    b = build_system_prompt(
+        "persona B", "7d (40 seeded rows, 4 live episodes)", ["Drinks it black."]
+    )
+    shared = commonprefix([a, b])
+    assert a.startswith("## Your job\n" + OBJECTIVE)
+    assert len(shared) >= len(OBJECTIVE)
+    assert len(shared) >= 1024 * 5
+    # Every section is still present.
+    for prompt in (a, b):
+        assert "## Who you are working for" in prompt
+        assert "## 7-day summary (trends and baselines)" in prompt
+    assert LEARNED_HEADING in b
+
+
+def test_the_objective_points_down_at_the_persona_it_now_precedes() -> None:
+    from pipeline.reasoner.prompts import OBJECTIVE
+
+    assert "persona above" not in OBJECTIVE
+    assert "lines above" not in OBJECTIVE
+    assert "The persona below" in OBJECTIVE
 
 
 def test_system_prompt_omits_the_section_when_nothing_is_learned() -> None:

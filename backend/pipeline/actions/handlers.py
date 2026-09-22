@@ -34,7 +34,12 @@ if TYPE_CHECKING:  # `pipeline.reasoner` imports this module: keep it one-way.
 
 log = logging.getLogger(__name__)
 
-__all__ = ["ActionHandler"]
+__all__ = ["ActionHandler", "FAST_PATHED"]
+
+#: Outcome on a clerk ``speak``/``ask`` for a moment the gate already handed
+#: straight to the voice agent (``Escalation.handed_off``): the words are being
+#: said, so the clerk's hand-off would only open a second conversation.
+FAST_PATHED = "fast_pathed"
 
 
 def _rid(prefix: str) -> str:
@@ -101,6 +106,15 @@ class ActionHandler:
         esc: Any | None = None,
     ) -> None:
         kind = action.type
+        handed_off = getattr(esc, "handed_off", None) if esc is not None else None
+
+        if kind in ("speak", "ask") and handed_off:
+            # The fast path: this moment went to the voice agent before the
+            # clerk was even called. Record what the clerk wanted, drop it.
+            result.setdefault("outcomes", {})[index] = {"outcome": FAST_PATHED}
+            log.info("%s dropped: fast_pathed to %s (decision %s)", kind,
+                     handed_off, decision_id)
+            return
 
         if kind == "annotate":
             self.db.append_summary_line(

@@ -53,21 +53,27 @@ class LongevityCapture:
         self.ask_listen_s = settings.timings.ask_listen_s
         self.ring = FrameRing(ttl_s=settings.frame_ttl_s)
         self.link = GlassesLink()
-        # The VLM budget follows the tick interval: a call that would return at
-        # 1.2 s is worth keeping when the next frame is not due until 1.5 s.
-        # Person A's default (1.0 s) dates from 1 Hz ticks and cut coverage to
-        # ~70-80% at a ~840 ms median. Override with VLM_BUDGET_S.
-        budget_s = settings.vlm_budget_s or max(0.5, settings.tick_interval_s - 0.1)
+        # The VLM budget is the full tick interval. It used to be interval - 0.1
+        # because a call over budget was cancelled and lost, so the budget had to
+        # leave room for the next call; calls now overlap (two in flight) and an
+        # over-budget call finishes and is used while fresh, so the budget is only
+        # the on-time line in the stats and there is no cliff to stay clear of.
+        # Freshness for a late result is B's own window (Timings.ai_max_age_ms),
+        # so T0 never attaches a block the gate would then ignore as stale.
+        # Override with VLM_BUDGET_S.
+        budget_s = settings.vlm_budget_s or max(0.5, settings.tick_interval_s)
         self.vlm_budget_s = budget_s
-        self.tagger = T0Tagger(build_client(vlm), budget_s=budget_s)
+        # VLM_MAX_IN_FLIGHT=1 is the kill switch back to the serial tagger
+        # (one call at a time); still only the ceiling cancels a call.
+        self.tagger = T0Tagger(
+            build_client(vlm), budget_s=budget_s,
+            max_age_s=settings.timings.ai_max_age_ms / 1000,
+            max_in_flight=settings.vlm_max_in_flight,
+        )
         self.his_bus = T0TickBus()
         self.source = self._build_source(
             source, dir=dir, speed=speed, loop=loop, camera=camera,
             period_s=settings.tick_interval_s,
-        )
-        self.loop = T0Loop(
-            self.source, ring=self.ring, tagger=self.tagger, bus=self.his_bus,
-            flow=flow,
         )
         self.converted = 0
         self.dropped = 0
@@ -84,6 +90,18 @@ class LongevityCapture:
             self.converted += 1
             our_bus.publish(tick)
 
+        # Publish-on-landing: when Gemini lands, T0 re-sends the newest tick
+        # (same tick_id, t and seq) with its ai block attached, through the
+        # same `forward`. Without it a landed result waited in the tagger for
+        # the next frame -- 0.1-1.5 s on the cue path, the most on exactly the
+        # calls that already ran late. The gate and the pipeline's downstream
+        # both replace a re-sent tick rather than counting it twice.
+        # PUBLISH_ON_LANDING=0 is the stage switch back to "a landed result
+        # rides the next frame": no tick_id is ever published twice.
+        self.loop = T0Loop(
+            self.source, ring=self.ring, tagger=self.tagger, bus=self.his_bus,
+            flow=flow, on_ai_update=forward if settings.publish_on_landing else None,
+        )
         self.his_bus.subscribe(forward)
 
     def _build_source(

@@ -185,3 +185,34 @@ def test_a_new_builder_closes_episodes_a_previous_process_left_open(tmp_path):
     assert len(rows) == 1 and not rows[0].open
     assert rows[0].end_t == 1090.0 and rows[0].duration_s == 90.0
     db.close()
+
+
+def test_a_tick_re_sent_with_its_ai_counts_once_and_brings_its_evidence(tmp_path) -> None:
+    """Publish-on-landing: T0 sends a tick blind, then the same tick_id again
+    once Gemini lands. Nearly all ai now arrives that way, so skipping the
+    re-send would starve every episode; counting it would double tick_count."""
+
+    timings = Timings.demo(tick_interval_s=1.0)
+    db = Database(tmp_path / "resend.db").connect().init_schema()
+    builder = EpisodeBuilder(db, timings)
+    try:
+        seq = 0
+        while "screen_block" not in builder.open_episodes():
+            builder.on_tick(tick(seq, screen_present=True))
+            seq += 1
+            assert seq < 60
+        episode = builder.open_episodes()["screen_block"]
+        before = episode.tick_count
+        builder.on_tick(tick(seq))                          # blind
+        builder.on_tick(tick(seq, screen_present=True))     # the same tick, landed
+        assert episode.tick_count == before + 1
+        assert builder._states["screen_block"].last_hit_t == float(seq)
+
+        # Before an episode opens: the landed evidence counts, the tick once.
+        fresh = EpisodeBuilder(db, timings)
+        fresh.on_tick(tick(100))
+        fresh.on_tick(tick(100, caffeine_visible=True))
+        state = fresh._states["caffeine_sighting"]
+        assert list(state.positives) == [100.0] and state.candidate_ticks == 1
+    finally:
+        db.close()

@@ -11,6 +11,8 @@ import base64
 
 from pipeline.models import AiBlock, Escalation, SensorBlock, Tick, TodaySummaryLine
 from pipeline.reasoner.envelope import (
+    CLERK_FRAMES,
+    TODAY_MAX_LINES,
     UNKNOWN,
     build_envelope,
     frame_label,
@@ -258,7 +260,8 @@ def test_envelope_interleaves_a_label_before_every_image_trigger_last():
     image_positions = [
         i for i, item in enumerate(content) if item["type"] == "input_image"
     ]
-    assert len(image_positions) == 4
+    # Two frames by default: one scene-change context frame, then the trigger.
+    assert len(image_positions) == 2
     for i in image_positions:
         assert content[i - 1]["type"] == "input_text", "every image needs a label"
         assert content[i - 1]["text"].startswith("t-")
@@ -394,3 +397,53 @@ def test_envelope_carries_the_last_questions_with_what_became_of_them():
     assert "just water?\" → no answer heard" in block
     assert "Whose bottle is that?\" → not sent (one_open)" in block
     assert "Do not ask any of these again" in block
+
+
+# -- clerk defaults: two frames, capped memory ------------------------------
+
+
+def test_envelope_default_is_one_low_context_frame_then_the_high_trigger():
+    window = stepped_window()
+    content = build_envelope(escalation(window), frames_for(window), [], "7d", "p")[1][
+        "content"
+    ]
+
+    images = [item for item in content if item["type"] == "input_image"]
+    assert CLERK_FRAMES == 2
+    assert [image["detail"] for image in images] == ["low", "high"]
+    assert "(trigger frame)" in content[content.index(images[-1]) - 1]["text"]
+
+
+def test_envelope_still_honours_an_explicit_k():
+    window = stepped_window()
+    content = build_envelope(
+        escalation(window), frames_for(window), [], "7d", "p", k=4
+    )[1]["content"]
+    assert sum(item["type"] == "input_image" for item in content) == 4
+
+
+def test_envelope_today_block_keeps_only_the_most_recent_lines():
+    window = stepped_window()
+    lines = [
+        TodaySummaryLine(t=T0 - 60 * (40 - i), line=f"memory line {i:02d}",
+                         decision_id=f"d_{i:04d}")
+        for i in range(40)
+    ]
+
+    text = build_envelope(
+        escalation(window), frames_for(window), lines, "7d", "p"
+    )[1]["content"][1]["text"]
+
+    assert text.startswith(f"Today so far (last {TODAY_MAX_LINES} of 40 lines):")
+    assert "memory line 24" not in text, "older lines are the ones dropped"
+    assert "memory line 25" in text and "memory line 39" in text
+    assert text.count("memory line") == TODAY_MAX_LINES
+
+
+def test_envelope_today_block_is_unchanged_under_the_cap():
+    window = stepped_window()
+    lines = [TodaySummaryLine(t=T0 - 60, line="one line", decision_id="d_0001")]
+    text = build_envelope(
+        escalation(window), frames_for(window), lines, "7d", "p"
+    )[1]["content"][1]["text"]
+    assert text.startswith("Today so far:\n")

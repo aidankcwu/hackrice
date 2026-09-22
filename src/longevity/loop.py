@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 from .emit import JSONLWriter, SQLiteMirror, TickBus
 from .ring import FrameRing
@@ -73,6 +73,7 @@ class T0Loop:
         jsonl: JSONLWriter | None = None,
         flow: str | None = None,
         log_every: int = 30,
+        on_ai_update: Callable[[dict[str, Any]], None] | None = None,
     ) -> None:
         self._source = source
         self._ring = ring
@@ -85,6 +86,18 @@ class T0Loop:
         self._log_every = log_every
         self.stats = LoopStats()
         self.seq = 0
+        # Publish-on-landing (opt-in). Without it a result that lands 1.1 s into a
+        # 1.5 s tick waits ~0.4 s for the next tick before anyone sees it -- and the
+        # faster Gemini gets, the more of its speed that wait throws away. With it,
+        # the landed result is attached to the newest tick (already emitted, no `ai`
+        # yet) and that tick is re-sent to `on_ai_update` with the same tick_id, t
+        # and seq: tick timestamps keep their meaning, only the `ai` block arrives
+        # early. It is opt-in because a consumer that appends every tick it receives
+        # to a window would count the re-send twice; it must replace by tick_id.
+        self._on_ai_update = on_ai_update
+        self._last_tick: dict[str, Any] | None = None
+        if on_ai_update is not None:
+            tagger.on_result = self._attach_landed
 
     def _warm_up(self) -> None:
         """Touch every numpy/Pillow path once before the clock starts.
@@ -136,8 +149,10 @@ class T0Loop:
 
         # 3. Offer the frame to the VLM and claim anything that has landed. Both of
         #    these return immediately; the network is never on this code path.
+        #    `take(now=...)` drops a result whose frame is past the freshness window,
+        #    so a call that finished late is used only while it is still evidence.
         self._tagger.offer(frame.t, frame.jpeg)
-        claimed = self._tagger.take()
+        claimed = self._tagger.take(now=frame.t)
         ai = ai_block(claimed[0], as_of=claimed[1], now=frame.t) if claimed else None
 
         # 4. Assemble. `device` is already derived by the glasses adapter and is None
@@ -147,6 +162,7 @@ class T0Loop:
         )
 
         # 5. Hand it off. None of these may block or throw upward.
+        self._last_tick = tick
         self._bus.publish(tick)
         if self._mirror is not None:
             self._mirror.write(tick)
@@ -163,3 +179,24 @@ class T0Loop:
             st.slow_ticks += 1
         if self._log_every and st.ticks % self._log_every == 0:
             log.info("T0 %s | %s", st.line(), self._tagger.stats_line())
+
+    def _attach_landed(self) -> None:
+        """A result just landed: attach it to the newest tick if that tick has none.
+
+        Runs synchronously from the tagger task, so it is as bounded as `_on_frame`.
+        The result's frame is never newer than the newest tick (a call only starts on
+        a frame that was already offered), so `age_ms` against that tick is >= 0.
+        """
+        last = self._last_tick
+        if last is None or "ai" in last or self._on_ai_update is None:
+            return
+        claimed = self._tagger.claim(now=last["t"])
+        if claimed is None:
+            return
+        updated = dict(last, ai=ai_block(claimed[0], as_of=claimed[1], now=last["t"]))
+        self._last_tick = updated
+        self.stats.with_ai += 1
+        try:
+            self._on_ai_update(updated)
+        except Exception:  # noqa: BLE001 - a consumer must not kill the tagger
+            log.exception("on_ai_update consumer raised; continuing")

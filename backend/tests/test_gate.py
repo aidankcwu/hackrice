@@ -63,10 +63,11 @@ def test_cooldown_and_global_gap(tmp_path) -> None:
     accepted = []
     triggers = [
         Trigger("a", lambda w: w[-1].seq in {0, 20}, 30, None, "a"),
-        Trigger("b", lambda w: w[-1].seq in {3, 40}, 0, None, "b"),  # 3 s: inside the 5 s global gap
+        Trigger("b", lambda w: w[-1].seq in {1, 40}, 0, None, "b"),  # 1 s: inside the 2 s global gap
     ]
+    assert Timings.demo().global_escalation_min_gap == 2.0
     gate = TriggerGate(triggers, Timings.demo(), db, episodes, lambda e: accepted.append(e) is None, True)
-    for i in (0, 3, 20, 40):
+    for i in (0, 1, 20, 40):
         gate.on_tick(tick(i))
     assert [e.trigger for e in accepted] == ["a", "b"]
     assert gate.suppressed == {"b": 1, "a": 1}
@@ -101,6 +102,10 @@ def test_default_scenario(tmp_path, interval_s: float) -> None:
         "food_in_frame", "screen_sustained", "people_sustained",
         "outdoor_sustained", "caffeine_seen", "alcohol_seen", "change",
     } - {"people_sustained"}, names
+    # The scripted evening is phone_use at home with `screen_present` and no
+    # laptop anywhere: the phone's own screen. That is not "phone at the
+    # laptop" (it used to be, and so was walking on stage checking a phone).
+    assert not [e for e in escalations if e.trigger == "cue"]
     bound_triggers = {
         "food_in_frame", "screen_sustained", "outdoor_sustained",
     }
@@ -200,14 +205,14 @@ def test_change_trigger_scene_activity_object_and_in_hand() -> None:
     trigger = change_trigger(Timings.demo())
     window = [
         tick(0, scene="home", activity="computer_use", objects=["laptop"]),
-        tick(1, scene="outdoor_other", activity="standing", food_present=True,
+        tick(1, scene="outdoor_other", activity="walking", food_present=True,
              caption="holding a snack bar in hand", objects=["snack bar"]),
-        tick(2, scene="outdoor_other", activity="standing", food_present=True,
+        tick(2, scene="outdoor_other", activity="walking", food_present=True,
              caption="holding a snack bar in hand", objects=["snack bar"]),
     ]
     assert trigger.predicate(window)
     reason, extra = trigger.enrich(window)  # type: ignore[misc]
-    for fragment in ("scene home -> outdoor_other", "activity computer_use -> standing",
+    for fragment in ("scene home -> outdoor_other", "activity computer_use -> walking",
                      "new object: snack bar", "food in hand"):
         assert fragment in reason
     assert extra and "Visual transition:" in extra[0]

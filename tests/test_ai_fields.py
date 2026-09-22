@@ -126,3 +126,68 @@ def test_every_named_alcohol_and_caffeine_drink_derives_its_flag():
     for value in ("water", "juice", "milk", "smoothie", "sports_drink"):
         assert coerce({"drink": value})["caffeine_visible"] is False, value
         assert coerce({"drink": value})["alcohol_visible"] is False, value
+
+
+# -- held item, phone in hand, head count ----------------------------------
+
+
+def test_new_hand_and_crowd_fields_are_in_schema_prompt_and_order():
+    from longevity.ai_fields import PEOPLE_COUNT, TRISTATE_BOOL_FIELDS
+
+    props = response_schema()["properties"]
+    assert props["in_hand"] == {"type": "STRING", "nullable": True}
+    assert props["phone_in_hand"] == {"type": "BOOLEAN", "nullable": True}
+    assert props["people_count"] == {"type": "STRING", "enum": PEOPLE_COUNT}
+    assert PEOPLE_COUNT == ["0", "1-2", "3-5", "6+", "unknown"]
+    assert TRISTATE_BOOL_FIELDS == ["phone_in_hand"]
+    # Generated first, so everything after it is conditioned on the held item.
+    assert FIELD_ORDER[:2] == ["in_hand", "phone_in_hand"]
+    assert set(props) == set(FIELD_ORDER)
+    for line in ("in_hand names what is in the wearer's hand",
+                 "phone_in_hand is true", "people_count buckets"):
+        assert sum(line in row for row in PROMPT.splitlines()) == 1
+    assert "rice krispies treat" in PROMPT and "coffee milkshake" in PROMPT
+
+
+def test_every_existing_field_and_enum_value_survived_the_additions():
+    """Downstream (gate, envelope, episodes, B's models) reads all of these."""
+    for name in ("scene", "activity", "food_present", "food_type", "caffeine_visible",
+                 "alcohol_visible", "screen_present", "vegetation_visible",
+                 "people_present", "people_interacting", "direct_sunlight_visible",
+                 "outdoor_visible", "smoking_or_vaping_visible", "medication_visible",
+                 "caption", "objects", "drink", "conf"):
+        assert name in FIELD_ORDER, name
+    assert (len(SCENE), len(ACTIVITY), len(FOOD_TYPE), len(DRINK)) == (30, 24, 36, 16)
+
+
+def test_in_hand_is_bounded_lowercased_and_empty_spellings_are_null():
+    assert coerce({"in_hand": "  Rice Krispies   Treat "})["in_hand"] == "rice krispies treat"
+    assert len(coerce({"in_hand": "x" * 200})["in_hand"]) == 60
+    for empty in (None, "", "none", "None.", "nothing", "N/A", 3, ["cup"]):
+        assert coerce({"in_hand": empty})["in_hand"] is None, empty
+    assert coerce({})["in_hand"] is None
+
+
+def test_phone_in_hand_is_tri_state_and_derived_only_when_unreported():
+    assert coerce({"phone_in_hand": True})["phone_in_hand"] is True
+    assert coerce({"phone_in_hand": False})["phone_in_hand"] is False
+    # Unreported / null / junk is unknown, never a negative observation.
+    for raw in ({}, {"phone_in_hand": None}, {"phone_in_hand": "yes"}):
+        assert coerce(raw)["phone_in_hand"] is None, raw
+    # A phone named in the hand fills the gap ...
+    assert coerce({"in_hand": "iPhone"})["phone_in_hand"] is True
+    assert coerce({"in_hand": "smart-phone"})["phone_in_hand"] is True
+    # ... but never overrules an explicit answer, and other held items stay unknown.
+    assert coerce({"in_hand": "phone", "phone_in_hand": False})["phone_in_hand"] is False
+    assert coerce({"in_hand": "cucumber"})["phone_in_hand"] is None
+
+
+def test_people_count_is_a_closed_menu_with_an_unknown_default():
+    assert coerce({"people_count": "3-5"})["people_count"] == "3-5"
+    assert coerce({"people_count": "6+"})["people_count"] == "6+"
+    for bad in ({}, {"people_count": 4}, {"people_count": "lots"}):
+        assert coerce(bad)["people_count"] == "unknown", bad
+
+
+def test_coerce_output_keys_follow_field_order():
+    assert list(coerce({})) == FIELD_ORDER

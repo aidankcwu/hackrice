@@ -109,6 +109,10 @@ class Pipeline:
         self._last_tick_wall: float | None = None
         self._t1_error_snapshot = (0, 0)
         self._t1_snapshot_at = time.monotonic()
+        #: ``speak_fn.warm`` from the capture branch: opens the ElevenLabs
+        #: connection at start so the first cue of the demo does not also pay
+        #: the TLS handshake. Never raises, spends no credit.
+        self._speech_warm = None
 
     def _session_clock(self) -> float:
         """The tick clock, advanced by real elapsed time when ticks have stalled.
@@ -201,19 +205,30 @@ class Pipeline:
 
         async def downstream() -> None:
             async for tick in downstream_sub:
+                # Publish-on-landing re-sends the newest tick with its ai block
+                # once Gemini lands (capture.bridge): same tick, now with eyes.
+                resend = self.last_tick is not None and tick.tick_id == self.last_tick.tick_id
                 self._last_tick_wall = time.time()
                 self.last_tick = tick
                 self._auto_session_open()
-                self._ai_window.append((tick.t, tick.ai is not None))
+                if self._ai_window and self._ai_window[-1][0] == tick.t:
+                    # A re-send of the newest tick with its ai attached
+                    # (publish-on-landing): one tick, not two, in the coverage.
+                    self._ai_window[-1] = (tick.t, tick.ai is not None)
+                else:
+                    self._ai_window.append((tick.t, tick.ai is not None))
                 while self._ai_window and tick.t - self._ai_window[0][0] > 60.0:
                     self._ai_window.popleft()
-                self.db.insert_tick(tick)
+                self.db.insert_tick(tick)  # INSERT OR REPLACE: the re-send wins
+                # The episode builder knows a re-send by its tick_id and only
+                # adds the new evidence; the gate replaces it in its window.
                 self.episodes.on_tick(tick)
                 self.gate.on_tick(tick)
-                self.questions.expire(tick.t)
+                if not resend:
+                    self.questions.expire(tick.t)
                 self.last_tick = tick
                 self._score_event.set()
-                if (tick.seq + 1) % 30 == 0:
+                if not resend and (tick.seq + 1) % 30 == 0:
                     stats = self.db.stats()
                     log.info("status: ticks=%d decisions=%d ai_coverage=%.2f",
                              stats["tick_count"], stats["decision_count"],
@@ -248,6 +263,12 @@ class Pipeline:
             asyncio.create_task(auto_session_watchdog(), name="pipeline-auto-session"),
         ]
         self.questions.start()
+        # Only on the real glasses: replay and webcam runs (and their tests)
+        # have no phone to speak to and must not reach the network.
+        if self._speech_warm is not None and self.source_name == "glasses":
+            warm = asyncio.create_task(self._speech_warm(), name="speech-warm")
+            self.background_tasks.add(warm)
+            warm.add_done_callback(self.background_tasks.discard)
         if self.capture is not None:
             await self.capture.start()
         else:
@@ -397,6 +418,7 @@ def build_pipeline(settings: Settings, *,
     bus = TickBus()
     capture = None
     sim_source = None
+    speech_warm = None
     if source == "sim":
         frame_store: FrameStore = InMemoryFrameStore(ttl_s=settings.frame_ttl_s)
     else:
@@ -423,6 +445,7 @@ def build_pipeline(settings: Settings, *,
         speak_fn = make_speak_fn(capture.link, settings)
         capture._speech_stats = speak_fn.stats  # type: ignore[attr-defined]
         set_speak_fn(speak_fn)
+        speech_warm = getattr(speak_fn, "warm", None)
     end_day = day_key(time.time())
     if seed_db:
         seed_database(db, end_day=end_day)
@@ -463,6 +486,7 @@ def build_pipeline(settings: Settings, *,
         db, frame_store, make_voice_client(settings, reasoner_mode), speech,
         settings, questions=questions, reasoner=reasoner,
         now_fn=lambda: clock.wall_to_tick(time.time()),
+        mouth_guard=settings.mouth_busy_guard,
     )
     reasoner.conversation = conversation
     questions.conversation = conversation
@@ -480,9 +504,23 @@ def build_pipeline(settings: Settings, *,
         lambda: resting_hr_for(db, end_day),
         db.latest_biometric,
     )
+    # Persona cues skip the clerk on the way to the mouth: the gate hands them
+    # to the voice agent through `fast_path` on the tick they appear, and the
+    # clerk wakes beside it only to write the moment down. Everything else
+    # still goes gate -> clerk -> (maybe) voice agent.
+    # Kill switches (config.Settings): FAST_PATH=0 leaves cues on the clerk
+    # path (fast_path=None is the gate's own "no fast path" branch), and
+    # CUE_TRIGGER=0 removes the one-tick cue trigger altogether. With
+    # FAST_PATH=0 the cue also loses its global-gap exemption: that exemption
+    # is justified only because a cue skips the clerk's queue. One line at
+    # startup says which were in effect, so a rehearsal log is never ambiguous.
+    log.info("switches: %s", settings.switches_line())
     gate = TriggerGate(default_triggers(timings, settings.demo_mode, feed=feed,
-                                       keyword_triggers=settings.keyword_triggers), timings, db,
-                       episodes, reasoner.try_escalate, settings.demo_mode, feed=feed)
+                                       keyword_triggers=settings.keyword_triggers,
+                                       cues=settings.cue_trigger,
+                                       cue_bypass_gap=settings.fast_path), timings, db,
+                       episodes, reasoner.try_escalate, settings.demo_mode, feed=feed,
+                       fast_path=reasoner.fast_path if settings.fast_path else None)
     if source == "sim":
         set_speak_fn(default_speak_fn)
         sim_source = SimSource(scenario or DEFAULT_SCENARIO, frame_store, speed=speed,
@@ -495,9 +533,14 @@ def build_pipeline(settings: Settings, *,
         biometric_start = now
     if seed_db:
         seed_biometric_series(db, biometric_start)
-    return Pipeline(settings=settings, source_name=source,
-                    reasoner_mode=reasoner_mode, speed=speed, db=db,
-                    frame_store=frame_store, bus=bus, scorer=scorer, speech=speech,
-                    reasoner=reasoner, episodes=episodes, gate=gate,
-                    questions=questions, conversation=conversation,
-                    source=sim_source, capture=capture, clock=clock)
+    pipeline = Pipeline(settings=settings, source_name=source,
+                        reasoner_mode=reasoner_mode, speed=speed, db=db,
+                        frame_store=frame_store, bus=bus, scorer=scorer, speech=speech,
+                        reasoner=reasoner, episodes=episodes, gate=gate,
+                        questions=questions, conversation=conversation,
+                        source=sim_source, capture=capture, clock=clock)
+    pipeline._speech_warm = speech_warm
+    # Re-warm on every conversation open as well, on the real glasses only
+    # (replay and webcam runs have no phone and must not reach the network).
+    conversation.speech_warm = speech_warm if source == "glasses" else None
+    return pipeline

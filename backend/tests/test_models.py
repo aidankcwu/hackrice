@@ -16,6 +16,7 @@ from pipeline.models import (
     HEALTHY_FOOD_TYPES,
     HOME_SCENES,
     OUTDOOR_SCENES,
+    PEOPLE_COUNTS,
     SCENES,
     UNHEALTHY_FOOD_TYPES,
     AiBlock,
@@ -251,6 +252,44 @@ def test_enum_menus_mirror_person_as_source_of_truth() -> None:
     assert list(ACTIVITIES) == ai_fields.ACTIVITY
     assert list(FOOD_TYPES) == ai_fields.FOOD_TYPE
     assert list(DRINKS) == ai_fields.DRINK
+    assert list(PEOPLE_COUNTS) == ai_fields.PEOPLE_COUNT
+
+
+def test_every_field_a_emits_is_a_declared_ai_block_field() -> None:
+    """A field A adds must be mirrored here, or it rides along untyped via extra."""
+
+    assert set(ai_fields.FIELD_ORDER) <= set(AiBlock.model_fields)
+
+
+def test_coerced_block_validates_and_round_trips_the_hand_and_crowd_fields() -> None:
+    raw = ai_fields.coerce({
+        "scene": "office", "in_hand": "Rice Krispies Treat",
+        "phone_in_hand": False, "people_count": "6+",
+    })
+    tick = _bare_tick({"as_of": 1.0, "age_ms": 0, **raw})
+    assert tick.held() == "rice krispies treat"
+    assert tick.flag("phone_in_hand") is False
+    assert tick.enum("people_count") == "6+"
+    assert Tick.model_validate_json(tick.model_dump_json()) == tick
+
+
+def test_hand_and_crowd_fields_are_tri_state() -> None:
+    # Not reported (an older producer), or reported as unknown/null: all None.
+    tick = _bare_tick({"as_of": 1.0, "age_ms": 0, "scene": "office"})
+    assert tick.held() is None
+    assert tick.flag("phone_in_hand") is None
+    assert tick.enum("people_count") is None
+    assert "in_hand" not in tick.ai.model_dump()  # absent stays absent downstream
+    unknown = _bare_tick({"as_of": 1.0, "age_ms": 0, "people_count": "unknown",
+                          "in_hand": None, "phone_in_hand": None})
+    assert unknown.enum("people_count") is None and unknown.held() is None
+    # Stale ai is unknown too, even when the hand was reported.
+    stale = _bare_tick({"as_of": 1.0, "age_ms": 9000, "in_hand": "cucumber",
+                        "phone_in_hand": True, "people_count": "3-5"})
+    assert (stale.held(), stale.flag("phone_in_hand"), stale.enum("people_count")) == (
+        None, None, None)
+    with pytest.raises(ValidationError):
+        _bare_tick({"as_of": 1.0, "age_ms": 0, "people_count": "lots"})
 
 
 def test_named_families_mirror_and_stay_inside_their_menus() -> None:

@@ -32,18 +32,38 @@ from ..db import Database, day_key
 from ..frames import FrameStore
 from ..models import Decision, Escalation, PendingQuestion
 from .client import AnswerParser, ReasonerClient
-from .envelope import build_envelope, local_time, select_frames, RECENT_QUESTIONS
+from .envelope import CLERK_FRAMES, build_envelope, local_time, select_frames, RECENT_QUESTIONS
 from .evidence import EvidenceStore
 from .prompts import DEFAULT_PERSONA, LEARNED_MAX, NO_SEVEN_DAY
 from .schema import normalize
 
 log = logging.getLogger(__name__)
 
-__all__ = ["Reasoner", "FRAMES_PER_ESCALATION", "settled_fact"]
+__all__ = ["Reasoner", "FRAMES_PER_ESCALATION", "FAST_PATH_NOTE", "NO_AGENT", "settled_fact"]
 
-#: SPEC §4.3 -- "Four images is the right number; the fifth adds latency and
-#: little information."
-FRAMES_PER_ESCALATION = 4
+#: Frames copied as evidence and sent to the clerk per escalation. SPEC §4.3
+#: said four; the envelope now sends one low-detail change frame and the sharp
+#: trigger frame (``envelope.CLERK_FRAMES``), and the admission copy must match
+#: it exactly -- the envelope re-runs the same selection over the copied refs.
+FRAMES_PER_ESCALATION = CLERK_FRAMES
+
+#: Longest one clerk call may hold the single T1 slot. 9 s, not 15: the client
+#: gives up on a call after 8 s (``reasoner.client``), so past that the slot is
+#: only blocking the next wake-up -- including the silent half of a cue.
+T1_DEADLINE_S = 9.0
+
+#: ``fast_path`` outcome when no voice agent is wired: the gate then sends the
+#: cue down the ordinary clerk path (mirrored as ``gate.NO_AGENT``).
+NO_AGENT = "no_agent"
+
+#: The line the clerk gets on a fast-pathed escalation, after the tick table.
+#: Its speak/ask would be dropped anyway (``fast_pathed``); saying so up front
+#: keeps it from spending output tokens on a hand-off nobody will read.
+FAST_PATH_NOTE = (
+    "Already handed to the voice agent, which is saying it to the wearer now: "
+    "{topic}. Do not speak or ask about this moment; any speak or ask is dropped. "
+    "Annotate it, and log_insight or remember only if it earns one."
+)
 
 
 def _number(value: float) -> str:
@@ -95,7 +115,7 @@ class Reasoner:
         settings: Settings,
         seven_day_summary: Callable[[], str] | None = None,
         persona: str | None = None,
-        t1_deadline_s: float = 15.0,
+        t1_deadline_s: float = T1_DEADLINE_S,
         parser: AnswerParser | None = None,
         questions: Any | None = None,
         conversation: Any | None = None,
@@ -158,6 +178,8 @@ class Reasoner:
         #: for, the next wearer's window.
         self.epoch = 0
         self.skipped_stale = 0
+        #: Persona cues the gate handed straight to the voice agent.
+        self.fast_pathed = 0
 
     # -- admission --------------------------------------------------------
 
@@ -192,18 +214,67 @@ class Reasoner:
         been written and the gate should simply move on.
         """
 
+        return self._admit(esc)
+
+    def fast_path(self, esc: Escalation) -> str:
+        """Hand a persona cue straight to the voice agent, then wake the clerk.
+
+        The clerk used to sit on the spoken path: every cue paid its full call
+        (p50 2.2 s, p90 3.0 s) before the voice agent even started, and the
+        clerk's only contribution to the words was a topic string that T0's
+        caption already supplied. Now the gate's cue goes to the agent here,
+        synchronously, and the clerk runs beside it for what only it does --
+        the memory line, the episode label, insights -- with its own speak/ask
+        dropped as ``fast_pathed`` (``handed_off`` on the escalation).
+
+        Returns the agent's outcome. Anything but ``handed_off:<id>`` means
+        nothing happened here -- no decision row, no clerk call -- and the gate
+        decides what next: a busy mouth is retried on the next fresh tick, no
+        phone sends the cue down the clerk path, a repeat spends the moment.
+        The decision id is taken *before* the hand-off so the conversation row
+        points at the decision that records the moment, and given back if the
+        agent refused.
+        """
+
+        conversation = self._conversation
+        if conversation is None:
+            return NO_AGENT
+        decision_id = self._next_decision_id()
+        try:
+            outcome = conversation.request(
+                esc.cue_topic or esc.reason, esc.cue_mode,
+                decision_id=decision_id, episode_id=esc.episode_id, esc=esc,
+                reason=esc.reason,
+            )
+        except Exception:  # pragma: no cover - request() never raises by contract
+            log.exception("fast-path hand-off failed")
+            outcome = "no_transport"
+        if not outcome.startswith("handed_off:"):
+            self._return_decision_id(decision_id)
+            return outcome
+        esc.handed_off = outcome.split(":", 1)[1]
+        esc.extra_text = [*esc.extra_text,
+                          FAST_PATH_NOTE.format(topic=esc.cue_topic or esc.reason)]
+        self.fast_pathed += 1
+        log.info("%s · %s · fast path -> %s", local_time(esc.t, "%H:%M:%S"),
+                 esc.trigger, esc.handed_off)
+        # The words are already on their way; this only decides whether the
+        # clerk gets to write the moment down (a busy slot drops it, SPEC §5.4).
+        self._admit(esc, decision_id)
+        return outcome
+
+    def _admit(self, esc: Escalation, decision_id: str | None = None) -> bool:
         self.escalations += 1
 
-
         if not self._slot.acquire(blocking=False):
-            self._drop(esc, "t1_busy")
+            self._drop(esc, "t1_busy", decision_id=decision_id)
             self.dropped_busy += 1
             return False
 
         claimed = False
         try:
             self._busy = True
-            decision_id = self._next_decision_id()
+            decision_id = decision_id or self._next_decision_id()
 
             # Copy the evidence NOW: the ring buffer is 90 s wide and the model
             # call has no such guarantee (SPEC §2.5).
@@ -390,6 +461,17 @@ class Reasoner:
             self._next_seq += 1
             return f"d_{n:04d}"
 
+    def _return_decision_id(self, decision_id: str) -> None:
+        """Give back an id nothing was written under, if it was the last one.
+
+        A fast-path cue refused by a busy voice agent retries every tick; burning
+        an id each time would leave the decisions feed full of holes.
+        """
+
+        with self._counter_lock:
+            if decision_id == f"d_{self._next_seq - 1:04d}":
+                self._next_seq -= 1
+
     def _drop(
         self, esc: Escalation, reason: str, decision_id: str | None = None
     ) -> Decision:
@@ -513,11 +595,13 @@ class Reasoner:
                 if 0 <= index < len(decision.actions):
                     decision.actions[index].update(patch)
 
-            if outcome.get("spoke"):
+            if outcome.get("spoke") or esc.handed_off:
+                # A fast-pathed moment spoke through the voice agent before the
+                # clerk even started; the decision that records it says so.
                 decision.spoke = True
                 self.spoke_count += 1
 
-            if outcomes or outcome.get("spoke"):
+            if outcomes or decision.spoke:
                 self.db.insert_decision(decision)
 
             self._remember(decision_id, esc.t, norm)
@@ -717,6 +801,7 @@ class Reasoner:
             "answers_completed": self.answers_completed,
             "answers_dropped": self.answers_dropped,
             "remembered": self.remembered,
+            "fast_pathed": self.fast_pathed,
             "frames_copied": self.evidence.copied,
             "frames_missing": self.evidence.missing,
             "model": getattr(self.client, "model", ""),
