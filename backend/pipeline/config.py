@@ -24,7 +24,8 @@ from typing import Annotated, Any, Literal
 from pydantic import AliasChoices, BeforeValidator, Field
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
-__all__ = ["DEFAULT_KEYWORD_TRIGGERS", "Timings", "Settings", "get_settings"]
+__all__ = ["DEFAULT_AUTOPILOT_ACTS", "DEFAULT_KEYWORD_TRIGGERS", "Timings", "Settings",
+           "get_settings"]
 
 log = logging.getLogger(__name__)
 
@@ -100,6 +101,45 @@ def _parse_hhmm(value: Any) -> str:
         pass
     log.warning("Invalid WIND_DOWN_HHMM %r; using %s", value, _DEFAULT_WIND_DOWN)
     return _DEFAULT_WIND_DOWN
+
+
+#: Act kinds the autopilot may send when AUTOPILOT_ACTS is unset.
+DEFAULT_AUTOPILOT_ACTS: tuple[str, ...] = ("calendar_block", "screen_shield")
+
+
+def _csv_items(value: Any) -> list[str]:
+    """``"a, b,,c"`` or ``["a", "b"]`` -> stripped, non-empty items."""
+
+    if value is None:
+        return []
+    parts = value.split(",") if isinstance(value, str) else list(value)
+    return [str(part).strip() for part in parts if str(part).strip()]
+
+
+def _parse_autopilot_acts(value: Any) -> tuple[str, ...]:
+    """AUTOPILOT_ACTS: comma-separated act kinds. Empty = autopilot off."""
+
+    return tuple(dict.fromkeys(item.lower() for item in _csv_items(value)))
+
+
+def _parse_quiet_days(value: Any) -> tuple[int, ...]:
+    """AUTOPILOT_QUIET_DAYS: comma-separated weekdays, 0 = Monday .. 6 = Sunday.
+
+    Leniently, like the switches: a token that is not 0-6 is dropped with a
+    warning, never a startup failure.
+    """
+
+    days: set[int] = set()
+    for item in _csv_items(value):
+        try:
+            day = int(item)
+        except ValueError:
+            day = -1
+        if 0 <= day <= 6:
+            days.add(day)
+        else:
+            log.warning("Invalid AUTOPILOT_QUIET_DAYS entry %r; ignoring it", item)
+    return tuple(sorted(days))
 
 
 @dataclass(frozen=True, slots=True)
@@ -447,6 +487,17 @@ class Settings(BaseSettings):
     outdoor_target_min: int = 30
     #: WIND_DOWN_HHMM: local time the phone's screen shield goes up until 07:00.
     wind_down_hhmm: Annotated[str, BeforeValidator(_parse_hhmm)] = _DEFAULT_WIND_DOWN
+    #: AUTOPILOT_ACTS: comma-separated act kinds allowed to reach the phone
+    #: (``calendar_block``, ``screen_shield``). Empty string = autopilot off. Any
+    #: other kind is held back as ``vetoed:disabled``.
+    autopilot_acts: Annotated[
+        tuple[str, ...], NoDecode, BeforeValidator(_parse_autopilot_acts)
+    ] = DEFAULT_AUTOPILOT_ACTS
+    #: AUTOPILOT_QUIET_DAYS: comma-separated weekdays (0 = Monday .. 6 = Sunday)
+    #: on which no act fires (``vetoed:quiet_day``). Default: none.
+    autopilot_quiet_days: Annotated[
+        tuple[int, ...], NoDecode, BeforeValidator(_parse_quiet_days)
+    ] = ()
 
     def switches_line(self) -> str:
         """The effective kill-switch values, for one startup log line."""

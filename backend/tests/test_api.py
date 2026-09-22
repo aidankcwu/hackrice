@@ -417,7 +417,10 @@ async def test_health_auto_export_and_whoop_adapter_routes(tmp_path):
             "wrist_temp_dev", whoop_t - 2, whoop_t + 2)] == [0.4]
         resting = [r for r in pipeline.db.list_seeded(day_key(whoop_t), day_key(whoop_t))
                    if r.metric == "resting_hr"]
-        assert resting and resting[0].value == 57.0 and resting[0].source == "whoop"
+        # A real WHOOP night is whoop_live, never the demo seed's "whoop".
+        assert resting and resting[0].value == 57.0 and resting[0].source == "whoop_live"
+        from pipeline.scoring.scorer import row_provenance
+        assert row_provenance(resting[0].source) == "live"
     await pipeline.stop()
 
 

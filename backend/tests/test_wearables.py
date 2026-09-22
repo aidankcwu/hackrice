@@ -6,10 +6,13 @@ from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 
-from pipeline.db import Database
-from pipeline.scoring.scorer import row_provenance
+from pipeline.db import Database, day_key
+from pipeline.models import SeededRow
+from pipeline.scoring.scorer import LIVE_DAILY_SOURCES, Scorer, row_provenance
+from pipeline.seed.generate import seed_database
 from pipeline.wearables import DEVICES, LIVE_METRICS, Sample
 from pipeline.wearables.adapters import (
+    WHOOP_LIVE_SOURCE,
     WHOOP_SKIN_TEMP_BASELINE_C,
     health_auto_export_to_samples,
     healthkit_seeded_rows,
@@ -182,7 +185,31 @@ def test_whoop_recovery_maps_hrv_spo2_and_a_temperature_deviation() -> None:
 
     rows = whoop_seeded_rows(WHOOP_RECOVERY)
     assert len(rows) == 1
-    assert (rows[0].metric, rows[0].value, rows[0].source) == ("resting_hr", 57.0, "whoop")
+    assert (rows[0].metric, rows[0].value, rows[0].source) == ("resting_hr", 57.0, "whoop_live")
+
+
+def test_a_whoop_push_reads_live_and_the_demo_seed_still_reads_seeded(db) -> None:
+    day = day_key(NOW)
+    seed_database(db, end_day=day)
+    seeded = {r.metric: r for r in db.list_seeded(day, day)}
+    # SPEC §6 demo seed rows keep "whoop" and stay seeded, in the scorer too.
+    assert seeded["resting_hr"].source == seeded["sleep_hours"].source == "whoop"
+    assert row_provenance("whoop") == "seeded"
+    sleep = next(s for s in Scorer(db).score_day(day) if s.metric == "sleep_hours")
+    assert sleep.source == "seeded"
+
+    # A real WHOOP push replaces the night's resting HR under whoop_live.
+    assert db.insert_seeded_rows(whoop_seeded_rows(WHOOP_RECOVERY)) == 1
+    resting = next(r for r in db.list_seeded(day, day) if r.metric == "resting_hr")
+    assert (resting.value, resting.source) == (57.0, WHOOP_LIVE_SOURCE)
+    assert WHOOP_LIVE_SOURCE == "whoop_live" and WHOOP_LIVE_SOURCE in LIVE_DAILY_SOURCES
+    assert row_provenance(resting.source) == "live"
+
+    # And the §8 scorer labels a whoop_live daily row live, naming the device.
+    db.insert_seeded_rows([SeededRow(day=day, metric="sleep_hours", value=7.4,
+                                     unit="hours", source=WHOOP_LIVE_SOURCE)])
+    sleep = next(s for s in Scorer(db).score_day(day) if s.metric == "sleep_hours")
+    assert sleep.source == "live" and "live from whoop_live" in (sleep.note or "")
 
 
 def test_whoop_cycle_sleep_and_workout() -> None:

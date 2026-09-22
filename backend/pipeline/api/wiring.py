@@ -10,7 +10,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Literal
 
-from ..actions.autopilot import Autopilot
+from ..actions.autopilot import Autopilot, config_act_veto
 from ..actions.handlers import make_act_sender
 from ..actions.speech import SpeechLimiter, default_speak_fn, set_speak_fn, spoken
 from ..actions.questions import QuestionManager
@@ -512,6 +512,9 @@ def build_pipeline(settings: Settings, *,
         # `act` goes down the socket speech uses; `act_result` comes back up it.
         reasoner.handler.send_act = make_act_sender(capture.link)
         setattr(capture.link, "on_act_result", reasoner.handler.on_act_result)
+    # What may act is config (AUTOPILOT_ACTS / AUTOPILOT_QUIET_DAYS), not persona.
+    reasoner.handler.act_veto = config_act_veto(settings.autopilot_acts,
+                                                settings.autopilot_quiet_days)
     autopilot = Autopilot(db, reasoner.handler,
                           outdoor_target_min=settings.outdoor_target_min,
                           wind_down_hhmm=settings.wind_down_hhmm,

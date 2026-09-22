@@ -14,22 +14,30 @@ Only a crossing the autopilot saw counts: a backend started at 16:05 does not
 block a walk for a check it never ran. Each firing is one decision row with a
 single ``act`` action; :meth:`ActionHandler.on_act_result` flips it to
 ``acted`` or ``act_failed`` when the phone answers.
+
+What may act is configuration, not persona: :func:`config_act_veto` holds back
+a kind missing from ``AUTOPILOT_ACTS`` (``vetoed:disabled``) and every act on
+an ``AUTOPILOT_QUIET_DAYS`` weekday (``vetoed:quiet_day``). The persona text
+only reaches the LLM prompt; it never vetoes an act.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from datetime import date, datetime, time
 from math import acos, asin, cos, degrees, radians, sin
+from typing import Any
 from uuid import uuid4
 
 from ..db import Database, day_key
 from ..models import Decision
-from .handlers import ActionHandler
+from .handlers import ActionHandler, ActVetoFn
 
 log = logging.getLogger(__name__)
 
-__all__ = ["Autopilot", "OUTDOOR_CHECK_HHMM", "SHIELD_UNTIL", "WALK_MINUTES", "sunset_t"]
+__all__ = ["Autopilot", "OUTDOOR_CHECK_HHMM", "SHIELD_UNTIL", "WALK_MINUTES",
+           "config_act_veto", "sunset_t"]
 
 #: When the outdoor minutes are checked, local time.
 OUTDOOR_CHECK_HHMM = "16:00"
@@ -72,6 +80,27 @@ def sunset_t(day: str, lat: float | None, lon: float | None) -> float:
              / (cos(radians(lat)) * cos(dec)))
     w = degrees(acos(min(1.0, max(-1.0, cos_w))))
     return (transit + w / 360.0 - 2440587.5) * 86400.0
+
+
+def config_act_veto(acts: Iterable[str], quiet_days: Iterable[int]) -> ActVetoFn:
+    """``ActionHandler.act_veto`` from ``AUTOPILOT_ACTS`` / ``AUTOPILOT_QUIET_DAYS``.
+
+    ``disabled`` for a kind not in ``acts`` (an empty ``acts`` is autopilot
+    off), else ``quiet_day`` when the local day of ``t`` is a quiet weekday
+    (0 = Monday .. 6 = Sunday), else ``None``: the act goes out.
+    """
+
+    enabled = frozenset(acts)
+    quiet = frozenset(quiet_days)
+
+    def veto(kind: str, args: dict[str, Any], t: float) -> str | None:
+        if kind not in enabled:
+            return "disabled"
+        if quiet and date.fromisoformat(day_key(t)).weekday() in quiet:
+            return "quiet_day"
+        return None
+
+    return veto
 
 
 class Autopilot:

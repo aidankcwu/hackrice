@@ -363,7 +363,10 @@ undone`, with `seen_t` and `evidence_ref`. No row reads as `waiting`.
 `GET /api/evidence/<evidence_ref>`. `done` and `undo` set today's status to
 `done` / `undone` and keep any `seen_t` / `evidence_ref` already recorded.
 `seen` and `missed` are written by the adherence matcher (PLAN 2.2). "Today" is
-the local day on the tick clock, like `/api/episodes`.
+the local day on the tick clock, like `/api/episodes`. A dose window that closes
+unsighted says "Your <name> window just closed. Take it now, or mark it skipped
+in Brian." exactly once per close. That line skips the speech limiter's gap and
+hourly cap but still stamps it, so the next ordinary line waits its gap.
 
 `GET /api/protocol/today`:
 
@@ -382,6 +385,31 @@ days including today, oldest first. Columns:
 A day gets a row when a status was recorded for it, or when the item was
 scheduled that day and already existed. An item added today has no two weeks
 of `waiting` behind it. Empty cells mean null.
+
+
+## Autopilot acts (`act` / `act_result`, PLAN 4.1)
+
+The backend sends `act {id, kind, args}` down the glasses socket
+(`src/longevity/wire.py`); the phone answers `act_result {id, ok, detail}`. Two
+rules in `backend/pipeline/actions/autopilot.py` fire at most once per local day:
+`calendar_block {minutes: 20, earliest, latest}` at 16:00 when outdoor minutes
+are under `OUTDOOR_TARGET_MIN` (default 30), and `screen_shield {until: "07:00"}`
+at `WIND_DOWN_HHMM` (default 21:30). Each firing is a decision (`trigger`
+`autopilot:outdoor` / `autopilot:wind_down`) with one `act` action whose
+`outcome` is `sent`, then `acted` or `act_failed` (one spoken line) when the
+result arrives, or `vetoed:<reason>`.
+
+What may act is set by two env vars (`backend/.env.example`), checked before
+every send:
+
+| Env var | Default | Effect |
+|---|---|---|
+| `AUTOPILOT_ACTS` | `calendar_block,screen_shield` | Comma-separated kinds allowed to reach the phone. Any other kind is `vetoed:disabled`. **Empty string = autopilot off.** |
+| `AUTOPILOT_QUIET_DAYS` | empty | Comma-separated weekdays, 0 = Monday … 6 = Sunday, on which no act fires (`vetoed:quiet_day`). An entry outside 0–6 is ignored with a warning. |
+
+A vetoed act is recorded on its decision and nothing else happens: no `act`
+message, no speech. **Persona text does not veto acts.** The persona only
+reaches the LLM prompt; these two env vars are the only veto.
 
 
 ## Feed line format (dashboard)

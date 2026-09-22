@@ -40,7 +40,7 @@ if TYPE_CHECKING:  # `pipeline.reasoner` imports this module: keep it one-way.
 log = logging.getLogger(__name__)
 
 __all__ = [
-    "ActionHandler", "FAST_PATHED", "ACT_SENT", "ACTED", "ACT_FAILED",
+    "ActionHandler", "ActVetoFn", "FAST_PATHED", "ACT_SENT", "ACTED", "ACT_FAILED",
     "ACT_FAILED_LINES", "make_act_sender",
 ]
 
@@ -66,9 +66,10 @@ ACT_FAILED_LINES: dict[str, str] = {
 #: ``send_act`` signature: one ``wire.act_message`` in, ``True`` when a send was
 #: scheduled (not that the phone did it -- that is ``act_result``).
 ActSendFn = Callable[[str], bool]
-#: ``act_veto`` signature: ``(kind, args, t)`` -> a reason to hold the act back,
-#: or ``None`` to let it through. Consulted before every send, like the gates in
-#: front of ``speak``.
+#: ``act_veto`` signature: ``(kind, args, t)`` -> a reason to hold the act back
+#: (recorded as ``vetoed:<reason>``; nothing sent, nothing said), or ``None`` to
+#: let it through. Consulted before every send, like the gates in front of
+#: ``speak``.
 ActVetoFn = Callable[[str, dict[str, Any], float], "str | None"]
 
 
@@ -138,8 +139,11 @@ class ActionHandler:
         #: Where ``act`` messages go. The wiring points it at the ingest
         #: socket (:func:`make_act_sender`); without a phone it logs.
         self.send_act: ActSendFn = _console_send
-        #: Persona veto in front of every act, the way the speech gates sit in
-        #: front of ``speak``. ``None``: nothing vetoes.
+        #: Veto in front of every act, the way the speech gates sit in front of
+        #: ``speak``. The wiring installs ``autopilot.config_act_veto`` from
+        #: ``AUTOPILOT_ACTS`` / ``AUTOPILOT_QUIET_DAYS``; persona text never
+        #: vetoes an act (it only reaches the LLM prompt). ``None``: nothing
+        #: vetoes.
         self.act_veto: ActVetoFn | None = None
         #: Acts sent and not yet answered: act id -> (decision id, decision t,
         #: kind). Popped by the first ``act_result``, so a repeat is ignored.
