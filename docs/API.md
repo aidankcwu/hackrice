@@ -80,6 +80,14 @@ The `scene` / `activity` / `food_type` / `drink` menus live in `src/longevity/ai
 | `PUT /api/persona` | `{text}` → the same shape; empty `text` clears the override back to the default |
 | `GET /api/profile?limit=50` | learned lines `[{id, t, line, source_decision_id}]`, oldest first |
 | `DELETE /api/profile/{id}` | retire one learned line → `{id, removed}`; `404` if it is not active |
+| `GET /api/protocol` | protocol items `[{id, name, kind, window_start, window_end, days, created_t}]`, earliest window first (see "The protocol") |
+| `POST /api/protocol` | `{name, kind, window_start, window_end, days?}` → `201` the new item; `400` on a bad field |
+| `PUT /api/protocol/{id}` | any of `{name, kind, window_start, window_end, days}` → the updated item; `404` / `400` |
+| `DELETE /api/protocol/{id}` | remove an item and its status history → `{id, removed}`; `404` if it does not exist |
+| `GET /api/protocol/today` | `{day, items: [item + {status, seen_t, evidence_ref, updated_t}]}` — only items scheduled today |
+| `POST /api/protocol/{id}/done` | mark today's item `done` → the today row plus `day`; `404` if no such item |
+| `POST /api/protocol/{id}/undo` | mark today's item `undone` → the today row plus `day`; `404` if no such item |
+| `GET /api/protocol/export.csv?days=14` | `text/csv` attachment, one row per item per day, oldest first; `422` outside 1–366 |
 | `GET /api/questions?limit=20` | `pending_questions` rows, newest first (docs/ASK_DESIGN.md §5) |
 | `POST /api/answer` | `{question_id?, text, heard?=true}` → `{question_id, accepted}`; answers by hand what the phone would have transcribed |
 | `POST /api/ask` | `{text, answer_kind?="yes_no", fills?="confirmed", episode_id?}` → `{question_id, suppressed_reason}`; demo/debug ask |
@@ -319,6 +327,61 @@ first decision on the episode (the last line of an episode, "still at the
 desk", is a far worse name for it than the first), and carried through
 `upsert_episode`, which the episode builder calls on every tick. `null` until
 T1 names it.
+
+
+## The protocol (`/api/protocol`, PLAN 2.1)
+
+What the wearer means to do each day, and when. Tables `protocol_items` and
+`protocol_status` in `backend/pipeline/db.py`.
+
+```json
+{"id": "pi_3f2a91c4", "name": "Morning dose", "kind": "dose",
+ "window_start": "07:00", "window_end": "10:00",
+ "days": [0, 1, 2, 3, 4, 5, 6], "created_t": 1757700842.0}
+```
+
+- `kind` is `dose | meal | winddown | walk`.
+- `window_start` / `window_end` are local `"HH:MM"` on the same day, start
+  before end.
+- `days` are weekdays, **0 = Monday** (Python `date.weekday()`), sorted and
+  de-duplicated. Omitted on create means every day.
+- `name` is trimmed and must not be empty. A wrong type is a `400`, never
+  coerced.
+- `PUT` merges the fields it is given onto the item. `id` and `created_t`
+  never change.
+
+**Seed.** The first time a database gets the `protocol_items` table it is
+seeded with five items, every day: "Morning dose" 07:00–10:00 (dose),
+"Evening dose" 19:00–22:00 (dose), "Lunch window" 11:30–14:00 (meal),
+"Wind‑down" 21:30–23:00 (winddown), "Daylight walk" 07:00–16:00 (walk). The
+seed is written once. A wearer who deletes every item gets an empty list after
+a restart, not the seed again.
+
+**Status.** One row per item per local day, `waiting | seen | done | missed |
+undone`, with `seen_t` and `evidence_ref`. No row reads as `waiting`.
+`evidence_ref` is `<decision_id>/<frame_ref>`, so the thumbnail is
+`GET /api/evidence/<evidence_ref>`. `done` and `undo` set today's status to
+`done` / `undone` and keep any `seen_t` / `evidence_ref` already recorded.
+`seen` and `missed` are written by the adherence matcher (PLAN 2.2). "Today" is
+the local day on the tick clock, like `/api/episodes`.
+
+`GET /api/protocol/today`:
+
+```json
+{"day": "2026-09-22",
+ "items": [{"id": "pi_3f2a91c4", "name": "Morning dose", "kind": "dose",
+            "window_start": "07:00", "window_end": "10:00",
+            "days": [0, 1, 2, 3, 4, 5, 6], "created_t": 1757700842.0,
+            "status": "seen", "seen_t": 1757745300.0,
+            "evidence_ref": "d_0007/f_00001742", "updated_t": 1757745300.0}]}
+```
+
+**CSV.** `GET /api/protocol/export.csv?days=14` covers the last `days` local
+days including today, oldest first. Columns:
+`day,item_id,name,kind,window_start,window_end,status,seen_t,evidence_ref,updated_t`.
+A day gets a row when a status was recorded for it, or when the item was
+scheduled that day and already existed. An item added today has no two weeks
+of `waiting` behind it. Empty cells mean null.
 
 
 ## Feed line format (dashboard)
