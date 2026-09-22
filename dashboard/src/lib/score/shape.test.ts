@@ -424,7 +424,7 @@ describe("shapeDashboard", () => {
     const data = shapeDashboard({ payloads, days, person: PERSON, source: SOURCE, engineMs: 412 });
     expect(data.generated_at).toBe(at(18, 30));
     expect(data.engine_ms).toBe(412);
-    expect(data.source).toBe(SOURCE);
+    expect(data.source).toEqual({ ...SOURCE, glasses_coverage: { today: false, week: false } });
     expect(data.person).toBe(PERSON);
     expect(data).toMatchObject({ overall: 71, hours_today: 0.64, hours_ci: [0.4, 0.88], years_delta: 1.2, years_ci: [0.8, 1.6] });
     expect(data.layers).toHaveLength(8);
@@ -442,6 +442,21 @@ describe("shapeDashboard", () => {
     const days = [day({ date: "2026-09-11", nowT: at(10) }), day({ isToday: true, nowT: at(18, 30) })];
     const data = shapeDashboard({ payloads: [payload(), payload()], days, person: PERSON, source: SOURCE, engineMs: 1 });
     expect(data.forecast.bedtime).toBe("—");
+  });
+
+  it("marks glasses coverage from the day inputs' episodes, today and across the week", () => {
+    const walk = { id: "e1", kind: "outdoor_block", start_t: at(9), end_t: at(9, 30), duration_s: 1800, dominant: {}, open: false };
+    const shaped = (earlier: DayInputs["episodes"], today: DayInputs["episodes"]) =>
+      shapeDashboard({
+        payloads: [payload(), payload()],
+        days: [day({ date: "2026-09-11", episodes: earlier }), day({ isToday: true, episodes: today })],
+        person: PERSON,
+        source: SOURCE,
+        engineMs: 1,
+      }).source.glasses_coverage;
+    expect(shaped([], [])).toEqual({ today: false, week: false });
+    expect(shaped([walk], [])).toEqual({ today: false, week: true });
+    expect(shaped([], [walk])).toEqual({ today: true, week: true });
   });
 
   it("refuses an empty run rather than inventing a day", () => {

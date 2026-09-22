@@ -147,8 +147,6 @@ export function Tonight({ f, observations, profile, baselineSleepH }: TonightPro
       })();
     }, DEBOUNCE_MS);
     return () => clearTimeout(timer);
-    // `base` is derived from `observations`, which is in the list.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [touched, values, profile, baselineSleepH, observations]);
 
   const shown = what ?? f;

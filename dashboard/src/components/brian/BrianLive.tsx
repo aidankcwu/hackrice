@@ -29,7 +29,8 @@ async function fetchScore(goal: Goal): Promise<ApiResult<DashboardData>> {
   if (!res.ok) throw new Error(`/api/score ${res.status}`);
   const json: unknown = await res.json();
   if (!looksLikeDashboard(json)) throw new Error("/api/score: unexpected payload");
-  return { data: json, mock: json.source.mode === "mock" };
+  // `/api/score` has no fixture behind it (loader.ts): every payload is live.
+  return { data: json, mock: false };
 }
 
 export function BrianLive({ initial, intervalMs = 5000 }: BrianLiveProps) {
@@ -71,14 +72,5 @@ export function BrianLive({ initial, intervalMs = 5000 }: BrianLiveProps) {
     };
   }, [goal, refresh]);
 
-  const onGoalChange = useCallback((next: Goal) => {
-    setGoal(next);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, next);
-    } catch {
-      // Not persisting is fine; the choice still applies for this visit.
-    }
-  }, []);
-
-  return <BrianDashboard data={poll.data ?? initial} goal={goal} onGoalChange={onGoalChange} updating={updating} />;
+  return <BrianDashboard data={poll.data ?? initial} updating={updating} />;
 }

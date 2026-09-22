@@ -1,5 +1,5 @@
 import { mockBiometrics, mockBiometricsMulti, mockConversations, mockDecisions, mockEpisodes, mockHealthspan, mockPending, mockPersona, mockProfileLines, mockQuestions, mockScores, mockSeeded, mockSeededRows, mockStatus, mockSummary, mockTicks, mockWearablesStatus } from "./mock";
-import type { AnswerResult, AskResult, Biometrics, BiometricsMulti, Conversation, Decision, Episode, ForgetResult, Healthspan, Insight, MetricScore, OpenConversationResult, PendingCheck, Persona, ProfileLine, ProtocolDayRow, ProtocolToday, Question, Recap, RecapSummary, Scores, SeededDay, SeededMetricRow, Session, Status, Tick, TodaySummary, WearablesStatus } from "./types";
+import type { AnswerResult, AskResult, Biometrics, BiometricsMulti, Conversation, Decision, Episode, ForgetResult, Healthspan, Insight, MetricScore, OpenConversationResult, PendingCheck, Persona, ProfileLine, ProtocolDayRow, ProtocolToday, Question, Recap, RecapSummary, Scores, SeededDay, SeededMetricRow, Session, Status, Tick, WearablesStatus } from "./types";
 import { parseProtocolCsv } from "./protocol";
 import { authInit, withToken } from "./score/backend";
 

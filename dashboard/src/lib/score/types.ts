@@ -11,7 +11,7 @@
  *
  * Field names on the engine side mirror the Python exactly (snake_case).
  */
-import type { Provenance } from "./provenance";
+import type { GlassesCoverage, Provenance } from "./provenance";
 
 // ---------------------------------------------------------------------------
 // Engine request
@@ -457,7 +457,8 @@ export interface CurrenciesView {
 }
 
 export interface DataSource {
-  mode: "live" | "mock";
+  /** Always "live": the loader has no offline fixture (loader.ts), so there is no other mode. */
+  mode: "live";
   api_base: string;
   /** The day being scored, ISO. */
   day: string;
@@ -467,6 +468,8 @@ export interface DataSource {
   last_tick_t?: number;
   /** Today's `seeded` rows by metric -> the `source` that wrote each (`fitbit`, `whoop`, `phone`...). */
   wearable_sources?: Record<string, string>;
+  /** Whether the glasses filed any episode today / this week; `shapeDashboard` sets it from the day inputs. */
+  glasses_coverage?: GlassesCoverage;
 }
 
 /**
@@ -490,7 +493,8 @@ export interface WearableStat {
 export interface DashboardData {
   /** Unix seconds when this payload was built. */
   generated_at: number;
-  source: DataSource;
+  /** Always carries `glasses_coverage`: a glasses zero is gated on it (provenance.ts `glassesGap`). */
+  source: DataSource & { glasses_coverage: GlassesCoverage };
   person: Person;
   overall: number;
   hours_today: number;

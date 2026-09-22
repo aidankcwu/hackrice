@@ -1,8 +1,8 @@
 "use client";
 import { T } from "@/lib/tokens";
-import { instrumentProvenance } from "@/lib/score/instruments";
+import { instrumentSource } from "@/lib/score/instruments";
 import { minutesOfInstant } from "@/lib/score/narrative";
-import type { DashboardData, Goal } from "@/lib/score/types";
+import type { DashboardData } from "@/lib/score/types";
 import { BrianHeader } from "./Header";
 import { BryanSaid } from "./BryanSaid";
 import { Effects } from "./Effects";
@@ -21,9 +21,6 @@ import { PersonaPanel } from "@/components/PersonaPanel";
 
 export interface BrianDashboardProps {
   data: DashboardData;
-  goal: Goal;
-  /** Absent on pages that cannot re-score live (the select then navigates with `?goal=`). */
-  onGoalChange?: (goal: Goal) => void;
   /** True while a fresh payload is being fetched behind the one on screen. */
   updating?: boolean;
 }
@@ -38,7 +35,7 @@ export interface BrianDashboardProps {
   evidence strip — a real frame from the glasses pinned to what it earned or
   cost tonight. Everything drawn here comes from `data`.
 */
-export function BrianDashboard({ data, goal, onGoalChange, updating = false }: BrianDashboardProps) {
+export function BrianDashboard({ data, updating = false }: BrianDashboardProps) {
   return (
     <div className="brian min-h-dvh bg-bg text-text">
       <BrianHeader person={data.person} source={data.source} />
@@ -58,18 +55,20 @@ export function BrianDashboard({ data, goal, onGoalChange, updating = false }: B
             factor the glasses measured is Glasses, a device row is that device,
             a seed row is Seeded, and one the engine did not measure is
             `missing`, so its tile says so rather than showing a number nothing
-            produced. `trailing` stays empty until the days=7 window is wired —
-            the tiles read that as "no sparkline", never a flat line at zero. */}
+            produced. The clock reads a leading indicator, not a factor, so its
+            chip comes from whether `observations` carries the number. On a day
+            with no glasses episode, every glasses value (the engine's default
+            zeros included) is unmeasured, "no glasses episodes today". */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
           <Today d={data} updating={updating} />
           <Instruments
-            source={{
+            source={instrumentSource({
+              factors: data.factors,
+              source: data.source,
               observations: data.observations,
-              provenance: instrumentProvenance(data.factors, data.source),
               forecast: data.forecast,
               bedtime_hh: data.person.bedtime_hh,
-              trailing: [],
-            }}
+            })}
           />
         </div>
         {/* Full width: the panel no longer carries a column span (design-system

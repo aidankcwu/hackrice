@@ -351,9 +351,16 @@ export function shapeDashboard({ payloads, days, person, source, engineMs }: Sha
   const week = weekDays(payloads, days, person.bedtime_hh);
   // `person.bedtime_hh` is the engine's 23:00 default when no night was recorded.
   const bedtimeMeasured = days.some((d) => finiteNumber(d.seeded.bed_time) !== undefined);
+  // The engine reports 0 bright minutes, 0 drinks and 0 screen minutes on a day
+  // the glasses never ran. Any episode at all (of any kind) is what makes such a
+  // zero a sighting — the backend adapter's `covered` rule (healthspan.py).
+  const glasses_coverage = {
+    today: todayInputs.episodes.length > 0,
+    week: days.some((d) => d.episodes.length > 0),
+  };
   return {
     generated_at: todayInputs.nowT,
-    source,
+    source: { ...source, glasses_coverage },
     person,
     overall: today.overall,
     hours_today: today.hours_today,
