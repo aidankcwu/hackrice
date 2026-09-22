@@ -84,6 +84,23 @@ def _parse_switch(value: Any) -> bool:
 #: A bool field that parses like a stage switch (see ``_parse_switch``).
 Switch = Annotated[bool, BeforeValidator(_parse_switch)]
 
+_DEFAULT_WIND_DOWN = "21:30"
+
+
+def _parse_hhmm(value: Any) -> str:
+    """Local ``HH:MM``, leniently: a typo falls back to 21:30 with a warning,
+    same rule as the stage switches, never a startup failure."""
+
+    raw = "" if value is None else str(value).strip()
+    try:
+        hour, minute = (int(part) for part in raw.split(":"))
+        if 0 <= hour <= 23 and 0 <= minute <= 59:
+            return f"{hour:02d}:{minute:02d}"
+    except ValueError:
+        pass
+    log.warning("Invalid WIND_DOWN_HHMM %r; using %s", value, _DEFAULT_WIND_DOWN)
+    return _DEFAULT_WIND_DOWN
+
 
 @dataclass(frozen=True, slots=True)
 class Timings:
@@ -408,6 +425,14 @@ class Settings(BaseSettings):
     #: Reserved for the engine's cadence -> gait model; unused by the adapter today.
     profile_height_m: float | None = None
     profile_cyp1a2_slow: bool = False
+
+    # -- autopilot (PLAN 4.1, pipeline/actions/autopilot.py): the system acts
+    # instead of nagging. Sunset for the walk comes from AIR_LAT/AIR_LON. -------
+    #: OUTDOOR_TARGET_MIN: outdoor minutes wanted by 16:00 local; fewer, and a
+    #: 20 min walk goes on the calendar before sunset.
+    outdoor_target_min: int = 30
+    #: WIND_DOWN_HHMM: local time the phone's screen shield goes up until 07:00.
+    wind_down_hhmm: Annotated[str, BeforeValidator(_parse_hhmm)] = _DEFAULT_WIND_DOWN
 
     def switches_line(self) -> str:
         """The effective kill-switch values, for one startup log line."""

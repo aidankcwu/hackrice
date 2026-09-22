@@ -33,10 +33,13 @@ from ..scoring.scorer import rollup
 from ..wearables import LIVE_METRICS, air
 from ..wearables.adapters import (
     health_auto_export_to_samples,
+    healthkit_seeded_rows,
+    healthkit_to_samples,
+    is_healthkit,
     whoop_seeded_rows,
     whoop_to_samples,
 )
-from ..wearables.ingest import ingest, ingest_samples
+from ..wearables.ingest import ingest, ingest_samples, parse_payload
 
 #: A live sample newer than this counts as "a wearable is connected right now".
 LIVE_FRESH_S = 15 * 60
@@ -324,10 +327,20 @@ async def wearables_ingest(
     """Canonical push endpoint.
 
     ``{"device": "apple_watch", "samples": [{"t", "metric", "value", "unit"}]}``
+
+    The same body with ``source: "healthkit"`` is the phone's Apple Health
+    sync: its sleep, resting HR, HRV and steps also land as daily rows, the way
+    the WHOOP route files resting HR.
     """
 
     _check_token(x_ingest_token)
     pipeline = _pipeline(request)
+    if is_healthkit(payload):
+        samples, result = parse_payload(payload)
+        result = ingest_samples(pipeline.db, healthkit_to_samples(samples), now=time.time(),
+                                result=result, wall_to_tick=pipeline.clock.wall_to_tick)
+        result["seeded_rows"] = pipeline.db.insert_seeded_rows(healthkit_seeded_rows(samples))
+        return result
     return ingest(pipeline.db, payload, now=time.time(),
                   wall_to_tick=pipeline.clock.wall_to_tick)
 

@@ -126,6 +126,10 @@ class GlassesLink:
         #: Called synchronously with (question_id, text, heard, mac_recv_t).
         self.on_answer: Callable[[str, str, bool, float], None] | None = None
 
+        #: Set by the wiring to `ActionHandler.on_act_result` (PLAN 4.1).
+        #: Called synchronously with (act_id, ok, detail, mac_recv_t).
+        self.on_act_result: Callable[[str, bool, str, float], None] | None = None
+
         # Health counters. `dropped` is the interesting one — it is invariant 2 doing
         # its job, and a nonzero value under a 1 Hz phone means T0 is falling behind.
         self.n_received = 0
@@ -485,6 +489,8 @@ def _handle(link: GlassesLink, raw: str | bytes, websocket: Any = None) -> None:
         )
     elif mtype == wire.ANSWER:
         _handle_answer(link, msg, websocket)
+    elif mtype == wire.ACT_RESULT:
+        _handle_act_result(link, msg)
     elif mtype in (wire.PONG, wire.ECHO):
         log.info("ingest: %s %s", mtype, msg.get("text", ""))
     elif mtype == wire.PING:
@@ -577,6 +583,34 @@ def _handle_answer(link: GlassesLink, msg: dict[str, Any], websocket: Any = None
         log.warning(
             "ingest: answer handler failed for %s: %s: %s",
             question_id, type(exc).__name__, exc,
+        )
+
+
+def _handle_act_result(link: GlassesLink, msg: dict[str, Any]) -> None:
+    """One `act_result` from the phone: validate, hand to the action handler.
+
+    Same rules as `_handle_answer`: the Mac's receipt time is what is handed on,
+    and a callback that raises never costs the capture socket.
+    """
+    act_id = msg.get("id")
+    ok = msg.get("ok")
+    detail = msg.get("detail", "")
+    if not isinstance(act_id, str) or not act_id or not isinstance(ok, bool):
+        link.n_malformed += 1
+        log.warning("ingest: act_result with no usable id/ok: %r", msg)
+        return
+    if not isinstance(detail, str):
+        detail = ""
+    log.info("ingest: act_result %s ok=%s %r", act_id, ok, detail[:80])
+    callback = link.on_act_result
+    if callback is None:
+        log.warning("ingest: no act handler bound; dropping act_result %s", act_id)
+        return
+    try:
+        callback(act_id, ok, detail, time.time())
+    except Exception as exc:  # noqa: BLE001
+        log.warning(
+            "ingest: act handler failed for %s: %s: %s", act_id, type(exc).__name__, exc
         )
 
 

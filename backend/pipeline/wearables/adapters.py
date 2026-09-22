@@ -8,6 +8,8 @@ Two real integration paths are supported today (see ``docs/WEARABLES.md``):
 * **WHOOP API v2** -- OAuth REST objects (``recovery``, ``cycle``, ``sleep``,
   ``workout``). WHOOP exposes no raw intraday HR stream, so what lands here is
   per-record summary values stamped at the record's own boundary.
+* **Brian's HealthKit sync** -- the phone app posts the canonical body with
+  ``source: "healthkit"``; its once-a-day numbers become daily rows.
 
 Everything returns :class:`~pipeline.wearables.Sample` objects in canonical
 units; validation (unknown metric, stale timestamp, non-numeric value) is the
@@ -16,17 +18,24 @@ ingest's job, not the adapter's, so an adapter stays trivially testable.
 
 from __future__ import annotations
 
+import math
 from datetime import datetime, timezone
 from typing import Any, Iterable
 
 from ..db import day_key
 from ..models import SeededRow
 from . import LIVE_METRICS, Sample
+from .google_health import NIGHT_LOOKBACK
 
 __all__ = [
     "WHOOP_SKIN_TEMP_BASELINE_C",
     "HEALTH_AUTO_EXPORT_METRICS",
+    "HEALTHKIT_DAILY_METRICS",
+    "HEALTHKIT_SOURCE",
     "health_auto_export_to_samples",
+    "healthkit_seeded_rows",
+    "healthkit_to_samples",
+    "is_healthkit",
     "whoop_to_samples",
     "whoop_seeded_rows",
     "dedupe",
@@ -136,6 +145,97 @@ def health_auto_export_to_samples(payload: dict[str, Any]) -> list[Sample]:
                        unit=_unit_for(metric), device="apple_watch")
             )
     return samples
+
+
+# -- Brian's own HealthKit sync (ios Sources/Health) ----------------------
+
+#: ``source``/``device`` the phone's HealthKit sync posts under, and the
+#: ``seeded``-table source its daily rows are written with.
+HEALTHKIT_SOURCE = "healthkit"
+
+#: Phone metric name -> (daily ``seeded`` metric, unit). The phone posts the
+#: canonical body (STATE.md §5) with once-a-day numbers, which belong beside the
+#: Fitbit poller's daily rows, not in the intraday series.
+HEALTHKIT_DAILY_METRICS: dict[str, tuple[str, str]] = {
+    "sleep_hours": ("sleep_hours", "hours"),
+    "sleep": ("sleep_hours", "hours"),
+    "resting_hr": ("resting_hr", "bpm"),
+    "resting_heart_rate": ("resting_hr", "bpm"),
+    "hrv_sdnn": ("hrv_rmssd_ms", "ms"),
+    "heart_rate_variability": ("hrv_rmssd_ms", "ms"),
+    "hrv_rmssd": ("hrv_rmssd_ms", "ms"),
+    "steps": ("steps", "steps"),
+    "step_count": ("steps", "steps"),
+}
+
+#: Daily names that are also one reading with its own timestamp, so they land in
+#: the intraday series too. HealthKit HRV is SDNN, stored as ``hrv_rmssd`` exactly
+#: as the Health Auto Export path does (see the catalogue note).
+_HEALTHKIT_INTRADAY = {"hrv_sdnn": "hrv_rmssd", "heart_rate_variability": "hrv_rmssd",
+                       "hrv_rmssd": "hrv_rmssd"}
+
+#: Sleep totals may arrive in minutes or seconds; the row is in hours.
+_SLEEP_TO_HOURS = {"min": 1 / 60, "minutes": 1 / 60, "s": 1 / 3600, "sec": 1 / 3600}
+
+
+def is_healthkit(payload: Any) -> bool:
+    """True when a canonical body says it came from the phone's HealthKit sync."""
+
+    if not isinstance(payload, dict):
+        return False
+    return any(str(payload.get(key, "")).strip().lower() == HEALTHKIT_SOURCE
+               for key in ("source", "device"))
+
+
+def healthkit_to_samples(samples: Iterable[Sample]) -> list[Sample]:
+    """Parsed canonical samples -> intraday samples, all under ``healthkit``.
+
+    Daily-only names (sleep, resting HR, steps) are left to
+    :func:`healthkit_seeded_rows`; HRV is kept as a reading. Anything else
+    passes through so the ingest accepts a catalogue metric and rejects an
+    unknown one with its reason, as the canonical path does.
+    """
+
+    out: list[Sample] = []
+    for sample in samples:
+        metric = _HEALTHKIT_INTRADAY.get(sample.metric)
+        if metric is None and sample.metric in HEALTHKIT_DAILY_METRICS:
+            continue
+        metric = metric or sample.metric
+        unit = _unit_for(metric) if metric != sample.metric else sample.unit
+        out.append(Sample(t=sample.t, metric=metric, value=sample.value,
+                          unit=unit, device=HEALTHKIT_SOURCE))
+    return out
+
+
+def healthkit_seeded_rows(samples: Iterable[Sample]) -> list[SeededRow]:
+    """The daily rows a HealthKit body carries, ``source="healthkit"``.
+
+    Sleep is filed under the evening the night began (``t`` walked back
+    :data:`~.google_health.NIGHT_LOOKBACK`, the Fitbit convention); resting HR,
+    HRV and steps under the local day of ``t``. A value or time that cannot be
+    dated is dropped, never raised on.
+    """
+
+    rows: list[SeededRow] = []
+    for sample in samples:
+        mapped = HEALTHKIT_DAILY_METRICS.get(sample.metric)
+        if mapped is None:
+            continue
+        metric, unit = mapped
+        value = sample.value
+        if metric == "sleep_hours":
+            value *= _SLEEP_TO_HOURS.get(sample.unit.strip().lower(), 1.0)
+        at = sample.t - NIGHT_LOOKBACK.total_seconds() if metric == "sleep_hours" else sample.t
+        if not (math.isfinite(value) and math.isfinite(at)):
+            continue
+        try:
+            day = day_key(at)
+        except (OverflowError, OSError, ValueError):
+            continue
+        rows.append(SeededRow(day=day, metric=metric, value=value, unit=unit,
+                              source=HEALTHKIT_SOURCE))
+    return rows
 
 
 # -- WHOOP API v2 ---------------------------------------------------------

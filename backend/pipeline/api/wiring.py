@@ -10,6 +10,8 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Literal
 
+from ..actions.autopilot import Autopilot
+from ..actions.handlers import make_act_sender
 from ..actions.speech import SpeechLimiter, default_speak_fn, set_speak_fn, spoken
 from ..actions.questions import QuestionManager
 from ..bus import TickBus
@@ -67,7 +69,8 @@ class Pipeline:
                  questions: QuestionManager, source: SimSource | None,
                  conversation: ConversationAgent | None = None,
                  capture=None, clock: Clock | None = None,
-                 adherence: AdherenceMatcher | None = None) -> None:
+                 adherence: AdherenceMatcher | None = None,
+                 autopilot: Autopilot | None = None) -> None:
         self.settings = settings
         self.source_name = source_name
         self.reasoner_mode = reasoner_mode
@@ -88,6 +91,8 @@ class Pipeline:
         #: Closes dose windows on the tick clock (PLAN 2.2); its sightings
         #: arrive through ``reasoner.on_evidence``.
         self.adherence = adherence
+        #: The two rule-based acts (PLAN 4.1), checked on the tick clock.
+        self.autopilot = autopilot
         # Live capture uses wall time unchanged; simulation scales its own clock.
         if clock is None:
             assert source is not None
@@ -231,6 +236,8 @@ class Pipeline:
                 self.gate.on_tick(tick)
                 if self.adherence is not None:
                     self.adherence.on_tick(tick.t)
+                if self.autopilot is not None:
+                    self.autopilot.on_tick(tick.t)
                 if not resend:
                     self.questions.expire(tick.t)
                 self.last_tick = tick
@@ -502,6 +509,13 @@ def build_pipeline(settings: Settings, *,
     questions.reasoner = reasoner
     if capture is not None:
         setattr(capture.link, "on_answer", questions.on_answer)
+        # `act` goes down the socket speech uses; `act_result` comes back up it.
+        reasoner.handler.send_act = make_act_sender(capture.link)
+        setattr(capture.link, "on_act_result", reasoner.handler.on_act_result)
+    autopilot = Autopilot(db, reasoner.handler,
+                          outdoor_target_min=settings.outdoor_target_min,
+                          wind_down_hhmm=settings.wind_down_hhmm,
+                          lat=settings.air_lat, lon=settings.air_lon)
     episodes = EpisodeBuilder(db, timings)
     # SPEC §14.3: the biometric_anomaly trigger reads the seeded wearable HR
     # series on the tick clock; the gate never imports the seed modules.
@@ -548,7 +562,7 @@ def build_pipeline(settings: Settings, *,
                         reasoner=reasoner, episodes=episodes, gate=gate,
                         questions=questions, conversation=conversation,
                         source=sim_source, capture=capture, clock=clock,
-                        adherence=adherence)
+                        adherence=adherence, autopilot=autopilot)
     pipeline._speech_warm = speech_warm
     # Re-warm on every conversation open as well, on the real glasses only
     # (replay and webcam runs have no phone and must not reach the network).
