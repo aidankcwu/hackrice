@@ -1,0 +1,97 @@
+# XcodeGen spec for the Brian iPhone app. `cd ios/Brian && xcodegen generate` writes
+# Brian.xcodeproj. The .xcodeproj is committed so anyone can open it; regenerate after editing this file.
+# Task 1.1 finishes this file. Lines marked CHECK need a human or the builder to confirm.
+
+name: Brian
+options:
+  bundleIdPrefix: edu.rice.brian          # CHECK: your reverse-DNS prefix; the app id becomes <prefix>.Brian
+  deploymentTarget:
+    iOS: "26.0"                           # Liquid Glass baseline. Every test phone must run iOS 26+.
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+packages:
+  MWDAT:
+    url: https://github.com/facebook/meta-wearables-dat-ios
+    from: "0.9.0"                         # CHECK: newest tag from `git ls-remote --tags <url>`
+
+targets:
+  Brian:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      - path: Fixtures
+        buildPhase: resources             # JSON captured from the backend; served in -demo mode
+    dependencies:
+      - package: MWDAT
+        product: MWDATCore
+      - package: MWDAT
+        product: MWDATCamera
+      - package: MWDAT
+        product: MWDATMockDevice          # mock glasses driven by the phone camera; DEBUG only in code
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: Brian
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        ITSAppUsesNonExemptEncryption: false
+        # Meta Wearables Device Access Toolkit (see .claude/skills/getting-started)
+        UISupportedExternalAccessoryProtocols: [com.meta.ar.wearable]
+        UIBackgroundModes: [bluetooth-peripheral, external-accessory, audio]
+        LSApplicationQueriesSchemes: [fb-viewapp]
+        MWDAT:
+          AppLinkURLScheme: "brian://"
+          MetaAppID: "0"                  # 0 = Developer Mode; a real app id comes from the Wearables Developer Center
+        CFBundleURLTypes:
+          - CFBundleURLName: edu.rice.brian
+            CFBundleURLSchemes: [brian]
+        # Local network to the Mac. Without these the WebSocket fails silently (ios/README.md).
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: Sends what the glasses see to the Mac running Brian on your Wi‑Fi.
+        # Permissions, in the words the Setup screen uses
+        NSBluetoothAlwaysUsageDescription: Connects to your glasses.
+        NSMicrophoneUsageDescription: Hears your answer when Brian asks a question.
+        NSSpeechRecognitionUsageDescription: Turns your spoken answer into text.
+        NSMotionUsageDescription: Tells stillness from activity.
+        NSLocationWhenInUseUsageDescription: Uses your speed to tell walking from sitting.
+        NSCameraUsageDescription: Only used by the mock glasses while testing without hardware.
+        # Job 3
+        NSHealthShareUsageDescription: Reads last night's sleep, heart rate and steps to score your day.
+        NSHealthUpdateUsageDescription: Brian does not write to Health.
+        # Job 4
+        NSCalendarsWriteOnlyAccessUsageDescription: Adds a short walk to your calendar when you are short on daylight.
+    entitlements:
+      path: Brian.entitlements
+      properties: {}                      # Job 3 adds com.apple.developer.healthkit; Job 4 adds com.apple.developer.family-controls
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""              # set in Xcode → Signing & Capabilities; never commit a team id
+        ENABLE_USER_SCRIPT_SANDBOXING: true
+        SWIFT_STRICT_CONCURRENCY: minimal # the ported Link/ files predate Swift 6 strictness; raise later
+
+  BrianTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [Tests]
+    dependencies:
+      - target: Brian
+
+schemes:
+  Brian:
+    build:
+      targets:
+        Brian: all
+        BrianTests: [test]
+    run:
+      config: Debug
+      commandLineArguments:
+        "-demo": false                    # tick in Xcode's scheme editor, or pass -demo from simctl launch
+    test:
+      config: Debug
+      targets: [BrianTests]
