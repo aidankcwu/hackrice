@@ -127,7 +127,7 @@ debugging, sample-app-guide). Do not guess the SDK; read them or use the
 - [ ] 3.2 (ios-builder) `Sources/Health/HealthSync.swift`: read last night's sleep (asleep stages total), resting HR, HRV (SDNN), today's steps; `HKObserverQuery` + background delivery; POST to `/api/wearables/ingest` in the body shape from STATE.md §5 with `source: "healthkit"`. Settings toggle + last sync line. Health row in Setup.
   Skills: healthkit, background-processing.
   Acceptance: build + tests green; a unit test builds the ingest body from sample values and matches the schema; on device (human) the dashboard's wearable chips show a `healthkit` source.
-- [ ] 3.3 (backend-builder) If the ingest adapter does not already accept `source: "healthkit"`, add it in `backend/pipeline/wearables/adapters.py` mirroring the Health Auto Export path; tests.
+- [x] 3.3 (backend-builder) If the ingest adapter does not already accept `source: "healthkit"`, add it in `backend/pipeline/wearables/adapters.py` mirroring the Health Auto Export path; tests.
 - [ ] 3.4 (verifier) full run.
 - STOP gate 3: human grants Health access on device; dashboard shows sleep/HRV from the phone within one sync.
 

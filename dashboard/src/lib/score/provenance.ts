@@ -9,12 +9,13 @@
  * property of the day's data, not of the key, so the caller passes it in.
  */
 
-export type Provenance = "glasses" | "whoop" | "fitbit" | "entered" | "seeded" | "imputed";
+export type Provenance = "glasses" | "whoop" | "fitbit" | "healthkit" | "entered" | "seeded" | "imputed";
 
 export const PROVENANCE_LABEL: Readonly<Record<Provenance, string>> = {
   glasses: "Glasses",
   whoop: "WHOOP",
   fitbit: "Fitbit",
+  healthkit: "Apple Health",
   entered: "Entered",
   seeded: "Seeded",
   imputed: "Imputed",
@@ -25,6 +26,7 @@ export const PROVENANCE_HINT: Readonly<Record<Provenance, string>> = {
   glasses: "Measured by the Ray-Ban Meta glasses (episodes from the camera pipeline)",
   whoop: "From the wearer's WHOOP data",
   fitbit: "From the wearer's Fitbit, via the Google Health API",
+  healthkit: "From the wearer's Apple Health, synced by the Brian phone app",
   entered: "Entered by the wearer (PVT, self-check)",
   seeded: "Demo seed data, not the wearer's own",
   imputed: "Not measured today: imputed at the population reference and earns nothing",
@@ -93,11 +95,11 @@ export function contextFor(key: string, sources: Record<string, string> | undefi
 }
 
 /** Seeded-table sources that are a real device (mirrors `LIVE_DAILY_SOURCES` in backend scorer.py). */
-export const LIVE_SOURCES: ReadonlySet<string> = new Set(["fitbit", "apple_watch_live", "whoop_live"]);
+export const LIVE_SOURCES: ReadonlySet<string> = new Set(["fitbit", "apple_watch_live", "whoop_live", "healthkit"]);
 
 export interface ProvenanceContext {
   /** Whether the day's wearable rows are the wearer's own device or the demo seed. */
-  wearable: "whoop" | "fitbit" | "seeded";
+  wearable: "whoop" | "fitbit" | "healthkit" | "seeded";
 }
 
 /** The engine's per-factor provenance, as the backend adapter reports it. */
@@ -116,6 +118,7 @@ export function wearableFor(p: EngineProvenance | undefined, fallback: Provenanc
   if (p?.source !== "live") return p === undefined ? fallback : "seeded";
   const basis = (p.basis ?? "").toLowerCase();
   if (basis.includes("fitbit")) return "fitbit";
+  if (basis.includes("healthkit")) return "healthkit";
   if (basis.includes("whoop")) return "whoop";
   return fallback === "seeded" ? "whoop" : fallback;
 }

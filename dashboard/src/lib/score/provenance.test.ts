@@ -1,5 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { FACTOR_ORIGIN, provenanceOf } from "./provenance";
+import { contextFor, FACTOR_ORIGIN, LIVE_SOURCES, PROVENANCE_LABEL, provenanceOf } from "./provenance";
+
+describe("healthkit rows", () => {
+  it("resolves a row the phone's HealthKit sync wrote to live, labelled Apple Health", () => {
+    expect(LIVE_SOURCES.has("healthkit")).toBe(true);
+    const sources = { sleep_hours: "healthkit", steps: "healthkit" };
+    for (const key of ["sleep_hours", "steps"]) {
+      const chip = provenanceOf(key, true, contextFor(key, sources, "seeded"));
+      expect(chip, key).toBe("healthkit");
+      expect(PROVENANCE_LABEL[chip]).toBe("Apple Health");
+    }
+  });
+
+  it("keeps a demo-seed row beside it labelled Seeded", () => {
+    const chip = provenanceOf("sri", true, contextFor("sri", { sleep_hours: "healthkit", sleep_regularity_sri: "whoop" }, "seeded"));
+    expect(PROVENANCE_LABEL[chip]).toBe("Seeded");
+  });
+});
 
 describe("provenanceOf", () => {
   it("labels every unmeasured factor as imputed regardless of origin", () => {

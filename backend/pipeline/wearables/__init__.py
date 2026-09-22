@@ -25,8 +25,9 @@ __all__ = [
 ]
 
 #: Devices this backend accepts samples from. ``sim`` is the seeded fallback
-#: used when nothing real is connected.
-DEVICES: tuple[str, ...] = ("apple_watch", "whoop", "oura", "sim", "fitbit",)
+#: used when nothing real is connected. ``healthkit`` is the phone app's own
+#: Apple Health sync.
+DEVICES: tuple[str, ...] = ("apple_watch", "whoop", "oura", "sim", "fitbit", "healthkit",)
 
 
 @dataclass(frozen=True, slots=True)
