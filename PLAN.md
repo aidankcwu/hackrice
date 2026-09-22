@@ -58,7 +58,7 @@ session, `/clear` between jobs, logs go to files, reports are short.
 
 ## Job 0 — Recon (scout)
 
-- [ ] 0.1 Write `docs/STATE.md` (≤ 100 lines, every fact with `path:line`):
+- [x] 0.1 Write `docs/STATE.md` (≤ 100 lines, every fact with `path:line`):
   1. Backend run command that needs **no API keys** (look at `backend/scripts/preflight.py --offline`, `backend/pipeline/main.py` flags, `--source sim`). Confirm it starts and `curl localhost:8010/health` answers. Record the exact command.
   2. Test commands for the root `tests/` and `backend/tests/` (root `pytest.ini`, `backend/pyproject.toml`), and the dashboard test/build command. Run them; record pass/fail counts and failing names only.
   3. The wire contract: every message type in `src/longevity/wire.py` with its fields, up and down.
