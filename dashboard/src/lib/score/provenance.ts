@@ -118,7 +118,8 @@ export function wearableFor(p: EngineProvenance | undefined, fallback: Provenanc
   if (p?.source !== "live") return p === undefined ? fallback : "seeded";
   const basis = (p.basis ?? "").toLowerCase();
   if (basis.includes("fitbit")) return "fitbit";
-  if (basis.includes("healthkit")) return "healthkit";
+  // An Apple Watch writes through HealthKit: `apple_watch_live` is Apple Health, never WHOOP.
+  if (basis.includes("healthkit") || basis.includes("apple_watch")) return "healthkit";
   if (basis.includes("whoop")) return "whoop";
   return fallback === "seeded" ? "whoop" : fallback;
 }
@@ -134,3 +135,22 @@ export function provenanceOf(key: string, measured: boolean, ctx: ProvenanceCont
   if (origin === "entered") return "entered";
   return "glasses";
 }
+
+/** The slice of the payload's `DataSource` a chip depends on. */
+export interface PageSource {
+  mode: string;
+  demo_mode?: boolean;
+  wearable_sources?: Record<string, string>;
+}
+
+/** The page-wide wearable fallback when the loader supplied no row sources: live backend and not demo mode -> WHOOP. */
+export const wearableFallback = (source: PageSource): ProvenanceContext["wearable"] =>
+  source.mode === "live" && source.demo_mode !== true ? "whoop" : "seeded";
+
+/**
+ * One factor's chip from the day's own row sources — the same `provenanceOf` +
+ * `contextFor` derivation the By-layer panel uses, so a tile and a layer row
+ * can never name different streams for one factor.
+ */
+export const factorProvenance = (key: string, measured: boolean, source: PageSource): Provenance =>
+  provenanceOf(key, measured, contextFor(key, source.wearable_sources, wearableFallback(source)));
