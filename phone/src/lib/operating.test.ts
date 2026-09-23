@@ -13,8 +13,9 @@ function cleanDay(date: string, extra: EventDraft[] = []): Day {
     { kind: "meal", start: at(10, 10), label: "Eggs", food: "whole", thumb: "eggs" },
     { kind: "meal", start: at(12, 20), label: "Rice bowl", food: "whole", thumb: "rice_bowl" },
     { kind: "conversation", start: at(12, 20), minutes: 40, label: "Lunch" },
-    { kind: "outdoor", start: at(12, 55), minutes: 60, label: "Walk", sunlight: true },
+    { kind: "outdoor", start: at(12, 55), minutes: 20, label: "Walk", sunlight: true },
     { kind: "workout", start: at(15, 30), minutes: 45, label: "Strength", vigorous: true },
+    { kind: "outdoor", start: at(16, 45), minutes: 40, label: "Evening walk", sunlight: true },
     { kind: "meal", start: at(17, 50), label: "Salmon", food: "whole", thumb: "fish" },
     { kind: "peptide", start: at(20, 0), dose: "PM", taken: true, thumb: "pen" },
     ...[7, 9, 10, 11, 12, 14, 15, 17].map((h) => ({ kind: "water" as const, start: at(h, 30), ml: 280 })),
@@ -86,5 +87,14 @@ describe("the two ceilings", () => {
     // From the worst day on, every day is at least as good as the one before, ending at 100.
     for (let i = worstAt + 1; i < series.length; i++) expect(series[i]).toBeGreaterThanOrEqual(series[i - 1]);
     expect(series.at(-1)).toBe(100);
+  });
+
+  it("long direct sun at a very high UV is a red; a short midday walk is not", () => {
+    const market: EventDraft = { kind: "outdoor", start: at(14), minutes: 55, label: "Market", sunlight: true };
+    const days = dates(2).map((d, i) => cleanDay(d, i === 1 ? [market] : []));
+    const findings = monthFindings(days);
+    expect(findings[0].some((f) => f.rule === "uv")).toBe(false);
+    expect(findings[1].filter((f) => f.rule === "uv").map((f) => f.tone)).toEqual(["violation"]);
+    expect(operatingFor(days, 1, findings).body).toBeLessThan(100);
   });
 });

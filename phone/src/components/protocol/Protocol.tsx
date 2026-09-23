@@ -10,6 +10,7 @@ import { errorSentence } from "@/lib/today";
 import type { ProtocolTodayItem } from "@/lib/types";
 import { useProtocol } from "@/lib/useProtocol";
 import { ActionSheet } from "./ActionSheet";
+import { DailyAmounts } from "./DailyAmounts";
 
 const EMPTY = "No items yet. Add the first dose window.";
 
@@ -83,6 +84,8 @@ export function Protocol({ query }: { query: string }) {
           ))}
         </ul>
       ) : null}
+
+      <DailyAmounts />
 
       <ActionSheet item={open} onChoose={choose} onClose={() => setOpen(null)} />
     </>

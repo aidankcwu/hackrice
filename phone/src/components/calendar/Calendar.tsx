@@ -1,48 +1,35 @@
 "use client";
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { analyze } from "@/lib/analysis";
-import { bandsFor, headerFor, itemsFor } from "@/lib/calendar";
+import { Segment } from "@/components/Segment";
+import { planFor, shortDate } from "@/lib/calendar";
 import { useMonth } from "@/lib/useMonth";
-import { AnalysisPanel } from "./AnalysisPanel";
-import { DayHeaderView, DayTimeline } from "./DayView";
-import { WeekView } from "./WeekView";
+import { Columns } from "./Columns";
+import { DayStrip } from "./DayStrip";
 
 type View = "day" | "week";
 
 /**
- * The protocol laid over what happened. Day: a 24-hour timeline, the windows as
- * soft labelled bands, reality on top. Week: seven compressed columns. Arrows
- * or a swipe move between the month's days.
+ * The protocol laid over what happened, sized so a whole day fits one phone
+ * screen. Day: the date, the two ceilings, the seven-lane strip. Week: seven
+ * compact columns; a tap opens the day. Arrows or a swipe move through the month.
  */
 export function Calendar() {
   const month = useMonth();
   const [view, setView] = useState<View>("day");
   const [picked, setPicked] = useState<number | null>(null);
-  const [scope, setScope] = useState<"week" | "month">("week");
   const touch = useRef<number | null>(null);
 
   const days = useMemo(() => month.month?.days ?? [], [month.month]);
+  const plans = useMemo(() => days.map((_, i) => planFor(days, i, month.findings[i] ?? [])), [days, month.findings]);
   const last = days.length - 1;
   const index = picked ?? last;
 
-  const dayData = useMemo(() => {
-    if (!month.month || index < 0) return null;
-    const day = days[index];
-    const findings = month.findings[index] ?? [];
-    return {
-      day,
-      header: headerFor(days, index, month.operating[index]),
-      bands: bandsFor(day),
-      ...itemsFor(day, findings, days[index + 1]),
-    };
-  }, [month.month, month.findings, month.operating, days, index]);
-
   if (!month.loaded) return null;
-  if (!month.month || !dayData) {
+  if (!month.month || index < 0) {
     return (
-      <p className="type-body mt-section text-muted">
+      <p className="type-body mt-2 text-muted">
         {month.error === "unreachable"
           ? "The Mac is not answering. The calendar appears once it does."
           : "The month appears once the backend serves it. Fixtures mode shows a seeded month."}
@@ -53,16 +40,8 @@ export function Calendar() {
   const step = view === "day" ? 1 : 7;
   const go = (delta: number) => setPicked(Math.max(0, Math.min(last, index + delta)));
   const weekFrom = Math.max(0, index - 6);
-  const columns = days.slice(weekFrom, index + 1).map((day, n) => ({
-    day,
-    index: weekFrom + n,
-    operating: month.operating[weekFrom + n],
-    findings: month.findings[weekFrom + n],
-  }));
-  const range =
-    view === "day"
-      ? dayData.header.short
-      : `${new Date(`${days[weekFrom].date}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })} to ${dayData.header.short}`;
+  const operating = month.operating[index];
+  const range = view === "day" ? shortDate(days[index].date) : weekRange(days[weekFrom].date, days[index].date);
 
   return (
     <div
@@ -89,7 +68,7 @@ export function Calendar() {
           <button type="button" aria-label={view === "day" ? "Previous day" : "Previous week"} disabled={index === 0} onClick={() => go(-step)} className="grid size-11 place-items-center rounded-full text-ink disabled:text-muted">
             <ChevronLeft size={22} strokeWidth={2} aria-hidden="true" />
           </button>
-          <span className="type-secondary min-w-[88px] text-center font-semibold text-ink tabular-nums" aria-live="polite">
+          <span className="type-secondary text-center font-semibold whitespace-nowrap text-ink tabular-nums" aria-live="polite">
             {range}
           </span>
           <button type="button" aria-label={view === "day" ? "Next day" : "Next week"} disabled={index === last} onClick={() => go(step)} className="grid size-11 place-items-center rounded-full text-ink disabled:text-muted">
@@ -100,56 +79,42 @@ export function Calendar() {
 
       {view === "day" ? (
         <>
-          <div className="mt-4">
-            <DayHeaderView header={dayData.header} />
-          </div>
-          <div className="mt-section">
-            <DayTimeline bands={dayData.bands} items={dayData.items} frames={dayData.frames} sick={dayData.day.type === "sick"} />
+          <p className="type-number m-0 mt-1 text-ink">
+            Cognition {Math.round(operating.cognition)}% <span className="text-muted">·</span> Body {Math.round(operating.body)}%
+          </p>
+          <div className="mt-3">
+            <DayStrip key={days[index].date} plan={plans[index]} />
           </div>
         </>
       ) : (
-        <div className="mt-4">
-          <div className="mb-3 flex items-center gap-2">
-            <Segment on={scope === "week"} onClick={() => setScope("week")}>
-              This week
-            </Segment>
-            <Segment on={scope === "month"} onClick={() => setScope("month")}>
-              {days.length} days
-            </Segment>
-          </div>
-          <AnalysisPanel
-            month={scope === "month"}
-            analysis={
-              scope === "month"
-                ? analyze(days, month.findings, month.operating, 0, last, `${days.length} days`)
-                : analyze(days, month.findings, month.operating, weekFrom, index, index === last ? "This week" : `The week to ${dayData.header.short}`)
-            }
+        <div className="mt-3">
+          <Columns
+            columns={days.slice(weekFrom, index + 1).map((day, n) => ({
+              index: weekFrom + n,
+              date: day.date,
+              plan: plans[weekFrom + n],
+              cognition: month.operating[weekFrom + n].cognition,
+              body: month.operating[weekFrom + n].body,
+            }))}
+            height={440}
+            cap={20}
+            selected={index}
+            onPick={(i) => {
+              setPicked(i);
+              setView("day");
+            }}
           />
-          <div className="mt-section">
-            <WeekView
-              columns={columns}
-              selected={index}
-              onPick={(i) => {
-                setPicked(i);
-                setView("day");
-              }}
-            />
-          </div>
         </div>
       )}
     </div>
   );
 }
 
-function Segment({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={on}
-      onClick={onClick}
-      className={`type-secondary min-h-9 rounded-full px-4 font-semibold ${on ? "bg-ink text-page" : "bg-surface-2 text-text"}`}
-    >
-      {children}
-    </button>
-  );
+/** "Sep 16 to 22", or "Aug 28 to Sep 3" across a month's end. */
+function weekRange(from: string, to: string): string {
+  const a = new Date(`${from}T12:00:00`);
+  const b = new Date(`${to}T12:00:00`);
+  const start = a.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const end = a.getMonth() === b.getMonth() ? String(b.getDate()) : b.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return `${start} to ${end}`;
 }

@@ -1,15 +1,16 @@
-/** The app's screens: three tabs, and Settings from the gear. */
-export type ScreenId = "today" | "calendar" | "protocol" | "settings";
+/** The app's screens: four tabs, and Settings from the gear. */
+export type ScreenId = "today" | "calendar" | "analysis" | "protocol" | "settings";
 
 export const SCREENS: Record<ScreenId, { title: string; href: string }> = {
   today: { title: "Today", href: "/" },
   calendar: { title: "Calendar", href: "/calendar" },
+  analysis: { title: "Analysis", href: "/analysis" },
   protocol: { title: "Protocol", href: "/protocol" },
   settings: { title: "Settings", href: "/settings" },
 };
 
 /** The tab bar, in order. Settings is pushed from the gear, never a tab. */
-export const TABS: readonly ScreenId[] = ["today", "calendar", "protocol"];
+export const TABS: readonly ScreenId[] = ["today", "calendar", "analysis", "protocol"];
 
 export type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -38,6 +39,8 @@ export function readFixtureView(params: SearchParams): FixtureView {
     ? "settings"
     : state.startsWith("calendar")
       ? "calendar"
+    : state.startsWith("analysis")
+      ? "analysis"
     : state.startsWith("protocol") || state.startsWith("additem")
       ? "protocol"
       : "today";

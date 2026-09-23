@@ -125,6 +125,7 @@ const SHORT: Record<RuleId, string> = {
   sauna_cold: "Cold close to bed",
   stress: "Stress spike",
   air: "Bad air",
+  uv: "Midday sun",
   peptide: "Missed dose",
   sleep_window: "Late bedtime",
   sleep_short: "Short sleep",

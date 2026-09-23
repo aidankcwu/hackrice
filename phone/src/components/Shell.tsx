@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
-import { CalendarDays, ChevronLeft, ListChecks, Settings, Sun, type LucideIcon } from "lucide-react";
+import { CalendarDays, ChartNoAxesColumn, ChevronLeft, ListChecks, Settings, Sun, type LucideIcon } from "lucide-react";
 import { SCREENS, TABS, type ScreenId } from "@/lib/screens";
 
 /** One icon per meaning; Settings is the gear in the top bar. */
 const ICONS: Record<ScreenId, LucideIcon> = {
   today: Sun,
   calendar: CalendarDays,
+  analysis: ChartNoAxesColumn,
   protocol: ListChecks,
   settings: Settings,
 };
@@ -41,7 +42,7 @@ export interface ShellProps {
 
 /**
  * The phone app's frame, native-first: a navigation bar with the Settings gear,
- * the large title, the screen's content, and the two-tab bar. Settings is a
+ * the large title, the screen's content, and the tab bar. Settings is a
  * pushed screen: a back button instead of the gear, and no tab bar.
  */
 export function Shell({ screen, pushed: pushedDetail, title: titleOverride, theme, scale, action, children }: ShellProps) {
@@ -114,7 +115,7 @@ function TabBar({ active }: { active: ScreenId }) {
               key={id}
               href={SCREENS[id].href}
               aria-current={on ? "page" : undefined}
-              className={`flex h-[54px] w-24 flex-col items-center justify-center gap-1 rounded-full transition-colors duration-200 ${
+              className={`flex h-[54px] w-[80px] flex-col items-center justify-center gap-1 rounded-full transition-colors duration-200 ${
                 on ? "bg-[var(--glass-selected)] text-ink" : "text-muted"
               }`}
             >

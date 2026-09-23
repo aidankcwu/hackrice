@@ -25,7 +25,7 @@ const TYPES: DayType[] = [
   "clean", "clean", "late_caffeine", "clean", "perfect", "clean", "clean",
   "skipped_lunch", "clean", "late_dinner", "crying_baby", "late_workout", "social_evening", "perfect",
   "late_caffeine", "late_nap", "clean", "crying_baby", "screens_in_bed", "travel", "sick",
-  "clean", "clean", "late_caffeine", "crying_baby", "drinking_night", "late_caffeine", "clean",
+  "clean", "clean", "late_caffeine", "crying_baby", "drinking_night", "late_caffeine", "midday_sun",
   "perfect", "late_caffeine",
 ];
 
@@ -281,6 +281,12 @@ function buildEvents(date: string, type: DayType, r: () => number): { events: Dr
       // Awake half the night: a second coffee lands late morning, still inside the window.
       b.add({ kind: "caffeine", start: at(11, 55), drink: "coffee" });
       b.add({ kind: "nap", start: at(13, 30), minutes: 20 });
+      break;
+
+    case "midday_sun":
+      // A market with no shade at the day's highest UV; costs nothing through sleep.
+      b.add({ kind: "outdoor", start: at(14, 0), minutes: 55, label: "Farmers market, no shade", sunlight: true });
+      b.add({ kind: "conversation", start: at(14, 0), minutes: 40, label: "Market with Maya" });
       break;
 
     case "clean":

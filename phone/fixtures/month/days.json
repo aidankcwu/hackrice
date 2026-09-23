@@ -6965,7 +6965,7 @@
   },
   {
    "date": "2026-09-20",
-   "type": "clean",
+   "type": "midday_sun",
    "sleep": {
     "bed": -65,
     "wake": 401,
@@ -7084,10 +7084,27 @@
      "seeded": true
     },
     {
+     "kind": "outdoor",
+     "start": 840,
+     "minutes": 55,
+     "label": "Farmers market, no shade",
+     "sunlight": true,
+     "id": "2026-09-20-13",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 840,
+     "minutes": 40,
+     "label": "Market with Maya",
+     "id": "2026-09-20-14",
+     "seeded": true
+    },
+    {
      "kind": "water",
      "start": 860,
      "ml": 317,
-     "id": "2026-09-20-13",
+     "id": "2026-09-20-15",
      "seeded": true
     },
     {
@@ -7095,7 +7112,7 @@
      "start": 911,
      "minutes": 22,
      "label": "Groceries",
-     "id": "2026-09-20-14",
+     "id": "2026-09-20-16",
      "seeded": true
     },
     {
@@ -7104,21 +7121,21 @@
      "minutes": 50,
      "label": "Cycling",
      "vigorous": true,
-     "id": "2026-09-20-15",
+     "id": "2026-09-20-17",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 961,
      "ml": 321,
-     "id": "2026-09-20-16",
+     "id": "2026-09-20-18",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1055,
      "ml": 327,
-     "id": "2026-09-20-17",
+     "id": "2026-09-20-19",
      "seeded": true
     },
     {
@@ -7127,7 +7144,7 @@
      "label": "Chicken, rice and greens",
      "food": "whole",
      "thumb": "plate",
-     "id": "2026-09-20-18",
+     "id": "2026-09-20-20",
      "seeded": true
     },
     {
@@ -7135,14 +7152,14 @@
      "start": 1080,
      "minutes": 22,
      "label": "Dinner with family",
-     "id": "2026-09-20-19",
+     "id": "2026-09-20-21",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1183,
      "ml": 276,
-     "id": "2026-09-20-20",
+     "id": "2026-09-20-22",
      "seeded": true
     },
     {
@@ -7151,7 +7168,7 @@
      "dose": "PM",
      "taken": true,
      "thumb": "pen",
-     "id": "2026-09-20-21",
+     "id": "2026-09-20-23",
      "seeded": true
     },
     {
@@ -7159,16 +7176,16 @@
      "start": 1209,
      "minutes": 30,
      "device": "phone",
-     "id": "2026-09-20-22",
+     "id": "2026-09-20-24",
      "seeded": true
     }
    ],
-   "aqi": 54,
+   "aqi": 49,
    "weather": {
-    "high_f": 93,
-    "summary": "Partly cloudy"
+    "high_f": 94,
+    "summary": "Clear and hot"
    },
-   "held_back": 12,
+   "held_back": 11,
    "until": 1440,
    "seeded": true
   },

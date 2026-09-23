@@ -20,7 +20,8 @@ export type DayType =
   | "travel"
   | "crying_baby"
   | "sick"
-  | "social_evening";
+  | "social_evening"
+  | "midday_sun";
 
 export type FoodClass = "whole" | "fast_food" | "sweets" | "ultra_processed";
 

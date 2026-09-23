@@ -10,7 +10,7 @@
  * "to verify" until each number is traced to a study.
  */
 import type { Day, MonthEvent } from "./month/types";
-import { sunTimes } from "./month/sun";
+import { sunTimes, uvIndex } from "./month/sun";
 
 export type RuleId =
   | "caffeine"
@@ -28,6 +28,7 @@ export type RuleId =
   | "sauna_cold"
   | "stress"
   | "air"
+  | "uv"
   | "peptide"
   | "sleep_window"
   | "sleep_short"
@@ -136,6 +137,11 @@ export const RULES: Record<RuleId, Rule> = {
     consequence: "Bad air outside. Easier on the lungs indoors.",
     effect: { cognition: 0, body: 0.005 }, lands: 0, decayDays: 0, lever: "Move the walk indoors on bad-air days", source: "to verify",
   }),
+  uv: r({
+    id: "uv", name: "Midday sun", window: "Under 30 min in direct sun while the UV index is 8 or more",
+    consequence: "Long direct sun at a very high UV: skin damage adds up, and the heat load tires you by evening.",
+    effect: { cognition: 0.01, body: 0.02 }, lands: 0, decayDays: 1, lever: "Shade between 11:00 and 16:00", source: "to verify",
+  }),
   peptide: r({
     id: "peptide", name: "Peptide doses", window: "AM 7:00 to 10:00, PM 19:00 to 22:00",
     consequence: "A dose outside its window.",
@@ -241,6 +247,8 @@ export const WINDOWS = {
   peopleTarget: 30,
   waterTarget: 2000,
   sedentaryMax: 90,
+  uvHigh: 8,
+  uvMaxMinutes: 30,
 } as const;
 
 export const HOUSTON = { lat: 29.7604, lon: -95.3698, utcOffset: -5 } as const;
@@ -372,10 +380,15 @@ export function evaluateDay(days: readonly Day[], index: number): Finding[] {
         else add(finding("movement", date, e.start, "watch", "Ends after 16:30. Sleep may come a little later.", 0.5, e.id));
         break;
       }
-      case "outdoor":
+      case "outdoor": {
+        const uv = e.sunlight ? peakUv(date, e.start, end(e)) : 0;
+        if (e.minutes >= WINDOWS.uvMaxMinutes && uv >= WINDOWS.uvHigh) {
+          add(finding("uv", date, e.start, "violation", `${e.minutes} min in direct sun at UV ${uv}, a clear-sky estimate. ${RULES.uv.consequence}`, 1, e.id));
+        }
         if (day.aqi > 100) add(finding("air", date, e.start, "watch", `Air at AQI ${day.aqi}. ${RULES.air.consequence}`, 1, e.id));
         else add(finding("daylight", date, e.start, "inside", e.sunlight ? `${e.minutes} min of daylight.` : `${e.minutes} min outside, no direct sun.`, 1, e.id));
         break;
+      }
       case "sedentary":
         if (e.minutes >= WINDOWS.sedentaryMax) add(finding("sedentary", date, e.start, "watch", `${e.minutes} min without standing.`, 1, e.id));
         break;
@@ -457,6 +470,13 @@ export function sleepCause(day: Day): string | null {
     if (e.kind === "nap" && e.start >= WINDOWS.napLate) return `yesterday's ${clock(e.start)} nap`;
   }
   return null;
+}
+
+/** The highest clear-sky UV index over [from, to), rounded; checked every 5 min. */
+export function peakUv(date: string, from: number, to: number): number {
+  let peak = 0;
+  for (let t = from; t < to; t += 5) peak = Math.max(peak, uvIndex(date, t, HOUSTON.lat, HOUSTON.lon, HOUSTON.utcOffset));
+  return Math.round(peak);
 }
 
 /** Minutes of outdoor sunlight before sunset. */
