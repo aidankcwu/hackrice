@@ -382,7 +382,39 @@ per hour becomes a number on `/api/status`.
 
 - Watcher: built on `perception/watcher` (US-W01 to W12): settings, prompt bank, MobileCLIP2 wrapper with a fake (6.9 ms per frame on this Mac's GPU), watcher core, watch block, packet feed, labeler scheduler and request kinds, loop wiring, bridge wiring, labeler health, ring cap, calibration tool. Calibration itself (W12's sweep on the real corpus) is not run: no corpus on this machine yet. Verifier 2026-09-23: root 230, backend 1741, dashboard 133 and build, all green.
 - Decider and writers: built on `perception/decider` (US-D01 to D08): settings, state builder, Jev client with a fake, writers, decision path columns, reasoner routing with clerk fallback, factory, sound act. Built against the documented API and the SDK's OpenAPI models; the real Jev client is unverified until a key exists (signups closed 22 Sep 2026). Verifier 2026-09-23: root 130, backend 1823, dashboard 126, all green.
-- Phase 3: not started.
+- Phase 3: built on `perception/main` (US-M02 to M07): one `Settings`, wiring, backend `watcher` extra, preflight; gate reads `watch` for persistence and episodes exit on cold behind `GATE_READS_WATCH`; `look` action end to end; sound cue as an `act` kind from the decider; armed `watch`; `deliver` policy; steady cadence 30 s once the gate reads watch. Verifier 2026-09-23: see the PR.
+
+## Switching it on
+
+Every switch defaults to today's behaviour. Turn them on one at a time.
+
+| Step | Command or env | What changes |
+| --- | --- | --- |
+| Install the watcher model | `cd backend && uv sync --extra watcher` (torch, open_clip, ~1 GB) | without it `WATCHER=1` logs an error and runs without a watcher |
+| Watcher | `WATCHER=1` (default) with `WATCHER_MODEL=mobileclip2-s0` | ticks carry `watch`; Gemini runs on wake-ups, transitions, steady cadence and a heartbeat |
+| Calibrate | `CORPUS_DIR=corpus/<recording> uv run python tools/probe_watcher.py --out thresholds.json`, then `WATCH_THRESHOLDS_JSON=$(cat thresholds.json)` | per-concept enter and exit thresholds replace the 0.60 / 0.40 defaults |
+| Decider | `DECIDER=jev TYPESAFE_API_KEY=...` | Jev picks actions per escalation; `DECIDE_*` thresholds tune what fires; the clerk stays as fallback |
+| Gate reads watch | `GATE_READS_WATCH=1` | sustained triggers need the watcher hot on 70% of their hit count of watch ticks plus one Gemini confirmation; steady cadence falls to 30 s |
+| Labeler cap | `LABELER_MAX_PER_HOUR=600` | past it only wake-ups and heartbeats run |
+
+`backend/scripts/preflight.py --offline` prints every perception knob and whether the watcher extra is importable.
+
+## Interfaces added
+
+- `/api/status`: `capture.watcher` (frames, usable, dropped, wakeups, hot, inference ms), `capture.labeler` (calls per hour by kind, capped, last heartbeat age, last wake latency, frames sent per hour, mode, steady_s), `capture.watcher_error`, `capture.labeler_stale_after_s`, top-level `gate_reads_watch`. Health problems `labeler_heartbeat_stale`, `labeler_wake_slow`, `watcher_unavailable` (text in `health.details`) replace `ai_coverage_low` while the watcher is on.
+- Decision rows: `path` ("decider", "clerk", "clerk_fallback:error", "clerk_fallback:uncertain:<action>", and "<path>:look" for a re-run after a look) and `writers` (which writers ran, and "<action>:failed" / ":no_writer").
+- Actions: `look {question}`, `act {kind: sound, args: {name}}`, `watch {concept, within_s}`, and `deliver` / `expire_s` on `speak` and `ask`. Outcomes: `looked`, `look_unavailable`, `look_timeout`, `look_chained`, `answered:rerun`, `answered:conversation:<outcome>`, `watch_armed`, `watch_armed_unavailable`, `sound_rate_limited`, `deliver_waiting`, `deliver_expired`, `deliver_superseded`.
+- Gate escalation `watch_armed` with the originating decision id in the reason.
+- Tick: the optional `watch` block (see Tick).
+
+## Known gaps
+
+- Calibration has not run: no corpus on this machine. Thresholds are the 0.60 / 0.40 placeholders until `tools/probe_watcher.py` runs on real frames.
+- The real Jev client is unexercised: signups were closed on 22 Sep 2026. Everything up to the HTTP call is tested against the SDK's OpenAPI models.
+- A look answer that lands while a conversation is open goes through `request()` and today comes back `conversation_active`; the voice agent has no mid-conversation injection yet. It is recorded on the row, not spoken.
+- A quiet-delivery wait's final outcome lives in the voice agent's counters, not on the decision's action row (which keeps `deliver_waiting`).
+- Phone side unchanged: the phone still sends one frame per 1.5 s. Phase 1 needs the phone to send every 2 fps frame (Lukas's app); the backend already handles any rate.
+- `brian-ios-fixes` carries nine of Lukas's fixes that `brian-ios` lacks; this branch does not include them.
 
 Sources: MobileCLIP README (github.com/apple/ml-mobileclip), MobileCLIP2-S0 model card
 (huggingface.co/apple/MobileCLIP2-S0), Gemini API pricing (ai.google.dev/gemini-api/docs/pricing),
