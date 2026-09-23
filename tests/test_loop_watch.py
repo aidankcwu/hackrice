@@ -682,3 +682,40 @@ async def test_without_a_watcher_no_scheduler_is_consulted() -> None:
     await loop.run()
     assert tagger.offers == 5 and tagger.requests == []
     assert tagger.scheduler.mode == "cold" and tagger.scheduler._last_request is None
+
+
+# --- US-M05: the loop tells a listener about each forwarded wake-up ------------------
+
+
+async def test_a_forwarded_wakeup_reaches_on_wakeup_forwarded_with_its_armed_reason() -> None:
+    """`on_wakeup_forwarded` is called on the asyncio loop after the wake request
+    went out, with the same `Wakeup` -- an armed one carries `watch_armed:<id>`.
+    A listener that raises does not stop the loop."""
+    watcher = concept_watcher()
+    source = QueueSource()
+    loop, bus, tagger = make_loop(source, watcher)
+    frames = Frames()
+    heard: list[Wakeup] = []
+
+    def listener(wake: Wakeup) -> None:
+        heard.append(wake)
+        raise RuntimeError("listener bug")
+
+    loop.on_wakeup_forwarded = listener
+    watcher.arm(VEG, 60.0, "d_1/vegetation_visible")
+    task = asyncio.create_task(loop.run())
+
+    source.put(frames(NULL_JPEG))
+    await settle()
+    assert heard == []
+    source.put(frames(VEG_JPEG))
+    await settle()
+    source.put(frames(NULL_JPEG))  # the loop survived the raising listener
+    await settle()
+    source.close()
+    await asyncio.wait_for(task, 2.0)
+
+    assert [w.reason for w in heard] == ["watch_armed:d_1/vegetation_visible"]
+    assert heard[0].concepts == (VEG,)
+    assert "wake" in tagger.kinds() and loop.stats.wakeups_forwarded == 1
+    assert len(bus.ticks) == 3

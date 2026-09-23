@@ -150,6 +150,10 @@ class T0Loop:
         self._pending_wakes: dict[float, tuple[str, ...]] = {}
         #: The newest targeted-look answer, `(frame_t, answer)`, until taken.
         self.last_look_answer: tuple[float, str] | None = None
+        #: Called on the asyncio loop with each wake-up just forwarded to the
+        #: labeler, so a consumer past the tick (the backend's armed watches,
+        #: reason ``watch_armed:<id>``) learns of it without reading the watcher.
+        self.on_wakeup_forwarded: Callable[[Wakeup], None] | None = None
 
     def _warm_up(self) -> None:
         """Touch every numpy/Pillow path once before the clock starts.
@@ -237,6 +241,11 @@ class T0Loop:
         if wake.concepts:
             held = self._pending_wakes.get(frame_t, ())
             self._pending_wakes[frame_t] = held + tuple(c for c in wake.concepts if c not in held)
+        if self.on_wakeup_forwarded is not None:
+            try:
+                self.on_wakeup_forwarded(wake)
+            except Exception:  # noqa: BLE001 - a listener must not stop the loop
+                log.exception("on_wakeup_forwarded listener raised; continuing")
 
     def _request(self, kind: str, frame_t: float, jpeg: bytes) -> None:
         self._tagger.request(kind, frame_t, jpeg)  # type: ignore[arg-type]

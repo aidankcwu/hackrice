@@ -643,6 +643,7 @@ def build_pipeline(settings: Settings, *,
                        timings, db,
                        episodes, reasoner.try_escalate, settings.demo_mode, feed=feed,
                        fast_path=reasoner.fast_path if settings.fast_path else None)
+    reasoner.handler.gate = gate  # an armed `watch` re-escalates through `escalate_armed` (US-M05)
     if source == "sim":
         set_speak_fn(default_speak_fn)
         sim_source = SimSource(scenario or DEFAULT_SCENARIO, frame_store, speed=speed,

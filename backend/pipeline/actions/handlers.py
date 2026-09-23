@@ -5,7 +5,9 @@ Each action in the T1 response maps to exactly one durable effect:
 ===============  ==========================================================
 ``annotate``     a line in ``today_summary`` -- part 4 of the next envelope
 ``log_insight``  a row in ``insights``, feeding daily and weekly reports
-``watch``        a row in ``pending_checks`` the trigger gate polls
+``watch``        a row in ``pending_checks`` the trigger gate polls; with a
+                 ``concept``, an armed condition on the watcher instead, which
+                 re-escalates as ``watch_armed`` when the concept comes back
 ``speak``        the rate limiter, then the TTS seam
 ``act``          an ``act`` message down the ingest socket (PLAN 4.1); a
                  ``sound`` kind first passes its own hourly limiter
@@ -49,6 +51,7 @@ __all__ = [
     "ActionHandler", "FAST_PATHED", "ACT_SENT", "ACTED", "ACT_FAILED",
     "ACT_FAILED_LINES", "SOUND_RATE_LIMITED", "LOOKED", "LOOK_UNAVAILABLE",
     "LOOK_CHAINED", "LOOK_TIMEOUT", "LOOK_ANSWERED", "LOOK_ANSWER_WAIT_S",
+    "WATCH_ARMED", "WATCH_ARMED_UNAVAILABLE", "MAX_ARMED_WATCHES", "armed_watch_id",
     "make_act_sender",
 ]
 
@@ -74,6 +77,16 @@ LOOK_ANSWERED = "answered"
 LOOK_UNAVAILABLE = "look_unavailable"
 LOOK_CHAINED = "look_chained"
 LOOK_TIMEOUT = "look_timeout"
+
+#: Outcomes of a ``watch`` with a concept (docs/PERCEPTION.md "Gate and
+#: actions"). ``watch_armed``: the watcher holds it and will wake the gate.
+#: ``watch_armed_unavailable``: no capture or no watcher (sim mode, WATCHER=0),
+#: so it fell back to a timed pending check at the deadline.
+WATCH_ARMED = "watch_armed"
+WATCH_ARMED_UNAVAILABLE = "watch_armed_unavailable"
+#: Armed watches the handler remembers, mirroring the watcher's ``max_armed``:
+#: past this the oldest is forgotten here as it is evicted there.
+MAX_ARMED_WATCHES = 8
 
 #: How long an answer is polled for after a ``look`` went out: the tagger's
 #: 3 s ceiling plus room for the mailbox to start the call. The capture bridge
@@ -103,6 +116,14 @@ ActVetoFn = Callable[[str, dict[str, Any], float], "str | None"]
 
 def _rid(prefix: str) -> str:
     return f"{prefix}_{uuid4().hex[:8]}"
+
+
+def armed_watch_id(decision_id: str, concept: str) -> str:
+    """The watch id an armed ``watch`` gets: derived from the decision so the
+    ``watch_armed`` escalation carries the decision back by name, and per
+    concept so one decision can arm two."""
+
+    return f"{decision_id}/{concept}"
 
 
 def _console_send(message: str) -> bool:
@@ -160,9 +181,18 @@ class ActionHandler:
         self.speech = speech
         self.timings = timings
         self.questions = questions
-        #: The capture bridge (``LongevityCapture``): ``look(question)`` and
-        #: ``take_look_answer()``. ``None`` in sim mode, where a ``look`` is
-        #: recorded ``look_unavailable``.
+        #: The trigger gate, for ``escalate_armed`` when an armed watch fires.
+        #: Set by the wiring; ``None`` means a wake-up is only logged.
+        self.gate: Any | None = None
+        #: Armed watches awaiting the watcher: watch id -> (decision id,
+        #: concept, deadline on the decision clock). Bounded to
+        #: ``MAX_ARMED_WATCHES``, oldest evicted, mirroring the watcher.
+        self._armed: dict[str, tuple[str, str, float]] = {}
+        self._capture: Any | None = None
+        #: The capture bridge (``LongevityCapture``): ``look(question)``,
+        #: ``take_look_answer()``, ``arm``/``disarm``. ``None`` in sim mode,
+        #: where a ``look`` is ``look_unavailable`` and an armed ``watch``
+        #: ``watch_armed_unavailable``.
         self.capture = capture
         #: The reasoner that owns this handler, for ``rerun_after_look``. Set
         #: by the reasoner itself; ``None`` means an answer with no open
@@ -191,6 +221,21 @@ class ActionHandler:
         #: Acts sent and not yet answered: act id -> (decision id, decision t,
         #: kind). Popped by the first ``act_result``, so a repeat is ignored.
         self._acts: dict[str, tuple[str, float, str]] = {}
+
+    @property
+    def capture(self) -> Any | None:
+        return self._capture
+
+    @capture.setter
+    def capture(self, value: Any | None) -> None:
+        """Assigning the capture bridge also registers this handler as where its
+        armed wake-ups go (``capture.on_armed_wake``), so the wiring's one
+        assignment is the whole registration. A fake without the attribute is
+        left alone."""
+
+        self._capture = value
+        if value is not None and hasattr(value, "on_armed_wake"):
+            value.on_armed_wake = self.on_armed_wake
 
     def apply(
         self, decision_id: str, t: float, resp: "T1Response", *,
@@ -261,6 +306,13 @@ class ActionHandler:
             result["insights"] += 1
 
         elif kind == "watch":
+            concept = getattr(action, "concept", None)
+            if concept:
+                outcome, watch_id = self.arm_watch(decision_id, t, concept, action)
+                result.setdefault("outcomes", {})[index] = {
+                    "outcome": outcome, "watch_id": watch_id}
+                result["watches"] += 1
+                return
             after_s = action.after_s
             if after_s is None and action.condition is None:
                 # A watch with neither a delay nor a condition would never
@@ -463,6 +515,89 @@ class ActionHandler:
             self.speech.speak(line, "normal", t=t)
         else:
             log.info("act failure line suppressed by the limiter (%s)", kind)
+
+    # -- armed watch (docs/PERCEPTION.md "Gate and actions") ---------------
+
+    def arm_watch(
+        self, decision_id: str, t: float, concept: str, action: Any,
+    ) -> tuple[str, str]:
+        """Arm the watcher on ``concept`` for ``action.within_s``. Returns
+        ``(outcome, watch_id)``.
+
+        Without a capture or a watcher the arming degrades to today's timed
+        pending check at the deadline (``watch_armed_unavailable``), so the
+        clerk's "come back to this" is never silently lost.
+        """
+
+        within_s = float(getattr(action, "within_s", None) or 600)
+        watch_id = armed_watch_id(decision_id, concept)
+        arm = getattr(self.capture, "arm", None)
+        armed = False
+        if callable(arm):
+            try:
+                armed = bool(arm(concept, within_s, watch_id))
+            except Exception:
+                log.exception("armed watch %s could not be set", watch_id)
+        if not armed:
+            log.info("armed watch %s unavailable: no watcher; pending check at +%.0fs",
+                     watch_id, within_s)
+            self.db.insert_pending_check(
+                PendingCheck(
+                    id=_rid("w"), created_t=t, due_t=t + within_s,
+                    condition=action.condition or concept,
+                    reason=action.reason or f"{concept} within {within_s:.0f}s",
+                    decision_id=decision_id,
+                )
+            )
+            return WATCH_ARMED_UNAVAILABLE, watch_id
+        self._armed.pop(watch_id, None)
+        self._armed = {k: v for k, v in self._armed.items() if v[2] >= t}
+        self._armed[watch_id] = (decision_id, concept, t + within_s)
+        while len(self._armed) > MAX_ARMED_WATCHES:
+            oldest = next(iter(self._armed))
+            del self._armed[oldest]
+            log.info("armed watch %s forgotten (more than %d armed)", oldest,
+                     MAX_ARMED_WATCHES)
+        log.info("armed watch %s: %s within %.0fs (decision %s)", watch_id, concept,
+                 within_s, decision_id)
+        return WATCH_ARMED, watch_id
+
+    def on_armed_wake(self, watch_id: str, concept: str, frame_t: float) -> Any:
+        """The bridge's ``on_armed_wake``: an armed concept came back.
+
+        Runs on the asyncio loop (the T0 loop forwards wake-ups there). The
+        arming is spent here; the gate's ``escalate_armed`` builds the
+        ``watch_armed`` escalation carrying the original decision id. An id
+        this handler is not holding (evicted, from before a restart, or
+        disarmed) is ignored. Returns what the gate returned, or ``None``.
+        """
+
+        pending = self._armed.pop(watch_id, None)
+        if pending is None:
+            log.info("armed wake for unknown watch %s ignored", watch_id)
+            return None
+        decision_id, armed_concept, _deadline = pending
+        gate = self.gate
+        escalate = getattr(gate, "escalate_armed", None)
+        if not callable(escalate):
+            log.info("armed watch %s fired but no gate is wired", watch_id)
+            return None
+        try:
+            return escalate(watch_id, concept or armed_concept, frame_t, decision_id)
+        except Exception:
+            log.exception("armed watch %s could not escalate", watch_id)
+            return None
+
+    def disarm_watch(self, watch_id: str) -> None:
+        """Forget an armed watch here and on the watcher."""
+
+        self._armed.pop(watch_id, None)
+        disarm = getattr(self.capture, "disarm", None)
+        if callable(disarm):
+            try:
+                disarm(watch_id)
+            except Exception:
+                log.exception("armed watch %s could not be disarmed", watch_id)
 
     # -- look (docs/PERCEPTION.md "Gate and actions") ----------------------
 

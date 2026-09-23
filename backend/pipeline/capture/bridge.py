@@ -7,6 +7,7 @@ import contextlib
 import logging
 import time
 from collections import deque
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
@@ -19,7 +20,7 @@ from longevity.server.ingest import GlassesLink
 from longevity.sources.base import CaptureSource
 from longevity.tick import frame_ref
 from longevity.vlm import KINDS, T0Tagger, VLMClient, build_client
-from longevity.watcher import Watcher, WatcherConfig
+from longevity.watcher import Wakeup, Watcher, WatcherConfig
 from longevity.watcher_model import build_watcher_model
 
 from ..bus import TickBus
@@ -204,6 +205,11 @@ class LongevityCapture:
             watcher=self.watcher,
         )
         self.his_bus.subscribe(forward)
+        #: Where an armed watch's wake-up goes: ``(watch_id, concept, frame_t)``.
+        #: The action handler registers itself here when it is handed this
+        #: bridge (``ActionHandler.capture``). Called on the asyncio loop.
+        self.on_armed_wake: Callable[[str, str, float], None] | None = None
+        self.loop.on_wakeup_forwarded = self._on_wakeup_forwarded
 
     def _build_watcher(self, cs: CaptureSettings) -> Watcher | None:
         """The watcher, or None with `watcher_error` set. Never raises: a missing
@@ -329,6 +335,32 @@ class LongevityCapture:
             log.info("look dropped: no frame to label yet (%r)", question)
             return
         self.tagger.request("look", frame_t, jpeg, question=question)
+
+    # --- armed watches (docs/PERCEPTION.md "Gate and actions") -----------------
+
+    def arm(self, concept: str, within_s: float, watch_id: str) -> bool:
+        """Arm the watcher: wake with ``watch_armed:<watch_id>`` the first usable
+        frame with `concept` above its enter threshold within `within_s`. False
+        when there is no watcher, so the caller can fall back to a timed check."""
+        if self.watcher is None:
+            return False
+        self.watcher.arm(concept, float(within_s), watch_id)
+        return True
+
+    def disarm(self, watch_id: str) -> None:
+        if self.watcher is not None:
+            self.watcher.disarm(watch_id)
+
+    def _on_wakeup_forwarded(self, wake: Wakeup) -> None:
+        """The loop's hook: an armed wake-up becomes one `on_armed_wake` call."""
+        family, _, watch_id = wake.reason.partition(":")
+        if family != "watch_armed" or not watch_id:
+            return
+        callback = self.on_armed_wake
+        if callback is None:
+            log.info("armed watch %s woke but nobody is listening", watch_id)
+            return
+        callback(watch_id, wake.concepts[0] if wake.concepts else "", wake.frame_t)
 
     @property
     def look_wait_s(self) -> float:
