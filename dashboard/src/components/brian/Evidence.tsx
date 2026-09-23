@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useBackendUrl } from "@/lib/useBackendUrl";
 import { T } from "@/lib/tokens";
 import type { PinRow } from "@/lib/score/types";
 import { Icon } from "./icons";
@@ -15,6 +16,7 @@ const SCROLL_STEP = FRAME_W + 16;
 
 function Pin({ p, fluid }: { p: PinRow; fluid: boolean }) {
   const earn = p.kind === "earn";
+  const src = useBackendUrl(p.img);
   return (
     <figure
       className={`${fluid ? "w-full" : "w-72 shrink-0"} m-0 overflow-hidden`}
@@ -27,7 +29,7 @@ function Pin({ p, fluid }: { p: PinRow; fluid: boolean }) {
           // host that changes per machine, so the plain element is used.
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={p.img}
+            src={src}
             alt={p.seen}
             width={FRAME_W}
             height={FRAME_H}

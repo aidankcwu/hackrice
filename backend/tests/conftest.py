@@ -6,6 +6,12 @@ import os
 # Settings reads it, and environment variables win over the file. Pin the
 # demo-only switches off so the suite tests the code, not tonight's demo.
 os.environ.setdefault("FIXED_LINES_ONLY", "0")
+# Hosted-deployment presets (deploy/): a .env copied from a tester's container
+# must not lock the suite behind a token, reset its databases or swap its
+# persona. Assigned, not setdefault: these change what a test observes.
+for _hosted in ("ACCESS_TOKEN", "PERSONA_FILE", "ROOT_PATH"):
+    os.environ[_hosted] = ""
+os.environ["DEMO_RESET_ON_START"] = "0"
 
 import time
 

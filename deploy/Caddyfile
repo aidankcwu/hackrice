@@ -1,0 +1,26 @@
+# One site, one certificate: https://{$DOMAIN}. Caddy obtains and renews it
+# from Let's Encrypt by itself -- a publicly trusted certificate is not
+# optional, iOS refuses plain ws:// to a public host.
+#
+# Each tester lives under /t/NAME/, routed by routes/NAME.caddy (written by
+# new_tester.sh):
+#
+#   /t/NAME/            -> redirect to /t/NAME/dashboard, query kept
+#   /t/NAME/dashboard*  -> the tester's dashboard, prefix KEPT (Next has the
+#                          base path baked in)
+#   /t/NAME/*           -> the tester's backend, prefix STRIPPED, so it sees
+#                          /api/..., /frames and /ws/glasses exactly as on a
+#                          laptop; reverse_proxy upgrades WebSockets by itself
+#
+# Only `handle` blocks, never `handle_path`: blocks of one directive are
+# tried most-specific path first and the bare catch-all last, so
+# /t/NAME/dashboard* always wins over /t/NAME/*, and the 404 over nothing.
+
+{$DOMAIN} {
+	import /etc/caddy/routes/*.caddy
+
+	# Anything that is not a tester: a plain 404, nothing about who is hosted.
+	handle {
+		respond "not found" 404
+	}
+}

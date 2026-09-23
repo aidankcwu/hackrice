@@ -1,5 +1,6 @@
 "use client";
 import { useId, useState } from "react";
+import { withBasePath } from "@/lib/runtime";
 import { T, fmtH, tone } from "@/lib/tokens";
 import type { CurrenciesView, DashboardData, ExperienceView } from "@/lib/score/types";
 import { fmtHoursValue, fmtSigned } from "./format";
@@ -165,7 +166,7 @@ export function Today({ d, updating = false }: TodayProps) {
 
       <p className="m-0 mt-5" style={{ color: T.muted, fontSize: 12 }}>
         Healthspan score {Math.round(d.overall)} / 100 ·{" "}
-        <a href="/how-its-scored" className="underline decoration-1 underline-offset-2" style={{ color: T.muted }}>
+        <a href={withBasePath("/how-its-scored")} className="underline decoration-1 underline-offset-2" style={{ color: T.muted }}>
           How the hours are computed →
         </a>
       </p>

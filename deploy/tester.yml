@@ -1,0 +1,41 @@
+# The templates every tester's services extend (testers/NAME.yml, written by
+# new_tester.sh). Never started on their own: compose only reads a service
+# out of this file when another one extends it.
+services:
+  # The pipeline backend. The image's CMD runs
+  #   python -m pipeline.main --source glasses --vlm gemini --reasoner openai
+  # on port 8010 inside the container (every tester the same; the host port
+  # and the token differ, and come from testers/NAME.env).
+  backend:
+    image: hackrice-backend:local
+    restart: unless-stopped
+    environment:
+      DEMO_MODE: "1"
+      # Every start is a fresh demo: what was said, asked and settled is
+      # cleared; seeded and measured data is kept.
+      DEMO_RESET_ON_START: "1"
+      DEMO_RESET_ALL: "1"
+      HOSTED: "1"
+      # The browser talks to the backend through the same https origin as
+      # the dashboard, and the token rides in a header, not a cookie, so
+      # allowing any origin opens nothing.
+      CORS_ORIGINS: "*"
+      # Caddy is the only thing in front; trust its X-Forwarded-* headers.
+      FORWARDED_ALLOW_IPS: "*"
+    # Enough for numpy + OpenCV + the pipeline with headroom; one runaway
+    # tester cannot starve the others.
+    mem_limit: 1g
+    logging: &logging
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # The dashboard (dashboard/Dockerfile, owned by the dashboard). Built once
+  # per tester, because Next bakes the /t/NAME/dashboard base path into the
+  # bundle. Its own HEALTHCHECK probes /t/NAME/dashboard/healthz.
+  dashboard:
+    restart: unless-stopped
+    environment:
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+    mem_limit: 512m
+    logging: *logging

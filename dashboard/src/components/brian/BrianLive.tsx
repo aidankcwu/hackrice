@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ApiResult } from "@/lib/api";
+import { appFetch } from "@/lib/runtime";
 import { usePoll } from "@/lib/usePoll";
 import { GOALS } from "@/lib/score/types";
 import type { DashboardData, Goal } from "@/lib/score/types";
@@ -22,7 +23,7 @@ const looksLikeDashboard = (v: unknown): v is DashboardData =>
 
 /** Throws on any failure so usePoll keeps the last good payload instead of swapping in a fixture. */
 async function fetchScore(goal: Goal): Promise<ApiResult<DashboardData>> {
-  const res = await fetch(`/api/score?goal=${encodeURIComponent(goal)}`, {
+  const res = await appFetch(`/api/score?goal=${encodeURIComponent(goal)}`, {
     cache: "no-store",
     signal: AbortSignal.timeout(8000),
   });

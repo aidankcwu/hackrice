@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { API_BASE, api } from "@/lib/api";
+import { api } from "@/lib/api";
+import { useBackendUrl } from "@/lib/useBackendUrl";
 import type { Moment, Recap, Session, Subscore } from "@/lib/types";
 
 /** Ending a session auto-generates its recap.
@@ -12,8 +13,9 @@ import type { Moment, Recap, Session, Subscore } from "@/lib/types";
 
 const clock = (t: number) => new Date(t * 1000).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false});
 const mmss = (s: number) => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,"0")}`;
-// `frame_url` is server-relative; the dashboard may be on a different origin.
-const frameSrc = (m: Moment) => `${API_BASE}${m.frame_url}`;
+// `frame_url` is server-relative; the dashboard may be on a different origin,
+// and an <img> cannot send the token header, so it rides as `?token=`
+// (useBackendUrl → lib/runtime.ts backendUrl).
 
 const SEVERITY: Record<string,string> = {
   good: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
@@ -44,9 +46,10 @@ function SubscoreRow({row}:{row:Subscore}) {
 
 function MomentCard({moment}:{moment:Moment}) {
   const tone = SEVERITY[moment.severity] ?? SEVERITY.neutral;
+  const src = useBackendUrl(moment.frame_url);
   return <figure className={`w-40 shrink-0 overflow-hidden rounded-md border ${tone}`}>
     {/* eslint-disable-next-line @next/next/no-img-element -- evidence JPEG off the pipeline, not a static asset */}
-    <img src={frameSrc(moment)} alt={moment.caption} className="h-24 w-full bg-zinc-900 object-cover" loading="lazy"/>
+    <img src={src} alt={moment.caption} className="h-24 w-full bg-zinc-900 object-cover" loading="lazy"/>
     <figcaption className="space-y-1 p-2">
       <div className="flex items-center justify-between gap-1">
         <span className="text-[9px] font-black uppercase tracking-[.1em]">{moment.category}</span>

@@ -34,6 +34,7 @@ from ..wearables.adapters import (
     whoop_to_samples,
 )
 from ..wearables.ingest import ingest, ingest_samples
+from .auth import token_matches
 
 #: A live sample newer than this counts as "a wearable is connected right now".
 LIVE_FRESH_S = 15 * 60
@@ -54,6 +55,18 @@ def _dump(rows: list) -> list[dict]:
 @router.get("/api/status")
 async def status(request: Request) -> dict:
     return _pipeline(request).status()
+
+
+@router.get("/healthz")
+async def healthz(request: Request) -> dict[str, bool | float]:
+    """Public process liveness only; never expose user or pipeline state."""
+
+    pipeline = _pipeline(request)
+    started_at = pipeline.started_at
+    return {
+        "ok": True,
+        "uptime_s": max(0.0, time.time() - started_at) if started_at is not None else 0.0,
+    }
 
 
 @router.post("/api/session/start")
@@ -307,8 +320,11 @@ def _check_token(token: str | None) -> None:
     whole config object.
     """
 
-    expected = os.environ.get("WEARABLE_INGEST_TOKEN", "").strip()
-    if expected and (token or "").strip() != expected:
+    # The same constant-time check as the ACCESS_TOKEN in front of the whole
+    # API (api/auth.py). This one stacks on top: with both set, a wearable
+    # push presents both -- the access token to reach the container at all,
+    # the ingest token to write into its biometrics.
+    if not token_matches(os.environ.get("WEARABLE_INGEST_TOKEN"), token):
         raise HTTPException(status_code=401, detail="bad or missing X-Ingest-Token")
 
 

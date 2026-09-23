@@ -21,7 +21,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from pydantic import AliasChoices, BeforeValidator, Field
+from pydantic import AliasChoices, BeforeValidator, Field, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 __all__ = ["DEFAULT_KEYWORD_TRIGGERS", "Timings", "Settings", "get_settings"]
@@ -83,6 +83,33 @@ def _parse_switch(value: Any) -> bool:
 
 #: A bool field that parses like a stage switch (see ``_parse_switch``).
 Switch = Annotated[bool, BeforeValidator(_parse_switch)]
+
+
+def _parse_opt_in(value: Any) -> bool:
+    """An opt-in flag: OFF unless clearly on. The mirror of ``_parse_switch``
+    for behaviour that destroys something (DEMO_RESET_ON_START clears memory):
+    a blank or mistyped value must never be read as yes."""
+
+    if isinstance(value, bool):
+        return value
+    raw = "" if value is None else str(value).strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw not in _SWITCH_OFF and raw != "":
+        log.warning("Invalid opt-in flag value %r; treating it as off", value)
+    return False
+
+
+#: A bool field that is off unless set to a clear yes (see ``_parse_opt_in``).
+OptIn = Annotated[bool, BeforeValidator(_parse_opt_in)]
+
+
+def _blank_is_none(value: Any) -> Any:
+    """``PERSONA_FILE=`` in an env file means "no file", not the current directory."""
+
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    return value
 
 
 @dataclass(frozen=True, slots=True)
@@ -388,6 +415,40 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("vlm_max_in_flight", "t0_max_in_flight"),
     )
 
+    # -- hosted deployment (deploy/README.md): one container per tester, behind
+    # one reverse proxy. Every field defaults to the local-Mac behaviour, so a
+    # laptop run with no .env changes nothing. ----------------------------------
+    #: ACCESS_TOKEN: the one secret a tester's phone and dashboard present
+    #: (X-Access-Token header or ?token=). Empty = open, as on localhost.
+    access_token: str = ""
+    #: HOSTED=1 applies hosted safety checks even without a public prefix.
+    hosted: OptIn = False
+    #: PERSONA_FILE: a text file loaded into the persona override at startup,
+    #: but only when the database has none -- so an edit a tester makes in the
+    #: dashboard survives a container restart instead of being stamped over.
+    persona_file: Annotated[Path | None, BeforeValidator(_blank_is_none)] = None
+    #: DEMO_RESET_ON_START=1: clear the short-term memory (scripts/demo_reset.py)
+    #: at every start, so each restart of a tester's container is a fresh demo.
+    demo_reset_on_start: OptIn = False
+    #: DEMO_RESET_ALL=1 also clears the measured demo day and live biometrics.
+    demo_reset_all: OptIn = False
+    #: CORS_ORIGINS: comma-separated browser origins allowed to call the API
+    #: ("*" for any). The token rides in a header, not a cookie, so "*" does not
+    #: open a cross-site request hole; it only lets a hosted dashboard read.
+    cors_origins: str = "http://localhost:3000"
+    #: ROOT_PATH: the public prefix the proxy strips (e.g. /t/alice), handed to
+    #: uvicorn. Routing is unaffected; it only makes URLs the server builds
+    #: itself -- redirects, the OpenAPI page -- point back through the prefix.
+    root_path: str = ""
+
+    @model_validator(mode="after")
+    def hosted_requires_access_token(self) -> "Settings":
+        if (self.root_path.strip() or self.hosted) and not self.access_token.strip():
+            raise ValueError(
+                "ACCESS_TOKEN must be non-empty when ROOT_PATH is set or HOSTED=1"
+            )
+        return self
+
     # -- air quality (pipeline/wearables/air.py). Unset lat/lon is the honest
     # default: no coordinates means no air layer, never an invented number. ----
     air_lat: float | None = None
@@ -408,6 +469,11 @@ class Settings(BaseSettings):
     #: Reserved for the engine's cadence -> gait model; unused by the adapter today.
     profile_height_m: float | None = None
     profile_cyp1a2_slow: bool = False
+
+    def cors_origin_list(self) -> list[str]:
+        """``cors_origins`` split on commas, blanks dropped."""
+
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
     def switches_line(self) -> str:
         """The effective kill-switch values, for one startup log line."""

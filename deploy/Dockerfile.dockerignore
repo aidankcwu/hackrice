@@ -1,0 +1,25 @@
+# BuildKit reads this for deploy/Dockerfile (it takes precedence over any
+# root .dockerignore). The Dockerfile copies explicit paths anyway; this keeps
+# the upload small and makes sure secrets never even reach the builder.
+**/.env
+**/.env.*
+!**/.env.example
+**/.venv
+**/__pycache__
+**/*.pyc
+**/*.db
+**/*.db-wal
+**/*.db-shm
+**/data
+**/node_modules
+.git
+.claude
+dashboard
+ios
+docs
+tools
+tests
+backend/tests
+deploy/data
+deploy/testers
+deploy/routes

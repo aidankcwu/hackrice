@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { appFetch } from "@/lib/runtime";
 import { T } from "@/lib/tokens";
 import type { EngineForecast, EngineProfile, ForecastView } from "@/lib/score/types";
 import { clockTime, recoverableDrivers, withUnit } from "@/lib/score/instruments";
@@ -116,7 +117,7 @@ export function Tonight({ f, observations, profile, baselineSleepH }: TonightPro
     const timer = setTimeout(() => {
       void (async () => {
         try {
-          const res = await fetch("/api/forecast", {
+          const res = await appFetch("/api/forecast", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             cache: "no-store",

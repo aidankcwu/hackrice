@@ -8,6 +8,7 @@
  * behind it shows no numbers (R1).
  */
 import type { Decision, Status, WearableMetricRow, WearablesStatus } from "@/lib/types";
+import { backendHeaders } from "@/lib/runtime";
 import type { DataSource, DayInputs, PipelineEpisode } from "./types";
 
 export const DEFAULT_API_BASE = "http://localhost:8010";
@@ -18,8 +19,21 @@ const DECISION_LIMIT = 200;
 /** Parallel `/api/evidence/{id}` lookups; the backend is one SQLite connection. */
 const EVIDENCE_CONCURRENCY = 8;
 
+/**
+ * The backend as this Next.js server reaches it. Per container: `BACKEND_URL`
+ * (e.g. `http://backend-alice:8010` on the deploy network) — the browser's
+ * base is resolved separately in `lib/runtime.ts` and is usually a different
+ * URL for the same backend. `NEXT_PUBLIC_API_BASE` and localhost stay as the
+ * dev fallbacks.
+ */
 export function apiBase(): string {
-  return process.env.NEXT_PUBLIC_API_BASE ?? DEFAULT_API_BASE;
+  const configured = process.env.BACKEND_URL?.trim() || process.env.NEXT_PUBLIC_API_BASE?.trim();
+  return (configured || DEFAULT_API_BASE).replace(/\/+$/, "");
+}
+
+/** The tester's token for server→backend calls (`ACCESS_TOKEN`), sent as `X-Access-Token`. */
+export function serverToken(): string | undefined {
+  return process.env.ACCESS_TOKEN?.trim() || undefined;
 }
 
 /** Network error, timeout, non-2xx, or a body that is not JSON. */
@@ -35,7 +49,11 @@ const describe = (e: unknown): string => (e instanceof Error ? e.message : Strin
 export async function fetchJson<T>(base: string, path: string, timeoutMs = 2500): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${base}${path}`, { cache: "no-store", signal: AbortSignal.timeout(timeoutMs) });
+    response = await fetch(`${base}${path}`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: backendHeaders(undefined, serverToken() ?? null),
+    });
   } catch (cause) {
     throw new BackendOffline(`${path}: ${describe(cause)}`, { cause });
   }
@@ -123,7 +141,10 @@ export function pivotSeeded(rows: SeededRow[]): Record<string, Record<string, nu
 // ---------------------------------------------------------------------------
 
 /**
- * decision id → frame URL, or null when no frame survived. The reasoner copies
+ * decision id → frame path, or null when no frame survived. The path is
+ * server-relative (`/api/evidence/{id}/{ref}`), never `${base}/...`: `base` is
+ * the backend as *this server* reaches it, which a browser behind the proxy
+ * usually cannot, so the client puts it on its own base (`backendUrl`). The reasoner copies
  * frames at admission and inserts the decision row only after inference, so by
  * the time an id is listed its evidence is complete and never changes — a
  * settled answer is final. Fetch failures are deliberately not cached so the
@@ -149,7 +170,7 @@ async function evidenceFrameUrl(base: string, decisionId: string): Promise<strin
   const last = rows.length > 0 ? rows[rows.length - 1] : undefined;
   const url =
     last !== undefined && typeof last.frame_ref === "string"
-      ? `${base}/api/evidence/${id}/${encodeURIComponent(last.frame_ref)}`
+      ? `/api/evidence/${id}/${encodeURIComponent(last.frame_ref)}`
       : null;
   evidenceCache.set(decisionId, url);
   return url;

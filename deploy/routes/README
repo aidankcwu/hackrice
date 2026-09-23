@@ -1,0 +1,5 @@
+One Caddy route file per tester, NAME.caddy, written by ../new_tester.sh and
+removed by ../remove_tester.sh. Caddy imports routes/*.caddy (see ../Caddyfile).
+
+This directory is committed on purpose: if it did not exist when Caddy first
+started, Docker would create it as root and the scripts could not write here.

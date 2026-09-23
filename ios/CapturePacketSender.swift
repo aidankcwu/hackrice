@@ -10,7 +10,8 @@
 //  1. **Drop, never queue** (SPEC §5.2). The DAT stream runs at 2 fps; one frame per
 //     `interval` is encoded and every other frame is thrown away *at the door*. There
 //     is no buffer here, and `encodeInFlight` makes sure a slow encode drops the next
-//     frame rather than stacking work behind itself.
+//     frame rather than stacking work behind itself. `sendInFlight` does the same for
+//     the network: at most one capture packet is ever outstanding (see `finish`).
 //  2. **Encoding is off the main actor.** CorpusRecorder (A4) encodes synchronously on
 //     main because it is a throwaway at 1 Hz; this one is in the live path and shares
 //     the main actor with the DAT preview, so the resize + JPEG runs on `capture.encode`.
@@ -68,10 +69,19 @@ final class CapturePacketSender {
   /// number of encodes that reached the socket; `sentCount` alone is the number that
   /// left it. A climbing `failedCount` with `sentCount` stuck is a dead socket.
   private(set) var failedCount = 0
-  /// Frames the sampler discarded, plus packets refused because `isConnected` is false.
+  /// Frames the sampler discarded, plus packets refused because `isConnected` is false,
+  /// plus frames dropped because the previous send had not completed (`busyCount`).
   /// At 2 fps into a 1.5 s interval this climbs ~2x as fast as `sentCount`. A zero here
   /// means frames are not arriving at all.
   private(set) var droppedCount = 0
+  /// The part of `droppedCount` caused by a send still in flight. Climbing steadily
+  /// means the uplink is slower than one packet per interval (weak cellular): frames
+  /// are being thrown away at the door instead of queueing, which is the intended
+  /// behaviour, and the Mac sees fewer but fresh frames.
+  private(set) var busyCount = 0
+  /// Sends that missed the deadline (`sendDeadline`): the transport reported a timeout,
+  /// or never reported at all. Each one is also in `failedCount`.
+  private(set) var stalledCount = 0
   private(set) var lastSentAt: Date?
   private(set) var lastPacketBytes = 0
   private(set) var isRunning = false
@@ -97,7 +107,10 @@ final class CapturePacketSender {
     let kb = lastPacketBytes > 0 ? "\(lastPacketBytes / 1024) KB" : "—"
     let when = lastSentAt.map { String(format: "%.1fs ago", Date().timeIntervalSince($0)) }
     return "sent \(sentCount) · failed \(failedCount) · dropped \(droppedCount) · \(kb)"
-      + " · \(when ?? "never")" + (lastError.map { " · \($0)" } ?? "")
+      + " · \(when ?? "never")"
+      + (busyCount > 0 ? " · busy \(busyCount)" : "")
+      + (stalledCount > 0 ? " · stalled \(stalledCount)" : "")
+      + (lastError.map { " · \($0)" } ?? "")
   }
 
   /// Derive `isConnected` from `MacLink.status`.
@@ -131,6 +144,19 @@ final class CapturePacketSender {
 
   @ObservationIgnored private var lastSampleAt: TimeInterval = 0
   @ObservationIgnored private var encodeInFlight = false
+  /// True from the moment a capture packet is handed to `send` until its completion
+  /// (or the deadline backstop) is processed on the main actor. See `finish`.
+  @ObservationIgnored private var sendInFlight = false
+  /// Identifies the outstanding capture send, so a completion that arrives after the
+  /// backstop already gave up on it cannot clear the flag of a newer send or count twice.
+  @ObservationIgnored private var sendSeq = 0
+
+  /// MacLink fails a `sendRaw` that has not completed in `MacLink.sendDeadline` (3 s)
+  /// and reconnects. This backstop fires a little later and only matters for a transport
+  /// that never calls back at all: without it one lost completion would leave
+  /// `sendInFlight` set and stop capture for good.
+  nonisolated static var sendDeadline: TimeInterval { 3 }
+  nonisolated static var sendBackstopGrace: TimeInterval { 0.5 }
 
   /// `nonisolated` so SwiftUI can build one in a property initializer
   /// (`@State private var sender = CapturePacketSender()`), which is not a main-actor
@@ -164,9 +190,20 @@ final class CapturePacketSender {
 
   func start() {
     guard !isRunning else { return }
+    // ConsentView.swift. MacLink.connect() already refuses without consent, so this
+    // should never trip; it is here because this class is the one that ships camera
+    // frames, and it must not depend on a view remembering to ask first.
+    guard StreamingConsent.isGranted else {
+      lastError = "consent needed"
+      return
+    }
     sensors.start()
     lastSampleAt = 0
     encodeInFlight = false
+    // A send from before a stop/reconnect is not ours to wait for. `sendSeq` moves on, so
+    // its completion, if one ever comes, is ignored instead of clearing a new send's flag.
+    sendInFlight = false
+    sendSeq &+= 1
     lastError = nil
     isRunning = true
     // wire.py: HELLO is "sent once on connect; identifies the phone, carries clock
@@ -228,6 +265,15 @@ final class CapturePacketSender {
       droppedCount += 1
       return
     }
+    // The previous packet is still on the wire. Encoding this frame would only produce
+    // a packet with nowhere to go, so it is dropped here, before any work is done.
+    // `lastSampleAt` is left alone, so the first frame after the send completes is
+    // taken straight away rather than waiting out another full interval.
+    guard !sendInFlight else {
+      droppedCount += 1
+      busyCount += 1
+      return
+    }
     lastSampleAt = now
     encodeInFlight = true
 
@@ -264,22 +310,56 @@ final class CapturePacketSender {
       lastError = "not connected"
       return
     }
+    // At most one capture send outstanding (CLAUDE.md invariant 2, drop never queue).
+    //
+    // Why this is needed: `send` returns immediately and URLSession accepts every packet
+    // handed to it. On a slow uplink (cellular with weak signal, where a ~53 KB packet
+    // can take longer than the 1.5 s interval), a new packet every interval queues up
+    // behind the last one in URLSession and the TCP send buffer. The Mac then gets
+    // frames that are many seconds old and labels them with their old `t`, so the tick
+    // shows a stale scene. The flag was previously cleared as soon as the encode
+    // finished, before the network send completed, so nothing stopped that build-up.
+    //
+    // Now the flag stays set until the transport reports back, and `ingest` drops frames
+    // (`busyCount`) while it is set. A send that stalls is failed by MacLink after
+    // `MacLink.sendDeadline`, which also tears the socket down and reconnects. The
+    // backstop below covers a transport that never reports at all.
+    guard !sendInFlight else {
+      droppedCount += 1
+      busyCount += 1
+      return
+    }
     let bytes = json.utf8.count
+    sendSeq &+= 1
+    let seq = sendSeq
+    sendInFlight = true
     send(json) { [weak self] error in
       // Flatten the error to a String *before* the hop: a bare `Error` existential is
       // not Sendable, and capturing one in a `Task { @MainActor in … }` is a strict
       // concurrency error. The message is all `statusLine` ever wanted anyway.
       let failure = error.map { "send failed: \($0.localizedDescription)" }
+      let timedOut = (error as? URLError)?.code == .timedOut
       Task { @MainActor in
-        self?.delivered(bytes: bytes, failure: failure)
+        self?.delivered(seq: seq, bytes: bytes, failure: failure, stalled: timedOut)
       }
+    }
+    Task { @MainActor [weak self] in
+      try? await Task.sleep(for: .seconds(Self.sendDeadline + Self.sendBackstopGrace))
+      self?.delivered(
+        seq: seq, bytes: bytes,
+        failure: "send stalled > \(Int(Self.sendDeadline))s, no completion", stalled: true)
     }
   }
 
-  /// The only place `sentCount`, `lastSentAt` and `lastPacketBytes` move.
-  private func delivered(bytes: Int, failure: String?) {
+  /// The only place `sentCount`, `lastSentAt` and `lastPacketBytes` move, and the only
+  /// place `sendInFlight` is cleared. Called twice per send (the transport's completion
+  /// and the backstop); only the first call for the current `seq` counts.
+  private func delivered(seq: Int, bytes: Int, failure: String?, stalled: Bool) {
+    guard sendInFlight, seq == sendSeq else { return }
+    sendInFlight = false
     if let failure {
       failedCount += 1
+      if stalled { stalledCount += 1 }
       lastError = failure
       return
     }

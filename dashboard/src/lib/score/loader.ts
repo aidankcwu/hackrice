@@ -15,7 +15,7 @@ import { GOALS, type DashboardData, type Goal, type Person } from "./types";
 
 export interface LoadOptions {
   goal?: Goal;
-  /** Overrides NEXT_PUBLIC_API_BASE. */
+  /** Overrides BACKEND_URL / NEXT_PUBLIC_API_BASE. */
   apiBase?: string;
 }
 

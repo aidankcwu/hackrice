@@ -8,6 +8,7 @@ import logging
 import time
 from collections import deque
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 from ..actions.speech import SpeechLimiter, default_speak_fn, set_speak_fn, spoken
@@ -406,6 +407,80 @@ def health_problems(*, source: str, phone, ai_coverage: float, ai_ticks: int,
     return problems
 
 
+#: What ``scripts/demo_reset.py`` clears: short-term memory only (what was
+#: said, asked and settled today), never anything measured. The script keeps
+#: its own copy so it runs without the package's wiring; a test pins the two
+#: lists equal so they cannot drift.
+DEMO_RESET_TABLES = ("conversations", "pending_questions", "today_summary",
+                     "profile_lines", "recaps", "sessions")
+DEMO_RESET_ALL_TABLES = DEMO_RESET_TABLES + (
+    "ticks", "episodes", "decisions", "escalated_frames",
+)
+
+
+def demo_reset(db: Database, *, all_data: bool = False) -> int:
+    """Clear the short-term memory tables, returning how many rows went.
+
+    Same clearing as ``scripts/demo_reset.py --yes``. A hosted tester's
+    container restarts into a blank day this way: without it the voice agent
+    would remember the tester's rehearsal and skip the coffee question.
+    """
+
+    cleared = 0
+    with db._lock:
+        for table in (DEMO_RESET_ALL_TABLES if all_data else DEMO_RESET_TABLES):
+            try:
+                cleared += db.conn.execute(f"DELETE FROM {table}").rowcount or 0
+            except Exception:  # noqa: BLE001 -- a table this schema lacks is not an error
+                log.debug("demo reset: no table %s", table)
+        if all_data:
+            try:
+                cleared += db.conn.execute(
+                    "DELETE FROM biometric_series WHERE origin = 'live'"
+                ).rowcount or 0
+            except Exception:  # noqa: BLE001 -- old schemas may lack origin
+                log.debug("demo reset: no live biometric series")
+        db.conn.commit()
+    return cleared
+
+
+def load_persona_file(db: Database, path) -> bool:
+    """Seed the persona override from a file, once. True when it was loaded.
+
+    Only when the database has no override yet: a tester who rewrites the
+    persona in the dashboard keeps their edit across a container restart.
+    A missing or empty file is logged and skipped, never fatal -- the built-in
+    persona is a working fallback, a backend that will not start is not.
+    """
+
+    if db.get_persona() is not None:
+        return False
+    try:
+        text = Path(path).expanduser().read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        log.error("PERSONA_FILE %s unreadable (%s); using the built-in persona", path, exc)
+        return False
+    if not text:
+        log.warning("PERSONA_FILE %s is empty; using the built-in persona", path)
+        return False
+    db.set_persona(text)
+    log.info("persona: loaded %d chars from %s", len(text), path)
+    return True
+
+
+def apply_startup_presets(db: Database, settings: Settings) -> None:
+    """DEMO_RESET_ON_START, then PERSONA_FILE. Reset first: it never touches
+    the persona, so the order only matters for reading the log."""
+
+    if getattr(settings, "demo_reset_on_start", False):
+        all_data = getattr(settings, "demo_reset_all", False)
+        log.info("demo reset on start%s: cleared %d rows",
+                 " (all)" if all_data else "", demo_reset(db, all_data=all_data))
+    persona_file = getattr(settings, "persona_file", None)
+    if persona_file:
+        load_persona_file(db, persona_file)
+
+
 def build_pipeline(settings: Settings, *,
                    source: Literal["sim", "glasses", "webcam", "replay"],
                    reasoner_mode: Literal["openai", "fake"], speed: float,
@@ -415,6 +490,7 @@ def build_pipeline(settings: Settings, *,
                    flow: str | None = None) -> Pipeline:
     """Build the graph in dependency order without starting any tasks."""
     db = Database(settings.db_path).connect().init_schema()
+    apply_startup_presets(db, settings)
     bus = TickBus()
     capture = None
     sim_source = None
