@@ -291,7 +291,7 @@ async def test_openai_parser_returns_the_parsed_fields() -> None:
     (call,) = stub.responses.calls
     assert call["model"] == "gpt-5.4-mini"
     assert call["text"]["format"]["name"] == "answer_parse"
-    assert call["reasoning"] == {"effort": "minimal"}
+    assert call["reasoning"] == {"effort": "none"}
 
 
 async def test_openai_parser_prompt_carries_question_episode_and_transcript() -> None:

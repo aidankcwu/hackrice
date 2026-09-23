@@ -6,12 +6,27 @@ import os
 # Settings reads it, and environment variables win over the file. Pin the
 # demo-only switches off so the suite tests the code, not tonight's demo.
 os.environ.setdefault("FIXED_LINES_ONLY", "0")
+# Auth off for the suite even if the shell exports a deploy token; blank (not
+# absent) so a later load_dotenv(override=False) cannot turn it back on.
+# test_auth.py turns it on per test.
+os.environ["API_TOKEN"] = ""
 
 import time
 
 import pytest
 
 from pipeline.models import AiBlock, DeviceBlock, SensorBlock, Tick
+from pipeline.reasoner.effort import reset_effort_memory
+
+
+@pytest.fixture(autouse=True)
+def _forget_learned_effort():
+    """The accepted reasoning effort is process-wide by design; a stub model
+    that rejected it in one test must not decide the next test's first call."""
+
+    reset_effort_memory()
+    yield
+    reset_effort_memory()
 
 
 def make_tick(seq: int = 0, t: float | None = None, with_ai: bool = True) -> Tick:

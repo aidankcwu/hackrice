@@ -1,8 +1,9 @@
 """The T1 context envelope (SPEC §4.2, §4.3).
 
-Five parts, ordered by volatility so the stable prefix is cacheable: persona,
-7-day summary and objective go in a system message; today's summary, the tick
-table and the frames go in one user message.
+Five parts, ordered by volatility so the stable prefix is cacheable: the
+objective, persona and 7-day summary go in a system message (see
+:func:`~.prompts.build_system_prompt` for why the objective leads); today's
+summary, the tick table and the frames go in one user message.
 
 Two rules do the real work here:
 
@@ -28,6 +29,8 @@ from .prompts import build_system_prompt
 __all__ = [
     "UNKNOWN",
     "local_time",
+    "CLERK_FRAMES",
+    "TODAY_MAX_LINES",
     "select_frames",
     "tick_table",
     "frame_label",
@@ -41,6 +44,22 @@ __all__ = [
 AI_MAX_AGE_MS = 3000
 
 UNKNOWN = "?"
+
+#: Frames per clerk call: the trigger frame (sent at detail high) and the one
+#: context frame at the biggest scene change in the window (detail low). The
+#: clerk's job on a wake-up is "what is in hand right now"; the trigger frame
+#: answers that, and one before-the-change frame gives it the contrast. Four
+#: frames spent two images on the two sides of the same old phash hop (real
+#: selections sat at t-35s/t-34s) and paid two more vision passes per call.
+#: The Reasoner owns the count it copies at admission and passes it as ``k``.
+CLERK_FRAMES = 2
+
+#: How many of today's memory lines the clerk sees, newest last. Uncapped, the
+#: block grew to ~86 lines (~1.5 K tokens) by the end of a day -- the largest
+#: part of the user message -- and it re-reads earlier sightings as "again".
+#: The conversation agent already caps its own copy at the same 15; repeats
+#: beyond the cap are still caught by the questions block and learned lines.
+TODAY_MAX_LINES = 15
 
 #: One tick-table row per this many seconds of window (SPEC §4.3: compact).
 TABLE_ROW_EVERY_S = 5.0
@@ -69,7 +88,9 @@ def local_time(t: float, fmt: str = "%H:%M:%S") -> str:
 # -- frame selection ------------------------------------------------------
 
 
-def select_frames(window: list[Tick], trigger_tick: Tick, k: int = 4) -> list[Tick]:
+def select_frames(
+    window: list[Tick], trigger_tick: Tick, k: int = CLERK_FRAMES
+) -> list[Tick]:
     """Pick up to ``k`` ticks whose frames to send, chronologically, trigger last.
 
     The trigger tick is always included and always last. The other ``k-1`` are
@@ -238,11 +259,20 @@ def frame_label(tick: Tick, origin: float, is_trigger: bool = False) -> str:
     return label
 
 
-def _today_block(lines: list[TodaySummaryLine]) -> str:
+def _today_block(
+    lines: list[TodaySummaryLine], limit: int = TODAY_MAX_LINES
+) -> str:
     if not lines:
         return "Today so far:\nnothing yet"
-    body = "\n".join(f"  {local_time(l.t, '%H:%M')} {l.line}" for l in lines)
-    return "Today so far:\n" + body
+    shown = lines[-limit:] if limit > 0 else lines
+    body = "\n".join(f"  {local_time(l.t, '%H:%M')} {l.line}" for l in shown)
+    # Say when lines were cut, so a short block is not read as a quiet day.
+    head = (
+        f"Today so far (last {len(shown)} of {len(lines)} lines):"
+        if len(shown) < len(lines)
+        else "Today so far:"
+    )
+    return f"{head}\n{body}"
 
 
 RECENT_QUESTIONS = 5
@@ -306,7 +336,7 @@ def build_envelope(
     today_lines: list[TodaySummaryLine],
     seven_day: str,
     persona: str,
-    k: int = 4,
+    k: int = CLERK_FRAMES,
     learned: list[str] | None = None,
     recent_questions: list[Any] | None = None,
 ) -> list[dict[str, Any]]:

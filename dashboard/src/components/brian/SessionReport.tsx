@@ -1,5 +1,6 @@
 "use client";
 import { API_BASE } from "@/lib/api";
+import { withToken } from "@/lib/score/backend";
 import { T } from "@/lib/tokens";
 import type { Moment, Recap, Subscore } from "@/lib/types";
 import { Chip, H2, Panel, Track } from "./Panel";
@@ -67,7 +68,7 @@ function MomentCard({ m }: { m: Moment }) {
         {/* Served by the pipeline backend on a host that changes per machine, so
             next/image would need a remotePatterns entry it cannot have. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={`${API_BASE}${m.frame_url}`} alt={m.caption}
+        <img src={withToken(`${API_BASE}${m.frame_url}`)} alt={m.caption}
              className="h-full w-full object-cover" loading="lazy" decoding="async"/>
       </div>
       <figcaption className="flex flex-col gap-1.5 p-3">

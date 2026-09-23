@@ -13,6 +13,7 @@ place where the system could plausibly say nothing at all and look broken.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from typing import Any
 
 import httpx
@@ -303,8 +304,13 @@ async def test_a_second_handoff_is_dropped_and_recorded_on_the_decision(h):
 
 
 async def test_the_cooldown_drops_the_next_handoff(h):
-    """§1: a short quiet window after a close, then hand-offs land again."""
+    """§1: a quiet window after a close, then hand-offs land again.
 
+    The demo runs it at zero (next test); a deployment that sets one still
+    gets exactly this behaviour.
+    """
+
+    h.agent.timings = dataclasses.replace(h.agent.timings, conversation_cooldown_s=2.0)
     h.agent.request("wine glass", "statement", decision_id="d", episode_id=None,
                     esc=make_escalation())
     await settle()
@@ -313,9 +319,23 @@ async def test_the_cooldown_drops_the_next_handoff(h):
     assert h.agent.request("the cereal", "statement", decision_id="d2",
                            episode_id=None, esc=None) == "conversation_cooldown"
 
-    h.clock.t += h.settings.timings.conversation_cooldown_s + 1
+    h.clock.t += h.agent.timings.conversation_cooldown_s + 1
     assert h.agent.request("the cereal", "statement", decision_id="d3",
                            episode_id=None, esc=None).startswith("handed_off:")
+    await settle()
+
+
+async def test_in_the_demo_the_next_prop_lands_the_instant_a_conversation_closes(h):
+    """Seen live: a cucumber dropped 1.7 s after the coffee conversation closed.
+    The ACTIVE guard already stops overlap, so the demo cooldown is zero."""
+
+    assert h.settings.timings.conversation_cooldown_s == 0.0
+    h.agent.request("coffee milkshake in hand", "statement", decision_id="d1",
+                    esc=make_escalation())
+    await settle()
+    assert h.agent.current() is None
+    assert h.agent.request("cucumber in hand", "statement", decision_id="d2",
+                           esc=make_escalation()).startswith("handed_off:")
     await settle()
 
 
@@ -700,3 +720,539 @@ def test_a_line_said_minutes_ago_is_not_said_again(tmp_path):
         assert rows[0]["turns"][0]["text"] == ""
     asyncio.run(run())
     db.close()
+
+
+# -- the fast path's side of the agent (reactive glasses) -------------------
+
+
+def cue_escalation(cue: str, item: str, trigger: str = "cue") -> Escalation:
+    esc = make_escalation(trigger)
+    esc.cue, esc.cue_item = cue, item
+    esc.cue_topic = f"{item} in hand"
+    return esc
+
+
+async def test_a_repeat_cue_is_dropped_before_any_model_call():
+    """Seven conversations on demo night paid a whole voice turn to be closed as
+    a repeat. The same cue with the same item is now refused at the door."""
+
+    from pipeline.conversation.agent import REPEAT
+
+    h = build(FakeVoiceClient())  # counts its calls: a repeat must add none
+    try:
+        first = h.agent.request("rice krispies treat in hand", "statement",
+                                decision_id="d1", esc=cue_escalation("food:treat", "rice krispies treat"))
+        assert first.startswith("handed_off:")
+        await settle()
+        assert h.agent.client.calls == 1
+
+        # The same treat, relabelled by the tagger, from a clerk wake-up.
+        again = h.agent.request("snack in hand, junk food", "statement", decision_id="d2",
+                                esc=cue_escalation("food:treat", "rice krispie treat", "change"))
+        assert again == REPEAT
+        assert h.agent.client.calls == 1, "a repeat costs nothing"
+        assert len(h.agent.list(10)) == 1, "and opens nothing"
+        assert h.agent.stats()["dropped_repeat"] == 1
+
+        # A different prop straight after is not a repeat.
+        assert h.agent.request("cucumber in hand", "statement", decision_id="d3",
+                               esc=cue_escalation("food:healthy", "cucumber")
+                               ).startswith("handed_off:")
+        await settle()
+        # Nor is a different junk food.
+        assert h.agent.request("chips bag in hand", "statement", decision_id="d4",
+                               esc=cue_escalation("food:treat", "chips bag")
+                               ).startswith("handed_off:")
+        await settle()
+
+        # The operator's manual open is never second-guessed.
+        assert h.agent.request("rice krispies treat in hand", "statement",
+                               decision_id="manual", reason="manual").startswith("handed_off:")
+        await settle()
+
+        # Past the window the same prop gets its line again.
+        from pipeline.conversation.agent import REPEAT_WINDOW_S
+        h.clock.t += REPEAT_WINDOW_S + 1
+        assert h.agent.request("rice krispies treat in hand", "statement", decision_id="d5",
+                               esc=cue_escalation("food:treat", "rice krispies treat")
+                               ).startswith("handed_off:")
+        await settle()
+    finally:
+        h.db.close()
+
+
+async def test_the_same_topic_twice_is_a_repeat_even_without_a_cue(h):
+    assert h.agent.request("wine glass in hand", "statement", decision_id="d1",
+                           esc=None).startswith("handed_off:")
+    await settle()
+    assert h.agent.request("Wine glass, in hand!", "statement", decision_id="d2",
+                           esc=None) == "conversation_repeat"
+    assert h.agent.client.calls == 1
+
+
+async def test_a_conversation_that_said_nothing_does_not_count_as_said():
+    class Silent(FakeVoiceClient):
+        async def complete(self, thread):
+            self.calls += 1
+            return VoiceReply(utterance="", kind="statement", done=True), {}
+
+    h = build(Silent())
+    try:
+        esc = cue_escalation("caffeine", "coffee milkshake")
+        assert h.agent.request("coffee milkshake in hand", "statement", decision_id="d1",
+                               esc=esc).startswith("handed_off:")
+        await settle()
+        assert h.agent.request("coffee milkshake in hand", "statement", decision_id="d2",
+                               esc=esc).startswith("handed_off:")
+        await settle()
+    finally:
+        h.db.close()
+
+
+async def test_nothing_heard_closes_without_a_model_call(h):
+    """On demo night all six heard=false reply turns cost 1.4-2.2 s each and
+    came back empty; the slot was held for nothing."""
+
+    cid = h.agent.request("coffee milkshake", "question", decision_id="d",
+                          episode_id=EPISODE, esc=make_escalation()).split(":", 1)[1]
+    await settle()
+    assert h.agent.client.calls == 1
+    question = h.db.open_question()
+    h.questions.on_answer(question.id, "", False, h.clock())
+    assert h.agent.current() is None, "closed synchronously, no turn scheduled"
+    await settle()
+    assert h.agent.client.calls == 1
+    row = h.agent.get(cid)
+    assert row["close_reason"] == "silent"
+    assert [l.line for l in h.db.today_summary_lines(day=DAY)] == [
+        "asked about coffee milkshake -> nothing heard"]
+
+
+async def test_an_expired_question_closes_without_a_model_call(h):
+    h.agent.request("coffee milkshake", "question", decision_id="d", episode_id=EPISODE,
+                    esc=make_escalation())
+    await settle()
+    question = h.db.open_question()
+    question.sent_t = h.clock()
+    question.expires_t = h.clock() + 1
+    h.db.update_question(question)
+    h.questions.expire(h.clock() + 2)
+    await settle()
+    assert h.agent.current() is None
+    assert h.agent.client.calls == 1
+    assert h.db.get_question(question.id).status == "expired"
+
+
+async def test_only_the_opening_trigger_frame_is_sent_sharp(h):
+    h.agent.request("wine glass", "question", decision_id="d", episode_id=EPISODE,
+                    esc=make_escalation())
+    await settle()
+    opening = [p for p in h.agent.client.last_thread[1]["content"] if p["type"] == "input_image"]
+    assert [p["detail"] for p in opening] == ["high"]
+
+    # A tick after the question, with its frame in the ring, for the reply turn.
+    later = make_window(WINDOW_N + 3)[-1]
+    h.db.insert_tick(later)
+    h.store.put(later.frame_ref, b"jpeg-later", later.t)
+    h.clock.t = later.t + 0.5
+    question = h.db.open_question()
+    h.questions.on_answer(question.id, "yes it's mine", True, h.clock())
+    await settle()
+    reply = [p for p in h.agent.client.last_thread[-1]["content"] if p["type"] == "input_image"]
+    assert reply and [p["detail"] for p in reply] == ["low"] * len(reply)
+
+
+async def test_the_opening_uses_the_newest_frame_not_the_gates(h):
+    """By the time a clerk hand-off opens, the gate's tick is 2-4 s old -- in a
+    props-in-a-row demo, the previous prop."""
+
+    import base64
+
+    esc = make_escalation()
+    newer = make_window(WINDOW_N + 3)[-1]  # three ticks after the gate's
+    h.db.insert_tick(esc.tick)
+    h.db.insert_tick(newer)
+    h.store.put(newer.frame_ref, b"jpeg-newest", newer.t)
+    h.agent.request("wine glass", "statement", decision_id="d", esc=esc)
+    await settle()
+    content = h.agent.client.last_thread[1]["content"]
+    (image,) = [p for p in content if p["type"] == "input_image"]
+    assert base64.b64decode(image["image_url"].split(",", 1)[1]) == b"jpeg-newest"
+    assert image["detail"] == "high"
+    text = "\n".join(p["text"] for p in content if p["type"] == "input_text")
+    assert "(trigger frame)" in text
+
+
+async def test_the_opening_keeps_the_gates_frame_when_nothing_newer_exists(h):
+    import base64
+
+    esc = make_escalation()
+    h.db.insert_tick(esc.tick)
+    h.agent.request("wine glass", "statement", decision_id="d", esc=esc)
+    await settle()
+    (image,) = [p for p in h.agent.client.last_thread[1]["content"]
+                if p["type"] == "input_image"]
+    assert base64.b64decode(image["image_url"].split(",", 1)[1]) == \
+        f"jpeg-{WINDOW_N - 1}".encode()
+
+
+async def test_the_settled_block_is_capped_and_no_longer_says_do_not_reopen(h):
+    from pipeline.conversation.agent import SETTLED_LINES
+
+    for i in range(20):
+        h.db.insert_conversation({
+            "id": f"c_old{i:02d}", "opened_t": T0 - 100 + i, "closed_t": T0 - 99 + i,
+            "reason": "", "topic": f"prop {i:02d}", "state": "closed",
+            "close_reason": "done", "turns": [], "settled": {},
+            "decision_id": None, "episode_id": None,
+        })
+    h.agent.request("wine glass", "statement", decision_id="d", esc=make_escalation())
+    await settle()
+    text = "\n".join(p["text"] for p in h.agent.client.last_thread[1]["content"]
+                     if p["type"] == "input_text")
+    assert f"last {SETTLED_LINES} of 20" in text
+    assert "prop 19" in text and "prop 11" not in text
+    assert "Do not reopen" not in text and "Do not re-ask" in text
+
+
+async def test_the_turn_deadline_is_eight_seconds():
+    from pipeline.conversation.agent import TURN_DEADLINE_S
+
+    assert TURN_DEADLINE_S == 8.0
+
+
+# -- review fixes: the cue stamp is a label, not a topic ----------------------
+
+
+async def test_a_crowd_stamp_does_not_mute_an_unrelated_clerk_line(h):
+    """In the hackathon room people_count is 3-5 on nearly every tick, so nearly
+    every clerk wake-up was stamped ``crowd`` and, for 45 s after the crowd
+    line, dropped as conversation_repeat -- break nudges, watch follow-ups,
+    an alcohol question, all silently."""
+
+    assert h.agent.request("crowd in view (3-5 people)", "statement", decision_id="d1",
+                           esc=cue_escalation("crowd", "crowd")).startswith("handed_off:")
+    await settle()
+    nudge = h.agent.request("20 minutes at the screen, stand up and look away",
+                            "statement", decision_id="d2",
+                            esc=cue_escalation("crowd", "crowd", "screen_sustained"))
+    assert nudge.startswith("handed_off:"), nudge
+    # ... and that nudge is not remembered as a second crowd line either.
+    assert h.agent._active_cue == (None, "")
+    await settle()
+    # A clerk line that *is* about the crowd is still the same crowd.
+    assert h.agent.request("lots of people around you", "statement", decision_id="d3",
+                           esc=cue_escalation("crowd", "crowd", "people_sustained")
+                           ) == "conversation_repeat"
+
+
+async def test_a_prop_stamp_does_not_mute_an_unrelated_clerk_line(h):
+    assert h.agent.request("rice krispies treat in hand", "statement", decision_id="d1",
+                           esc=cue_escalation("food:treat", "rice krispies treat")
+                           ).startswith("handed_off:")
+    await settle()
+    assert h.agent.request("heart rate up 30 bpm sitting still", "statement",
+                           decision_id="d2",
+                           esc=cue_escalation("food:treat", "rice krispies treat",
+                                              "biometric_anomaly")
+                           ).startswith("handed_off:")
+
+
+async def test_the_same_treat_relabelled_healthy_is_still_a_repeat(h):
+    """The family flips with ``food_type``; the item does not. Compare kinds."""
+
+    assert h.agent.request("rice krispies treat in hand", "statement", decision_id="d1",
+                           esc=cue_escalation("food:treat", "rice krispies treat")
+                           ).startswith("handed_off:")
+    await settle()
+    assert h.agent.request("rice krispie treat in hand (healthy food)", "statement",
+                           decision_id="d2",
+                           esc=cue_escalation("food:healthy", "rice krispie treat")
+                           ) == "conversation_repeat"
+
+
+async def test_a_spent_live_prop_is_a_repeat_past_the_window(h):
+    """A treat held for a minute is still the treat: while the gate says its
+    moment is live and spent, the clerk cannot hand it off again."""
+
+    from pipeline.conversation.agent import REPEAT_WINDOW_S
+
+    assert h.agent.request("rice krispies treat in hand", "statement", decision_id="d1",
+                           esc=cue_escalation("food:treat", "rice krispies treat")
+                           ).startswith("handed_off:")
+    await settle()
+    h.clock.t += REPEAT_WINDOW_S + 10
+    esc = cue_escalation("food:treat", "rice krispies treat", "change")
+    esc.cue_spent = True
+    assert h.agent.request("rice krispie treat, put it down", "statement",
+                           decision_id="d2", esc=esc) == "conversation_repeat"
+    # Without the gate's word that the moment is still live, the window rules.
+    fresh = cue_escalation("food:treat", "rice krispies treat", "change")
+    assert h.agent.request("rice krispie treat, put it down", "statement",
+                           decision_id="d3", esc=fresh).startswith("handed_off:")
+
+
+async def test_opening_a_conversation_warms_the_speech_connection(h):
+    """The start-up warm expires (120 s keep-alive) long before the first prop;
+    re-warming beside the model call hides the handshake inside it."""
+
+    warmed = []
+
+    async def warm() -> bool:
+        warmed.append(h.clock.t)
+        return True
+
+    h.agent.speech_warm = warm
+    assert h.agent.request("crowd in view", "statement", decision_id="d1",
+                           esc=cue_escalation("crowd", "crowd")).startswith("handed_off:")
+    await settle()
+    assert warmed == [h.clock.t]
+    # A dropped hand-off warms nothing.
+    h.agent.request("crowd in view", "statement", decision_id="d2",
+                    esc=cue_escalation("crowd", "crowd"))
+    await settle()
+    assert len(warmed) == 1
+
+
+# -- mouth-busy guard ----------------------------------------------------------
+
+
+class Mouth:
+    """What ``Speech.busy_for`` would say, on the test's own clock."""
+
+    def __init__(self, clock: Clock) -> None:
+        self.clock = clock
+        self.until = 0.0
+
+    def play(self, seconds: float) -> None:
+        self.until = self.clock.t + seconds
+
+    def __call__(self) -> float:
+        return max(0.0, self.until - self.clock.t)
+
+
+async def test_a_handoff_while_the_last_clip_plays_is_dropped_as_mouth_busy(h):
+    """A 3 s clip went out: a hand-off 1 s later would talk over it and is
+    dropped (never queued); one after the clip ends opens. This is what makes
+    the demo's zero cooldown safe."""
+
+    assert h.settings.timings.conversation_cooldown_s == 0.0
+    mouth = Mouth(h.clock)
+    h.agent.mouth_busy_for = mouth
+    h.agent.mouth_guard = True
+    assert h.agent.request("coffee milkshake in hand", "statement", decision_id="d1",
+                           esc=make_escalation()).startswith("handed_off:")
+    await settle()
+    assert h.agent.current() is None
+    mouth.play(3.0)  # the line just said: 12000 bytes at 4000 B/s
+
+    h.clock.t += 1.0
+    before = len(h.agent.list(10))
+    assert h.agent.request("cucumber in hand", "statement", decision_id="d2",
+                           esc=make_escalation()) == "mouth_busy"
+    assert len(h.agent.list(10)) == before, "nothing opened, nothing queued"
+    assert h.agent.stats()["dropped_mouth_busy"] == 1
+
+    h.clock.t += 2.5
+    assert h.agent.request("cucumber in hand", "statement", decision_id="d3",
+                           esc=make_escalation()).startswith("handed_off:")
+    await settle()
+
+
+async def test_the_guard_reads_the_real_speech_estimate_through_the_speak_hook(h, monkeypatch):
+    """End to end with the glasses' hook: an 8800-byte clip (2.2 s + pad)."""
+
+    from pipeline.actions import speech as speech_mod
+    from pipeline.capture import speak as speak_mod
+    from pipeline.capture.tts import ElevenLabsTTS
+
+    async def synthesize(self, text):
+        return b"x" * 8800
+    monkeypatch.setattr(ElevenLabsTTS, "synthesize", synthesize)
+
+    class Link:
+        clients = {object()}
+        sent: list[Any] = []
+
+        async def send_text(self, message):
+            self.sent.append(message)
+            return 1
+
+    link = Link()
+    hook = speak_mod.make_speak_fn(
+        link, Settings(speech_mode="elevenlabs", elevenlabs_api_key="key"))
+    mono = [50.0]
+    hook.speech.clock = lambda: mono[0]
+    previous = speech_mod.get_speak_fn()
+    speech_mod.set_speak_fn(hook)
+    try:
+        class Lines:
+            """Two different statements, so the second is not a repeat."""
+            model = "lines"
+            said = iter(["Easy on the coffee.", "Nice, a cucumber."])
+
+            async def complete(self, thread):
+                return VoiceReply(utterance=next(self.said), kind="statement"), {}
+
+        agent = ConversationAgent(h.db, h.store, Lines(), h.speech,
+                                  h.settings, questions=h.questions, now_fn=h.clock,
+                                  mouth_guard=True)
+        assert agent.request("coffee in hand", "statement", decision_id="d1",
+                             esc=make_escalation()).startswith("handed_off:")
+        await settle()
+        assert len(link.sent) == 1
+        mono[0] += 0.5
+        h.clock.t += 0.5
+        assert agent.request("cucumber in hand", "statement", decision_id="d2",
+                             esc=make_escalation()) == "mouth_busy"
+        mono[0] += 2.0 + speak_mod.PLAYBACK_PAD_S
+        h.clock.t += 2.0
+        assert agent.request("cucumber in hand", "statement", decision_id="d3",
+                             esc=make_escalation()).startswith("handed_off:")
+        await settle()
+        assert len(link.sent) == 2, "exactly two lines went out, never overlapping"
+    finally:
+        speech_mod.set_speak_fn(previous)
+
+
+async def test_the_mouth_guard_can_be_turned_off_from_the_environment(h, monkeypatch):
+    """MOUTH_BUSY_GUARD=0 reaches the agent through Settings (so a value in
+    .env works in sim mode too, not only when load_dotenv happened to run)."""
+
+    from pipeline.conversation import agent as agent_mod
+
+    monkeypatch.setenv(agent_mod.MOUTH_GUARD_ENV, "0")
+    settings = Settings(_env_file=None, demo_mode=True, openai_api_key=None)  # type: ignore[call-arg]
+    assert settings.mouth_busy_guard is False
+    agent = ConversationAgent(h.db, h.store, FakeVoiceClient(), h.speech, settings,
+                              questions=h.questions, now_fn=h.clock,
+                              mouth_busy_for=lambda: 5.0)
+    assert agent.mouth_guard is False
+    assert agent.request("cucumber in hand", "statement", decision_id="d1",
+                         esc=make_escalation()).startswith("handed_off:")
+    await settle()
+
+
+async def test_with_the_guard_off_the_demo_cooldown_goes_back_to_two_seconds(h):
+    """The demo's 0 s cooldown is only safe with the guard. Pulling the guard
+    on stage must not bring back a line landing ~1 s after a close while the
+    last clip still plays: the cooldown floors at UNGUARDED_COOLDOWN_S."""
+
+    from pipeline.conversation.agent import UNGUARDED_COOLDOWN_S
+
+    assert h.settings.timings.conversation_cooldown_s == 0.0
+    assert UNGUARDED_COOLDOWN_S == 2.0
+    h.agent.mouth_guard = False
+    h.agent.mouth_busy_for = lambda: 5.0  # ignored with the guard off
+    assert h.agent.request("coffee milkshake in hand", "statement", decision_id="d1",
+                           esc=make_escalation()).startswith("handed_off:")
+    await settle()
+    assert h.agent.current() is None
+
+    h.clock.t += 1.0
+    assert h.agent.request("cucumber in hand", "statement", decision_id="d2",
+                           esc=make_escalation()) == "conversation_cooldown"
+    h.clock.t += 1.1  # 2.1 s after the close
+    assert h.agent.request("cucumber in hand", "statement", decision_id="d3",
+                           esc=make_escalation()).startswith("handed_off:")
+    await settle()
+
+
+async def test_the_mouth_guard_never_drops_the_answer_reply(h):
+    """The guard gates opening a conversation only. The question clip keeps
+    busy_for above zero right up to the reply, so a guard moved into _say or
+    _call would silently drop the closing line of every exchange."""
+
+    h.agent.mouth_guard = True
+    busy = [0.0]
+    h.agent.mouth_busy_for = lambda: busy[0]
+    cid = h.agent.request("wine glass, whose is it", "question", decision_id="d1",
+                          episode_id=EPISODE, esc=make_escalation()).split(":", 1)[1]
+    await settle()
+    question = h.db.open_question()
+    assert question is not None
+    busy[0] = 5.0  # the question clip is (still) playing
+    h.questions.on_answer(question.id, "yes it's mine", True, h.clock())
+    await settle()
+
+    row = h.agent.get(cid)
+    assert row["state"] == "closed" and row["close_reason"] == "done"
+    assert row["turns"][-1] == {**row["turns"][-1], "role": "agent", "text": "Got it."}
+    assert spoken and spoken[-1][1] == "Got it.", "the reply went through the speak hook"
+    assert h.agent.stats()["dropped_mouth_busy"] == 0
+
+
+async def test_a_closed_conversations_late_reply_never_lands_in_the_next_thread(h):
+    """A's turn is in flight when A is closed (lifetime/stop) and B opens.
+    A's late reply must not be appended to B's thread, and A's call ending
+    must not clear B's in-flight flag."""
+
+    class Gated:
+        model = "gated"
+
+        def __init__(self) -> None:
+            self.gates = [asyncio.Event(), asyncio.Event()]
+            self.replies = [VoiceReply(utterance="Line from A.", kind="statement"),
+                            VoiceReply(utterance="Is that yours?", kind="question")]
+            self.calls = 0
+
+        async def complete(self, thread):
+            n = self.calls
+            self.calls += 1
+            await self.gates[n].wait()
+            return self.replies[n], {}
+
+    client = Gated()
+    h.agent.client = client
+    assert h.agent.request("coffee in hand", "statement", decision_id="dA",
+                           esc=make_escalation()).startswith("handed_off:")
+    await settle()
+    a = h.agent._active
+    h.agent._close(a, "lifetime")  # A's lifetime ran out mid-turn
+
+    outcome = h.agent.request("wine glass, whose is it", "question", decision_id="dB",
+                              episode_id=EPISODE, esc=make_escalation())
+    assert outcome.startswith("handed_off:"), outcome
+    b_id = outcome.split(":", 1)[1]
+    await settle()
+    assert client.calls == 2 and h.agent._turn_in_flight
+
+    client.gates[0].set()  # A's reply lands late
+    await settle()
+    assert h.agent.current()["id"] == b_id
+    assert all(m["role"] != "assistant" for m in h.agent._thread), \
+        "A's line was appended to B's thread"
+    assert h.agent._turn_in_flight, "A's call cleared B's in-flight flag"
+    assert not [s for s in spoken if s[1] == "Line from A."]
+
+    client.gates[1].set()
+    await settle()
+    texts = [m["content"][0]["text"] for m in h.agent._thread if m["role"] == "assistant"]
+    assert len(texts) == 1 and "Is that yours?" in texts[0]
+    assert not h.agent._turn_in_flight
+    await h.agent.stop()
+
+
+async def test_a_broken_estimate_never_mutes_the_glasses(h):
+    def broken() -> float:
+        raise RuntimeError("no idea")
+    h.agent.mouth_busy_for = broken
+    h.agent.mouth_guard = True
+    assert h.agent.request("cucumber in hand", "statement", decision_id="d1",
+                           esc=make_escalation()).startswith("handed_off:")
+    await settle()
+
+
+async def test_the_opening_turn_uses_the_short_schema_and_the_reply_the_full_one(h):
+    """The opening is asked for {utterance, kind} only; the reply keeps settled/heard/done."""
+
+    client = FakeVoiceClient()
+    h.agent.client = client
+    h.agent.request("wine glass, whose is it", "question", decision_id="d1",
+                    episode_id=EPISODE, esc=make_escalation())
+    await settle()
+    question = h.db.open_question()
+    assert question is not None
+    h.questions.on_answer(question.id, "yes it's mine", True, h.clock())
+    await settle()
+    assert client.formats == ["voice_open", "voice_turn"]

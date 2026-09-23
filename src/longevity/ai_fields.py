@@ -130,6 +130,12 @@ CAFFEINE_DRINKS = frozenset({"coffee", "tea", "energy_drink", "boba", "soda"})
 #: Drinks that set `alcohol_visible` the same way.
 ALCOHOL_DRINKS = frozenset({"alcohol", "beer", "wine", "cocktail"})
 
+#: How many people are in frame, bucketed. `people_present` only says "anyone at
+#: all", which cannot tell a desk-mate from a packed room; the crowd cue needs the
+#: count. Buckets rather than an integer because a 288x512 frame cannot be counted
+#: exactly past a handful and a closed list keeps the answer to one short token.
+PEOPLE_COUNT = ["0", "1-2", "3-5", "6+", "unknown"]
+
 BOOL_FIELDS = [
     "food_present",
     "caffeine_visible",
@@ -151,18 +157,30 @@ BOOL_FIELDS = [
     "medication_visible",
 ]
 
+#: Booleans where "not reported" must stay distinguishable from "no". Unlike
+#: BOOL_FIELDS (which default to false, §9), these coerce to None when the model
+#: gives null: "hands out of frame" is not evidence that no phone is held.
+TRISTATE_BOOL_FIELDS = ["phone_in_hand"]
+
 ENUM_FIELDS = {
     "scene": SCENE,
     "activity": ACTIVITY,
     "food_type": FOOD_TYPE,
     "drink": DRINK,
+    "people_count": PEOPLE_COUNT,
 }
 
-# Field order as it appears in the §12 example tick, for readable JSON output.
+# Field order is also the order Gemini *generates* in (propertyOrdering), and the
+# model conditions each value on what it has already written. The held item goes
+# first so the caption and food/drink tags that follow are about the thing in the
+# wearer's hand rather than the room -- the persona cues all live in the hand.
+# The rest keeps the §12 example order.
 FIELD_ORDER = [
+    "in_hand", "phone_in_hand",
     "scene", "activity", "food_present", "food_type", "caffeine_visible",
     "alcohol_visible", "screen_present", "vegetation_visible", "people_present",
-    "people_interacting", "direct_sunlight_visible", "outdoor_visible", "smoking_or_vaping_visible",
+    "people_interacting", "people_count",
+    "direct_sunlight_visible", "outdoor_visible", "smoking_or_vaping_visible",
     "medication_visible",
     "caption", "objects", "drink", "conf",
 ]
@@ -178,23 +196,43 @@ DEFAULTS: dict[str, Any] = {
     "objects": [],
     "drink": "none",
     "conf": 0.0,
+    "in_hand": None,
+    "people_count": "unknown",
     **{f: False for f in BOOL_FIELDS},
+    **{f: None for f in TRISTATE_BOOL_FIELDS},
 }
+
+# Answers that mean "nothing in hand". The schema allows null, but a model asked for
+# a noun phrase sometimes spells the null out; every spelling reads as empty hands.
+_EMPTY_HAND = frozenset({"", "none", "null", "nothing", "n/a", "na", "empty", "no"})
 
 # --- Prompt -------------------------------------------------------------------
 
 PROMPT = (
     "You are tagging a single first-person photo from smart glasses for a health "
-    "tracker. Report only what is plainly visible in this frame. Do not infer, "
-    "remember, or guess from context. If something is unclear, use the unknown / "
-    "false / none value rather than a confident answer.\n\n"
+    "tracker. Look at the wearer's hands first: what they are holding matters more "
+    "than the room. Report only what is visible in this frame. Do not infer, "
+    "remember, or guess from context, and when a field is truly unclear use its "
+    "unknown / false / none / null value. But an item that is held, wrapped, "
+    "packaged or partly covered by fingers IS visible: name it.\n\n"
+    "in_hand names what is in the wearer's hand as a short noun phrase, with the "
+    "brand or product if the label is legible (e.g. rice krispies treat, cucumber, "
+    "coffee milkshake, iphone); null when the hands are empty or out of view.\n"
+    "phone_in_hand is true when the wearer holds a phone, false when their hands "
+    "are visible without one, null when the hands are not visible.\n"
+    "people_count buckets every visible person: 0, 1-2, 3-5 or 6+.\n"
     "conf is your overall confidence in this whole tagging, from 0.0 to 1.0.\n"
-    "caption is one short phrase of at most 12 words describing what is plainly visible.\n"
-    "objects lists up to 5 lowercase nouns that are plainly visible.\n"
+    "caption is one short phrase of at most 12 words describing what is plainly "
+    "visible, starting with the held item if there is one.\n"
+    "objects lists up to 5 lowercase nouns that are plainly visible, nearest first "
+    "with the held item first; skip furniture, walls and people.\n"
     "scene is the most specific matching location from this list.\n"
-    "activity is the most specific matching thing the wearer is doing from this list.\n"
-    "food_type is the most specific matching food visible from this list, or none.\n"
-    "drink identifies the plainly visible drink, or none when no drink is visible.\n"
+    "activity is the most specific matching thing the wearer is doing from this "
+    "list; a phone held in the hand is phone_use even with a laptop in view.\n"
+    "food_type is the most specific matching food visible from this list, or none. "
+    "Held packaged or wrapped food counts, and sets food_present true.\n"
+    "drink identifies the plainly visible drink, or none when no drink is visible; "
+    "a coffee-flavoured drink such as a coffee milkshake is coffee.\n"
     "vegetation_visible is true only for outdoor greenery such as trees, grass, "
     "hedges or planted beds. A houseplant, a vase of cut flowers, or a vegetable "
     "on a plate is not vegetation.\n"
@@ -224,7 +262,14 @@ def response_schema() -> dict[str, Any]:
         "objects": {"type": "ARRAY", "items": {"type": "STRING"}, "maxItems": 5},
         "drink": {"type": "STRING", "enum": DRINK},
         "conf": {"type": "NUMBER"},
+        # Nullable rather than a sentinel string: "nothing in hand" and "hands not
+        # in view" are both null, and null costs one token where "none" invites a
+        # sentence.
+        "in_hand": {"type": "STRING", "nullable": True},
+        "people_count": {"type": "STRING", "enum": PEOPLE_COUNT},
     }
+    for f in TRISTATE_BOOL_FIELDS:
+        props.setdefault(f, {"type": "BOOLEAN", "nullable": True})
     for f in BOOL_FIELDS:
         props.setdefault(f, {"type": "BOOLEAN"})
     return {
@@ -255,6 +300,16 @@ def coerce(raw: dict[str, Any] | None) -> dict[str, Any]:
     for name in BOOL_FIELDS:
         out[name] = bool(raw.get(name, False))
 
+    for name in TRISTATE_BOOL_FIELDS:
+        val = raw.get(name)
+        out[name] = val if isinstance(val, bool) else None
+
+    out["in_hand"] = _in_hand(raw.get("in_hand"))
+    # A phone named in the hand but not flagged is still a phone in the hand; only
+    # fill the gap, never overrule an explicit answer (same rule as drink -> flags).
+    if out["phone_in_hand"] is None and out["in_hand"] and _names_phone(out["in_hand"]):
+        out["phone_in_hand"] = True
+
     caption = raw.get("caption", "")
     out["caption"] = "" if caption is None else str(caption)[:100]
 
@@ -274,3 +329,16 @@ def coerce(raw: dict[str, Any] | None) -> dict[str, Any]:
         out["conf"] = 0.0
 
     return {k: out[k] for k in FIELD_ORDER}
+
+
+def _in_hand(val: Any) -> str | None:
+    """A held-item phrase, bounded and lowercased like `objects`, or None."""
+    if not isinstance(val, str):
+        return None
+    text = " ".join(val.split()).lower()[:60]
+    return None if text.strip(" .") in _EMPTY_HAND else text
+
+
+def _names_phone(text: str) -> bool:
+    words = set(text.replace("-", " ").split())
+    return bool(words & {"phone", "smartphone", "iphone", "cellphone", "android"})

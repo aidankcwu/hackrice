@@ -12,7 +12,16 @@
  * `Instruments.tsx` draws what this returns and `instruments.test.ts` asserts it.
  */
 
-import { PROVENANCE_LABEL, type Provenance } from "./provenance";
+import {
+  FACTOR_METRIC,
+  FACTOR_ORIGIN,
+  factorProvenance,
+  LIVE_SOURCES,
+  PROVENANCE_LABEL,
+  wearableFor,
+  type PageSource,
+  type Provenance,
+} from "./provenance";
 
 // ---------------------------------------------------------------------------
 // What the payload gives us
@@ -85,32 +94,63 @@ export function statusOf(at: number | null, target: number, lowerIsBetter = fals
 // Provenance chip
 // ---------------------------------------------------------------------------
 
+/** A `basis` that names a wearable device; `phone`, `openaq` and the rest do not. */
+const DEVICE_BASIS = /whoop|fitbit|healthkit|apple_watch/;
+
 /**
- * The payload's `basis` → one of the five chips in the footer legend. `whoop`
- * and `apple_watch` are both the wearable; `phone` rows in the demo database are
- * the seed, so they read "Seeded" rather than claiming a live sensor. A missing
- * observation is "Imputed" whatever filed the attempt, matching how the engine
- * scores it at the population reference.
+ * The payload's provenance → one chip, with the same labels `provenance.ts`
+ * gives the By-layer panel. A wearable row earns its device's chip (Fitbit,
+ * Apple Health, WHOOP) only when a connected device wrote it: `live`, or a
+ * `derived` conversion of a live-device row. The demo seed is "Seeded" whatever
+ * device it imitates, and `phone` / `openaq` rows read "Seeded" rather than
+ * claiming a live sensor. A missing observation is "Imputed" whatever filed the
+ * attempt, matching how the engine scores it at the population reference.
  */
 export function chipFor(p: ObsProvenance | undefined): Provenance {
   if (!p || p.source === "missing") return "imputed";
-  switch (p.basis) {
-    case "glasses":
-      return "glasses";
-    case "whoop":
-    case "apple_watch":
-      return "whoop";
-    case "pvt":
-    case "user":
-      return "entered";
-    default:
-      // `phone`, `openaq`, and anything a later integration adds: a row used
-      // as-is from the seeded database until a real device files it.
-      return "seeded";
-  }
+  const basis = p.basis.toLowerCase();
+  if (basis === "glasses") return "glasses";
+  if (basis === "pvt" || basis === "user") return "entered";
+  const live = p.source === "live" || (p.source === "derived" && LIVE_SOURCES.has(basis));
+  return live && DEVICE_BASIS.test(basis) ? wearableFor({ source: "live", basis }) : "seeded";
 }
 
 export const chipLabel = (p: Provenance): string => PROVENANCE_LABEL[p];
+
+/** The engine factor fields a tile's provenance is built from. */
+export interface FactorRow {
+  key: string;
+  label: string;
+  measured: boolean;
+}
+
+/**
+ * `InstrumentSource.provenance` for a payload that carries no per-key
+ * provenance of its own: each factor's chip comes from `factorProvenance` (the
+ * By-layer panel's derivation), written back as the `ObsProvenance` that
+ * `chipFor` reads as that same chip. Never a hard-coded source: a factor the
+ * glasses measured is Glasses, a HealthKit row is Apple Health, a demo-seed row
+ * is Seeded, and an unmeasured one is `missing` with the voice.md string.
+ */
+export function instrumentProvenance(factors: readonly FactorRow[], source: PageSource): Record<string, ObsProvenance> {
+  return Object.fromEntries(
+    factors.map((f): [string, ObsProvenance] => {
+      const chip = factorProvenance(f.key, f.measured, source);
+      switch (chip) {
+        case "imputed":
+          return [f.key, { source: "missing", basis: FACTOR_ORIGIN[f.key] ?? "glasses", detail: UNMEASURED }];
+        case "seeded":
+          // The row's own source, as the backend's `seeded` basis carries it.
+          return [f.key, { source: "seeded", basis: source.wearable_sources?.[FACTOR_METRIC[f.key] ?? f.key] ?? "seed", detail: f.label }];
+        case "entered":
+          return [f.key, { source: "live", basis: "user", detail: f.label }];
+        default:
+          // glasses, whoop, fitbit, healthkit: the stream is the basis.
+          return [f.key, { source: "live", basis: chip, detail: f.label }];
+      }
+    }),
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Formatting helpers (en-US, pinned so server and client render the same string)

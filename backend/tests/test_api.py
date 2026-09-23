@@ -421,6 +421,42 @@ async def test_health_auto_export_and_whoop_adapter_routes(tmp_path):
     await pipeline.stop()
 
 
+async def test_healthkit_body_on_the_canonical_route_lands_as_live_daily_rows(tmp_path):
+    """PLAN 3.2's POST: sleep, resting HR, HRV SDNN, steps under ``source: healthkit``."""
+
+    from pipeline.scoring.scorer import Scorer
+
+    pipeline, client = await wearables_client(tmp_path, "healthkit")
+    async with client:
+        now = datetime.now()
+        wake = datetime.combine(now.date(), datetime.min.time()) + timedelta(hours=6, minutes=30)
+        wake = min(wake, now - timedelta(minutes=5)).timestamp()
+        steps_t = (now - timedelta(minutes=1)).timestamp()
+        posted = (await client.post("/api/wearables/ingest", json={
+            "source": "healthkit",
+            "samples": [
+                {"t": wake, "metric": "sleep_hours", "value": 7.25, "unit": "hours"},
+                {"t": wake, "metric": "resting_hr", "value": 54, "unit": "bpm"},
+                {"t": wake, "metric": "hrv_sdnn", "value": 48.5, "unit": "ms"},
+                {"t": steps_t, "metric": "steps", "value": 4210, "unit": "count"},
+            ],
+        })).json()
+        assert posted["accepted"] == 1 and posted["rejected"] == 0  # the HRV reading
+        assert posted["seeded_rows"] == 4
+
+        night = day_key(wake - 12 * 3600)
+        rows = {r.metric: r for r in pipeline.db.list_seeded(night, day_key(steps_t))
+                if r.source == "healthkit"}
+        assert {m: r.value for m, r in rows.items()} == {
+            "sleep_hours": 7.25, "resting_hr": 54.0, "hrv_rmssd_ms": 48.5, "steps": 4210.0}
+        assert rows["sleep_hours"].day == night
+
+        # The §8 scorer labels the phone's night live, not "Seeded".
+        sleep = next(s for s in Scorer(pipeline.db).score_day(night) if s.metric == "sleep_hours")
+        assert sleep.source == "live" and "live from healthkit" in (sleep.note or "")
+    await pipeline.stop()
+
+
 async def test_ingest_token_is_enforced_only_when_the_env_sets_one(tmp_path, monkeypatch):
     pipeline, client = await wearables_client(tmp_path, "token")
     async with client:

@@ -36,7 +36,7 @@ from .models import (
 
 log = logging.getLogger(__name__)
 
-__all__ = ["Database", "day_key"]
+__all__ = ["Database", "day_key", "ALL_DAYS", "PROTOCOL_KINDS", "PROTOCOL_STATUSES"]
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS ticks (
@@ -234,7 +234,52 @@ CREATE TABLE IF NOT EXISTS profile_lines (
     active             INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS ix_profile_lines_active ON profile_lines(active, t);
+
+-- The wearer's protocol (PLAN 2.1): what they mean to do each day, and when.
+-- `window_start` / `window_end` are local "HH:MM", same day, start < end.
+-- `days` is a JSON list of weekdays, 0 = Monday (Python `date.weekday()`).
+CREATE TABLE IF NOT EXISTS protocol_items (
+    id           TEXT PRIMARY KEY,
+    name         TEXT NOT NULL,
+    kind         TEXT NOT NULL,
+    window_start TEXT NOT NULL,
+    window_end   TEXT NOT NULL,
+    days         TEXT NOT NULL DEFAULT '[0,1,2,3,4,5,6]',
+    created_t    REAL NOT NULL
+);
+
+-- One row per item per local day once something happened to it; no row
+-- reads as `waiting`. `evidence_ref` is `<decision_id>/<frame_ref>`, so a
+-- thumbnail is `GET /api/evidence/<evidence_ref>`.
+CREATE TABLE IF NOT EXISTS protocol_status (
+    item_id      TEXT NOT NULL,
+    day          TEXT NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'waiting',
+    seen_t       REAL,
+    evidence_ref TEXT,
+    updated_t    REAL NOT NULL DEFAULT 0,
+    PRIMARY KEY (item_id, day)
+);
+CREATE INDEX IF NOT EXISTS ix_protocol_status_day ON protocol_status(day);
 """
+
+#: ``ProtocolItem.kind``.
+PROTOCOL_KINDS = ("dose", "meal", "winddown", "walk")
+
+#: ``ProtocolStatus.status``. ``waiting`` is also what a day with no row reads as.
+PROTOCOL_STATUSES = ("waiting", "seen", "done", "missed", "undone")
+
+#: Every weekday, 0 = Monday.
+ALL_DAYS = [0, 1, 2, 3, 4, 5, 6]
+
+#: Written once, the first time a database gets a ``protocol_items`` table.
+PROTOCOL_SEED = (
+    ("Morning dose", "dose", "07:00", "10:00"),
+    ("Evening dose", "dose", "19:00", "22:00"),
+    ("Lunch window", "meal", "11:30", "14:00"),
+    ("Wind‑down", "winddown", "21:30", "23:00"),
+    ("Daylight walk", "walk", "07:00", "16:00"),
+)
 
 
 def day_key(t: float) -> str:
@@ -280,10 +325,34 @@ class Database:
 
     def init_schema(self) -> "Database":
         with self._lock:
+            # Seed the protocol only when its table is new, not whenever it is
+            # empty: a wearer who deleted every item must not get them back
+            # on the next restart.
+            fresh_protocol = self.conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table'"
+                " AND name = 'protocol_items'"
+            ).fetchone() is None
             self.conn.executescript(SCHEMA)
             self._migrate()
+            if fresh_protocol:
+                self._seed_protocol()
             self.conn.commit()
         return self
+
+    def _seed_protocol(self) -> None:
+        import time as _time
+
+        now = _time.time()
+        self.conn.executemany(
+            "INSERT INTO protocol_items"
+            " (id, name, kind, window_start, window_end, days, created_t)"
+            " VALUES (?,?,?,?,?,?,?)",
+            [
+                (f"pi_{uuid4().hex[:8]}", name, kind, start, end,
+                 _json(ALL_DAYS), now)
+                for name, kind, start, end in PROTOCOL_SEED
+            ],
+        )
 
     def _migrate(self) -> None:
         """Additive column migrations for databases created by older builds.
@@ -1430,6 +1499,146 @@ class Database:
             )
             self.conn.commit()
         return cur.rowcount == 1
+
+    # -- the protocol (PLAN 2.1) -----------------------------------------
+    #
+    # Items are what the wearer means to do and when; a status row is what
+    # happened to one item on one local day. The routes validate; these store.
+
+    _PROTOCOL_COLUMNS = "id, name, kind, window_start, window_end, days, created_t"
+
+    @staticmethod
+    def _protocol_item_from_row(r: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "id": r["id"],
+            "name": r["name"],
+            "kind": r["kind"],
+            "window_start": r["window_start"],
+            "window_end": r["window_end"],
+            "days": json.loads(r["days"] or "[]"),
+            "created_t": r["created_t"],
+        }
+
+    @staticmethod
+    def _protocol_status_from_row(r: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "item_id": r["item_id"],
+            "day": r["day"],
+            "status": r["status"],
+            "seen_t": r["seen_t"],
+            "evidence_ref": r["evidence_ref"],
+            "updated_t": r["updated_t"],
+        }
+
+    def list_protocol_items(self) -> list[dict[str, Any]]:
+        """Every item, earliest window first."""
+
+        with self._lock:
+            rows = self.conn.execute(
+                f"SELECT {self._PROTOCOL_COLUMNS} FROM protocol_items"
+                " ORDER BY window_start ASC, window_end ASC, name ASC, rowid ASC"
+            ).fetchall()
+        return [self._protocol_item_from_row(r) for r in rows]
+
+    def get_protocol_item(self, item_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            row = self.conn.execute(
+                f"SELECT {self._PROTOCOL_COLUMNS} FROM protocol_items WHERE id = ?",
+                (item_id,),
+            ).fetchone()
+        return None if row is None else self._protocol_item_from_row(row)
+
+    def upsert_protocol_item(self, item: dict[str, Any]) -> dict[str, Any]:
+        """Write the whole item. A missing ``id`` makes a new one; returns it."""
+
+        row = {
+            "id": item.get("id") or f"pi_{uuid4().hex[:8]}",
+            "name": item["name"],
+            "kind": item["kind"],
+            "window_start": item["window_start"],
+            "window_end": item["window_end"],
+            "days": list(item.get("days") or ALL_DAYS),
+            "created_t": float(item["created_t"]),
+        }
+        with self._lock:
+            self.conn.execute(
+                f"INSERT OR REPLACE INTO protocol_items ({self._PROTOCOL_COLUMNS})"
+                " VALUES (?,?,?,?,?,?,?)",
+                (row["id"], row["name"], row["kind"], row["window_start"],
+                 row["window_end"], _json(row["days"]), row["created_t"]),
+            )
+            self.conn.commit()
+        return row
+
+    def delete_protocol_item(self, item_id: str) -> bool:
+        """Remove an item and its status history. ``True`` iff it existed."""
+
+        with self._lock:
+            cur = self.conn.execute(
+                "DELETE FROM protocol_items WHERE id = ?", (item_id,)
+            )
+            self.conn.execute(
+                "DELETE FROM protocol_status WHERE item_id = ?", (item_id,)
+            )
+            self.conn.commit()
+        return cur.rowcount == 1
+
+    def set_protocol_status(
+        self,
+        item_id: str,
+        day: str,
+        status: str,
+        t: float,
+        seen_t: float | None = None,
+        evidence_ref: str | None = None,
+    ) -> dict[str, Any]:
+        """Record what happened to one item on one day. Returns the row.
+
+        ``seen_t`` and ``evidence_ref`` are kept when not given, so marking a
+        sighted dose ``done`` (or undoing it) does not lose the frame that saw
+        it.
+        """
+
+        if status not in PROTOCOL_STATUSES:
+            raise ValueError(f"unknown protocol status: {status!r}")
+        with self._lock:
+            self.conn.execute(
+                "INSERT INTO protocol_status"
+                " (item_id, day, status, seen_t, evidence_ref, updated_t)"
+                " VALUES (?,?,?,?,?,?)"
+                " ON CONFLICT(item_id, day) DO UPDATE SET"
+                "  status = excluded.status,"
+                "  seen_t = COALESCE(excluded.seen_t, protocol_status.seen_t),"
+                "  evidence_ref = COALESCE(excluded.evidence_ref,"
+                "                          protocol_status.evidence_ref),"
+                "  updated_t = excluded.updated_t",
+                (item_id, day, status, seen_t, evidence_ref, t),
+            )
+            self.conn.commit()
+            row = self.conn.execute(
+                "SELECT * FROM protocol_status WHERE item_id = ? AND day = ?",
+                (item_id, day),
+            ).fetchone()
+        return self._protocol_status_from_row(row)
+
+    def protocol_status(self, item_id: str, day: str) -> dict[str, Any] | None:
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT * FROM protocol_status WHERE item_id = ? AND day = ?",
+                (item_id, day),
+            ).fetchone()
+        return None if row is None else self._protocol_status_from_row(row)
+
+    def protocol_statuses(self, day_from: str, day_to: str) -> list[dict[str, Any]]:
+        """Status rows for ``day_from..day_to`` inclusive, oldest day first."""
+
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT * FROM protocol_status WHERE day >= ? AND day <= ?"
+                " ORDER BY day ASC, item_id ASC",
+                (day_from, day_to),
+            ).fetchall()
+        return [self._protocol_status_from_row(r) for r in rows]
 
     # -- stats -----------------------------------------------------------
 

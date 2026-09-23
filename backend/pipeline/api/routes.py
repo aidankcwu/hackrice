@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import csv
+import io
 import logging
 import base64
 import os
+import re
 import time
 from datetime import date, timedelta
 from typing import Any, Literal
@@ -15,7 +18,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
 
 from ..actions.speech import get_speak_fn
-from ..db import day_key
+from ..db import ALL_DAYS, PROTOCOL_KINDS, day_key
 from ..models import PendingCheck, SeededRow
 from ..reasoner.prompts import DEFAULT_PERSONA
 from ..reasoner.schema import AskAction
@@ -30,10 +33,13 @@ from ..scoring.scorer import rollup
 from ..wearables import LIVE_METRICS, air
 from ..wearables.adapters import (
     health_auto_export_to_samples,
+    healthkit_seeded_rows,
+    healthkit_to_samples,
+    is_healthkit,
     whoop_seeded_rows,
     whoop_to_samples,
 )
-from ..wearables.ingest import ingest, ingest_samples
+from ..wearables.ingest import ingest, ingest_samples, parse_payload
 
 #: A live sample newer than this counts as "a wearable is connected right now".
 LIVE_FRESH_S = 15 * 60
@@ -82,18 +88,7 @@ async def end_session(request: Request) -> dict:
     if session is None:
         raise HTTPException(status_code=404, detail="no open session")
 
-    from ..recap.builder import build_recap  # local: recap imports scoring, not api
-
-    async def generate() -> None:
-        try:
-            await build_recap(pipeline, session_id=session.id, speak=False)
-        except Exception:  # noqa: BLE001 -- a failed recap must not be silent
-            log.exception("session %s ended but its recap failed", session.id)
-
-    task = asyncio.create_task(generate())
-    pipeline.background_tasks = getattr(pipeline, "background_tasks", set())
-    pipeline.background_tasks.add(task)
-    task.add_done_callback(pipeline.background_tasks.discard)
+    pipeline.spawn_recap(session.id)
     return {**session.model_dump(), "recap": "generating"}
 
 
@@ -332,10 +327,20 @@ async def wearables_ingest(
     """Canonical push endpoint.
 
     ``{"device": "apple_watch", "samples": [{"t", "metric", "value", "unit"}]}``
+
+    The same body with ``source: "healthkit"`` is the phone's Apple Health
+    sync: its sleep, resting HR, HRV and steps also land as daily rows, the way
+    the WHOOP route files resting HR.
     """
 
     _check_token(x_ingest_token)
     pipeline = _pipeline(request)
+    if is_healthkit(payload):
+        samples, result = parse_payload(payload)
+        result = ingest_samples(pipeline.db, healthkit_to_samples(samples), now=time.time(),
+                                result=result, wall_to_tick=pipeline.clock.wall_to_tick)
+        result["seeded_rows"] = pipeline.db.insert_seeded_rows(healthkit_seeded_rows(samples))
+        return result
     return ingest(pipeline.db, payload, now=time.time(),
                   wall_to_tick=pipeline.clock.wall_to_tick)
 
@@ -613,6 +618,183 @@ async def delete_profile_line(request: Request, line_id: str) -> dict:
     if not _pipeline(request).db.deactivate_profile_line(line_id):
         raise HTTPException(404, "no such active profile line")
     return {"id": line_id, "removed": True}
+
+
+# -- the protocol (PLAN 2.1, docs/API.md "The protocol") ------------------
+
+_HHMM = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+
+#: Columns of ``GET /api/protocol/export.csv``, in order.
+PROTOCOL_CSV_COLUMNS = ("day", "item_id", "name", "kind", "window_start",
+                        "window_end", "status", "seen_t", "evidence_ref",
+                        "updated_t")
+
+
+def _protocol_fields(body: dict[str, Any], base: dict[str, Any] | None) -> dict:
+    """Validate a new item (``base`` is ``None``) or ``body`` merged onto one.
+
+    Checked here rather than coerced: ``str(7)`` is a name nobody typed and
+    ``bool`` is an ``int`` to Python, so ``[True]`` would otherwise be Tuesday.
+    """
+
+    item = dict(base or {})
+    for key in ("name", "kind", "window_start", "window_end", "days"):
+        if key in body:
+            item[key] = body[key]
+    name = item.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise HTTPException(400, "name must be a non-empty string")
+    item["name"] = name.strip()
+    if item.get("kind") not in PROTOCOL_KINDS:
+        raise HTTPException(400, f"kind must be one of {', '.join(PROTOCOL_KINDS)}")
+    for key in ("window_start", "window_end"):
+        value = item.get(key)
+        if not isinstance(value, str) or not _HHMM.match(value):
+            raise HTTPException(400, f"{key} must be HH:MM")
+    if item["window_start"] >= item["window_end"]:
+        raise HTTPException(400, "window_start must be before window_end")
+    days = item.get("days", list(ALL_DAYS))
+    if (not isinstance(days, list) or not days
+            or any(isinstance(d, bool) or not isinstance(d, int) or not 0 <= d <= 6
+                   for d in days)):
+        raise HTTPException(400, "days must be a non-empty list of 0-6 (0 = Monday)")
+    item["days"] = sorted(set(days))
+    return item
+
+
+def _protocol_item_or_404(pipeline, item_id: str) -> dict:
+    item = pipeline.db.get_protocol_item(item_id)
+    if item is None:
+        raise HTTPException(404, "no such protocol item")
+    return item
+
+
+def _protocol_today_row(item: dict, status: dict | None) -> dict:
+    """One item plus what happened to it today; no status row reads ``waiting``."""
+
+    status = status or {}
+    return {**item,
+            "status": status.get("status", "waiting"),
+            "seen_t": status.get("seen_t"),
+            "evidence_ref": status.get("evidence_ref"),
+            "updated_t": status.get("updated_t")}
+
+
+def _protocol_mark(request: Request, item_id: str, status: str) -> dict:
+    pipeline = _pipeline(request)
+    item = _protocol_item_or_404(pipeline, item_id)
+    now = _now(pipeline)
+    day = day_key(now)
+    row = pipeline.db.set_protocol_status(item_id, day, status, t=now)
+    return {**_protocol_today_row(item, row), "day": day}
+
+
+@router.get("/api/protocol")
+async def protocol_items(request: Request) -> list[dict]:
+    """Every protocol item, earliest window first."""
+
+    return _pipeline(request).db.list_protocol_items()
+
+
+@router.post("/api/protocol", status_code=201)
+async def create_protocol_item(request: Request, body: dict[str, Any]) -> dict:
+    pipeline = _pipeline(request)
+    item = _protocol_fields(body, None)
+    item["created_t"] = _now(pipeline)
+    return pipeline.db.upsert_protocol_item(item)
+
+
+@router.get("/api/protocol/today")
+async def protocol_today(request: Request) -> dict:
+    """Today's items (those whose ``days`` include today) with today's status.
+
+    "Today" is the local day on the tick clock, like ``/api/episodes``.
+    """
+
+    pipeline = _pipeline(request)
+    day = day_key(_now(pipeline))
+    weekday = date.fromisoformat(day).weekday()
+    statuses = {row["item_id"]: row
+                for row in pipeline.db.protocol_statuses(day, day)}
+    return {"day": day,
+            "items": [_protocol_today_row(item, statuses.get(item["id"]))
+                      for item in pipeline.db.list_protocol_items()
+                      if weekday in item["days"]]}
+
+
+@router.get("/api/protocol/export.csv")
+async def protocol_export(request: Request,
+                          days: int = Query(14, ge=1, le=366)) -> Response:
+    """The last ``days`` local days, oldest first, one row per item per day.
+
+    A day gets a row when something was recorded for it, or when the item was
+    scheduled that day and already existed -- an item added today has no
+    fortnight of ``waiting`` behind it.
+    """
+
+    pipeline = _pipeline(request)
+    end = date.fromisoformat(day_key(_now(pipeline)))
+    start = end - timedelta(days=days - 1)
+    items = pipeline.db.list_protocol_items()
+    stored = {(row["item_id"], row["day"]): row
+              for row in pipeline.db.protocol_statuses(start.isoformat(),
+                                                       end.isoformat())}
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(PROTOCOL_CSV_COLUMNS)
+    for offset in range(days):
+        current = start + timedelta(days=offset)
+        key = current.isoformat()
+        for item in items:
+            status = stored.get((item["id"], key))
+            if status is None and (current.weekday() not in item["days"]
+                                   or key < day_key(item["created_t"])):
+                continue
+            row = _protocol_today_row(item, status)
+            writer.writerow([key, item["id"], item["name"], item["kind"],
+                             item["window_start"], item["window_end"],
+                             row["status"],
+                             "" if row["seen_t"] is None else row["seen_t"],
+                             row["evidence_ref"] or "",
+                             "" if row["updated_t"] is None else row["updated_t"]])
+    return Response(
+        buffer.getvalue(), media_type="text/csv",
+        headers={"Content-Disposition":
+                 f'attachment; filename="protocol-{end.isoformat()}.csv"'})
+
+
+@router.put("/api/protocol/{item_id}")
+async def update_protocol_item(request: Request, item_id: str,
+                               body: dict[str, Any]) -> dict:
+    """Change any of ``name, kind, window_start, window_end, days``; the rest
+    of the item is kept. ``id`` and ``created_t`` never change."""
+
+    pipeline = _pipeline(request)
+    item = _protocol_fields(body, _protocol_item_or_404(pipeline, item_id))
+    return pipeline.db.upsert_protocol_item(item)
+
+
+@router.delete("/api/protocol/{item_id}")
+async def delete_protocol_item(request: Request, item_id: str) -> dict:
+    """Remove an item and its status history. 404 when it does not exist."""
+
+    if not _pipeline(request).db.delete_protocol_item(item_id):
+        raise HTTPException(404, "no such protocol item")
+    return {"id": item_id, "removed": True}
+
+
+@router.post("/api/protocol/{item_id}/done")
+async def protocol_done(request: Request, item_id: str) -> dict:
+    """The wearer marks today's item done by hand; a sighting is kept."""
+
+    return _protocol_mark(request, item_id, "done")
+
+
+@router.post("/api/protocol/{item_id}/undo")
+async def protocol_undo(request: Request, item_id: str) -> dict:
+    """The wearer takes back today's ``seen`` or ``done``: status ``undone``."""
+
+    return _protocol_mark(request, item_id, "undone")
 
 
 # -- ask / answer (ASK_DESIGN §8.11) --------------------------------------

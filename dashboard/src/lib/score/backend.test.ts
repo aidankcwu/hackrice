@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BackendOffline, clearEvidenceCache, daysEnding, loadDayInputs, pivotSeeded, WINDOW_DAYS } from "./backend";
+import { authInit, BackendOffline, clearEvidenceCache, daysEnding, fetchJson, loadDayInputs, pivotSeeded, WINDOW_DAYS, withToken } from "./backend";
 
 const BASE = "http://localhost:8016";
 const TICK_T = new Date(2026, 8, 12, 18, 0, 0).getTime() / 1000;
@@ -89,5 +89,28 @@ describe("loadDayInputs", () => {
     await expect(loadDayInputs(BASE)).rejects.toBeInstanceOf(BackendOffline);
     stubFetch({ ...OK, "/api/seeded": null });
     await expect(loadDayInputs(BASE)).rejects.toBeInstanceOf(BackendOffline);
+  });
+});
+
+describe("NEXT_PUBLIC_API_TOKEN (docs/DEPLOY.md)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("sends nothing extra when unset", () => {
+    vi.stubEnv("NEXT_PUBLIC_API_TOKEN", "");
+    expect(authInit()).toEqual({});
+    expect(withToken(`${BASE}/api/evidence/d/f`)).toBe(`${BASE}/api/evidence/d/f`);
+  });
+
+  it("puts a Bearer header on fetches and ?token= on header-less URLs when set", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_TOKEN", "t k");
+    const seen: Array<RequestInit | undefined> = [];
+    vi.stubGlobal("fetch", (_url: string, init?: RequestInit) => {
+      seen.push(init);
+      return Promise.resolve(new Response("{}", { status: 200 }));
+    });
+    await fetchJson(BASE, "/api/status");
+    expect(seen[0]?.headers).toEqual({ authorization: "Bearer t k" });
+    expect(withToken(`${BASE}/api/evidence/d/f`)).toBe(`${BASE}/api/evidence/d/f?token=t%20k`);
+    expect(withToken(`${BASE}/api/protocol/export.csv?days=14`)).toBe(`${BASE}/api/protocol/export.csv?days=14&token=t%20k`);
   });
 });

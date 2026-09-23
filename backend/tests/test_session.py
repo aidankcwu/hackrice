@@ -128,3 +128,83 @@ async def test_stale_reasoner_work_applies_no_actions(tmp_path) -> None:
     assert db.due_pending_checks(t + 10_000) == []
     assert len(db.list_decisions()) == 1  # the row is still written (SPEC §6)
     db.close()
+
+
+def test_a_session_across_a_stalled_stream_is_not_zero_length(tmp_path):
+    """Live defect: the phone stopped sending, the socket stayed open, and an
+    eight-second session was stamped start == end -- a log entry covering nothing."""
+    import time as _time
+    from pipeline.api.wiring import Clock, Pipeline
+
+    now = 1_000_000.0
+    pipeline = Pipeline.__new__(Pipeline)          # only the clock path is under test
+    pipeline.clock = Clock(wall_start=now, sim_start_t=now, speed=1.0)
+
+    class _Tick:
+        t = now
+    pipeline.last_tick = _Tick()
+    pipeline._last_tick_wall = _time.time() - 8.0  # the last tick arrived 8 s ago
+
+    advanced = Pipeline._session_clock(pipeline)
+    assert advanced >= now + 7.5, "a stalled tick clock must still advance with real time"
+
+    pipeline.last_tick = None
+    pipeline._last_tick_wall = None
+    assert Pipeline._session_clock(pipeline) > 0
+
+
+def test_auto_session_opens_on_a_frame_and_closes_when_frames_stop(tmp_path):
+    """The glasses are the control: streaming opens a session, silence closes it."""
+    import time as _time
+    from pipeline.api.wiring import AUTO_SESSION_IDLE_S, Pipeline
+
+    class _Sessions:
+        def __init__(self): self.open = None; self.started = []; self.ended = []
+        def current(self): return self.open
+        def start(self, name=""):
+            self.open = type("S", (), {"id": f"s_{len(self.started)}", "name": name})()
+            self.started.append(name); return self.open
+        def end(self):
+            ended, self.open = self.open, None
+            self.ended.append(ended); return ended
+
+    pipeline = Pipeline.__new__(Pipeline)
+    pipeline.settings = type("S", (), {"auto_session": True})()
+    pipeline.sessions = _Sessions()
+    pipeline.background_tasks = set()
+    pipeline._last_tick_wall = None
+    recapped = []
+    pipeline.spawn_recap = recapped.append
+
+    # No frame yet: nothing to close.
+    Pipeline._auto_session_close(pipeline)
+    assert pipeline.sessions.ended == []
+
+    # First frame opens exactly one session; later frames do not open more.
+    Pipeline._auto_session_open(pipeline)
+    Pipeline._auto_session_open(pipeline)
+    assert len(pipeline.sessions.started) == 1
+
+    # Frames still arriving: the session stays open.
+    pipeline._last_tick_wall = _time.time()
+    Pipeline._auto_session_close(pipeline)
+    assert pipeline.sessions.open is not None
+
+    # Frames stopped: the session closes and its recap is generated.
+    pipeline._last_tick_wall = _time.time() - AUTO_SESSION_IDLE_S - 1
+    Pipeline._auto_session_close(pipeline)
+    assert pipeline.sessions.open is None
+    assert recapped == ["s_0"]
+
+    # Nothing left open, so a second sweep is a no-op.
+    Pipeline._auto_session_close(pipeline)
+    assert recapped == ["s_0"]
+
+
+def test_auto_session_can_be_turned_off(tmp_path):
+    from pipeline.api.wiring import Pipeline
+
+    pipeline = Pipeline.__new__(Pipeline)
+    pipeline.settings = type("S", (), {"auto_session": False})()
+    pipeline.sessions = type("S", (), {"current": lambda self: None})()
+    Pipeline._auto_session_open(pipeline)   # must not raise, must not start

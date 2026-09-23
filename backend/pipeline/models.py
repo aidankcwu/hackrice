@@ -9,6 +9,7 @@ tolerate any optional field being absent, in particular the whole ``ai`` block
 
 from __future__ import annotations
 
+import re
 import time
 from typing import Any, Literal, get_args
 
@@ -23,11 +24,14 @@ __all__ = [
     "ACTIVITIES",
     "FOOD_TYPES",
     "DRINKS",
+    "PeopleCount",
+    "PEOPLE_COUNTS",
     "OUTDOOR_SCENES",
     "HOME_SCENES",
     "EXERTION_ACTIVITIES",
     "HEALTHY_FOOD_TYPES",
     "UNHEALTHY_FOOD_TYPES",
+    "MEDICATION_HELD_WORDS",
     "EpisodeKind",
     "SensorBlock",
     "DeviceBlock",
@@ -105,11 +109,15 @@ Drink = Literal[
     "unknown",
 ]
 
+#: Bucketed head count; mirrors ``ai_fields.PEOPLE_COUNT`` (the crowd cue).
+PeopleCount = Literal["0", "1-2", "3-5", "6+", "unknown"]
+
 #: The enum menus as tuples, for anything that needs to iterate rather than validate.
 SCENES: tuple[str, ...] = get_args(Scene)
 ACTIVITIES: tuple[str, ...] = get_args(Activity)
 FOOD_TYPES: tuple[str, ...] = get_args(FoodType)
 DRINKS: tuple[str, ...] = get_args(Drink)
+PEOPLE_COUNTS: tuple[str, ...] = get_args(PeopleCount)
 
 # -- named families ------------------------------------------------------
 #
@@ -152,6 +160,25 @@ UNHEALTHY_FOOD_TYPES: frozenset[str] = frozenset({
     "fast_food", "dessert", "burger", "pizza",
 })
 
+#: Words in ``in_hand`` that make the held thing a dose (PLAN 2.2). Whole words,
+#: a plural ``s`` allowed, so "pill bottle" and "insulin pens" count and
+#: "pencil" does not. The ``medication_seen`` trigger and the
+#: ``medication_sighting`` episode both read them through
+#: :meth:`Tick.medication_in_view`.
+MEDICATION_HELD_WORDS: frozenset[str] = frozenset({
+    "vial", "pen", "syringe", "injector", "pill", "capsule", "tablet", "bottle",
+})
+
+_HELD_WORD = re.compile(r"[a-z]+")
+
+
+def _names_medication(text: str) -> bool:
+    return any(
+        word in MEDICATION_HELD_WORDS
+        or (word.endswith("s") and word[:-1] in MEDICATION_HELD_WORDS)
+        for word in _HELD_WORD.findall(text.casefold())
+    )
+
 EpisodeKind = Literal[
     "meal",
     "food_sighting",
@@ -163,6 +190,7 @@ EpisodeKind = Literal[
     # Point observations (short episodes), not sustained states.
     "caffeine_sighting",
     "alcohol_sighting",
+    "medication_sighting",
 ]
 
 _TICK_BLOCK_CONFIG = ConfigDict(extra="allow")
@@ -223,6 +251,13 @@ class AiBlock(BaseModel):
     objects: list[str] | None = Field(default=None, exclude_if=lambda value: value is None)
     drink: Drink | None = Field(default=None, exclude_if=lambda value: value is None)
     conf: float | None = None
+    #: What the wearer is holding, as a short lowercase noun phrase (brand or
+    #: product when legible). ``None`` = empty hands, hands out of view, or an
+    #: older producer that does not report it -- never "nothing is held".
+    in_hand: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    #: Tri-state like the other flags: ``None`` means the hands were not visible.
+    phone_in_hand: bool | None = Field(default=None, exclude_if=lambda value: value is None)
+    people_count: PeopleCount | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class Tick(BaseModel):
@@ -268,7 +303,8 @@ class Tick(BaseModel):
         return value if isinstance(value, bool) else None
 
     def enum(self, name: str, max_age_ms: int = 3000) -> str | None:
-        """Tri-state read of an ``ai`` enum (``scene``, ``activity``, ``food_type``)."""
+        """Tri-state read of an ``ai`` enum (``scene``, ``activity``, ``food_type``,
+        ``people_count``)."""
 
         if not self.ai_fresh(max_age_ms):
             return None
@@ -276,6 +312,36 @@ class Tick(BaseModel):
         if value in (None, "unknown"):
             return None
         return value
+
+    def held(self, max_age_ms: int = 3000) -> str | None:
+        """Tri-state read of ``in_hand``: the held item, or ``None`` (unknown).
+
+        ``None`` covers absent/stale ai *and* empty or unseen hands -- a consumer
+        must not read it as "the wearer put the item down" on one tick alone.
+        """
+
+        if not self.ai_fresh(max_age_ms):
+            return None
+        value = getattr(self.ai, "in_hand", None)
+        return value if isinstance(value, str) and value else None
+
+    def medication_in_view(self, max_age_ms: int = 3000) -> bool | None:
+        """Tri-state: is a dose in view on this tick?
+
+        True when ``medication_visible`` is, or when ``in_hand`` names one of
+        :data:`MEDICATION_HELD_WORDS`. False when the flag says no or the hands
+        hold something else; ``None`` when neither was reported. The gate's
+        ``medication_seen`` and the ``medication_sighting`` episode both read
+        this, so a sighting and its escalation agree (SPEC §10).
+        """
+
+        visible = self.flag("medication_visible", max_age_ms)
+        held = self.held(max_age_ms)
+        if visible is True or (held is not None and _names_medication(held)):
+            return True
+        if visible is False or held is not None:
+            return False
+        return None
 
 
 class Escalation(BaseModel):
@@ -299,6 +365,29 @@ class Escalation(BaseModel):
     #: ``biometric_anomaly`` (SPEC §14.3). Rendered into the envelope right
     #: after the tick table and before the frames.
     extra_text: list[str] = Field(default_factory=list)
+    #: The persona cue this moment carries, as a stable key (``food:treat``,
+    #: ``food:healthy``, ``drink``, ``caffeine``, ``phone``, ``crowd``) -- set by the gate
+    #: on the ``cue`` trigger and on any other escalation whose tick shows one.
+    #: The voice agent keys "say it once" on it, so a clerk wake-up about the
+    #: same rice krispy treat cannot open a second conversation.
+    cue: str | None = None
+    #: The thing itself, in T0's words (``rice krispies treat``): the agent
+    #: tells a second treat from the same treat relabelled by comparing these.
+    cue_item: str = ""
+    #: Set by the gate's stamp when ``cue``/``cue_item`` is a moment the voice
+    #: agent already spoke and that is still live (the prop is still in the
+    #: hand). The agent then refuses a hand-off naming that item for as long as
+    #: the moment lasts, not only inside its own repeat window.
+    cue_spent: bool = False
+    #: What the voice agent is handed for a ``cue`` escalation, written by code
+    #: from the tick (held item, caption, objects) rather than by the clerk.
+    cue_topic: str = ""
+    cue_mode: Literal["statement", "question"] = "statement"
+    #: Conversation id when the gate handed this moment straight to the voice
+    #: agent (the fast path). The clerk still runs on it for the memory line and
+    #: the episode label, but its own ``speak``/``ask`` are dropped with outcome
+    #: ``fast_pathed``: the moment is already being spoken.
+    handed_off: str | None = None
 
 
 class Episode(BaseModel):

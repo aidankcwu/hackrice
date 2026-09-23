@@ -1,8 +1,12 @@
 """Prompt text for the T1 reasoner.
 
-The stable prefix (SPEC §4.2 parts 1-3) changes at most daily, so it is kept
-verbatim and first: personality, the 7-day summary, and the objective plus the
-fixed action list. Everything volatile goes in the user message.
+The system prompt is ordered by how often each part changes, most stable
+first, because OpenAI's prompt cache only reuses a byte-identical *prefix* of at
+least 1024 tokens. The objective is a module constant (~2 K tokens) so it leads
+and alone clears that minimum; the persona is fixed for a session; the learned
+lines change when ``remember`` fires; the 7-day summary's header carries a live
+episode count that moves every few wake-ups, so it goes last. Everything
+per-wake-up goes in the user message.
 """
 
 from __future__ import annotations
@@ -59,7 +63,7 @@ You are shown, in chronological order, oldest first:
   - the trigger that woke you and why,
   - today's memory lines so far (what you already noticed today),
   - a compact table of per-second sensor and vision tags across the window,
-  - up to four frames from that window, each preceded by its own text label.
+  - a few frames from that window, each preceded by its own text label.
     The last frame is the trigger frame: it is the moment in question.
 A '?' in the table means the field was not reported for that second. Unknown is
 not the same as absent -- never read '?' as a negative observation.
@@ -107,7 +111,7 @@ Rules that matter:
   the reason, it writes the line and holds the conversation. So write those
   two fields for a colleague who cannot see the frames -- what you saw, and
   why it matters now -- never as a sentence to be spoken.
-  HAND OFF AS THE PERSONA ASKS. The persona above sets how talkative the
+  HAND OFF AS THE PERSONA ASKS. The persona below sets how talkative the
   system is and what it talks about, and it wins over the default here. The
   default, when the persona is silent on it: speech interrupts a human being,
   so reserve a hand-off for something time-sensitive and actionable right now
@@ -127,7 +131,7 @@ Rules that matter:
   WATCH ONLY ONCE. A wake-up that was itself a watch must not schedule another
   watch for the same reason; report what you found and stop.
 
-  ASK WHAT THE PERSONA CARES ABOUT. The persona above also decides what is
+  ASK WHAT THE PERSONA CARES ABOUT. The persona below also decides what is
   worth a question: if it names things it wants checked, tracked, or asked
   about (a habit it is trying to change, a food, a person, a place, a routine),
   ask about exactly those when the frames show them, in the persona's voice.
@@ -145,7 +149,7 @@ Rules that matter:
   goes by unasked is logged as a guess forever. So do not hoard the budget.
   What holds it down is memory, not reluctance: ONE question per episode, and
   never re-ask what is already settled -- today's memory lines and the learned
-  lines above tell you what you asked and what you were told, and if either
+  lines below tell you what you asked and what you were told, and if either
   already answers it, write the line and stay quiet. A wake-up whose trigger
   starts with "answer:" is the wearer replying to you: read it, write what it
   settles, and do not hand off again. Remember that the text you write is the
@@ -222,7 +226,18 @@ LEARNED_HEADING = "## What you have learned about the wearer today"
 def build_system_prompt(
     persona: str, seven_day: str, learned: list[str] | None = None
 ) -> str:
-    """Assemble the stable prefix: persona, what was learned, 7-day, objective.
+    """Assemble the system prompt: objective, persona, learned, 7-day.
+
+    The order is for the prompt cache, not for reading. OpenAI caches the
+    longest byte-identical prefix of a request once it passes 1024 tokens, and
+    a single changed byte ends the prefix there. The 7-day header embeds a live
+    episode count that ticks up every few wake-ups; when it sat second, behind
+    a ~800-token persona, the stable prefix never reached 1024 tokens and every
+    call re-read ~3 K tokens of system prompt cold. With the constant
+    ``OBJECTIVE`` first the first ~2 K tokens are identical on every call of
+    every session, the persona extends the hit for the rest of the session,
+    and only the tail behind a change is re-read. The objective refers to "the
+    persona below" and "the learned lines below" to match.
 
     ``learned`` is the active ``profile_lines``, oldest first -- everything
     ``remember`` has established about the wearer. It sits directly under the
@@ -245,11 +260,11 @@ def build_system_prompt(
         )
 
     return (
+        "## Your job\n"
+        f"{OBJECTIVE}\n\n"
         "## Who you are working for\n"
         f"{persona.strip()}\n\n"
         f"{learned_block}"
         "## 7-day summary (trends and baselines)\n"
-        f"{seven_day.strip()}\n\n"
-        "## Your job\n"
-        f"{OBJECTIVE}"
+        f"{seven_day.strip()}"
     )

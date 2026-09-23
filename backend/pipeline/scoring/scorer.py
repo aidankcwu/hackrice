@@ -45,7 +45,7 @@ __all__ = ["LIVE_DAILY_SOURCES", "Scorer", "row_provenance", "rollup"]
 #: device could send this", not "this row did come from one", so the two sets
 #: cannot be the same object. Add a name here when a poller starts writing daily
 #: rows under it.
-LIVE_DAILY_SOURCES: frozenset[str] = frozenset({"fitbit", "apple_watch_live"})
+LIVE_DAILY_SOURCES: frozenset[str] = frozenset({"fitbit", "apple_watch_live", "healthkit"})
 
 
 def row_provenance(source: str) -> str:

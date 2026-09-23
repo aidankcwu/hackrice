@@ -1,5 +1,6 @@
 "use client";
 import { T } from "@/lib/tokens";
+import { instrumentProvenance } from "@/lib/score/instruments";
 import { minutesOfInstant } from "@/lib/score/narrative";
 import type { DashboardData, Goal } from "@/lib/score/types";
 import { BrianHeader } from "./Header";
@@ -9,6 +10,7 @@ import { Evidence } from "./Evidence";
 import { Instruments } from "./Instruments";
 import { Layers } from "./Layers";
 import { NextBest } from "./NextBest";
+import { Protocol } from "./Protocol";
 import { SevenDays } from "./SevenDays";
 import { WearableNumbers } from "./WearableNumbers";
 import { Today } from "./Today";
@@ -51,24 +53,19 @@ export function BrianDashboard({ data, goal, onGoalChange, updating = false }: B
             payload -- Today is the day it happens to sit inside. */}
         <Logs />
         {/* §1.1 beside §1.2: the ledger, then the five layers only the glasses
-            measure. `provenance` is derived from the factors the payload
-            carries: a factor the engine did not measure is `missing`, so its
-            tile says so rather than showing a number nothing produced.
-            `trailing` stays empty until the days=7 window is wired — the tiles
-            read that as "no sparkline", never a flat line at zero. */}
+            measure. `provenance` is derived per factor exactly as the By-layer
+            panel derives it (the factor's stream and the day's row sources): a
+            factor the glasses measured is Glasses, a device row is that device,
+            a seed row is Seeded, and one the engine did not measure is
+            `missing`, so its tile says so rather than showing a number nothing
+            produced. `trailing` stays empty until the days=7 window is wired —
+            the tiles read that as "no sparkline", never a flat line at zero. */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
           <Today d={data} updating={updating} />
           <Instruments
             source={{
               observations: data.observations,
-              provenance: Object.fromEntries(
-                data.factors.map((f) => [
-                  f.key,
-                  f.measured
-                    ? { source: "seeded" as const, basis: "whoop", detail: f.label }
-                    : { source: "missing" as const, basis: "glasses", detail: "Unmeasured today — scored at the population average, earns nothing." },
-                ]),
-              ),
+              provenance: instrumentProvenance(data.factors, data.source),
               forecast: data.forecast,
               bedtime_hh: data.person.bedtime_hh,
               trailing: [],
@@ -83,6 +80,10 @@ export function BrianDashboard({ data, goal, onGoalChange, updating = false }: B
             outcome window that has not elapsed yet stays Pending. */}
         <BryanSaid pins={data.pins} nowMinute={minutesOfInstant(data.generated_at)} />
         <Evidence pins={data.pins} />
+        {/* PLAN 2.4: dose by sight, per protocol item over 14 days. It polls
+            the protocol routes itself, like Logs, so an unreachable backend
+            empties this panel and nothing else. */}
+        <Protocol />
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <Tonight
             f={data.forecast}
