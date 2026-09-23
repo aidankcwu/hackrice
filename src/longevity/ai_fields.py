@@ -162,6 +162,111 @@ BOOL_FIELDS = [
 #: gives null: "hands out of frame" is not evidence that no phone is held.
 TRISTATE_BOOL_FIELDS = ["phone_in_hand"]
 
+# --- Watcher prompt bank ------------------------------------------------------
+# The watcher (docs/PERCEPTION.md, "Watcher") scores every frame with a zero-shot
+# image-text model against these prompts: per concept, the max over its prompts,
+# softmaxed against the null group. One group per boolean above, so adding a field
+# to BOOL_FIELDS or TRISTATE_BOOL_FIELDS means adding its prompts here (a test fails
+# otherwise). Prompts are concrete things a first-person glasses camera sees: short
+# noun phrases, no abstractions, no negations -- CLIP does not understand "not".
+
+WATCH_PROMPTS: dict[str, tuple[str, ...]] = {
+    "food_present": (
+        "a plate of food on a table",
+        "a sandwich held in a hand",
+        "a bowl of food with a fork",
+        "a snack bar in a wrapper",
+        "a slice of pizza held in a hand",
+    ),
+    "caffeine_visible": (
+        "a cup of coffee on a desk",
+        "an espresso cup held in a hand",
+        "a paper coffee cup with a lid",
+        "a can of energy drink",
+        "a mug of hot tea",
+    ),
+    "alcohol_visible": (
+        "a bottle of beer in a hand",
+        "a can of beer on a table",
+        "a glass of red wine",
+        "a cocktail glass on a bar",
+        "a shot glass of liquor",
+    ),
+    "screen_present": (
+        "a laptop screen on a desk",
+        "a computer monitor showing text",
+        "a television screen in a room",
+        "a tablet screen held in hands",
+    ),
+    "vegetation_visible": (
+        "green trees along a path",
+        "a grassy lawn in a park",
+        "hedges and planted flower beds",
+        "a forest trail with leafy trees",
+    ),
+    "people_present": (
+        "a person standing in a room",
+        "people walking on a sidewalk",
+        "a group of people in a hallway",
+        "a crowd of people",
+    ),
+    "people_interacting": (
+        "a person facing the camera and talking",
+        "a friend smiling across a table",
+        "a face turned toward the camera",
+        "two people in conversation",
+    ),
+    "direct_sunlight_visible": (
+        "bright sunlight with hard shadows",
+        "the sun shining in a blue sky",
+        "sunlight streaming onto the ground",
+        "sharp shadows on a sunny sidewalk",
+    ),
+    "outdoor_visible": (
+        "a view of the street through a window",
+        "a window showing trees and sky",
+        "an outdoor street with buildings",
+        "an open sky above a parking lot",
+        "a campus walkway outdoors",
+    ),
+    "smoking_or_vaping_visible": (
+        "a lit cigarette held in fingers",
+        "a vape pen held in a hand",
+        "a person exhaling a cloud of smoke",
+        "a cigar resting in an ashtray",
+        "a hookah pipe on a table",
+    ),
+    "medication_visible": (
+        "an orange prescription pill bottle",
+        "pills in the palm of a hand",
+        "a blister pack of tablets",
+        "an inhaler held in a hand",
+        "a syringe or insulin pen injector",
+    ),
+    "phone_in_hand": (
+        "a smartphone held in a hand",
+        "a phone screen in the palm of a hand",
+        "thumbs typing on a phone",
+    ),
+}
+
+#: The null group every concept is softmaxed against: frames with nothing in them.
+WATCH_NULL_PROMPTS: tuple[str, ...] = (
+    "an empty desk",
+    "a blank wall",
+    "a blurry frame",
+    "a dark room",
+    "a carpeted floor",
+    "a white ceiling",
+)
+
+
+def watch_prompt_bank() -> list[tuple[str, str]]:
+    """(concept, prompt) pairs: BOOL_FIELDS, then TRISTATE_BOOL_FIELDS, then "_null"."""
+    bank = [(c, p) for c in BOOL_FIELDS + TRISTATE_BOOL_FIELDS for p in WATCH_PROMPTS[c]]
+    return bank + [("_null", p) for p in WATCH_NULL_PROMPTS]
+
+
 ENUM_FIELDS = {
     "scene": SCENE,
     "activity": ACTIVITY,
