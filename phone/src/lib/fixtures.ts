@@ -25,6 +25,9 @@
  *             design payload.
  *   `-error`  the backend never answers (`fixtureUnreachable()`).
  *
+ * `/api/month` answers the 30 seeded days in `fixtures/month/days.json` (both sets;
+ * regenerate with `npm run month`). The backend has no such route yet.
+ *
  * Protocol writes (`/done`, `/undo`, `DELETE`, `POST /api/protocol`) land on an
  * in-memory copy of `protocol_today.json` (`writeFixture`), so the action sheet and
  * Add item can be tried without a backend. A reload restores the capture.
@@ -41,6 +44,7 @@ const SETS: Record<FixtureSet, Record<string, Loader>> = {
     "/api/episodes": () => import("../../fixtures/today_episodes.json"),
     "/api/decisions": () => import("../../fixtures/today_decisions.json"),
     "/api/protocol/today": () => import("../../fixtures/protocol_today.json"),
+    "/api/month": () => import("../../fixtures/month/days.json"),
   },
   design: {
     "/api/status": () => import("../../fixtures/design/status.json"),
@@ -48,6 +52,7 @@ const SETS: Record<FixtureSet, Record<string, Loader>> = {
     "/api/episodes": () => import("../../fixtures/design/today_episodes.json"),
     "/api/decisions": () => import("../../fixtures/design/today_decisions.json"),
     "/api/protocol/today": () => import("../../fixtures/design/protocol_today.json"),
+    "/api/month": () => import("../../fixtures/month/days.json"),
   },
 };
 

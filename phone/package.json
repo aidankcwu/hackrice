@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "month": "node fixtures/month/generate.ts"
   },
   "dependencies": {
     "lucide-react": "^1.47.0",
