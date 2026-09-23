@@ -10,6 +10,7 @@ import { HowSheet } from "./HowSheet";
 import { Hero } from "./Hero";
 import { Ledger } from "./Ledger";
 import { StatusStrip } from "./StatusStrip";
+import { TheDay } from "./TheDay";
 
 const EMPTY = "Put the glasses on. Counting starts the moment the camera is up.";
 
@@ -75,9 +76,7 @@ export function Today({ query }: { query: string }) {
         </div>
       ) : null}
 
-      <button type="button" onClick={() => setHow(true)} className="type-secondary mt-2 min-h-11 font-semibold text-ink">
-        How it’s computed
-      </button>
+      <TheDay onHow={() => setHow(true)} />
 
       {/* Nothing seen yet: the instruction sits where the log will be, the button above it. */}
       {empty || (entries && entries.length > 0) ? (
