@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-The app lives in `phone/` (Next.js). Vision: `docs/VISION.md`. Old plan and specs: `docs/archive/`.
+The app lives in `phone/` (Next.js). Vision: `docs/VISION.md`. Science and sources: `docs/SOURCES.md`.
 
 Commands (from `phone/`):
 - `NEXT_PUBLIC_FIXTURES=1 npm run dev -- -p 3100` (fixtures mode, no backend needed)
