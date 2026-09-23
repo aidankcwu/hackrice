@@ -381,7 +381,7 @@ per hour becomes a number on `/api/status`.
 ## Status
 
 - Watcher: not started.
-- Decider and writers: not started.
+- Decider and writers: built on `perception/decider` (US-D01 to D08): settings, state builder, Jev client with a fake, writers, decision path columns, reasoner routing with clerk fallback, factory, sound act. Built against the documented API and the SDK's OpenAPI models; the real Jev client is unverified until a key exists (signups closed 22 Sep 2026). Verifier 2026-09-23: root 130, backend 1823, dashboard 126, all green.
 - Phase 3: not started.
 
 Sources: MobileCLIP README (github.com/apple/ml-mobileclip), MobileCLIP2-S0 model card
