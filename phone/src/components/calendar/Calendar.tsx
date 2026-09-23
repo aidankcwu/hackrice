@@ -2,8 +2,10 @@
 
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { analyze } from "@/lib/analysis";
 import { bandsFor, headerFor, itemsFor } from "@/lib/calendar";
 import { useMonth } from "@/lib/useMonth";
+import { AnalysisPanel } from "./AnalysisPanel";
 import { DayHeaderView, DayTimeline } from "./DayView";
 import { WeekView } from "./WeekView";
 
@@ -18,6 +20,7 @@ export function Calendar() {
   const month = useMonth();
   const [view, setView] = useState<View>("day");
   const [picked, setPicked] = useState<number | null>(null);
+  const [scope, setScope] = useState<"week" | "month">("week");
   const touch = useRef<number | null>(null);
 
   const days = useMemo(() => month.month?.days ?? [], [month.month]);
@@ -106,14 +109,32 @@ export function Calendar() {
         </>
       ) : (
         <div className="mt-4">
-          <WeekView
-            columns={columns}
-            selected={index}
-            onPick={(i) => {
-              setPicked(i);
-              setView("day");
-            }}
+          <div className="mb-3 flex items-center gap-2">
+            <Segment on={scope === "week"} onClick={() => setScope("week")}>
+              This week
+            </Segment>
+            <Segment on={scope === "month"} onClick={() => setScope("month")}>
+              {days.length} days
+            </Segment>
+          </div>
+          <AnalysisPanel
+            month={scope === "month"}
+            analysis={
+              scope === "month"
+                ? analyze(days, month.findings, month.operating, 0, last, `${days.length} days`)
+                : analyze(days, month.findings, month.operating, weekFrom, index, index === last ? "This week" : `The week to ${dayData.header.short}`)
+            }
           />
+          <div className="mt-section">
+            <WeekView
+              columns={columns}
+              selected={index}
+              onPick={(i) => {
+                setPicked(i);
+                setView("day");
+              }}
+            />
+          </div>
         </div>
       )}
     </div>
