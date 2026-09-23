@@ -144,6 +144,15 @@ final class CapturePacketSender {
 
   @ObservationIgnored private var lastSampleAt: TimeInterval = 0
   @ObservationIgnored private var encodeInFlight = false
+  /// Lifecycle identity for asynchronous work. Every real start and every stop moves
+  /// this value, so an encode or send completion from an older consent session cannot
+  /// cross the stop boundary and touch the transport or delivery counters.
+  @ObservationIgnored private var captureGeneration = 0
+#if DEBUG
+  /// XCTest-only gate used by the stop-during-encode snippet at the bottom of this file.
+  /// Production leaves it nil, so the encode path pays only one optional check.
+  @ObservationIgnored var testBeforeEncode: (@Sendable () -> Void)?
+#endif
   /// True from the moment a capture packet is handed to `send` until its completion
   /// (or the deadline backstop) is processed on the main actor. See `finish`.
   @ObservationIgnored private var sendInFlight = false
@@ -197,11 +206,17 @@ final class CapturePacketSender {
       lastError = "consent needed"
       return
     }
+    captureGeneration &+= 1
     sensors.start()
     lastSampleAt = 0
     encodeInFlight = false
     // A send from before a stop/reconnect is not ours to wait for. `sendSeq` moves on, so
     // its completion, if one ever comes, is ignored instead of clearing a new send's flag.
+    if sendInFlight {
+      // Starting a new consent session retires any send owned by the old one. Its
+      // eventual completion has a different sequence/generation and cannot count twice.
+      droppedCount += 1
+    }
     sendInFlight = false
     sendSeq &+= 1
     lastError = nil
@@ -212,6 +227,9 @@ final class CapturePacketSender {
   }
 
   func stop() {
+    // Invalidate queued encodes and outstanding send completions before stopping the
+    // sensors. `finish`/`delivered` read this on the main actor before doing any work.
+    captureGeneration &+= 1
     isRunning = false
     sensors.stop()
   }
@@ -282,17 +300,31 @@ final class CapturePacketSender {
     let accel = sensors.latest
     let burst = sensors.burst
     let speed = sensors.speed
+    let generation = captureGeneration
+#if DEBUG
+    let testBeforeEncode = testBeforeEncode
+#endif
 
     CaptureEncode.queue.async { [weak self] in
+#if DEBUG
+      testBeforeEncode?()
+#endif
       let json = CapturePacketSender.capturePacketJSON(
         t: now, image: image, gpsSpeed: speed, accel: accel, burst: burst)
       Task { @MainActor in
-        self?.finish(json)
+        self?.finish(json, generation: generation)
       }
     }
   }
 
-  private func finish(_ json: String?) {
+  private func finish(_ json: String?, generation: Int) {
+    // This check is the consent boundary: stop() changes the generation before an
+    // already queued encode can return here. Count that frame as dropped and, most
+    // importantly, never hand its bytes to the transport.
+    guard isRunning, generation == captureGeneration else {
+      droppedCount += 1
+      return
+    }
     encodeInFlight = false
     guard let json else {
       lastError = "encode failed"
@@ -340,13 +372,15 @@ final class CapturePacketSender {
       let failure = error.map { "send failed: \($0.localizedDescription)" }
       let timedOut = (error as? URLError)?.code == .timedOut
       Task { @MainActor in
-        self?.delivered(seq: seq, bytes: bytes, failure: failure, stalled: timedOut)
+        self?.delivered(
+          seq: seq, generation: generation, bytes: bytes, failure: failure,
+          stalled: timedOut)
       }
     }
     Task { @MainActor [weak self] in
       try? await Task.sleep(for: .seconds(Self.sendDeadline + Self.sendBackstopGrace))
       self?.delivered(
-        seq: seq, bytes: bytes,
+        seq: seq, generation: generation, bytes: bytes,
         failure: "send stalled > \(Int(Self.sendDeadline))s, no completion", stalled: true)
     }
   }
@@ -354,8 +388,17 @@ final class CapturePacketSender {
   /// The only place `sentCount`, `lastSentAt` and `lastPacketBytes` move, and the only
   /// place `sendInFlight` is cleared. Called twice per send (the transport's completion
   /// and the backstop); only the first call for the current `seq` counts.
-  private func delivered(seq: Int, bytes: Int, failure: String?, stalled: Bool) {
+  private func delivered(
+    seq: Int, generation: Int, bytes: Int, failure: String?, stalled: Bool
+  ) {
     guard sendInFlight, seq == sendSeq else { return }
+    // A send can complete after the user stops capture. It no longer belongs to the
+    // active consent session, so retire it as a drop without reporting a delivery.
+    guard isRunning, generation == captureGeneration else {
+      sendInFlight = false
+      droppedCount += 1
+      return
+    }
     sendInFlight = false
     if let failure {
       failedCount += 1
@@ -509,3 +552,57 @@ final class CapturePacketSender {
     return String(data: data, encoding: .utf8)
   }
 }
+
+/*
+ STOP-DURING-ENCODE XCTEST SNIPPET
+ Drop this into CapturePacketSenderTests.swift in the CameraAccess test target. The
+ DEBUG-only gate makes the race deterministic: stop() runs after ingest accepted the
+ frame but before JPEG encoding is allowed to finish.
+
+ import XCTest
+ @testable import CameraAccess
+
+ final class CapturePacketSenderTests: XCTestCase {
+   @MainActor
+   func testStopDuringEncodeNeverSendsFrame() async throws {
+     StreamingConsent.grant() // Use the project's consent-grant helper if named differently.
+     defer { StreamingConsent.revoke() }
+     let sender = CapturePacketSender(interval: 0)
+     sender.isConnected = true
+
+     let encodeStarted = expectation(description: "encode started")
+     let releaseEncode = DispatchSemaphore(value: 0)
+     let transportTouched = expectation(description: "transport must not be touched")
+     transportTouched.isInverted = true
+     sender.testBeforeEncode = {
+       encodeStarted.fulfill()
+       releaseEncode.wait()
+     }
+     sender.start { json, completion in
+       // start() legitimately emits hello; only a capture packet violates the test.
+       if json.contains("\"type\":\"capture\"") {
+         transportTouched.fulfill()
+       }
+       completion(nil)
+     }
+
+     let image = UIGraphicsImageRenderer(size: CGSize(width: 32, height: 32)).image {
+       UIColor.white.setFill()
+       $0.fill(CGRect(x: 0, y: 0, width: 32, height: 32))
+     }
+     sender.offer(image, at: Date())
+     await fulfillment(of: [encodeStarted], timeout: 1)
+     sender.stop()
+     releaseEncode.signal()
+
+     await fulfillment(of: [transportTouched], timeout: 0.25)
+     XCTAssertEqual(sender.sentCount, 0)
+     XCTAssertEqual(sender.droppedCount, 1)
+   }
+ }
+
+ Control-flow check: ingest snapshots captureGeneration before queueing; stop increments
+ it on the main actor; finish sees the mismatch, increments droppedCount, and returns
+ before resolving or calling send. If stop happens after send begins, delivered applies
+ the same generation/isRunning guard and cannot record that completion as delivered.
+*/

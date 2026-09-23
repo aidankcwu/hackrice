@@ -421,6 +421,10 @@ class Settings(BaseSettings):
     #: ACCESS_TOKEN: the one secret a tester's phone and dashboard present
     #: (X-Access-Token header or ?token=). Empty = open, as on localhost.
     access_token: str = ""
+    #: API_TOKEN: legacy alias of ACCESS_TOKEN, the name the teammate web app's
+    #: branch uses (it sends it as Authorization: Bearer). Read only to fill
+    #: ACCESS_TOKEN; both set to different values refuses to start.
+    api_token: str = ""
     #: HOSTED=1 applies hosted safety checks even without a public prefix.
     hosted: OptIn = False
     #: PERSONA_FILE: a text file loaded into the persona override at startup,
@@ -443,6 +447,16 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def hosted_requires_access_token(self) -> "Settings":
+        # API_TOKEN folds into ACCESS_TOKEN first, so every reader (the HTTP
+        # middleware, the glasses socket, the startup log) sees one value.
+        legacy, current = self.api_token.strip(), self.access_token.strip()
+        if legacy and current and legacy != current:
+            raise ValueError(
+                "ACCESS_TOKEN and API_TOKEN are both set and differ; API_TOKEN is a "
+                "legacy alias of ACCESS_TOKEN -- set only ACCESS_TOKEN"
+            )
+        if legacy and not current:
+            self.access_token = legacy
         if (self.root_path.strip() or self.hosted) and not self.access_token.strip():
             raise ValueError(
                 "ACCESS_TOKEN must be non-empty when ROOT_PATH is set or HOSTED=1"

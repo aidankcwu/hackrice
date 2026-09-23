@@ -72,6 +72,11 @@ climbing alone = `isConnected` is false. Two segments appear only when non-zero:
 outstanding) and `stalled N` (sends that missed the 3 s deadline). Capture `link` strongly — a weak one that went
 nil would drop `done` on the floor, and MacLink holds no reference back.
 
+The sender also stamps queued work with a capture generation that changes on every
+start/stop lifecycle transition. An encode or send completion from an older generation
+is counted as dropped and cannot touch the transport or delivery counters, so tapping
+Stop cannot leak one final camera frame after consent has been withdrawn.
+
 ## 4 · Verify from the Mac
 
 `curl localhost:8010/ingest/stats` → `connected: 1`, `received` rising, `malformed: 0`.

@@ -14,7 +14,7 @@ browser (dashboard) ─https┘        │
 ```
 
 Everything runs in demo mode with seeded data and a preset persona. There
-is no Google Health login.
+is no Google Health or Fitbit login (see "What testers cannot do").
 
 ## Ten-minute runbook (fresh Ubuntu VPS, any provider)
 
@@ -137,8 +137,9 @@ wss://brian.example.com/t/alice/ws/glasses?token=<TOKEN>
 - It must be `wss://`. iOS App Transport Security blocks plain `ws://` to
   a public host, so the Caddy certificate is required. It is publicly
   trusted (Let's Encrypt), so there is nothing to install on the phone.
-- The app can send the token either as `?token=` in the URL or as an
-  `X-Access-Token` header. Both work.
+- The app can send the token as `?token=` in the URL, as an
+  `X-Access-Token` header, or as `Authorization: Bearer <token>`. All three
+  work (see the contract below for which one wins when several are sent).
 - A missing or wrong token: the server accepts the socket and then closes it
   with code **4401**, so the app can show "wrong token" instead of "cannot
   connect".
@@ -153,10 +154,13 @@ to the same person.
 | What | Value |
 |---|---|
 | Token header | `X-Access-Token: <token>` |
+| Token as bearer | `Authorization: Bearer <token>` (same token; any other scheme counts as absent) |
 | Token query parameter | `?token=<token>` (for `<img src>` and pasted socket URLs) |
+| Precedence | `X-Access-Token`, then `Authorization: Bearer`, then `?token=`. The first one present is the only one compared (constant-time); a later one never rescues a wrong earlier one. HTTP and the socket use the same order |
 | Open without a token | `GET /healthz` only, plus CORS preflight |
 | Socket refused | accepted, then closed with code `4401` (reason `unauthorized`) |
 | HTTP refused | `401`, with CORS headers so the browser shows the real error |
+| Wearable OAuth callbacks (`HOSTED=1`) | `409` `{"error": "wearable login is not available on hosted testers"}`, before the token check |
 | Prefix | `/t/NAME/` is stripped before the backend; `/t/NAME/dashboard*` is not |
 | URLs the backend returns | backend-relative paths (`/api/evidence/{id}/{ref}`); join them to `https://DOMAIN/t/NAME` and add `?token=` for image tags |
 | Token format | `secrets.token_urlsafe(32)`: letters, digits, `-` and `_`, safe in a query string |
@@ -164,6 +168,29 @@ to the same person.
 With `ACCESS_TOKEN` empty in local development (no `ROOT_PATH` and no
 `HOSTED=1`), nothing is checked, the same as before. Hosted startup refuses an
 empty token whenever `ROOT_PATH` is set or `HOSTED=1`.
+
+`API_TOKEN` is read as a legacy alias of `ACCESS_TOKEN` (the name the
+`brian-ios` branch's web app uses). Set only one. If both are set and differ,
+the backend refuses to start and says so.
+
+## What testers cannot do
+
+- **Log in to Fitbit or Google Health.** The provider sends the browser back
+  to `/api/wearables/{fitbit,google-health}/callback`, and that redirect
+  cannot carry the access token, so on a hosted tester it could only ever be
+  refused. With `HOSTED=1` those callbacks answer `409`
+  `{"error": "wearable login is not available on hosted testers"}` instead of
+  a bare `401`. Testers run in demo mode on seeded wearable data and never
+  need a provider login. Unsupported until further notice. Making it work
+  needs a signed OAuth `state` that stands in for the token, which is not
+  built.
+
+## Deploying the `brian-ios` branch's `fly.toml`
+
+If anyone deploys that branch's Fly config against this backend, its health
+check must probe **`/healthz`**, not `/docs`. With `ACCESS_TOKEN` set, every
+route but `/healthz` answers `401` without the token, so a `/docs` probe
+fails and Fly keeps restarting a healthy machine.
 
 ## Cost per tester per hour
 
@@ -196,6 +223,6 @@ about $0.01/h. With no frames coming in, nothing calls a model.
 | generated: `testers/`, `routes/`, `data/`, `docker-compose.override.yml` | per-tester state, git-ignored |
 
 Backend settings that exist for hosting (all default to local-Mac behaviour):
-`ACCESS_TOKEN`, `HOSTED`, `PERSONA_FILE`, `DEMO_RESET_ON_START`,
+`ACCESS_TOKEN` (legacy alias `API_TOKEN`), `HOSTED`, `PERSONA_FILE`, `DEMO_RESET_ON_START`,
 `DEMO_RESET_ALL`, `CORS_ORIGINS`, `ROOT_PATH` and `PORT`. See
 `backend/.env.example`.

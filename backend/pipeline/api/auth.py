@@ -10,12 +10,22 @@ Why it stays optional: with ``ACCESS_TOKEN`` empty (the default) nothing here
 checks anything, so ``localhost`` development and the stage demo on the Mac
 keep working exactly as they did.
 
-Two ways to present it, on purpose:
+Three ways to present the same token, checked in this fixed order (the first
+one present is the only one compared; a later one never rescues a wrong
+earlier one):
 
-* the ``X-Access-Token`` header -- what a program sets (curl, the dashboard's
-  fetch, the phone's URLSessionWebSocketTask);
-* the ``token`` query parameter -- for the places that cannot set a header:
-  an ``<img src>`` tag, and a WebSocket URL pasted into a text field.
+1. the ``X-Access-Token`` header -- what a program sets (curl, the dashboard's
+   fetch, the phone's URLSessionWebSocketTask);
+2. ``Authorization: Bearer <token>`` -- the same token in the standard header,
+   for the teammate web app that authenticates that way (its ``API_TOKEN``
+   is read as a legacy alias of ``ACCESS_TOKEN``, see ``pipeline.config``);
+   an ``Authorization`` header with any other scheme counts as absent;
+3. the ``token`` query parameter -- for the places that cannot set a header:
+   an ``<img src>`` tag, and a WebSocket URL pasted into a text field.
+
+The glasses socket (``longevity.server.ingest.socket_token_ok``) applies the
+same order; that package does not import this one, so the rule is written
+twice and pinned equal by tests on both sides.
 """
 
 from __future__ import annotations
@@ -33,8 +43,11 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 __all__ = [
     "ACCESS_HEADER",
     "ACCESS_QUERY",
+    "HOSTED_OAUTH_BLOCKED",
+    "HOSTED_OAUTH_CALLBACKS",
     "OPEN_PATHS",
     "AccessTokenMiddleware",
+    "bearer_token",
     "RedactTokenFilter",
     "install_log_redaction",
     "presented_token",
@@ -49,6 +62,16 @@ ACCESS_QUERY = "token"
 #: Paths that answer without a token. This response contains process liveness
 #: only; detailed status is authenticated because it carries tester state.
 OPEN_PATHS = frozenset({"/healthz"})
+
+#: Wearable OAuth callbacks. The provider redirects the browser here, and that
+#: redirect cannot carry the access token, so on a hosted tester they would
+#: only ever 401. Hosted testers run on seeded wearable data and never log in
+#: to a provider; with HOSTED=1 these answer a readable 409 instead.
+HOSTED_OAUTH_CALLBACKS = frozenset({
+    "/api/wearables/fitbit/callback",
+    "/api/wearables/google-health/callback",
+})
+HOSTED_OAUTH_BLOCKED = "wearable login is not available on hosted testers"
 
 
 def token_matches(expected: str | None, presented: str | None) -> bool:
@@ -65,14 +88,33 @@ def token_matches(expected: str | None, presented: str | None) -> bool:
     return hmac.compare_digest(want.encode("utf-8"), got.encode("utf-8"))
 
 
+def bearer_token(authorization: str | None) -> str | None:
+    """The token out of ``Authorization: Bearer <token>``, else None.
+
+    The scheme is case-insensitive (RFC 7235). Any other scheme (Basic, ...)
+    or a bare ``Bearer`` with nothing after it is treated as no token at all.
+    """
+
+    scheme, _, value = (authorization or "").strip().partition(" ")
+    if scheme.lower() != "bearer":
+        return None
+    return value.strip() or None
+
+
 def presented_token(headers: Mapping[str, str], query: Mapping[str, str]) -> str | None:
-    """The token a request carries: the header first, then ``?token=``.
+    """The one token a request carries, by fixed precedence:
+    ``X-Access-Token``, then ``Authorization: Bearer``, then ``?token=``.
 
     ``headers`` is Starlette's case-insensitive mapping, so one lookup covers
     ``x-access-token`` as proxies and HTTP/2 lower-case it.
     """
 
-    return headers.get(ACCESS_HEADER) or query.get(ACCESS_QUERY)
+    # Blank counts as absent, so an empty header never shadows a real token
+    # presented the next way down.
+    return ((headers.get(ACCESS_HEADER) or "").strip()
+            or bearer_token(headers.get("authorization"))
+            or (query.get(ACCESS_QUERY) or "").strip()
+            or None)
 
 
 class AccessTokenMiddleware:
@@ -85,11 +127,19 @@ class AccessTokenMiddleware:
     and that belongs next to the handler, not in a generic layer.
     """
 
-    def __init__(self, app: ASGIApp, *, token: str | None) -> None:
+    def __init__(self, app: ASGIApp, *, token: str | None, hosted: bool = False) -> None:
         self.app = app
         self.token = (token or "").strip()
+        self.hosted = bool(hosted)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and self.hosted \
+                and get_route_path(scope) in HOSTED_OAUTH_CALLBACKS:
+            # Ahead of the token check on purpose: the provider's redirect
+            # carries no token, and a bare 401 would hide why it failed.
+            response = JSONResponse(status_code=409, content={"error": HOSTED_OAUTH_BLOCKED})
+            await response(scope, receive, send)
+            return
         if not self.token or scope["type"] != "http":
             await self.app(scope, receive, send)
             return
@@ -107,7 +157,8 @@ class AccessTokenMiddleware:
             return
         response = JSONResponse(
             status_code=401,
-            content={"detail": f"missing or wrong {ACCESS_HEADER} (or ?{ACCESS_QUERY}=)"},
+            content={"detail": f"missing or wrong {ACCESS_HEADER} "
+                               f"(or Authorization: Bearer, or ?{ACCESS_QUERY}=)"},
         )
         await response(scope, receive, send)
 

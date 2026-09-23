@@ -55,7 +55,9 @@ def create_app(pipeline: Pipeline | None = None, *, settings: Settings | None = 
     # Order matters: add_middleware puts the last one outermost. CORS must be
     # outside the token check, or a 401 would go out without the CORS headers
     # and the browser would report a CORS error instead of "wrong token".
-    app.add_middleware(AccessTokenMiddleware, token=access_token)
+    # hosted: the wearable OAuth callbacks answer a readable 409 (auth.py).
+    app.add_middleware(AccessTokenMiddleware, token=access_token,
+                       hosted=bool(getattr(settings_used, "hosted", False)))
     origins = (settings_used.cors_origin_list()
                if hasattr(settings_used, "cors_origin_list") else ["http://localhost:3000"])
     app.add_middleware(CORSMiddleware,

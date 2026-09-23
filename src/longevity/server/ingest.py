@@ -394,20 +394,39 @@ def link_of(app: Any) -> GlassesLink:
 CLOSE_UNAUTHORIZED = 4401
 
 
+def _bearer(authorization: str | None) -> str:
+    """The token out of ``Authorization: Bearer <token>``; "" for any other scheme."""
+    scheme, _, value = (authorization or "").strip().partition(" ")
+    return value.strip() if scheme.lower() == "bearer" else ""
+
+
+def socket_presented_token(websocket: WebSocket) -> str:
+    """The one token this socket carries, by the same fixed precedence as the HTTP
+    middleware (``pipeline.api.auth.presented_token``): the ``X-Access-Token`` header,
+    then ``Authorization: Bearer``, then ``?token=``. The first one present is the only
+    one compared; blank counts as absent. Written out here rather than imported, because
+    this package does not depend on the pipeline.
+    """
+    return ((websocket.headers.get("x-access-token") or "").strip()
+            or _bearer(websocket.headers.get("authorization"))
+            or (websocket.query_params.get("token") or "").strip())
+
+
 def socket_token_ok(websocket: WebSocket) -> bool:
     """Whether this socket may stream. The auth hook for a hosted backend.
 
     The expected token is whatever the hosting app put on ``app.state.access_token``
-    (the pipeline sets it from ACCESS_TOKEN); absent or empty means open, which is how
-    the Mac on the venue Wi-Fi has always run. The phone may present it either as the
-    ``X-Access-Token`` header (URLSessionWebSocketTask can set one) or as ``?token=`` in
-    the URL (the simplest thing to paste into a text field).
+    (the pipeline sets it from ACCESS_TOKEN, or its legacy alias API_TOKEN); absent or
+    empty means open, which is how the Mac on the venue Wi-Fi has always run. The phone
+    may present it as the ``X-Access-Token`` header (URLSessionWebSocketTask can set
+    one), as ``Authorization: Bearer <token>``, or as ``?token=`` in the URL (the
+    simplest thing to paste into a text field); see `socket_presented_token` for the
+    order. Constant-time comparison.
     """
     expected = str(getattr(websocket.app.state, "access_token", "") or "").strip()
     if not expected:
         return True
-    got = (websocket.headers.get("x-access-token")
-           or websocket.query_params.get("token") or "").strip()
+    got = socket_presented_token(websocket)
     return hmac.compare_digest(expected.encode("utf-8"), got.encode("utf-8"))
 
 

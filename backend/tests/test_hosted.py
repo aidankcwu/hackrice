@@ -2,9 +2,11 @@
 
 Four contracts:
 
-1. ACCESS_TOKEN locks the glasses socket (closed with 4401) and every HTTP
-   route except /healthz; header ``X-Access-Token`` or ``?token=`` opens
-   them. Unset, everything is open, exactly as on the Mac.
+1. ACCESS_TOKEN (legacy alias API_TOKEN) locks the glasses socket (closed
+   with 4401) and every HTTP route except /healthz; header ``X-Access-Token``,
+   ``Authorization: Bearer`` or ``?token=`` opens them, checked in that order.
+   Unset, everything is open, exactly as on the Mac. With HOSTED=1 the
+   wearable OAuth callbacks answer a readable 409.
 2. PERSONA_FILE seeds the persona once; DEMO_RESET_ON_START clears the same
    tables scripts/demo_reset.py does, and nothing measured.
 3. Behind the /t/NAME prefix the routes still match, and a URL the server
@@ -23,7 +25,7 @@ from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from pipeline.api.app import create_app
-from pipeline.api.auth import token_matches
+from pipeline.api.auth import HOSTED_OAUTH_BLOCKED, presented_token, token_matches
 from pipeline.api.wiring import (
     DEMO_RESET_ALL_TABLES,
     DEMO_RESET_TABLES,
@@ -172,6 +174,129 @@ def test_glasses_socket_is_open_with_no_token_configured(tmp_path):
         with TestClient(app).websocket_connect("/ws/glasses"):
             pass
         assert app.state.glasses_link.n_connects == 1
+    finally:
+        pipeline.db.close()
+
+
+# -- 1b. Authorization: Bearer, precedence, the API_TOKEN alias ------------------
+
+#: (headers, query token, expected outcome) for the one precedence rule:
+#: X-Access-Token, then Authorization: Bearer, then ?token=. The first one
+#: present is the only one compared; blank or a non-Bearer scheme is absent.
+PRECEDENCE_CASES = [
+    ({"Authorization": f"Bearer {TOKEN}"}, None, True),
+    ({"Authorization": f"bearer  {TOKEN} "}, None, True),
+    ({"Authorization": "Bearer wrong"}, None, False),
+    ({"Authorization": "Bearer"}, None, False),
+    ({"Authorization": f"Basic {TOKEN}"}, None, False),
+    ({"X-Access-Token": "wrong", "Authorization": f"Bearer {TOKEN}"}, None, False),
+    ({"X-Access-Token": TOKEN, "Authorization": "Bearer wrong"}, None, True),
+    ({"X-Access-Token": "", "Authorization": f"Bearer {TOKEN}"}, None, True),
+    ({"Authorization": "Bearer wrong"}, TOKEN, False),
+    ({"Authorization": f"Bearer {TOKEN}"}, "wrong", True),
+    ({"Authorization": f"Basic {TOKEN}"}, TOKEN, True),
+    ({"X-Access-Token": "wrong"}, TOKEN, False),
+]
+
+
+def test_presented_token_follows_one_precedence():
+    from starlette.datastructures import Headers
+
+    h = lambda **kw: Headers(headers={k.replace("_", "-"): v for k, v in kw.items()})  # noqa: E731
+    assert presented_token(h(), {}) is None
+    assert presented_token(h(authorization="Bearer b"), {"token": "q"}) == "b"
+    assert presented_token(h(x_access_token="x", authorization="Bearer b"), {}) == "x"
+    assert presented_token(h(authorization="Basic b"), {"token": "q"}) == "q"
+    assert presented_token(h(x_access_token="  "), {"token": "q"}) == "q"
+
+
+@pytest.mark.parametrize("headers,query,ok", PRECEDENCE_CASES)
+async def test_http_accepts_bearer_with_the_fixed_precedence(tmp_path, headers, query, ok):
+    pipeline, app = sim_app(tmp_path, access_token=TOKEN)
+    url = "/api/persona" + (f"?token={query}" if query is not None else "")
+    try:
+        async with client_for(app) as client:
+            assert (await client.get(url, headers=headers)).status_code == (200 if ok else 401)
+            # /healthz stays open whatever is (or is not) presented.
+            assert (await client.get("/healthz", headers=headers)).status_code == 200
+    finally:
+        pipeline.db.close()
+
+
+@pytest.mark.parametrize("headers,query,ok", PRECEDENCE_CASES)
+def test_glasses_socket_accepts_bearer_with_the_same_precedence(tmp_path, headers, query, ok):
+    """Same table as HTTP: the socket's copy of the rule must not drift."""
+
+    pipeline, app = glasses_app(tmp_path, TOKEN)
+    url = "/ws/glasses" + (f"?token={query}" if query is not None else "")
+    try:
+        client = TestClient(app)
+        with client.websocket_connect(url, headers=headers) as ws:
+            if not ok:
+                with pytest.raises(WebSocketDisconnect) as closed:
+                    ws.receive_text()
+                assert closed.value.code == 4401
+        assert app.state.glasses_link.n_connects == (1 if ok else 0)
+    finally:
+        pipeline.db.close()
+
+
+def test_api_token_is_a_legacy_alias_of_access_token(monkeypatch):
+    monkeypatch.delenv("ACCESS_TOKEN", raising=False)
+    monkeypatch.setenv("API_TOKEN", "legacy")
+    assert Settings().access_token == "legacy"
+    # The alias satisfies the hosted requirement too.
+    monkeypatch.setenv("HOSTED", "1")
+    assert Settings().access_token == "legacy"
+    # Both set and equal is fine.
+    monkeypatch.setenv("ACCESS_TOKEN", "legacy")
+    assert Settings().access_token == "legacy"
+
+
+def test_access_token_and_api_token_that_differ_refuse_to_start(monkeypatch):
+    monkeypatch.setenv("ACCESS_TOKEN", "new")
+    monkeypatch.setenv("API_TOKEN", "old")
+    with pytest.raises(ValueError, match="ACCESS_TOKEN and API_TOKEN are both set and differ"):
+        Settings()
+
+
+async def test_api_token_alone_locks_the_app(tmp_path):
+    pipeline, app = sim_app(tmp_path, api_token=TOKEN)
+    try:
+        async with client_for(app) as client:
+            assert (await client.get("/api/persona")).status_code == 401
+            assert (await client.get("/api/persona", headers={
+                "Authorization": f"Bearer {TOKEN}"})).status_code == 200
+    finally:
+        pipeline.db.close()
+
+
+# -- 1c. hosted testers cannot log in to a wearable provider ---------------------
+
+
+async def test_hosted_wearable_oauth_callbacks_answer_a_readable_409(tmp_path):
+    """The provider's redirect carries no token, so hosted says why instead of 401."""
+
+    pipeline, app = sim_app(tmp_path, access_token=TOKEN, hosted=True)
+    try:
+        async with client_for(app) as client:
+            for provider in ("fitbit", "google-health"):
+                answer = await client.get(
+                    f"/api/wearables/{provider}/callback?code=c&state=s")
+                assert answer.status_code == 409, provider
+                assert answer.json() == {"error": HOSTED_OAUTH_BLOCKED}
+            assert HOSTED_OAUTH_BLOCKED == "wearable login is not available on hosted testers"
+            # Everything else keeps the token gate; /healthz stays open.
+            assert (await client.get("/api/wearables/fitbit/status")).status_code == 401
+            assert (await client.get("/healthz")).status_code == 200
+    finally:
+        pipeline.db.close()
+    # Not hosted: the callback is an ordinary token-gated route, as before.
+    pipeline, app = sim_app(tmp_path / "local", access_token=TOKEN)
+    try:
+        async with client_for(app) as client:
+            assert (await client.get(
+                "/api/wearables/fitbit/callback?code=c&state=s")).status_code == 401
     finally:
         pipeline.db.close()
 

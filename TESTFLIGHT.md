@@ -357,6 +357,11 @@ pasted URL, not in the Keychain (a known shortcut for Friday, TODO in `MacLink.s
 A leaked token exposes one tester's slot only, and it is revoked by removing that
 tester on the backend.
 
+Wearable login is not available on hosted testers. The Fitbit and Google Health OAuth
+callbacks cannot carry the token, so with `HOSTED=1` they answer `409` ("wearable login
+is not available on hosted testers"). VCs run in demo mode on seeded wearable data. Do
+not tell them to connect a Fitbit or Google account, and do not test that path here.
+
 1. [ ] Delete any Xcode-built copy of the app. **Turn Wi-Fi off**, so you are on
    cellular only.
 2. [ ] In Meta AI, **turn Developer Mode off**, unless A2 chose the Developer Mode
