@@ -341,10 +341,16 @@ class ActionHandler:
                 outcome = self.conversation.request(
                     action.text, "statement", decision_id=decision_id,
                     episode_id=episode_id, esc=esc,
+                    deliver=action.deliver, expire_s=action.expire_s,
                 )
                 result.setdefault("outcomes", {})[index] = {"outcome": outcome}
                 if outcome.startswith("handed_off"):
                     result["spoke"] = True
+                elif outcome == "deliver_waiting":
+                    # Held for a quiet moment (US-M04); the voice agent reports
+                    # the final outcome in its own counters.
+                    log.info("speak hand-off waiting for a quiet tick, decision %s",
+                             decision_id)
                 else:
                     log.info("speak hand-off dropped (%s) for decision %s",
                              outcome, decision_id)
@@ -364,10 +370,16 @@ class ActionHandler:
                 outcome = self.conversation.request(
                     action.text, "question", decision_id=decision_id,
                     episode_id=episode_id, esc=esc, reason=action.reason,
+                    deliver=action.deliver, expire_s=action.expire_s,
                 )
                 result.setdefault("outcomes", {})[index] = {"outcome": outcome}
                 if outcome.startswith("handed_off"):
                     result["spoke"] = True
+                elif outcome == "deliver_waiting":
+                    # Held for a quiet moment (US-M04); the voice agent reports
+                    # the final outcome in its own counters.
+                    log.info("ask hand-off waiting for a quiet tick, decision %s",
+                             decision_id)
                 else:
                     log.info("ask hand-off dropped (%s) for decision %s",
                              outcome, decision_id)

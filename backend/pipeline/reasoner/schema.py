@@ -55,6 +55,7 @@ __all__ = [
 ]
 
 Urgency = Literal["low", "normal", "high"]
+Deliver = Literal["now", "quiet"]
 
 ANNOTATE_MAX_CHARS = 80
 
@@ -115,6 +116,10 @@ class SpeakAction(_ActionBase):
     type: Literal["speak"] = "speak"
     text: str
     urgency: Urgency = "low"
+    #: ``now`` hands off at once; ``quiet`` waits for a quiet tick, up to
+    #: ``quiet_max_s`` (docs/PERCEPTION.md "Gate and actions").
+    deliver: Deliver = "now"
+    expire_s: int | None = Field(default=None, ge=1, le=600)
 
 
 class LogInsightAction(_ActionBase):
@@ -164,6 +169,8 @@ class AskAction(_ActionBase):
     answer_kind: Literal["yes_no", "count", "free"] = "yes_no"
     fills: Literal["confirmed", "count", "food_type", "note"] = "confirmed"
     reason: str = ""
+    deliver: Deliver = "now"
+    expire_s: int | None = Field(default=None, ge=1, le=600)
 
 
 class RememberAction(_ActionBase):

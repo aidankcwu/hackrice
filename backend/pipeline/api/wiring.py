@@ -593,6 +593,7 @@ def build_pipeline(settings: Settings, *,
         settings, questions=questions, reasoner=reasoner,
         now_fn=lambda: clock.wall_to_tick(time.time()),
         mouth_guard=settings.mouth_busy_guard,
+        quiet_max_s=settings.decider.quiet_max_s,
     )
     reasoner.conversation = conversation
     questions.conversation = conversation

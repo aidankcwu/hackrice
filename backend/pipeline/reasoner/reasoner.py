@@ -916,6 +916,11 @@ class Reasoner:
     def _urgency(score: float) -> str:
         return "high" if score >= 1.5 else "normal" if score >= 0.5 else "low"
 
+    @staticmethod
+    def _deliver(score: float) -> str:
+        """High urgency speaks now; anything less waits for a quiet moment."""
+        return "now" if score >= 1.5 else "quiet"
+
     async def _write(
         self, state: dict, verdict: Verdict, settings: DeciderSettings,
     ) -> tuple[T1Response, list[str]]:
@@ -967,12 +972,14 @@ class Reasoner:
                 got = await writers.handoff_topic(state, verdict, action="speak")
                 if got is not None:
                     actions.append(SpeakAction(text=got,
-                                               urgency=self._urgency(verdict.urgency)))
+                                               urgency=self._urgency(verdict.urgency),
+                                               deliver=self._deliver(verdict.urgency)))
             elif name == "ask":
                 writer, got = "question", await writers.question(state, verdict)
                 if got is not None:
                     actions.append(AskAction(text=got[0], answer_kind=got[1],
-                                             fills=got[2], reason=verdict.topic))
+                                             fills=got[2], reason=verdict.topic,
+                                             deliver=self._deliver(verdict.urgency)))
             elif name == "look":
                 got = await writers.look_question(state, verdict)
                 if got is not None:

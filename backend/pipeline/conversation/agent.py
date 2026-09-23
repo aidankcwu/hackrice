@@ -108,6 +108,21 @@ MOUTH_GUARD_ENV = "MOUTH_BUSY_GUARD"
 #: player never stops the earlier clip. Pulling the switch must not bring the
 #: overlap back.
 UNGUARDED_COOLDOWN_S = 2.0
+#: ``deliver: quiet`` (docs/PERCEPTION.md "Gate and actions"): the hand-off
+#: waits for a quiet tick, polled this often, then opens as a ``now`` one would.
+DELIVER_POLL_S = 0.5
+#: Default longest wait for a quiet tick (``DeciderSettings.quiet_max_s``).
+QUIET_MAX_S = 45.0
+#: ``device.accel_rms`` at or above this is "moving fast": not a quiet moment.
+QUIET_ACCEL_RMS = 0.5
+#: Returned by :meth:`ConversationAgent.request` for a quiet hand-off now
+#: waiting; its real outcome (open, ``deliver_expired``, ``deliver_superseded``)
+#: comes later, on the waiting task.
+DELIVER_WAITING = "deliver_waiting"
+#: No quiet tick arrived within ``quiet_max_s`` (or ``expire_s``).
+DELIVER_EXPIRED = "deliver_expired"
+#: A newer quiet hand-off replaced this one while it waited.
+DELIVER_SUPERSEDED = "deliver_superseded"
 
 
 def _speak_fn_busy_for() -> float:
@@ -128,6 +143,21 @@ def _speak_fn_busy_for() -> float:
 def _norm(text: str) -> str:
     return " ".join("".join(ch.lower() if ch.isalnum() or ch == " " else " "
                             for ch in text).split())
+
+
+def is_quiet(tick: Tick | None) -> bool:
+    """A quiet moment: nobody being talked with, the wearer not talking, the
+    device not moving fast. A tick without a ``watch`` block is quiet on the
+    first criterion; no tick at all is not quiet."""
+
+    if tick is None:
+        return False
+    if tick.watch_hot("people_interacting"):
+        return False
+    if tick.enum("activity") == "talking":
+        return False
+    accel = tick.device.accel_rms if tick.device is not None else None
+    return accel is None or accel < QUIET_ACCEL_RMS
 
 
 def _cid() -> str:
@@ -152,6 +182,8 @@ class ConversationAgent:
         deadline_s: float = TURN_DEADLINE_S,
         mouth_busy_for: Callable[[], float] | None = None,
         mouth_guard: bool | None = None,
+        latest_tick: Callable[[], Tick | None] | None = None,
+        quiet_max_s: float = QUIET_MAX_S,
     ) -> None:
         self.db = db
         self.frame_store = frame_store
@@ -168,6 +200,11 @@ class ConversationAgent:
         self.mouth_busy_for = mouth_busy_for or _speak_fn_busy_for
         self.mouth_guard = (bool(settings.mouth_busy_guard) if mouth_guard is None
                             else mouth_guard)
+        #: The newest tick, for ``deliver: quiet``. Defaults to the db's.
+        self.latest_tick = latest_tick or self._db_latest_tick
+        self.quiet_max_s = float(quiet_max_s)
+        #: The one quiet hand-off waiting for a quiet tick: ``(task, topic)``.
+        self._quiet_wait: tuple[asyncio.Task[None], str] | None = None
 
         self._active: dict[str, Any] | None = None
         self._thread: list[dict[str, Any]] = []
@@ -209,6 +246,8 @@ class ConversationAgent:
         self.dropped_no_transport = 0
         self.dropped_repeat = 0
         self.dropped_mouth_busy = 0
+        self.dropped_deliver_expired = 0
+        self.dropped_deliver_superseded = 0
 
     # -- hand-off ---------------------------------------------------------
 
@@ -221,6 +260,8 @@ class ConversationAgent:
         episode_id: str | None = None,
         esc: Escalation | None = None,
         reason: str = "",
+        deliver: str = "now",
+        expire_s: int | None = None,
     ) -> str:
         """Take one hand-off from the clerk. Synchronous, non-blocking (§1).
 
@@ -229,8 +270,16 @@ class ConversationAgent:
         ``conversation_repeat``, ``mouth_busy``, ``no_transport``.
         The model call happens on a task: the reasoner holds the single T1 slot
         while it calls this, and must not wait on a conversation to finish.
+
+        ``deliver="quiet"`` returns ``deliver_waiting`` at once and waits on a
+        task for a quiet tick (:func:`is_quiet`), up to ``quiet_max_s`` or
+        ``expire_s`` if smaller, then hands off exactly as ``now`` would.
         """
 
+        if deliver == "quiet":
+            return self._wait_for_quiet(
+                topic, mode, expire_s, decision_id=decision_id,
+                episode_id=episode_id, esc=esc, reason=reason)
         try:
             text = (topic or "").strip()
             t = self.now_fn()
@@ -327,6 +376,57 @@ class ConversationAgent:
                 self._close(active, "open_failed")
             return NO_TRANSPORT
 
+    # -- deliver: quiet ---------------------------------------------------
+
+    def _db_latest_tick(self) -> Tick | None:
+        rows = self.db.recent_ticks(1)
+        return rows[-1] if rows else None
+
+    def _wait_for_quiet(self, topic: str, mode: str, expire_s: int | None,
+                        **kwargs: Any) -> str:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            log.error("quiet hand-off requested with no running event loop")
+            return NO_TRANSPORT
+        waiting, self._quiet_wait = self._quiet_wait, None
+        if waiting is not None and not waiting[0].done():
+            waiting[0].cancel()
+            self.dropped_deliver_superseded += 1
+            log.info("conversation: hand-off dropped · %s · \"%s\"",
+                     DELIVER_SUPERSEDED, waiting[1][:80])
+        max_s = self.quiet_max_s if expire_s is None else min(self.quiet_max_s, expire_s)
+        task = loop.create_task(self._quiet_then_open(topic, mode, max_s, kwargs),
+                                name="conversation-deliver-quiet")
+        self._quiet_wait = (task, (topic or "").strip())
+        return DELIVER_WAITING
+
+    async def _quiet_then_open(self, topic: str, mode: str, max_s: float,
+                               kwargs: dict[str, Any]) -> None:
+        deadline = time.monotonic() + max_s
+        try:
+            while True:
+                try:
+                    quiet = is_quiet(self.latest_tick())
+                except Exception:  # noqa: BLE001 - a bad read is not a quiet moment
+                    log.debug("latest tick read failed", exc_info=True)
+                    quiet = False
+                if quiet:
+                    break
+                if time.monotonic() >= deadline:
+                    self.dropped_deliver_expired += 1
+                    log.info("conversation: hand-off dropped · %s · %.0f s · \"%s\"",
+                             DELIVER_EXPIRED, max_s, (topic or "")[:80])
+                    return
+                await asyncio.sleep(DELIVER_POLL_S)
+        except asyncio.CancelledError:
+            return
+        finally:
+            if self._quiet_wait is not None and self._quiet_wait[0] is asyncio.current_task():
+                self._quiet_wait = None
+        outcome = self.request(topic, mode, deliver="now", **kwargs)
+        log.info("conversation: quiet hand-off delivered · %s", outcome)
+
     def _mouth_busy(self) -> float:
         """Seconds of the previous clip still to play; 0.0 = free. Never raises."""
 
@@ -386,11 +486,16 @@ class ConversationAgent:
             "dropped_no_transport": self.dropped_no_transport,
             "dropped_repeat": self.dropped_repeat,
             "dropped_mouth_busy": self.dropped_mouth_busy,
+            "dropped_deliver_expired": self.dropped_deliver_expired,
+            "dropped_deliver_superseded": self.dropped_deliver_superseded,
             "cooldown_until": self._cooldown_until,
             "model": getattr(self.client, "model", ""),
         }
 
     async def stop(self) -> None:
+        waiting, self._quiet_wait = self._quiet_wait, None
+        if waiting is not None:
+            waiting[0].cancel()
         active = self._active
         if active is not None:
             # Persist a terminal state and release the pending question, so a
