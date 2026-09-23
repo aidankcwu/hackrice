@@ -329,6 +329,9 @@ class Pipeline:
             }
         result: dict[str, object] = {
             "demo_mode": self.settings.demo_mode,
+            # GATE_READS_WATCH: whether the gate and the episode builder read
+            # the tick's watch block (the startup "perception:" line says it too).
+            "gate_reads_watch": self.settings.capture.gate_reads_watch,
             "source": self.source_name,
             "uptime_s": max(0.0, time.time() - self.started_at)
             if self.started_at is not None else 0.0,
@@ -603,7 +606,8 @@ def build_pipeline(settings: Settings, *,
                           outdoor_target_min=settings.outdoor_target_min,
                           wind_down_hhmm=settings.wind_down_hhmm,
                           lat=settings.air_lat, lon=settings.air_lon)
-    episodes = EpisodeBuilder(db, timings)
+    episodes = EpisodeBuilder(db, timings,
+                              reads_watch=settings.capture.gate_reads_watch)
     # SPEC §14.3: the biometric_anomaly trigger reads the seeded wearable HR
     # series on the tick clock; the gate never imports the seed modules.
     # A live wearable pushing into /api/wearables/ingest lands in the same
@@ -629,7 +633,11 @@ def build_pipeline(settings: Settings, *,
     gate = TriggerGate(default_triggers(timings, settings.demo_mode, feed=feed,
                                        keyword_triggers=settings.keyword_triggers,
                                        cues=settings.cue_trigger,
-                                       cue_bypass_gap=settings.fast_path), timings, db,
+                                       cue_bypass_gap=settings.fast_path,
+                                       reads_watch=settings.capture.gate_reads_watch,
+                                       watch_thresholds=settings.capture.thresholds(),
+                                       novelty_enter=settings.capture.watch_novelty_enter),
+                       timings, db,
                        episodes, reasoner.try_escalate, settings.demo_mode, feed=feed,
                        fast_path=reasoner.fast_path if settings.fast_path else None)
     if source == "sim":

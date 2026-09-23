@@ -276,3 +276,31 @@ def test_decider_jev_wires_jev_with_no_writers_on_the_fake_client(tmp_path, monk
         assert pipeline.reasoner.decider_settings is settings.decider
     finally:
         pipeline.db.close()
+
+
+def _screen_sustained(pipeline):
+    return next(t for t in pipeline.gate.triggers if t.name == "screen_sustained")
+
+
+def test_gate_reads_watch_is_off_by_default(tmp_path, monkeypatch):
+    monkeypatch.delenv("GATE_READS_WATCH", raising=False)
+    pipeline = build_pipeline(Settings(db_path=tmp_path / "off.db"), source="sim",
+                              reasoner_mode="fake", speed=1, seed_db=False)
+    try:
+        assert pipeline.episodes.params.reads_watch is False
+        assert "_flag_hits" in _screen_sustained(pipeline).predicate.__qualname__
+        assert pipeline.status()["gate_reads_watch"] is False
+    finally:
+        pipeline.db.close()
+
+
+def test_gate_reads_watch_reaches_the_gate_and_the_episode_builder(tmp_path, monkeypatch):
+    monkeypatch.setenv("GATE_READS_WATCH", "1")
+    pipeline = build_pipeline(Settings(db_path=tmp_path / "on.db"), source="sim",
+                              reasoner_mode="fake", speed=1, seed_db=False)
+    try:
+        assert pipeline.episodes.params.reads_watch is True
+        assert "_watch_persisted" in _screen_sustained(pipeline).predicate.__qualname__
+        assert pipeline.status()["gate_reads_watch"] is True
+    finally:
+        pipeline.db.close()
