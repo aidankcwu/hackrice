@@ -27,6 +27,8 @@ export interface ShellProps {
   theme?: "light" | "dark";
   /** Fixtures mode only: text size multiplier (2 = accessibility XXXL). */
   scale?: number;
+  /** A screen's own toolbar button (Protocol's "+"), left of the Settings gear. */
+  action?: ReactNode;
   children?: ReactNode;
 }
 
@@ -35,7 +37,7 @@ export interface ShellProps {
  * the large title, the screen's content, and the two-tab bar. Settings is a
  * pushed screen: a back button instead of the gear, and no tab bar.
  */
-export function Shell({ screen, pushed: pushedDetail, title: titleOverride, theme, scale, children }: ShellProps) {
+export function Shell({ screen, pushed: pushedDetail, title: titleOverride, theme, scale, action, children }: ShellProps) {
   const title = titleOverride ?? SCREENS[screen].title;
   const pushed = pushedDetail || !TABS.includes(screen);
   const headerRef = useRef<HTMLElement>(null);
@@ -50,7 +52,7 @@ export function Shell({ screen, pushed: pushedDetail, title: titleOverride, them
     >
       <header ref={headerRef} className="sticky top-0 z-20 bg-page" style={{ paddingTop: "env(safe-area-inset-top)" }}>
         <div className="relative flex h-11 items-center px-1">
-          {pushed ? <BackButton /> : null}
+          {pushed ? <BackButton screen={screen} /> : null}
           {/* The inline title appears once the large title has scrolled under the bar. */}
           <span
             aria-hidden="true"
@@ -60,13 +62,16 @@ export function Shell({ screen, pushed: pushedDetail, title: titleOverride, them
             {title}
           </span>
           {pushed ? null : (
-            <Link
-              href={SCREENS.settings.href}
-              aria-label={SCREENS.settings.title}
-              className="ml-auto grid size-11 place-items-center rounded-full text-ink"
-            >
-              <Settings size={22} strokeWidth={2} aria-hidden="true" />
-            </Link>
+            <div className="ml-auto flex items-center">
+              {action}
+              <Link
+                href={SCREENS.settings.href}
+                aria-label={SCREENS.settings.title}
+                className="grid size-11 place-items-center rounded-full text-ink"
+              >
+                <Settings size={22} strokeWidth={2} aria-hidden="true" />
+              </Link>
+            </div>
           )}
         </div>
       </header>
@@ -116,13 +121,15 @@ function TabBar({ active }: { active: ScreenId }) {
   );
 }
 
-function BackButton() {
+/** Back to where the detail was pushed from; with no history, to the tab it belongs to (Today for Settings). */
+function BackButton({ screen }: { screen: ScreenId }) {
   const router = useRouter();
+  const home = TABS.includes(screen) ? SCREENS[screen].href : SCREENS.today.href;
   return (
     <button
       type="button"
       aria-label="Back"
-      onClick={() => (window.history.length > 1 ? router.back() : router.push(SCREENS.today.href))}
+      onClick={() => (window.history.length > 1 ? router.back() : router.push(home))}
       className="grid size-11 place-items-center rounded-full text-ink"
     >
       <ChevronLeft size={28} strokeWidth={2} aria-hidden="true" />

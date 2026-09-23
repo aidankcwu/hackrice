@@ -1,6 +1,7 @@
 /**
  * Wire types for the backend routes the phone reads, field for field from the
- * captures in `phone/fixtures/` (docs/STATE.md §4). Names stay snake_case, as on
+ * captures in `phone/fixtures/` (docs/STATE.md §4; the protocol from docs/API.md
+ * "The protocol" and `protocol_today.json`). Names stay snake_case, as on
  * the wire. Fields no screen reads are typed `unknown`; the phone only shows
  * what the backend decided (IOS_SPEC "Data layer").
  */
@@ -174,6 +175,55 @@ export type DecisionAction =
   | { type: "ask"; text: string; answer_kind: string; fills: string; reason: string; outcome?: string }
   /** Job 4: something the phone did on the backend's behalf (calendar, Screen Time). */
   | { type: "act"; kind: string; args?: unknown; outcome?: string };
+
+/** What a protocol item is for (docs/API.md "The protocol"). */
+export type ProtocolKind = "dose" | "meal" | "winddown" | "walk";
+
+/**
+ * Today's state of one item. `seen` and `missed` are the backend's adherence
+ * matcher; `done` and `undone` are the wearer, through `/done` and `/undo`.
+ * No row reads as `waiting`.
+ */
+export type ProtocolStatus = "waiting" | "seen" | "done" | "missed" | "undone";
+
+/** One item of `GET /api/protocol`, and the body `POST /api/protocol` answers with. */
+export interface ProtocolItem {
+  id: string;
+  name: string;
+  kind: ProtocolKind;
+  /** Local `"HH:MM"`, start before end, same day. */
+  window_start: string;
+  window_end: string;
+  /** Weekdays, 0 = Monday, sorted. */
+  days: number[];
+  created_t: number;
+}
+
+/** One item of `GET /api/protocol/today` (fixture: `protocol_today.json`), and what `/done` and `/undo` answer. */
+export interface ProtocolTodayItem extends ProtocolItem {
+  status: ProtocolStatus;
+  /** When the glasses saw it, epoch seconds on the backend's clock. */
+  seen_t: number | null;
+  /** `<decision_id>/<frame_ref>`: the frame is `GET /api/evidence/<evidence_ref>`. */
+  evidence_ref: string | null;
+  updated_t: number | null;
+}
+
+/** `GET /api/protocol/today`: only the items scheduled today. */
+export interface ProtocolToday {
+  /** ISO date, the local day on the tick clock. */
+  day: string;
+  items: ProtocolTodayItem[];
+}
+
+/** The body of `POST /api/protocol`. `days` omitted means every day. */
+export interface NewProtocolItem {
+  name: string;
+  kind: ProtocolKind;
+  window_start: string;
+  window_end: string;
+  days?: number[];
+}
 
 /** One item of `GET /api/decisions?limit=50` (fixture: `today_decisions.json`). */
 export interface Decision {

@@ -168,6 +168,19 @@ button {
   outline-offset: 2px;
 }
 
+/* Add item's Start and End read as plain trailing values, like a settings row;
+   a tap opens the system time picker. */
+input[type="time"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+input[type="time"]::-webkit-calendar-picker-indicator {
+  display: none;
+}
+input[type="time"]::-webkit-date-and-time-value {
+  text-align: right;
+}
+
 /* The connect sheet rises from the bottom edge (off under Reduce Motion, below). */
 dialog.sheet[open] {
   animation: sheet-rise 280ms cubic-bezier(0.2, 0.8, 0.2, 1);

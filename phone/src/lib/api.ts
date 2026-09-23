@@ -5,8 +5,19 @@
  *   NEXT_PUBLIC_API_TOKEN   sent as `Authorization: Bearer <token>` when set
  *   NEXT_PUBLIC_FIXTURES=1  serve phone/fixtures/*.json instead of the network
  */
-import { fixtureUnreachable, loadFixture } from "./fixtures";
-import type { Decision, Episode, EvidenceFrame, Healthspan, Session, Status } from "./types";
+import { fixtureUnreachable, loadFixture, writeFixture } from "./fixtures";
+import type {
+  Decision,
+  Episode,
+  EvidenceFrame,
+  Healthspan,
+  NewProtocolItem,
+  ProtocolItem,
+  ProtocolToday,
+  ProtocolTodayItem,
+  Session,
+  Status,
+} from "./types";
 
 export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8010").replace(/\/+$/, "");
 const API_TOKEN = process.env.NEXT_PUBLIC_API_TOKEN || "";
@@ -56,9 +67,14 @@ async function send(path: string, method: Method, accept: string, body?: unknown
 export async function request<T>(path: string, method: Method = "GET", body?: unknown): Promise<T> {
   if (FIXTURES) {
     if (fixtureUnreachable()) throw new ApiError(path, null);
-    // Fixtures are read-only captures: a write has nothing to land on.
-    const data = method === "GET" ? await loadFixture(path) : undefined;
-    if (data === undefined) throw new ApiError(path, method === "GET" ? 404 : 405);
+    // Only protocol writes have something to land on (in memory); any other write is a 405.
+    if (method !== "GET") {
+      const answer = await writeFixture(path, method, body);
+      if (!answer.ok) throw new ApiError(path, answer.status);
+      return answer.data as T;
+    }
+    const data = await loadFixture(path);
+    if (data === undefined) throw new ApiError(path, 404);
     return data as T;
   }
   return (await (await send(path, method, "application/json", body)).json()) as T;
@@ -84,4 +100,16 @@ export const api = {
   episodes: () => request<Episode[]>("/api/episodes"),
   decisions: (limit = 50) => request<Decision[]>(`/api/decisions?limit=${limit}`),
   evidence: (decisionId: string) => request<EvidenceFrame[]>(`/api/evidence/${encodeURIComponent(decisionId)}`),
+  /** Only the items scheduled today, earliest window first, each with today's status. */
+  protocolToday: () => request<ProtocolToday>("/api/protocol/today"),
+  addProtocolItem: (item: NewProtocolItem) => request<ProtocolItem>("/api/protocol", "POST", item),
+  /** Today's row, now `done`, plus `day`. */
+  markDone: (id: string) =>
+    request<ProtocolTodayItem & { day: string }>(`/api/protocol/${encodeURIComponent(id)}/done`, "POST"),
+  /** Today's row, now `undone`, plus `day`. */
+  undo: (id: string) =>
+    request<ProtocolTodayItem & { day: string }>(`/api/protocol/${encodeURIComponent(id)}/undo`, "POST"),
+  /** Removes the item and its status history. */
+  deleteProtocolItem: (id: string) =>
+    request<{ id: string; removed: boolean }>(`/api/protocol/${encodeURIComponent(id)}`, "DELETE"),
 };
