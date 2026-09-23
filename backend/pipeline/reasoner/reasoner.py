@@ -23,6 +23,7 @@ import asyncio
 import logging
 import threading
 import time
+from collections import Counter
 from typing import Any, Callable
 
 from ..actions.handlers import ActionHandler
@@ -32,10 +33,22 @@ from ..db import Database, day_key
 from ..frames import FrameStore
 from ..models import Decision, Escalation, PendingQuestion
 from .client import AnswerParser, ReasonerClient
+from .decider import Decider, Verdict, build_state
+from .decider_settings import DeciderSettings
 from .envelope import CLERK_FRAMES, build_envelope, local_time, select_frames, RECENT_QUESTIONS
 from .evidence import EvidenceStore
 from .prompts import DEFAULT_PERSONA, LEARNED_MAX, NO_SEVEN_DAY
-from .schema import normalize
+from .schema import (
+    AnnotateAction,
+    AskAction,
+    LogInsightAction,
+    RememberAction,
+    SpeakAction,
+    T1Response,
+    WatchAction,
+    normalize,
+)
+from .writers import Writers, _fallback_summary
 
 log = logging.getLogger(__name__)
 
@@ -119,6 +132,10 @@ class Reasoner:
         parser: AnswerParser | None = None,
         questions: Any | None = None,
         conversation: Any | None = None,
+        *,
+        decider: Decider | None = None,
+        writers: Writers | None = None,
+        decider_settings: DeciderSettings | None = None,
     ) -> None:
         # Cadence-aware AI freshness for the envelope (SPEC §12.2, S9).
         try:
@@ -138,6 +155,16 @@ class Reasoner:
         self._questions = questions
 
         self._conversation = conversation
+
+        #: The decider (docs/PERCEPTION.md, "Decider and writers"). ``None``
+        #: is the clerk path exactly as before; with one, every escalation
+        #: asks it first and the clerk runs only as the fallback.
+        self.decider = decider
+        self.writers = writers
+        self.decider_settings = (
+            decider_settings if decider_settings is not None
+            else (DeciderSettings() if decider is not None else None)
+        )
 
         self.evidence = EvidenceStore(db)
         #: Called as ``(escalation, decision_id, frames)`` right after an
@@ -185,6 +212,11 @@ class Reasoner:
         self.skipped_stale = 0
         #: Persona cues the gate handed straight to the voice agent.
         self.fast_pathed = 0
+        #: Escalations the decider settled (no clerk call).
+        self.decided_by_decider = 0
+        #: Escalations handed to the clerk after the decider ran, by reason
+        #: (``error``, ``uncertain:speak`` ...).
+        self.fell_back: Counter[str] = Counter()
 
     # -- admission --------------------------------------------------------
 
@@ -525,25 +557,10 @@ class Reasoner:
         self.last_decision_t = esc.t
         self.last_latency_ms = None
         try:
-            messages = self._envelope(esc, frames)
-
-            try:
-                resp, meta = await asyncio.wait_for(
-                    self.client.complete(messages), timeout=self.t1_deadline_s
-                )
-            except (asyncio.TimeoutError, TimeoutError):
-                self.dropped_timeout += 1
-                self._drop_after(esc, decision_id, "t1_timeout", started)
+            decided = await self._decide(esc, frames, decision_id, started)
+            if decided is None:
                 return
-            except asyncio.CancelledError:  # pragma: no cover - shutdown path
-                raise
-            except Exception as exc:
-                self.dropped_error += 1
-                log.exception("T1 call failed for %s", decision_id)
-                self._drop_after(
-                    esc, decision_id, f"t1_error:{type(exc).__name__}", started
-                )
-                return
+            resp, meta, path, writers_ran = decided
 
             norm = normalize(resp, t=esc.t)
             # A watch-triggered decision may not schedule another watch: the
@@ -578,6 +595,8 @@ class Reasoner:
                 dropped=False,
                 latency_ms=int(latency_ms),
                 model=str(meta.get("model") or ""),
+                path=path,
+                writers=writers_ran,
             )
             # Written before the actions apply: a handler that throws must not
             # cost us the decision row (SPEC §6).
@@ -639,11 +658,171 @@ class Reasoner:
         decision.latency_ms = int((time.perf_counter() - started) * 1000)
         self.db.insert_decision(decision)
 
+    # -- who decides ------------------------------------------------------
+    #
+    # The evidence copy already happened at admission, so nothing here needs
+    # the envelope until the clerk is actually called. The decider runs on the
+    # cheap text state first; the envelope (base64 frames, tick table) is
+    # built only on the clerk path -- the default, or a fallback.
+
+    async def _decide(
+        self, esc: Escalation, frames: dict[str, bytes], decision_id: str,
+        started: float,
+    ) -> tuple[T1Response, dict[str, Any], str, list[str]] | None:
+        """The response, its meta, the path that decided and the writers that
+        ran; ``None`` when the escalation was dropped (its row is written)."""
+
+        if self.decider is None:
+            return await self._clerk(esc, frames, decision_id, started, path="clerk")
+
+        today, seven_day = self._context(esc)
+        state = build_state(
+            esc, esc.window, [line.line for line in today], self._open_episodes(esc),
+            self.current_persona(), seven_day, esc.t,
+        )
+        try:
+            verdict = await self.decider.decide(state)
+        except asyncio.CancelledError:  # pragma: no cover - shutdown path
+            raise
+        except Exception as exc:  # DeciderError, or anything else: the clerk is never deleted
+            log.warning("decider failed for %s (%s: %s); falling back to the clerk",
+                        decision_id, type(exc).__name__, exc)
+            self.fell_back["error"] += 1
+            return await self._clerk(esc, frames, decision_id, started,
+                                     path="clerk_fallback:error",
+                                     today=today, seven_day=seven_day)
+
+        settings = self.decider_settings or DeciderSettings()
+        unsure = verdict.uncertain(settings.decide_uncertain_low,
+                                   settings.decide_uncertain_high)
+        if unsure is not None:
+            log.info("%s: decider unsure about %s (%.2f); clerk decides", decision_id,
+                     unsure, verdict.probabilities.get(unsure, 0.0))
+            self.fell_back[f"uncertain:{unsure}"] += 1
+            return await self._clerk(esc, frames, decision_id, started,
+                                     path=f"clerk_fallback:uncertain:{unsure}",
+                                     today=today, seven_day=seven_day)
+
+        writing = time.perf_counter()
+        resp, writers_ran = await self._write(state, verdict, settings)
+        self.decided_by_decider += 1
+        meta = {
+            "model": verdict.model,
+            "latency_ms": int(verdict.latency_ms + (time.perf_counter() - writing) * 1000),
+        }
+        return resp, meta, "decider", writers_ran
+
+    async def _clerk(
+        self, esc: Escalation, frames: dict[str, bytes], decision_id: str,
+        started: float, *, path: str,
+        today: list[Any] | None = None, seven_day: str | None = None,
+    ) -> tuple[T1Response, dict[str, Any], str, list[str]] | None:
+        """The one slow clerk call, bounded by the T1 deadline."""
+
+        messages = self._envelope(esc, frames, today=today, seven_day=seven_day)
+        try:
+            resp, meta = await asyncio.wait_for(
+                self.client.complete(messages), timeout=self.t1_deadline_s
+            )
+        except (asyncio.TimeoutError, TimeoutError):
+            self.dropped_timeout += 1
+            self._drop_after(esc, decision_id, "t1_timeout", started)
+            return None
+        except asyncio.CancelledError:  # pragma: no cover - shutdown path
+            raise
+        except Exception as exc:
+            self.dropped_error += 1
+            log.exception("T1 call failed for %s", decision_id)
+            self._drop_after(
+                esc, decision_id, f"t1_error:{type(exc).__name__}", started
+            )
+            return None
+        return resp, meta, path, []
+
+    @staticmethod
+    def _urgency(score: float) -> str:
+        return "high" if score >= 1.5 else "normal" if score >= 0.5 else "low"
+
+    async def _write(
+        self, state: dict, verdict: Verdict, settings: DeciderSettings,
+    ) -> tuple[T1Response, list[str]]:
+        """A clerk-shaped response from a verdict: one writer per fired action.
+
+        ``annotate`` always fires. ``act`` and ``look`` have no action type yet
+        (the act producers are the autopilot's) and are only recorded. Without
+        writers -- the fake reasoner path -- everything but the annotate is
+        dropped and the summary line is the trigger itself.
+        """
+
+        fired = verdict.fires(settings.thresholds())
+        writers = self.writers
+        ran: list[str] = []
+        actions: list[Any] = []
+
+        if writers is None:
+            line = _fallback_summary(state)
+        else:
+            line = await writers.summary_line(state, verdict)
+            ran.append("summary_line")
+        actions.append(AnnotateAction(line=line))
+
+        for name in fired:
+            if name == "annotate":
+                continue
+            if name in ("act", "look"):
+                ran.append(f"{name}:skipped")
+                continue
+            if writers is None:
+                ran.append(f"{name}:no_writer")
+                continue
+            if name == "log_insight":
+                writer, got = "insight", await writers.insight(state, verdict)
+                if got is not None:
+                    actions.append(LogInsightAction(category=got[0], text=got[1]))
+            elif name == "remember":
+                writer, got = "persona_fact", await writers.persona_fact(state, verdict)
+                if got is not None:
+                    actions.append(RememberAction(line=got))
+            elif name == "watch":
+                writer, got = "watch_condition", await writers.watch_condition(state, verdict)
+                if got is not None:
+                    actions.append(WatchAction(after_s=got[0], condition=got[1],
+                                               reason=verdict.topic))
+            elif name == "speak":
+                writer = "handoff_topic"
+                got = await writers.handoff_topic(state, verdict, action="speak")
+                if got is not None:
+                    actions.append(SpeakAction(text=got,
+                                               urgency=self._urgency(verdict.urgency)))
+            elif name == "ask":
+                writer, got = "question", await writers.question(state, verdict)
+                if got is not None:
+                    actions.append(AskAction(text=got[0], answer_kind=got[1],
+                                             fills=got[2], reason=verdict.topic))
+            else:  # pragma: no cover - ACTIONS is closed
+                continue
+            ran.append(writer if got is not None else f"{writer}:failed")
+
+        resp = T1Response(
+            interpretation=line,
+            confidence=max(verdict.probabilities.values(), default=0.0),
+            actions=actions,
+        )
+        return resp, ran
+
+    def _open_episodes(self, esc: Escalation) -> list[Any]:
+        try:
+            return [ep for ep in self.db.list_episodes(day=day_key(esc.t)) if ep.open]
+        except Exception:  # pragma: no cover - defensive
+            log.exception("could not read open episodes; deciding without them")
+            return []
+
     # -- envelope ---------------------------------------------------------
 
-    def _envelope(
-        self, esc: Escalation, frames: dict[str, bytes]
-    ) -> list[dict[str, Any]]:
+    def _context(self, esc: Escalation) -> tuple[list[Any], str]:
+        """Today's summary lines and the seven-day text, read once per
+        escalation and shared by the decider state and the envelope."""
+
         try:
             # Keyed off the escalation's own clock, not wall clock: one clock
             # everywhere means a replayed or sped-up day still reads its own
@@ -659,6 +838,16 @@ class Reasoner:
                 seven_day = self.seven_day_summary() or NO_SEVEN_DAY
             except Exception:
                 log.exception("7-day summary callable raised; using the placeholder")
+        return today, seven_day
+
+    def _envelope(
+        self, esc: Escalation, frames: dict[str, bytes], *,
+        today: list[Any] | None = None, seven_day: str | None = None,
+    ) -> list[dict[str, Any]]:
+        if today is None or seven_day is None:
+            read_today, read_seven = self._context(esc)
+            today = read_today if today is None else today
+            seven_day = read_seven if seven_day is None else seven_day
 
         try:
             recent_questions = self.db.list_questions(limit=RECENT_QUESTIONS)
@@ -812,6 +1001,8 @@ class Reasoner:
             "answers_dropped": self.answers_dropped,
             "remembered": self.remembered,
             "fast_pathed": self.fast_pathed,
+            "decided_by_decider": self.decided_by_decider,
+            "fell_back": dict(self.fell_back),
             "frames_copied": self.evidence.copied,
             "frames_missing": self.evidence.missing,
             "model": getattr(self.client, "model", ""),
