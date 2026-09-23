@@ -5,9 +5,13 @@ import { AddItem } from "@/components/protocol/AddItem";
 import { AddItemLink, Protocol } from "@/components/protocol/Protocol";
 import { Settings } from "@/components/settings/Settings";
 import { Today } from "@/components/today/Today";
+import { EmptyState } from "@/components/ui";
 import { FIXTURES } from "@/lib/api";
-import { fixtureQuery, readFixtureView, type SearchParams } from "@/lib/screens";
+import { fixtureQuery, readFixtureView, type ScreenId, type SearchParams } from "@/lib/screens";
 import { APP_VERSION } from "@/lib/version";
+
+/** Menu screens that are still stubs; each gets its content in a later build. */
+const STUBS = new Set<ScreenId>(["library", "treatments", "tests", "biomarkers", "devices", "concierge", "sources", "claims", "find"]);
 
 /**
  * Today. In fixtures mode this route also renders any other screen named by
@@ -31,6 +35,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       {screen === "analysis" ? <Analysis /> : null}
       {screen === "protocol" ? <Protocol query={query} /> : null}
       {screen === "settings" ? <Settings version={APP_VERSION} /> : null}
+      {STUBS.has(screen) ? <EmptyState text="Coming in this build." /> : null}
     </Shell>
   );
 }

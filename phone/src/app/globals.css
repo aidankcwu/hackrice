@@ -2,58 +2,98 @@
 
 /* ---------------------------------------------------------------------------
    Tokens: direction C · Instrument, picked in task F.0, with A's green/red
-   pair for the sign. Mirror of the Tokens section in
-   .claude/skills/brian-ios-design/SKILL.md.
+   pair for the sign; extended by the design-system contract (grid, radii,
+   photo-panel tints, type scale, motion).
    Each colour is `light-dark(light, dark)`, the CSS twin of the Swift
    `Color(light:dark:)`: the device's appearance picks the value unless fixtures
-   mode pins one (`?mode=`, below).
+   mode pins one (`?mode=`, below). Dark mode changes colour only; the layout
+   is the same to the pixel.
    Data colours only ever appear next to a sign and a word that carry the
-   meaning too.
+   meaning too. No gradients anywhere: every fill is one flat colour.
    --------------------------------------------------------------------------- */
 :root {
   color-scheme: light dark;
 
+  /* Surfaces and text */
   --page: light-dark(#ffffff, #000000);
-  --surface: light-dark(#f5f5f7, #1a1a1c); /* panels (the hero), 20 px radius */
-  --surface-2: light-dark(#e8e8ed, #29292c); /* capsule chips, pressed rows */
+  --surface: light-dark(#f5f5f7, #1a1a1c); /* cards, panels, inset lists, 20 px radius */
+  --surface-2: light-dark(#e8e8ed, #29292c); /* chips, secondary buttons, pressed rows */
+  --surface2: var(--surface-2); /* alias */
   --ink: light-dark(#0a0a0a, #f5f5f7); /* headings, 0.0 h, primary button fill */
-  --text: light-dark(#1d1d1f, #e3e3e8); /* body */
-  --muted: light-dark(#636368, #939399); /* secondary text, times, held-back rows */
-  --line: light-dark(#e3e3e8, #2c2c2e); /* hairlines between ledger rows */
-  --earn: light-dark(#047857, #4ade80); /* positive hours only */
-  --earn-soft: light-dark(#e3f2eb, #0e2a1c); /* fill behind a signed gain chip */
-  --cost: light-dark(#c81e1e, #f87171); /* negative hours only */
-  --cost-soft: light-dark(#fbe7e7, #301313); /* fill behind a signed cost chip */
-  --watch: light-dark(#a15c07, #fbbf24); /* amber: "watch this", never a cost or a gain */
-  --watch-soft: light-dark(#fbf0dc, #2b2110);
-  --band: light-dark(#ececf1, #242427); /* protocol bands on the calendar */
+  --text: light-dark(#1d1d1f, #f5f5f5); /* body: dark is 96% white */
+  --muted: light-dark(#636368, rgba(255, 255, 255, 0.6)); /* secondary text, times; dark is 60% white, >= 4.5:1 on page and surface */
+  --line: light-dark(#e3e3e8, rgba(255, 255, 255, 0.12)); /* hairlines; dark is 12% white */
+  --band: light-dark(#ececf1, #242427); /* protocol bands on the calendar, progress tracks */
   /* Not a Brian token: iOS system red, what SwiftUI draws for `Button(role:
      .destructive)`. Destructive actions in sheets only, the single exception to
      "colour is for data". */
   --destructive: light-dark(#ff3b30, #ff453a);
 
-  --radius-panel: 20px;
+  /* Data colours: green for gains and "inside a window", red for costs and
+     violations, amber only for "watch this". */
+  --earn: light-dark(#047857, #4ade80);
+  --earn-soft: light-dark(#e3f2eb, #0e2a1c); /* fill behind a signed gain chip */
+  --cost: light-dark(#c81e1e, #f87171);
+  --cost-soft: light-dark(#fbe7e7, #301313); /* fill behind a signed cost chip */
+  --watch: light-dark(#a15c07, #fbbf24);
+  --watch-soft: light-dark(#fbf0dc, #2b2110);
+  /* Contract aliases, same values. */
+  --good: var(--earn);
+  --good-soft: var(--earn-soft);
+  --bad: var(--cost);
+  --bad-soft: var(--cost-soft);
+  --warn: var(--watch);
+  --warn-soft: var(--watch-soft);
 
-  /* Spacing, px, on the 4 / 8 / 16 / 24 / 32 grid (Swift `Space`). */
-  --space-gutter: 24px; /* screen edges */
-  --space-section: 32px; /* between status strip, button, hero, ledger */
-  --space-panel: 24px; /* panel padding */
+  /* Photo-panel tints: five flat fills for the panel at the top of a card. */
+  --tint-stone: light-dark(#e7e2dc, #2a2723);
+  --tint-sage: light-dark(#dfe8df, #1f2a22);
+  --tint-sand: light-dark(#efe6d6, #2b261c);
+  --tint-slate: light-dark(#dfe3ea, #21252c);
+  --tint-bluegrey: light-dark(#dde4ea, #1f262d);
+
+  /* Hairline: 1 px at 50% of --line in light; in dark --line is already 12% white. */
+  --hairline: light-dark(color-mix(in srgb, var(--line) 50%, transparent), var(--line));
+
+  /* Radii */
+  --radius-card: 20px;
+  --radius-tile: 14px;
+  --radius-sheet: 24px; /* top corners of a bottom sheet */
+  --radius-photo: 16px;
+  --radius-pill: 999px; /* chips and buttons */
+  --radius-panel: var(--radius-card); /* alias, kept for old screens */
+
+  /* Spacing, px, on the 4 px grid. */
+  --space-gutter: 16px; /* page edges */
+  --space-section: 24px; /* between sections */
+  --space-card: 20px; /* card padding */
+  --space-panel: var(--space-card); /* alias, kept for old screens */
+  --space-row: 56px; /* list row, min height */
+  --space-tap: 44px; /* smallest tap target */
   --row-status: 28px; /* status strip line, min height */
   --row-log: 52px; /* ledger row, min height */
   --col-time: 40px; /* ledger time column; then 8 · symbol 18 · 16 · title · 8 · outcome */
 
-  /* Translucent-blur treatment. Exactly two things in the app wear it: the tab
-     bar (`glass`) and the one primary button (`glass-prominent`). Content
-     surfaces never do, and glass never sits on glass. */
+  /* Translucent-blur treatment: the floating top bar and tab bar (`glass`) and
+     the one prominent glass button (`glass-prominent`). Content surfaces never
+     wear it, and glass never sits on glass. */
   --glass-fill: color-mix(in srgb, var(--surface) 72%, transparent);
   --glass-edge: color-mix(in srgb, var(--ink) 10%, transparent);
   --glass-selected: color-mix(in srgb, var(--ink) 8%, transparent);
   --glass-prominent-fill: color-mix(in srgb, var(--ink) 88%, transparent);
   --glass-blur: blur(20px) saturate(180%);
 
+  /* Motion: state changes 200 ms, pressed fill 120 ms, sheets 280 ms, all
+     ease-out. Nothing animates on page load; Reduce Motion turns it all off. */
+  --motion-state: 200ms;
+  --motion-press: 120ms;
+  --motion-sheet: 280ms;
+  --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --press-brightness: brightness(0.92); /* pressed fill darkens 8% */
+
   /* Dynamic Type stand-in: 1 at the default size, 2 for the accessibility
-     screenshots (`?scale=2`). Every text style below multiplies by it except
-     the hero, which is the one fixed-size number in the app. */
+     screenshots (`?scale=2`). Every text style below multiplies by it. Sizes are
+     in rem (16 px base) so the browser's own font scaling works too. */
   --type-scale: 1;
 }
 
@@ -68,77 +108,157 @@
 }
 
 @theme inline {
+  /* Colours: bg-*, text-*, border-*, fill-*, stroke-* … */
   --color-page: var(--page);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-surface2: var(--surface2);
   --color-ink: var(--ink);
   --color-text: var(--text);
   --color-muted: var(--muted);
   --color-line: var(--line);
+  --color-hairline: var(--hairline);
+  --color-band: var(--band);
+  --color-destructive: var(--destructive);
   --color-earn: var(--earn);
   --color-earn-soft: var(--earn-soft);
   --color-cost: var(--cost);
   --color-cost-soft: var(--cost-soft);
   --color-watch: var(--watch);
   --color-watch-soft: var(--watch-soft);
-  --color-band: var(--band);
-  --color-destructive: var(--destructive);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-tint-stone: var(--tint-stone);
+  --color-tint-sage: var(--tint-sage);
+  --color-tint-sand: var(--tint-sand);
+  --color-tint-slate: var(--tint-slate);
+  --color-tint-bluegrey: var(--tint-bluegrey);
+
+  /* Radii: rounded-card, rounded-t-sheet, rounded-photo … */
+  --radius-card: var(--radius-card);
+  --radius-tile: var(--radius-tile);
+  --radius-sheet: var(--radius-sheet);
+  --radius-photo: var(--radius-photo);
+  --radius-pill: var(--radius-pill);
   --radius-panel: var(--radius-panel);
+
+  /* Spacing: px-gutter, mt-section, gap-section, p-card, p-panel, min-h-row, size-tap … */
   --spacing-gutter: var(--space-gutter);
   --spacing-section: var(--space-section);
+  --spacing-card: var(--space-card);
   --spacing-panel: var(--space-panel);
+  --spacing-row: var(--space-row);
+  --spacing-tap: var(--space-tap);
+
   /* The system font: SF Pro on the iPhone. No custom fonts. */
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
 }
 
-/* Type scale, one utility per BrianType style (sizes are the iOS defaults). */
-@utility type-large-title {
-  font-size: calc(34px * var(--type-scale));
-  line-height: 1.2;
+/* ---------------------------------------------------------------------------
+   Type scale. Sizes in rem × --type-scale; line-heights are the px value in
+   rem. Never below 11 px (type-tab). Tabular numerals on every number: set on
+   the body, so digits line up in every style.
+   --------------------------------------------------------------------------- */
+/* 34/40 bold: the screen title, drawn once at the top of a main tab. */
+@utility type-screen-title {
+  font-size: calc(2.125rem * var(--type-scale));
+  line-height: calc(2.5rem * var(--type-scale));
   font-weight: 700;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.5px;
 }
+@utility type-large-title {
+  font-size: calc(2.125rem * var(--type-scale));
+  line-height: calc(2.5rem * var(--type-scale));
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+/* 56/60 bold, tabular: the one hero number. */
 @utility type-hero {
-  font-size: 80px;
-  line-height: 1;
-  font-weight: 600;
-  letter-spacing: -2.5px;
+  font-size: calc(3.5rem * var(--type-scale));
+  line-height: calc(3.75rem * var(--type-scale));
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-@utility type-number {
-  font-size: calc(22px * var(--type-scale));
-  line-height: 1.27;
+/* 22/28 semibold: a section heading. */
+@utility type-section {
+  font-size: calc(1.375rem * var(--type-scale));
+  line-height: calc(1.75rem * var(--type-scale));
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
 }
 @utility type-title {
-  font-size: calc(20px * var(--type-scale));
-  line-height: 1.25;
+  font-size: calc(1.375rem * var(--type-scale));
+  line-height: calc(1.75rem * var(--type-scale));
   font-weight: 600;
 }
+/* 17/22 semibold: a card's title, a sheet's title, a row's title. */
+@utility type-card-title {
+  font-size: calc(1.0625rem * var(--type-scale));
+  line-height: calc(1.375rem * var(--type-scale));
+  font-weight: 600;
+}
+/* 28/32 semibold, tabular: a number that is not the hero. */
+@utility type-number {
+  font-size: calc(1.75rem * var(--type-scale));
+  line-height: calc(2rem * var(--type-scale));
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+/* 17/24: body. */
 @utility type-body {
-  font-size: calc(17px * var(--type-scale));
-  line-height: 1.3;
+  font-size: calc(1.0625rem * var(--type-scale));
+  line-height: calc(1.5rem * var(--type-scale));
 }
+/* 15/20: the secondary line. */
 @utility type-secondary {
-  font-size: calc(15px * var(--type-scale));
-  line-height: 1.33;
+  font-size: calc(0.9375rem * var(--type-scale));
+  line-height: calc(1.25rem * var(--type-scale));
 }
+/* 13/18: captions. */
 @utility type-caption {
-  font-size: calc(13px * var(--type-scale));
-  line-height: 1.38;
+  font-size: calc(0.8125rem * var(--type-scale));
+  line-height: calc(1.125rem * var(--type-scale));
 }
-/* Ledger outcome: symbol + word, no capsule. */
+/* Ledger outcome: symbol + word, no capsule (caption at weight 500). */
 @utility type-outcome {
-  font-size: calc(13px * var(--type-scale));
-  line-height: 1.38;
+  font-size: calc(0.8125rem * var(--type-scale));
+  line-height: calc(1.125rem * var(--type-scale));
   font-weight: 500;
 }
-/* Capsule chips: provenance and signed values only. */
+/* 13/18 medium: chips (provenance and signed values). */
 @utility type-chip {
-  font-size: calc(12px * var(--type-scale));
-  line-height: 1.33;
+  font-size: calc(0.8125rem * var(--type-scale));
+  line-height: calc(1.125rem * var(--type-scale));
   font-weight: 500;
+}
+/* 11/13 medium: tab-bar labels, the smallest text in the app. */
+@utility type-tab {
+  font-size: calc(0.6875rem * var(--type-scale));
+  line-height: calc(0.8125rem * var(--type-scale));
+  font-weight: 500;
+}
+/* 13/16 semibold, uppercase, tracked: the wordmark, the only all-caps text. */
+@utility type-wordmark {
+  font-size: calc(0.8125rem * var(--type-scale));
+  line-height: calc(1rem * var(--type-scale));
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+/* ---------------------------------------------------------------------------
+   Surface utilities.
+   --------------------------------------------------------------------------- */
+/* A 1 px rule across the top of an element (rows in an inset list). */
+@utility hairline {
+  border-top: 1px solid var(--hairline);
+}
+/* The same rule along the bottom (a field). */
+@utility hairline-b {
+  border-bottom: 1px solid var(--hairline);
 }
 
 @utility glass {
@@ -155,6 +275,47 @@
   backdrop-filter: var(--glass-blur);
 }
 
+/* ---------------------------------------------------------------------------
+   Motion utilities. Both collapse under Reduce Motion.
+   --------------------------------------------------------------------------- */
+/* A state change: colour, opacity, transform, 200 ms ease-out. */
+@utility motion {
+  transition-property: color, background-color, border-color, opacity, transform, filter;
+  transition-duration: var(--motion-state);
+  transition-timing-function: var(--motion-ease);
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+/* A pressable fill: darkens 8% while pressed, 120 ms. The press timing also
+   sits on the active state, so it survives `motion` (200 ms, emitted later)
+   on the same element. */
+@utility pressable {
+  transition-property: filter, background-color, color;
+  transition-duration: var(--motion-press);
+  transition-timing-function: var(--motion-ease);
+  &:active {
+    filter: var(--press-brightness);
+    transition-duration: var(--motion-press);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+    &:active {
+      transition: none;
+    }
+  }
+}
+/* The menu overlay: a 200 ms fade on open (never on page load). */
+@utility fade-in {
+  animation: fade-in var(--motion-state) var(--motion-ease);
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Base.
+   --------------------------------------------------------------------------- */
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -165,6 +326,7 @@ body {
   min-height: 100dvh;
   background: var(--page);
   color: var(--text);
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }
@@ -174,9 +336,13 @@ button {
   touch-action: manipulation;
 }
 
-:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
+/* Focus: a visible 2 px ink ring, offset 2 px. In the base layer so a utility
+   (e.g. an inset offset on a row inside a clipped list) can still override it. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
 }
 
 /* Add item's Start and End read as plain trailing values, like a settings row;
@@ -192,13 +358,19 @@ input[type="time"]::-webkit-date-and-time-value {
   text-align: right;
 }
 
-/* The connect sheet rises from the bottom edge (off under Reduce Motion, below). */
+/* A bottom sheet rises from the bottom edge, 280 ms ease-out (off under Reduce
+   Motion, below). */
 dialog.sheet[open] {
-  animation: sheet-rise 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: sheet-rise var(--motion-sheet) var(--motion-ease);
 }
 @keyframes sheet-rise {
   from {
     transform: translateY(100%);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
   }
 }
 

@@ -1,29 +1,18 @@
 "use client";
 
-import Link from "next/link";
+import { ChevronLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
-import { CalendarDays, ChartNoAxesColumn, ChevronLeft, ListChecks, Settings, Sun, type LucideIcon } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Menu } from "@/components/menu/Menu";
+import { Button, STROKE, TabBar, TopBar } from "@/components/ui";
 import { SCREENS, TABS, type ScreenId } from "@/lib/screens";
 
-/** One icon per meaning; Settings is the gear in the top bar. */
-const ICONS: Record<ScreenId, LucideIcon> = {
-  today: Sun,
-  calendar: CalendarDays,
-  analysis: ChartNoAxesColumn,
-  protocol: ListChecks,
-  settings: Settings,
-};
-
 /**
- * Tab bar: a 54 px item row inside a 4 px glass rim and its hairline edge (64 px
- * where the hairline rounds up to a whole pixel), floating (iOS 26) at the
- * safe-area inset, or 16 px above the edge when there is none.
+ * A tab's content ends this far above the bottom edge: the tab bar (64), its
+ * 8 px float, and 16 px clear, plus the home indicator, so the last row scrolls
+ * out from under the bar.
  */
-const TAB_BAR_HEIGHT = 64;
-const TAB_BAR_BOTTOM = "max(16px, env(safe-area-inset-bottom))";
-/** A tab's scrolling list ends this far above the bottom edge: tab-bar height + safe-area inset, so the last row scrolls clear of the bar. */
-const TAB_BAR_CLEARANCE = `calc(${TAB_BAR_HEIGHT}px + ${TAB_BAR_BOTTOM})`;
+const TAB_CLEARANCE = "calc(88px + env(safe-area-inset-bottom))";
 
 export interface ShellProps {
   screen: ScreenId;
@@ -35,22 +24,39 @@ export interface ShellProps {
   theme?: "light" | "dark";
   /** Fixtures mode only: text size multiplier (2 = accessibility XXXL). */
   scale?: number;
-  /** A screen's own toolbar button (Protocol's "+"), left of the Settings gear. */
+  /** A screen's own toolbar button (Protocol's "+"): beside the screen title on a tab, at the right of the bar on a pushed screen. */
   action?: ReactNode;
   children?: ReactNode;
 }
 
 /**
- * The phone app's frame, native-first: a navigation bar with the Settings gear,
- * the large title, the screen's content, and the tab bar. Settings is a
- * pushed screen: a back button instead of the gear, and no tab bar.
+ * The phone app's frame: a floating top pill (hamburger, wordmark, and on the
+ * four tabs the "Find my protocol" pill), the screen title once at the top of
+ * the content, the content, and the floating tab bar. Every other screen is
+ * pushed: the pill carries a back button and the title instead, and there is
+ * no tab bar. The hamburger opens the Menu over everything.
  */
 export function Shell({ screen, pushed: pushedDetail, title: titleOverride, theme, scale, action, children }: ShellProps) {
   const title = titleOverride ?? SCREENS[screen].title;
   const pushed = pushedDetail || !TABS.includes(screen);
-  const headerRef = useRef<HTMLElement>(null);
-  const titleRef = useRef<HTMLHeadingElement>(null);
-  const titleHidden = useScrolledUnder(titleRef, headerRef);
+  const [menuOpen, setMenuOpen] = useState(false);
+  /** What had focus when the menu opened (the hamburger); focus returns there on close. */
+  const opener = useRef<HTMLElement | null>(null);
+
+  const openMenu = () => {
+    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setMenuOpen(true);
+  };
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+
+  // Focus returns to the opener only after the close has committed: the page
+  // chrome is inert while the menu is open, and an inert element refuses focus.
+  useEffect(() => {
+    if (menuOpen) return;
+    const target = opener.current;
+    opener.current = null;
+    target?.focus();
+  }, [menuOpen]);
 
   return (
     <div
@@ -58,78 +64,55 @@ export function Shell({ screen, pushed: pushedDetail, title: titleOverride, them
       style={scale ? ({ "--type-scale": scale } as CSSProperties) : undefined}
       className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col bg-page text-text"
     >
-      <header ref={headerRef} className="sticky top-0 z-20 bg-page" style={{ paddingTop: "env(safe-area-inset-top)" }}>
-        <div className="relative flex h-11 items-center px-1">
-          {pushed ? <BackButton screen={screen} /> : null}
-          {/* The inline title appears once the large title has scrolled under the bar. */}
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-x-14 truncate text-center text-[17px] font-semibold text-ink transition-opacity duration-200"
-            style={{ opacity: titleHidden ? 1 : 0 }}
-          >
-            {title}
-          </span>
+      {/* Everything under the menu is inert while it is open, so focus and screen readers stay inside the overlay. */}
+      <div className="contents" inert={menuOpen || undefined}>
+        <header className="sticky top-0 z-20" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+          {pushed ? (
+            <PushedBar screen={screen} title={title} action={action} />
+          ) : (
+            <TopBar
+              onMenu={openMenu}
+              mainTab
+              action={
+                <Button variant="secondary" href={SCREENS.find.href} className="min-h-9! px-3!">
+                  {SCREENS.find.title}
+                </Button>
+              }
+            />
+          )}
+        </header>
+
+        <main className="flex-1 px-gutter" style={{ paddingBottom: pushed ? 32 : TAB_CLEARANCE }}>
           {pushed ? null : (
-            <div className="ml-auto flex items-center">
+            <div className="flex items-center justify-between gap-2 pt-4 pb-2">
+              <h1 className="type-screen-title m-0 text-ink">{title}</h1>
               {action}
-              <Link
-                href={SCREENS.settings.href}
-                aria-label={SCREENS.settings.title}
-                className="grid size-11 place-items-center rounded-full text-ink"
-              >
-                <Settings size={22} strokeWidth={2} aria-hidden="true" />
-              </Link>
             </div>
           )}
-        </div>
-      </header>
+          {children}
+        </main>
 
-      <main
-        className="flex-1 px-gutter"
-        style={{ paddingBottom: pushed ? 32 : TAB_BAR_CLEARANCE }}
-      >
-        <h1 ref={titleRef} className="type-large-title m-0 pb-2 text-ink">
-          {title}
-        </h1>
-        {children}
-      </main>
-
-      {pushed ? null : <TabBar active={screen} />}
+        {pushed ? null : <TabBar active={screen} />}
+      </div>
+      {menuOpen ? <Menu onClose={closeMenu} /> : null}
     </div>
   );
 }
 
-function TabBar({ active }: { active: ScreenId }) {
+/** The top pill on a pushed screen: the back button where the hamburger was, the title where the wordmark was. */
+function PushedBar({ screen, title, action }: { screen: ScreenId; title: string; action?: ReactNode }) {
   return (
-    <nav
-      aria-label="Tabs"
-      className="pointer-events-none fixed inset-x-0 z-30 mx-auto flex max-w-[430px] justify-center px-4"
-      style={{ bottom: TAB_BAR_BOTTOM }}
-    >
-      <div className="glass pointer-events-auto flex rounded-full p-1">
-        {TABS.map((id) => {
-          const on = id === active;
-          const Icon = ICONS[id];
-          return (
-            <Link
-              key={id}
-              href={SCREENS[id].href}
-              aria-current={on ? "page" : undefined}
-              className={`flex h-[54px] w-[80px] flex-col items-center justify-center gap-1 rounded-full transition-colors duration-200 ${
-                on ? "bg-[var(--glass-selected)] text-ink" : "text-muted"
-              }`}
-            >
-              <Icon size={24} strokeWidth={on ? 2.25 : 2} aria-hidden="true" />
-              <span className="text-[11px] leading-none font-semibold">{SCREENS[id].title}</span>
-            </Link>
-          );
-        })}
+    <div className="px-2 pt-2">
+      <div className="glass relative flex h-13 items-center rounded-full px-1">
+        <BackButton screen={screen} />
+        <h1 className="type-card-title pointer-events-none absolute inset-x-14 m-0 truncate text-center text-ink">{title}</h1>
+        {action ? <div className="ml-auto flex items-center pr-1">{action}</div> : null}
       </div>
-    </nav>
+    </div>
   );
 }
 
-/** Back to where the detail was pushed from; with no history, to the tab it belongs to (Today for Settings). */
+/** Back to where the detail was pushed from; with no history, to the tab it belongs to (Today for a menu screen). */
 function BackButton({ screen }: { screen: ScreenId }) {
   const router = useRouter();
   const home = TABS.includes(screen) ? SCREENS[screen].href : SCREENS.today.href;
@@ -138,25 +121,9 @@ function BackButton({ screen }: { screen: ScreenId }) {
       type="button"
       aria-label="Back"
       onClick={() => (window.history.length > 1 ? router.back() : router.push(home))}
-      className="grid size-11 place-items-center rounded-full text-ink"
+      className="grid size-11 shrink-0 place-items-center rounded-full text-ink transition-colors duration-120 active:bg-surface-2"
     >
-      <ChevronLeft size={28} strokeWidth={2} aria-hidden="true" />
+      <ChevronLeft size={24} strokeWidth={STROKE} aria-hidden="true" />
     </button>
   );
-}
-
-/** True once `target` has scrolled up under the sticky `bar`. */
-function useScrolledUnder(target: RefObject<HTMLElement | null>, bar: RefObject<HTMLElement | null>): boolean {
-  const [under, setUnder] = useState(false);
-  useEffect(() => {
-    const element = target.current;
-    if (!element) return;
-    const barHeight = bar.current?.offsetHeight ?? 0;
-    const observer = new IntersectionObserver(([entry]) => setUnder(!entry.isIntersecting), {
-      rootMargin: `-${barHeight}px 0px 0px 0px`,
-    });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [target, bar]);
-  return under;
 }
