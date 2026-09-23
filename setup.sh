@@ -33,7 +33,7 @@ if command -v xcode-select >/dev/null 2>&1; then
   esac
 fi
 if [ "$missing" = 1 ]; then
-  echo "   install what is MISSING (README_FIRST.md step 1), then re-run. Continuing anyway."
+  echo "   install what is MISSING (docs/README_FIRST.md step 1), then re-run. Continuing anyway."
 fi
 
 echo "→ commit the plan"
@@ -49,6 +49,6 @@ cat <<'EOF'
 
 Done. Next:
   1. claude --model opus
-  2. paste:  Read PLAN.md. You are the orchestrator. Follow section 0. Start Job 0.
+  2. paste:  Read docs/PLAN.md. You are the orchestrator. Follow section 0. Start Job 0.
   3. approve the two project MCP servers when Claude Code asks (meta-wearables-docs, apple-docs)
 EOF

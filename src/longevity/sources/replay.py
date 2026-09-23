@@ -1,4 +1,4 @@
-"""The `replay` capture adapter (PERSON_A.md A3, SPEC §11.3).
+"""The `replay` capture adapter (docs/PERSON_A.md A3, SPEC §11.3).
 
 A directory of JPEGs in, `Frame`s out at the rate they were recorded. SPEC §11.3 calls
 this "deterministic debugging" and §13.4 makes the corpus Person A's *first*

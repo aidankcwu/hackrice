@@ -106,4 +106,4 @@ tags (pinned to `gemini-2.5-flash-lite` — see FINDINGS before touching), Claud
 ElevenLabs for TTS, Next.js dashboard (Person B).
 Mac-side code never imports Meta SDK types — `VideoFrame` and friends stay on iOS.
 
-My task breakdown is [PERSON_A.md](PERSON_A.md).
+My task breakdown is [PERSON_A.md](docs/PERSON_A.md).

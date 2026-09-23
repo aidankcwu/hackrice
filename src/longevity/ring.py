@@ -1,4 +1,4 @@
-"""The frame ring buffer (PERSON_A.md A7, SPEC §2.5).
+"""The frame ring buffer (docs/PERSON_A.md A7, SPEC §2.5).
 
 Frames live here and nowhere else. Three rules from §2.5, in force for this module:
 

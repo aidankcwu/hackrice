@@ -1,4 +1,4 @@
-"""Verification for src/longevity/sensors.py (PERSON_A.md A5).
+"""Verification for src/longevity/sensors.py (docs/PERSON_A.md A5).
 
     uv run python tools/check_sensors.py
 

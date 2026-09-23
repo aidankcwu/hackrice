@@ -27,7 +27,7 @@ with `lsof -i :8010` and stop it, or use `--port 8011` everywhere below.
 ## 1. Xcode — three files, one plist key
 
 Project: `~/meta-wearables-dat-ios`, target `CameraAccess`. Do **not** start
-from a clean clone (XCODE.md §0 explains why).
+from a clean clone (docs/XCODE.md §0 explains why).
 
 1. Replace `samples/CameraAccess/MacLink.swift` with `ios/MacLink.swift` from the branch.
 2. Replace `samples/CameraAccess/CapturePacketSender.swift` with `ios/CapturePacketSender.swift`

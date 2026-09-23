@@ -6,7 +6,7 @@ a live uvicorn, a real WebSocket, a real phone on the other end. Five things tha
 cannot be checked by staring at the code, and that a fake link cannot show either:
 
   1. A message handed to `speak()` actually arrives at a connected phone, intact.
-  2. Nothing rate-limits it. The limiter is B's (§4.6, PERSON_A.md A17), so fifty
+  2. Nothing rate-limits it. The limiter is B's (§4.6, docs/PERSON_A.md A17), so fifty
      utterances in a row must produce fifty messages on the wire.
   3. A phone that vanishes mid-session yields `False`, not an exception — B calls this
      from inside action handling and speech must not reach the reasoner as a crash.

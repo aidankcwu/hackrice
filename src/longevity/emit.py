@@ -1,6 +1,6 @@
-"""Tick delivery to Person B (PERSON_A.md A6, decision #1).
+"""Tick delivery to Person B (docs/PERSON_A.md A6, decision #1).
 
-PERSON_A.md leaves the transport open — "in-process async callback, SQLite polling, or
+docs/PERSON_A.md leaves the transport open — "in-process async callback, SQLite polling, or
 WebSocket push?" — and recommends the first: "Both halves are Python on one laptop, so
 an in-process subscription is simplest, with SQLite as the durable mirror." That is
 what this module implements. Both paths are live at once, so B can switch without a

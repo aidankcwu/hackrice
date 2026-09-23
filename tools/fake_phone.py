@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A synthetic iPhone: capture packets over a WebSocket, no hardware involved.
 
-This is what lets A15 be *finished* before A14 exists. PERSON_A.md: "Half 1 does not
+This is what lets A15 be *finished* before A14 exists. docs/PERSON_A.md: "Half 1 does not
 need the glasses... Half 2 does not need Half 1." The two halves meet at the capture
 packet, so a Python client that speaks exactly that packet — `wire.capture_packet`, not
 a hand-rolled dict — closes the Python half on its own. When the real phone is then

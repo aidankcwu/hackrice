@@ -12,7 +12,7 @@ Starts the real FastAPI app in-process, drives it with `tools/fake_phone.py`, co
   4. a malformed packet does not kill the socket
   5. under backpressure the consumer gets the NEWEST frame, not a backlog
 
-PERSON_A.md: the two straddling tasks are where the bugs will be, "because a failure on
+docs/PERSON_A.md: the two straddling tasks are where the bugs will be, "because a failure on
 one side looks exactly like a failure on the other." This is the Python half's alibi —
 if it prints PASS and the real phone still does not work, the bug is in Swift.
 

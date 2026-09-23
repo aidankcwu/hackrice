@@ -1,4 +1,4 @@
-"""`speak(text, urgency)` — the utterance handoff (PERSON_A.md A17, SPEC §13.3).
+"""`speak(text, urgency)` — the utterance handoff (docs/PERSON_A.md A17, SPEC §13.3).
 
 One of exactly two interfaces between A and B. §13.3: "B calls an in-process function A
 owns. A synthesizes, ships the bytes to the phone, and plays them. **B decides whether
@@ -7,7 +7,7 @@ and what; A owns how.**"
 So what is *not* here, deliberately:
 
   * **No rate limiting.** §4.6 says "the model proposes speech; code disposes", and
-    PERSON_A.md A17 puts that limiter on B's side — it is logic, not plumbing. If this
+    docs/PERSON_A.md A17 puts that limiter on B's side — it is logic, not plumbing. If this
     module silently swallowed utterances, B could not tell a rate-limited decision from
     a broken socket, and the silent-decision feed on the dashboard would lie.
   * **No decision about whether to speak.** Called means say it.

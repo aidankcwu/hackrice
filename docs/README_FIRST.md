@@ -25,7 +25,7 @@ claude --model opus
 ```
 Then paste into Claude Code:
 ```
-Read PLAN.md. You are the orchestrator. Follow section 0. Start Job 0.
+Read docs/PLAN.md. You are the orchestrator. Follow section 0. Start Job 0.
 ```
 When Claude Code asks to approve the project MCP servers (`meta-wearables-docs`,
 `apple-docs`), say yes. Both are documentation lookups.
@@ -35,8 +35,8 @@ When Claude Code asks to approve the project MCP servers (`meta-wearables-docs`,
 1. Claude Code works through the job's tasks with subagents. You'll see short reports,
    not code. Leave it alone.
 2. It stops with "Job N done. Run the STOP gate." Do the gate (it is written in
-   `PLAN.md` under that job: run on device, hold up a cup, etc.). Takes 15–60 min.
-3. Type `/clear`, then paste: `Read PLAN.md. You are the orchestrator. Follow section 0. Start Job N+1.`
+   `docs/PLAN.md` under that job: run on device, hold up a cup, etc.). Takes 15–60 min.
+3. Type `/clear`, then paste: `Read docs/PLAN.md. You are the orchestrator. Follow section 0. Start Job N+1.`
 
 Five jobs. Job 1 is the big one (3–5 hours of Claude Code time). The whole thing is
 about two working days of Claude Code and one day of your time, mostly waiting and
@@ -44,7 +44,7 @@ testing on the phone.
 
 ## 3b. Job F: the front end, from scratch, on Windows
 
-Paste `Read PLAN.md. You are the orchestrator. Follow section 0. Start Job F.` First it
+Paste `Read docs/PLAN.md. You are the orchestrator. Follow section 0. Start Job F.` First it
 shows you three design directions side by side in Chrome (F.0); you pick one. Then it
 builds the phone app as a standalone mobile web app in `phone/` against the real backend.
 It inherits nothing from the old dashboard. You look at it in Chrome (F12 → phone icon →
@@ -81,7 +81,7 @@ Optional heavy hitters, typed inside Claude Code once:
 ## 6. What's in the box
 
 ```
-PLAN.md                      the plan the orchestrator follows (jobs, tasks, acceptance, STOP gates, effort)
+docs/PLAN.md                 the plan the orchestrator follows (jobs, tasks, acceptance, STOP gates, effort)
 CLAUDE.md                    replaces the old one (the old one said "I am Person A" and would refuse backend work)
 docs/IOS_SPEC.md             every screen, state, and line of copy
 .claude/settings.json        effort high, pre-approved build/test commands, push and rm ask first

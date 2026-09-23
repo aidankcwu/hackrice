@@ -1,4 +1,4 @@
-"""`GET /frames` (PERSON_A.md A8, SPEC §12.3).
+"""`GET /frames` (docs/PERSON_A.md A8, SPEC §12.3).
 
 The escalation path's only way to reach pixels. Person B holds tick history, picks four
 refs by perceptual-hash distance (§4.3), and fetches the bytes here to base64 into the

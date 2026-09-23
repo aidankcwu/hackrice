@@ -1,4 +1,4 @@
-"""The `glasses` capture adapter — the demo path (PERSON_A.md A15, SPEC §11.3).
+"""The `glasses` capture adapter — the demo path (docs/PERSON_A.md A15, SPEC §11.3).
 
 Reads the one-slot mailbox that `server/ingest.py` fills from the phone's WebSocket and
 yields the newest packet as a `Frame` at 1 Hz. Nothing here touches a socket: ingest

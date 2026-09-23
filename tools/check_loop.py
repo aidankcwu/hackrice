@@ -1,6 +1,6 @@
 """Acceptance checks for A6 — tick assembly and emission.
 
-PERSON_A.md's done-when: "ticks arrive at a steady 1 Hz with no seq gaps and no clock
+docs/PERSON_A.md's done-when: "ticks arrive at a steady 1 Hz with no seq gaps and no clock
 drift over 15 minutes."
 
 Fifteen real minutes is not a useful thing to run repeatedly, so this does both: a

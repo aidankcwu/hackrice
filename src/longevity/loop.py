@@ -1,4 +1,4 @@
-"""T0 — the tick producer (PERSON_A.md A6, SPEC §2).
+"""T0 — the tick producer (docs/PERSON_A.md A6, SPEC §2).
 
 "Emit exactly one timestamp object per second, forever, regardless of what any other
 layer is doing." (§2.1)

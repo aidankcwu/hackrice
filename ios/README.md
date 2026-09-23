@@ -1,7 +1,7 @@
 # iOS side
 
 The Xcode project lives **outside this repo** (`~/meta-wearables-dat-ios`, Meta's
-`facebook/meta-wearables-dat-ios` sample). PERSON_A.md warns that nothing in it is
+`facebook/meta-wearables-dat-ios` sample). docs/PERSON_A.md warns that nothing in it is
 version-controlled alongside the Python, so this directory is the backup.
 
 ## What's here
@@ -20,7 +20,7 @@ project is ever lost or rebuilt, because it also carries the three integration e
 that live nowhere else:
 
 - `Info.plist` — `NSAppTransportSecurity` -> `NSAllowsLocalNetworking`. Without it a
-  plain `ws://` fails **silently** and reads exactly like a backend bug (PERSON_A.md A11).
+  plain `ws://` fails **silently** and reads exactly like a backend bug (docs/PERSON_A.md A11).
   (`NSLocalNetworkUsageDescription` was already in the sample.)
 - `CameraAccess.entitlements` — Access Wi-Fi Information and Hotspot Configuration
   **removed**; a free Personal Team cannot provision them (hardware_software.md §7, §26).
@@ -78,7 +78,7 @@ exit (answer, timeout, interruption, device lost, cancel, socket failure) must r
 profile (`hardware_software.md:646-664`, §22). `.playAndRecord` + `.allowBluetoothHFP`
 (`QuestionListener.swift:172-174`) does exactly that, so anything played while the window
 is open sounds like a phone call, and the speaker path A16 depends on stays degraded until
-the restore runs (`XCODE_ASK.md:97-106`). The Mac stays quiet for the window: a `speak` is
+the restore runs (`docs/XCODE_ASK.md:97-106`). The Mac stays quiet for the window: a `speak` is
 dropped while a question is listening (`backend/pipeline/actions/handlers.py:252-253`,
 `docs/ASK_DESIGN.md:169-171`).
 
@@ -89,8 +89,8 @@ same day (15:32) and opens the mic on purpose (`docs/ASK_DESIGN.md:8-13,29`,
 (`ios/Brian/project.yml:56-57`).
 
 **Not yet measured.** §22 never validated DAT camera input with a live glasses mic
-(`hardware_software.md:660-664`). `XCODE_ASK.md:86-95` asks for switch latency, the input
+(`hardware_software.md:660-664`). `docs/XCODE_ASK.md:86-95` asks for switch latency, the input
 route (`BluetoothHFP`) and whether DAT frames keep arriving during the window, recorded in
-`FINDINGS.md` (`XCODE_ASK.md:157-158`); `FINDINGS.md` has no such section yet. Until it
+`FINDINGS.md` (`docs/XCODE_ASK.md:157-158`); `FINDINGS.md` has no such section yet. Until it
 does, "DAT keeps streaming while the mic is open" is unknown. If the HFP switch kills DAT,
-the fallback is the phone mic: drop `.allowBluetoothHFP` (`XCODE_ASK.md:173,176`).
+the fallback is the phone mic: drop `.allowBluetoothHFP` (`docs/XCODE_ASK.md:173,176`).

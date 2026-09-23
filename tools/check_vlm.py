@@ -1,6 +1,6 @@
 """Acceptance checks for A10 — the T0 VLM call, its budget, and the drop rule.
 
-PERSON_A.md on this task: "Test this by injecting a 3-second artificial delay into the
+docs/PERSON_A.md on this task: "Test this by injecting a 3-second artificial delay into the
 call. If the tick stream stutters, invariant 1 is broken. This is the single most
 likely thing to be quietly wrong in your whole half of the system, and it will not
 announce itself."

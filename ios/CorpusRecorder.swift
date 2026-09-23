@@ -1,5 +1,5 @@
 //  CorpusRecorder.swift
-//  Drop into the CameraAccess sample target. PERSON_A.md A4.
+//  Drop into the CameraAccess sample target. docs/PERSON_A.md A4.
 //
 //  Writes the replay corpus: 1 Hz, 512 px longest edge, JPEG q70 — the same encode
 //  A12 uses for the live capture packet (SPEC §2.2). That match is the whole point:

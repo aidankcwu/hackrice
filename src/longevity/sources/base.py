@@ -1,4 +1,4 @@
-"""The `CaptureSource` interface (PERSON_A.md A3).
+"""The `CaptureSource` interface (docs/PERSON_A.md A3).
 
 All three adapters hang off this — `replay`, `webcam`, `glasses` (SPEC §11.3) — so the
 shape is frozen here before any of them are written. A wrong shape costs three rewrites.

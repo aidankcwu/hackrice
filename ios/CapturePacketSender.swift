@@ -1,5 +1,5 @@
 //  CapturePacketSender.swift
-//  PERSON_A.md A12 (sample + encode) + A13 (sensors ride along) + A14 (send the packet).
+//  docs/PERSON_A.md A12 (sample + encode) + A13 (sensors ride along) + A14 (send the packet).
 //  Drop into the CameraAccess target alongside MacLink.swift and PhoneSensors.swift.
 //
 //  This is the whole phone-side product: sample, encode, send. No ticks, no VLM, no

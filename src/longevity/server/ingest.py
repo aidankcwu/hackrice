@@ -1,4 +1,4 @@
-"""WebSocket ingest — the Mac end of the capture packet (PERSON_A.md A15, SPEC §11.2).
+"""WebSocket ingest — the Mac end of the capture packet (docs/PERSON_A.md A15, SPEC §11.2).
 
 The phone is a dumb adapter; this is where its packets land. One endpoint,
 `/ws/glasses`, decodes messages per `longevity.wire` and drops each capture packet into
@@ -633,7 +633,7 @@ def _handle_answer(link: GlassesLink, msg: dict[str, Any], websocket: Any = None
         # a question it was never asked — never let it win a race with the one
         # that was. If that original socket has since disconnected, this is
         # instead the phone finishing an exchange it started before a drop —
-        # "glasses off and on" (XCODE_ASK.md §7) — and must go through as before.
+        # "glasses off and on" (docs/XCODE_ASK.md §7) — and must go through as before.
         log.info(
             "ingest: ignoring answer to %s from a socket it was never sent to",
             question_id,

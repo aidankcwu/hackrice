@@ -1,4 +1,4 @@
-"""The T0 VLM call (PERSON_A.md A10) — fired, never awaited.
+"""The T0 VLM call (docs/PERSON_A.md A10) — fired, never awaited.
 
 This module exists to keep one promise: **the 1 Hz tick stream does not care how slow
 the VLM is.** Gemini Flash-Lite typically returns in 300-600 ms, but SPEC §2.4 warns
@@ -833,7 +833,7 @@ class GeminiClient:
     """Gemini Flash-Lite with structured output over the §9 field set.
 
     The field list and schema come from `ai_fields`; this class must never name a §9
-    field itself (PERSON_A.md A2 — one place, one edit). A targeted look (`question`)
+    field itself (docs/PERSON_A.md A2 — one place, one edit). A targeted look (`question`)
     uses the same prompt plus `ai_fields.look_suffix()` and the schema variant that
     adds the one ``answer`` string; nothing else about the call changes.
     """

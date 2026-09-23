@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A11 (Python half) — prove the socket before adding payload.
 
-PERSON_A.md calls A11 the worst of the two straddling tasks: without
+docs/PERSON_A.md calls A11 the worst of the two straddling tasks: without
 `NSLocalNetworkUsageDescription` and `NSAllowsLocalNetworking` in the iOS Info.plist,
 the WebSocket fails *silently* in a way that reads exactly like a backend bug. So this
 server exists to be loud. It is standalone — no FastAPI, no app state, nothing from the

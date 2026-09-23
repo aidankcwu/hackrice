@@ -1,4 +1,4 @@
-"""The `webcam` capture adapter (PERSON_A.md A9, SPEC §11.3, §13.4).
+"""The `webcam` capture adapter (docs/PERSON_A.md A9, SPEC §11.3, §13.4).
 
 The laptop's own camera, shaped to look exactly like the glasses path. §13.4: build
 this before the `glasses` adapter, because it proves the whole Python pipeline end to

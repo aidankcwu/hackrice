@@ -1,4 +1,4 @@
-"""Sensor field computation (PERSON_A.md A5) — the tick's `sensor` block (SPEC §12).
+"""Sensor field computation (docs/PERSON_A.md A5) — the tick's `sensor` block (SPEC §12).
 
 Seven numbers per frame, derived from the decoded JPEG and nothing else:
 
@@ -171,7 +171,7 @@ class SensorComputer:
 
     `flow` selects the `flow_mag` backend — see `_flow_numpy` for why the default is
     numpy. Pass "off" (or set LONGEVITY_FLOW=off) when B confirms nothing reads the
-    field; it is first on the cut list (PERSON_A.md).
+    field; it is first on the cut list (docs/PERSON_A.md).
     """
 
     def __init__(self, *, flow: str | None = None, work_px: int = WORK_PX) -> None:

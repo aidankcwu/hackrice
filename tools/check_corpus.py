@@ -1,4 +1,4 @@
-"""Validate a recorded replay corpus (PERSON_A.md A4 "done when").
+"""Validate a recorded replay corpus (docs/PERSON_A.md A4 "done when").
 
 Checks the things that quietly ruin a corpus: wrong encode parameters (so sensor
 thresholds tuned on it don't transfer), timing gaps (so the replay adapter's 1 Hz is a

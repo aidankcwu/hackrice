@@ -1,5 +1,5 @@
 //  PhoneSensors.swift
-//  PERSON_A.md A13. Drop into the CameraAccess target.
+//  docs/PERSON_A.md A13. Drop into the CameraAccess target.
 //
 //  Two sensors, no arithmetic. SPEC §11.2 is explicit: "the phone computes nothing
 //  from them" — `accel_rms` is derived on the Mac (`sources/glasses.py: AccelWindow`),

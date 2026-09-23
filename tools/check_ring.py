@@ -6,7 +6,7 @@ Four things worth checking, and none of them can be checked by staring at the co
   1. The 90 s TTL actually evicts. Driven by an injected clock — `put`, `get` and
      `stats` all take an explicit `now`, so a 15-minute run costs milliseconds and no
      test ever sleeps.
-  2. Memory is flat (PERSON_A.md A7's done-when). 900 puts is the whole demo at 1 Hz.
+  2. Memory is flat (docs/PERSON_A.md A7's done-when). 900 puts is the whole demo at 1 Hz.
      Each put allocates a *distinct* 40 KB payload, so `tracemalloc` measures real
      retention rather than 900 references to one shared object — reusing one buffer
      would make this check pass while proving nothing.

@@ -12,7 +12,7 @@ first failure, stop and tell the other person. Don't improvise around it.
   registration, the release channel, the build and the upload.
 
 The phone-side code changes are in [ios/INTEGRATION.md](ios/INTEGRATION.md) §9. The ask
-and answer test is in [XCODE_ASK.md](XCODE_ASK.md).
+and answer test is in [XCODE_ASK.md](docs/XCODE_ASK.md).
 
 ## Order of operations (this is the critical path)
 
@@ -285,7 +285,7 @@ Pass: you know which of the four paths Friday uses, and Rishi knows what to tell
 
 ### A3. Build
 
-In `~/meta-wearables-dat-ios` (never a fresh clone, see XCODE.md §0):
+In `~/meta-wearables-dat-ios` (never a fresh clone, see docs/XCODE.md §0):
 
 1. Copy in `ios/MacLink.swift` and `ios/CapturePacketSender.swift`, and add
    `ios/ConsentView.swift` to the target. Make the CameraView edits from
@@ -317,7 +317,7 @@ In `~/meta-wearables-dat-ios` (never a fresh clone, see XCODE.md §0):
    - Any ITMS-91053 email: see R4.
 4. Check that the build shows in App Store Connect → TestFlight and is added to the
    internal group.
-5. Re-snapshot `ios/xcode-project.patch` (XCODE.md §7). It is the only backup of the
+5. Re-snapshot `ios/xcode-project.patch` (docs/XCODE.md §7). It is the only backup of the
    project edits.
 
 Don't update the Meta SDK Swift package between now and Friday.
@@ -381,7 +381,7 @@ not tell them to connect a Fitbit or Google account, and do not test that path h
    signal the phone's status line may show `busy N` (frames dropped because the last
    send had not finished; expected, never queued) or `stalled N` (a send took more than
    3 s, so the link reconnected). `stalled` climbing on good signal is a bug.
-7. [ ] Force an ask over cellular (XCODE_ASK.md Test 1, against the hosted URL):
+7. [ ] Force an ask over cellular (docs/XCODE_ASK.md Test 1, against the hosted URL):
    - The voice plays in the glasses.
    - The answer lands as `answered`.
    - Normal audio returns afterwards (Test 2).

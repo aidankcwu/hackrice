@@ -1,7 +1,7 @@
 """The T0 AI field set (SPEC §9) — the single source of truth.
 
 §9 is flagged in CLAUDE.md as AI-generated and not fully reasoned: "expect the field
-list to change." PERSON_A.md A2 settles it operationally — build against §9 exactly as
+list to change." docs/PERSON_A.md A2 settles it operationally — build against §9 exactly as
 written, but keep the list in *one* place so a change costs one edit rather than a
 search across the pipeline. That place is this module.
 

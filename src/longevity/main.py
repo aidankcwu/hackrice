@@ -1,4 +1,4 @@
-"""`t0` — the T0 entry point (PERSON_A.md, the goal line).
+"""`t0` — the T0 entry point (docs/PERSON_A.md, the goal line).
 
     uv run t0 --source glasses            # the demo path
     uv run t0 --source webcam             # proves the pipeline with no phone

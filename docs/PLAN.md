@@ -16,13 +16,13 @@ this plan replaces.
 You are the ORCHESTRATOR. You run on Opus with effort high. Rules:
 
 1. You never open source files and never edit code. You dispatch the subagents in
-   `.claude/agents/` and read their reports. The only files you touch are `PLAN.md`
+   `.claude/agents/` and read their reports. The only files you touch are `docs/PLAN.md`
    (ticking boxes) and git.
 2. Branch is `brian-ios` (created by `setup.sh` from `origin/reactive-glasses`). Every
    session starts with `git status` and `git log --oneline -3` to confirm.
 3. One task per subagent call. The dispatch prompt is exactly:
    ```
-   Task <id> from PLAN.md. Read only: PLAN.md section "<id>", docs/IOS_SPEC.md
+   Task <id> from docs/PLAN.md. Read only: docs/PLAN.md section "<id>", docs/IOS_SPEC.md
    (if ios), docs/STATE.md, and the files the task names. Do the task. Run the
    acceptance command. Report in the format your agent file requires.
    ```
@@ -62,7 +62,7 @@ Run on Windows (no Mac), one commit per task. Snapshot before the fix round: bra
   - Real WHOOP rows are `whoop_live` (live); the demo seed stays `whoop` (Seeded).
   - Glasses mic: scoped rule (only QuestionListener's answer window) in ios/README.md and
     CLAUDE.md. STILL UNMEASURED on device: does the camera stream survive while the mic
-    is open (`XCODE_ASK.md:86-95`)? Measure it at STOP gate 1.
+    is open (`docs/XCODE_ASK.md:86-95`)? Measure it at STOP gate 1.
   - `tzdata` is a backend dependency (Fitbit zoneinfo crashed on Windows); tests never
     read a developer's local `backend/.env`.
 - Still open: the Dockerfile has never been built (no Docker on the Windows machine) —

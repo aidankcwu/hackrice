@@ -1,5 +1,5 @@
 //  MacLink.swift
-//  PERSON_A.md A11 — prove the phone <-> Mac socket before any payload rides on it.
+//  docs/PERSON_A.md A11 — prove the phone <-> Mac socket before any payload rides on it.
 //
 //  Kept deliberately small. A11 exists as its own task because without
 //  NSLocalNetworkUsageDescription and NSAppTransportSecurity -> NSAllowsLocalNetworking
