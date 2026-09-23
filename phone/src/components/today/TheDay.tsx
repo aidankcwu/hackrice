@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import type { Calibration, Measured } from "@/lib/operating";
 import { useMonth } from "@/lib/useMonth";
 import { ceilingLines, yourDay } from "@/lib/yourDay";
 
@@ -15,8 +16,10 @@ export function TheDay({ onHow }: { onHow: () => void }) {
     const days = month.month?.days;
     if (!days?.length) return null;
     const index = days.length - 1;
+    const operating = month.operating[index];
     return {
-      ceilings: ceilingLines(month.operating[index]),
+      ceilings: ceilingLines(operating),
+      note: calibrationNote(operating.calibration, operating.measured),
       sentences: yourDay(days, index, month.findings, month.operating),
     };
   }, [month.month, month.findings, month.operating]);
@@ -33,6 +36,7 @@ export function TheDay({ onHow }: { onHow: () => void }) {
             <p className="type-secondary m-0 mt-0.5 text-muted">{c.reason}</p>
           </div>
         ))}
+        {data.note ? <p className="type-caption m-0 mb-2 text-muted tabular-nums">{data.note}</p> : null}
         <button type="button" onClick={onHow} className="type-secondary min-h-11 font-semibold text-ink">
           How it’s computed
         </button>
@@ -44,4 +48,13 @@ export function TheDay({ onHow }: { onHow: () => void }) {
       </section>
     </>
   );
+}
+
+/** "Calibrating, 4 of 7 days" until the best week is known; then this morning against it. */
+function calibrationNote(calibration: Calibration, measured: Measured): string | null {
+  if (!calibration.ready) return `${calibration.label.charAt(0).toUpperCase()}${calibration.label.slice(1)}`;
+  const parts: string[] = [];
+  if (measured.cognition !== null) parts.push(`PVT ${Math.round(measured.cognition)}%`);
+  if (measured.body !== null) parts.push(`HRV ${Math.round(measured.body)}%`);
+  return parts.length ? `Measured this morning: ${parts.join(", ")}` : null;
 }

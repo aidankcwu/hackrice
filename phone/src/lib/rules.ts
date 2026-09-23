@@ -393,14 +393,17 @@ export function caffeineCutoff(drink: Drink, strength: Strength = "single"): num
 /** Hours under 8 h a night summed over the 14 nights ending this morning; never negative. */
 export function sleepDebtHours(days: readonly Day[], index: number): number {
   let debt = 0;
-  for (let i = Math.max(0, index - 13); i <= index; i++) debt += Math.max(0, FULL_NIGHT - days[i].sleep.minutes);
+  // An unrecorded night (minutes 0) is not a night of no sleep: it is skipped.
+  for (let i = Math.max(0, index - 13); i <= index; i++) {
+    if (days[i].sleep.minutes > 0) debt += Math.max(0, FULL_NIGHT - days[i].sleep.minutes);
+  }
   return debt / 60;
 }
 
-/** N: consecutive nights under 7 h ending this morning. */
+/** N: consecutive recorded nights under 7 h ending this morning; an unrecorded night ends the run. */
 export function shortSleepDay(days: readonly Day[], index: number): number {
   let n = 0;
-  for (let i = index; i >= 0 && days[i].sleep.minutes < SHORT_NIGHT; i--) n += 1;
+  for (let i = index; i >= 0 && days[i].sleep.minutes > 0 && days[i].sleep.minutes < SHORT_NIGHT; i--) n += 1;
   return n;
 }
 

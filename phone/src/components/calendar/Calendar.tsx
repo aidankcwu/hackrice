@@ -82,6 +82,7 @@ export function Calendar() {
           <p className="type-number m-0 mt-1 text-ink">
             Cognition {Math.round(operating.cognition)}% <span className="text-muted">·</span> Body {Math.round(operating.body)}%
           </p>
+          {!operating.calibration.ready ? <p className="type-caption m-0 text-muted tabular-nums">{sentence(operating.calibration.label)}</p> : null}
           <div className="mt-3">
             <DayStrip key={days[index].date} plan={plans[index]} />
           </div>
@@ -108,6 +109,11 @@ export function Calendar() {
       )}
     </div>
   );
+}
+
+/** "calibrating, 4 of 7 days" as a sentence: first letter up. */
+function sentence(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 /** "Sep 16 to 22", or "Aug 28 to Sep 3" across a month's end. */

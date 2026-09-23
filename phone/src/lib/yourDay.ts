@@ -7,7 +7,7 @@
 import { BAR_TITLE } from "./calendar";
 import type { Day } from "./month/types";
 import { reasonLabel, type Contribution, type Operating } from "./operating";
-import { clock, hm, peptideSchedule, WINDOWS, type Finding, type RuleId } from "./rules";
+import { clock, hm, peptideSchedule, RULES, WINDOWS, type Finding, type RuleId } from "./rules";
 
 export interface CeilingLine {
   label: "Cognition" | "Body";
@@ -43,8 +43,20 @@ export function ceilingLines(op: Operating): CeilingLine[] {
   });
 }
 
-/** Rules whose cost lands on tomorrow through tonight's sleep. */
-const THROUGH_SLEEP = new Set<RuleId>(["caffeine", "exercise_timing", "last_meal", "alcohol", "screens", "phone_in_bed", "nap"]);
+/** Rules whose cost lands on tomorrow through tonight's sleep; a late dinner is same-night glucose, body only, so it is not here. */
+const THROUGH_SLEEP = new Set<RuleId>(["caffeine", "exercise_timing", "alcohol", "screens", "phone_in_bed", "nap"]);
+
+/** Van Dongen's curve, as operating.ts charges it: 0.5% of cognition per hour of sleep lost, assumed. */
+const DEBT_PER_HOUR = 0.005;
+
+/** Minutes of tonight's sleep a group of one rule's reds is forecast to cost, scaled like each finding's own effect. */
+function forecastMinutes(group: Finding[]): number {
+  return group.reduce((n, f) => {
+    const rule = RULES[f.rule];
+    const scale = rule.effect.cognition > 0 ? f.cognition / rule.effect.cognition : 1;
+    return n + rule.sleepMinutes * scale;
+  }, 0);
+}
 
 /** Reds the Calendar draws as bars (calendar.ts `barsFor`); day-level reds such as sleep debt have no bar. */
 const onCalendar = (rule: RuleId): boolean => rule === "alcohol" || rule in BAR_TITLE;
@@ -87,9 +99,16 @@ export function yourDay(days: readonly Day[], index: number, findings: Finding[]
     const f = group[0];
     const drinks = day.events.reduce((n, e) => (e.kind === "alcohol" ? n + e.drinks : n), 0);
     const what = f.rule === "alcohol" ? `${drinks} ${drinks === 1 ? "drink" : "drinks"} from ${clock(f.time)}` : reasonLabel(f, day.date);
-    const cog = sum(group, "cognition") * 100;
-    if (THROUGH_SLEEP.has(f.rule)) out.push(`${what} cost tonight's sleep; tomorrow's cognition about ${Math.max(1, Math.round(cog))}% lower.`);
-    else out.push(`${what}: ${firstClause(f.line)}.`);
+    const minutes = f.rule === "alcohol" ? 0 : forecastMinutes(group);
+    if (f.rule === "alcohol") {
+      // Drinks cost tomorrow directly: 2% of cognition a drink, as operating.ts charges it.
+      const cog = sum(group, "cognition") * 100;
+      out.push(`${what} cost tonight's sleep; tomorrow's cognition about ${Math.max(1, Math.round(cog))}% lower.`);
+    } else if (THROUGH_SLEEP.has(f.rule) && minutes > 0) {
+      // The same number the next day is charged through the debt term.
+      const cost = (DEBT_PER_HOUR * minutes) / 60;
+      out.push(`${what} cost tonight's sleep, about ${hm(Math.round(minutes))}; tomorrow's cognition about ${Math.round(cost * 1000) / 10}% lower, assumed.`);
+    } else out.push(`${what}: ${firstClause(f.line)}.`);
   }
   // The rest, split by whether the Calendar has a bar to point at.
   const rest = [...reds.keys()].filter((rule) => !named.some((group) => group[0].rule === rule));
