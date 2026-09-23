@@ -1,10 +1,10 @@
 # XcodeGen spec for the Brian iPhone app. `cd ios/Brian && xcodegen generate` writes
 # Brian.xcodeproj. The .xcodeproj is committed so anyone can open it; regenerate after editing this file.
-# Task 1.1 finishes this file. Lines marked CHECK need a human or the builder to confirm.
+# Lines marked CHECK need a human to confirm.
 
 name: Brian
 options:
-  bundleIdPrefix: edu.rice.brian          # CHECK: your reverse-DNS prefix; the app id becomes <prefix>.Brian
+  bundleIdPrefix: com.refleo              # the app id is set explicitly below: com.refleo.bryan (registered 23 Sept, Refleo team)
   deploymentTarget:
     iOS: "26.0"                           # Liquid Glass baseline. Every test phone must run iOS 26+.
   createIntermediateGroups: true
@@ -13,10 +13,7 @@ options:
 packages:
   MWDAT:
     url: https://github.com/facebook/meta-wearables-dat-ios
-    from: "0.9.0"                         # CHECK: newest tag from `git ls-remote --tags <url>`
-  SnapshotTesting:
-    url: https://github.com/pointfreeco/swift-snapshot-testing
-    from: "1.19.4"
+    from: "0.9.0"                         # newest tag on 2026-09-23 (`git ls-remote --tags <url>`)
 
 targets:
   Brian:
@@ -26,6 +23,7 @@ targets:
       - path: Sources
       - path: Fixtures
         buildPhase: resources             # JSON captured from the backend; served in -demo mode
+        excludes: [".gitkeep"]
     dependencies:
       - package: MWDAT
         product: MWDATCore
@@ -37,25 +35,31 @@ targets:
       path: Info.plist
       properties:
         CFBundleDisplayName: Brian
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         ITSAppUsesNonExemptEncryption: false
-        # Meta Wearables Device Access Toolkit (see .claude/skills/getting-started)
+        # Meta Wearables Device Access Toolkit. Matches the hardware-validated CameraAccess
+        # sample (ios/xcode-project.patch, CLAUDE.md "Hardware").
         UISupportedExternalAccessoryProtocols: [com.meta.ar.wearable]
-        UIBackgroundModes: [bluetooth-peripheral, external-accessory, audio]
+        UIBackgroundModes: [processing, bluetooth-central, audio, bluetooth-peripheral, external-accessory]
         LSApplicationQueriesSchemes: [fb-viewapp]
         MWDAT:
           AppLinkURLScheme: "brian://"
           MetaAppID: "0"                  # 0 = Developer Mode; a real app id comes from the Wearables Developer Center
+          TeamID: "$(DEVELOPMENT_TEAM)"
         CFBundleURLTypes:
-          - CFBundleURLName: edu.rice.brian
+          - CFBundleURLName: com.refleo.bryan
             CFBundleURLSchemes: [brian]
         # Local network to the Mac. Without these the WebSocket fails silently (ios/README.md).
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         NSLocalNetworkUsageDescription: Sends what the glasses see to the Mac running Brian on your Wi‑Fi.
+        NSBonjourServices: [_bonjour._tcp]
         # Permissions, in the words the Setup screen uses
         NSBluetoothAlwaysUsageDescription: Connects to your glasses.
+        NSBluetoothPeripheralUsageDescription: Connects to your glasses.
         NSMicrophoneUsageDescription: Hears your answer when Brian asks a question.
         NSSpeechRecognitionUsageDescription: Turns your spoken answer into text.
         NSMotionUsageDescription: Tells stillness from activity.
@@ -71,10 +75,13 @@ targets:
       properties: {}                      # Job 3 adds com.apple.developer.healthkit; Job 4 adds com.apple.developer.family-controls
     settings:
       base:
-        SWIFT_VERSION: "6.0"
+        # Swift 5 language mode on purpose: SWIFT_STRICT_CONCURRENCY only applies there. In
+        # Swift 6 mode the unchanged ports (QuestionListener's nonisolated deinit) do not compile.
+        SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: ""              # set in Xcode → Signing & Capabilities; never commit a team id
+        PRODUCT_BUNDLE_IDENTIFIER: com.refleo.bryan   # App ID registered under the Refleo team (Apple + Meta must match)
+        DEVELOPMENT_TEAM: 3386QS4N44      # Refleo team id (not a secret: it is in every provisioning profile)
         ENABLE_USER_SCRIPT_SANDBOXING: true
         SWIFT_STRICT_CONCURRENCY: minimal # the ported Link/ files predate Swift 6 strictness; raise later
 
@@ -84,8 +91,11 @@ targets:
     sources: [Tests]
     dependencies:
       - target: Brian
-      - package: SnapshotTesting
-        product: SnapshotTesting
+    settings:
+      base:
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES
 
 schemes:
   Brian:
@@ -99,4 +109,5 @@ schemes:
         "-demo": false                    # tick in Xcode's scheme editor, or pass -demo from simctl launch
     test:
       config: Debug
+      gatherCoverageData: false
       targets: [BrianTests]
