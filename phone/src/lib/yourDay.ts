@@ -72,14 +72,19 @@ export function yourDay(days: readonly Day[], index: number, findings: Finding[]
   const dose = (d: "AM" | "PM") => day.events.find((e): e is Extract<Day["events"][number], { kind: "peptide" }> => e.kind === "peptide" && e.dose === d);
   const am = dose("AM");
   const pm = dose("PM");
+  // One sentence for both doses, so the three-to-five cap counts it once.
+  const pmTaken = pm?.taken ? clock(pm.start) : null;
+  const tail = pm && !pm.taken ? "; evening dose missed" : !pm && day.until < WINDOWS.peptidePm[1] ? `; evening dose due by ${clock(WINDOWS.peptidePm[1])}` : "";
   let peptide: string;
-  if (!am) peptide = `No morning peptide seen; ${run}.`;
-  else if (!am.taken) peptide = `Morning peptide missed; ${run}.`;
-  else if (am.start < WINDOWS.peptideAm[0] || am.start > WINDOWS.peptideAm[1]) peptide = `Peptide taken ${clock(am.start)}, outside its window; ${run}.`;
-  else peptide = `Peptide taken ${clock(am.start)}, ${run}.`;
-  if (pm && !pm.taken) peptide += " Evening dose missed.";
-  else if (pm) peptide += ` Evening dose taken ${clock(pm.start)}.`;
-  else if (day.until < WINDOWS.peptidePm[1]) peptide += ` Evening dose due by ${clock(WINDOWS.peptidePm[1])}.`;
+  if (!am || !am.taken) {
+    const morning = !am ? "No morning peptide seen" : "Morning peptide missed";
+    peptide = pmTaken ? `${morning}, evening dose taken ${pmTaken}; ${run}.` : `${morning}; ${run}${tail}.`;
+  } else {
+    const outside = am.start < WINDOWS.peptideAm[0] || am.start > WINDOWS.peptideAm[1];
+    const times = pmTaken ? `${clock(am.start)} and ${pmTaken}` : clock(am.start);
+    const aside = outside ? (pmTaken ? ", the morning outside its window" : ", outside its window") : "";
+    peptide = `Peptide taken ${times}${aside}, ${run}${tail}.`;
+  }
   out.push(peptide);
 
   // Last night, plainly.

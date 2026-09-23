@@ -32,6 +32,8 @@ interface Write {
 export function useProtocol(): ProtocolData & {
   act: (item: ProtocolTodayItem, action: RowAction) => Promise<void>;
   retry: () => void;
+  /** Re-reads today's list (after Add item's POST). */
+  refresh: () => Promise<void>;
 } {
   const [data, setData] = useState<ProtocolData>({ today: null, error: null, loaded: false, pending: null });
   const inFlight = useRef<Promise<void> | null>(null);
@@ -108,5 +110,5 @@ export function useProtocol(): ProtocolData & {
     };
   }, [refresh]);
 
-  return { ...data, act, retry };
+  return { ...data, act, retry, refresh };
 }

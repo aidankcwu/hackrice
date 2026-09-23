@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { Button, InsetList, Sheet } from "@/components/ui";
 
 /**
  * The glasses steps from SetupView's Glasses row, as a sheet the user can close.
@@ -17,60 +17,33 @@ const STEPS = [
 ] as const;
 
 export function ConnectSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    const element = dialog.current;
-    if (!element) return;
-    if (open && !element.open) element.showModal();
-    if (!open && element.open) element.close();
-  }, [open]);
-
   return (
-    <dialog
-      ref={dialog}
-      aria-labelledby="connect-title"
-      onClose={onClose}
-      // A tap on the dimmed page above the sheet lands on the dialog itself.
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-      className="sheet mx-auto mt-auto mb-0 max-h-[90dvh] w-full max-w-[430px] rounded-t-panel border-0 bg-surface p-0 text-text backdrop:bg-black/40"
-    >
-      <div className="px-gutter" style={{ paddingBottom: "max(32px, env(safe-area-inset-bottom))" }}>
-        <header className="relative flex min-h-14 items-center justify-center">
-          <h2 id="connect-title" className="type-body m-0 font-semibold text-ink">
-            Connect glasses
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="type-body absolute right-0 min-h-11 font-semibold text-ink"
-          >
-            Done
-          </button>
-        </header>
-        <ol className="m-0 mt-2 list-none p-0">
+    <Sheet open={open} onClose={onClose} title="Connect glasses" id="connect">
+      <div className="mt-4">
+        <InsetList>
           {STEPS.map((step, index) => (
-            <li key={step} className="flex gap-4 border-t-[0.5px] border-line py-4 first:border-t-0">
-              <span className="type-body w-[calc(16px*var(--type-scale))] shrink-0 text-muted tabular-nums">
-                {index + 1}
-              </span>
+            <li
+              key={step}
+              className="relative flex min-h-row items-start gap-3 py-4 pr-4 pl-4 not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-4 not-first:before:hairline"
+            >
+              <span className="type-body w-4 shrink-0 text-muted tabular-nums">{index + 1}</span>
               <div className="min-w-0 flex-1">
                 <p className="type-body m-0 text-text">{step}</p>
                 {index === 0 ? (
-                  <a
-                    href="fb-viewapp://"
-                    className="type-body mt-4 inline-flex min-h-11 items-center rounded-full bg-surface-2 px-4 font-semibold text-ink"
-                  >
-                    Open Meta AI
-                  </a>
+                  <div className="mt-3">
+                    <Button variant="secondary" href="fb-viewapp://">
+                      Open Meta AI
+                    </Button>
+                  </div>
                 ) : null}
               </div>
             </li>
           ))}
-        </ol>
+        </InsetList>
       </div>
-    </dialog>
+      <div className="mt-4">
+        <Button onClick={onClose}>Done</Button>
+      </div>
+    </Sheet>
   );
 }

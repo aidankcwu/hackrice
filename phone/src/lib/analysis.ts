@@ -17,6 +17,8 @@ export interface AnalysisColumn {
   plan: DayPlan;
   cognition: number;
   body: number;
+  /** Last night's sleep, minutes; absent when the night was not recorded. */
+  sleepMinutes?: number;
 }
 
 export interface Cluster {
@@ -25,6 +27,8 @@ export interface Cluster {
   title: string;
   /** "Wed 16, Sat 19 and Tue 22". */
   days: string;
+  /** The same days as ISO dates, one chip each. */
+  dates: string[];
   body: string;
   mind: string;
 }
@@ -37,6 +41,10 @@ export interface Analysis {
   summary: string;
   /** "Biggest lever: caffeine before 13:30". */
   lever: string | null;
+  /** The rule behind the lever, for the sheet that opens it. */
+  leverRule: RuleId | null;
+  /** Averages over the range: cognition and body, % of ceiling. */
+  average: { cognition: number; body: number };
   /** What was not red but moved the ceilings: broken nights, sick days. */
   notes: string[];
   /** The whole month, one line. */
@@ -164,7 +172,14 @@ function sentences(days: readonly Day[], operating: Operating[], rule: RuleId, i
 
 export function analyze(days: readonly Day[], findings: Finding[][], operating: Operating[], from: number, to: number, label: string): Analysis {
   const range = Array.from({ length: to - from + 1 }, (_, n) => from + n);
-  const columns = range.map((i) => ({ index: i, date: days[i].date, plan: planFor(days, i, findings[i]), cognition: operating[i].cognition, body: operating[i].body }));
+  const columns: AnalysisColumn[] = range.map((i) => ({
+    index: i,
+    date: days[i].date,
+    plan: planFor(days, i, findings[i]),
+    cognition: operating[i].cognition,
+    body: operating[i].body,
+    sleepMinutes: days[i].sleep.minutes > 0 ? days[i].sleep.minutes : undefined,
+  }));
 
   // One group per rule with a bar in range: its days, and what its reds cost.
   const groups = new Map<RuleId, { idx: number[]; cost: number }>();
@@ -182,7 +197,8 @@ export function analyze(days: readonly Day[], findings: Finding[][], operating: 
   const numbers: Partial<Record<RuleId, number>> = {};
   const clusters: Cluster[] = ordered.map(([rule, g], n) => {
     numbers[rule] = n + 1;
-    return { number: n + 1, rule, title: BAR_TITLE[rule] ?? RULES[rule].name, days: listDays(g.idx.map((i) => days[i].date)), ...sentences(days, operating, rule, g.idx) };
+    const dates = g.idx.map((i) => days[i].date);
+    return { number: n + 1, rule, title: BAR_TITLE[rule] ?? RULES[rule].name, days: listDays(dates), dates, ...sentences(days, operating, rule, g.idx) };
   });
 
   const notes: string[] = [];
@@ -208,6 +224,8 @@ export function analyze(days: readonly Day[], findings: Finding[][], operating: 
     clusters,
     summary: `${label}: cognition ${avg("cognition", range)}% of ceiling, body ${avg("body", range)}%`,
     lever: lever ? `Biggest lever: ${lever.charAt(0).toLowerCase()}${lever.slice(1)}` : null,
+    leverRule: top ?? null,
+    average: { cognition: avg("cognition", range), body: avg("body", range) },
     notes,
     month: `${days.length} days: cognition ${avg("cognition", all)}% of ceiling, body ${avg("body", all)}%`,
   };

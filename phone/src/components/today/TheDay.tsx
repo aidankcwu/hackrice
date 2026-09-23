@@ -1,17 +1,18 @@
 "use client";
 
 import { useMemo } from "react";
+import { Button } from "@/components/ui";
 import type { Calibration, Measured } from "@/lib/operating";
-import { useMonth } from "@/lib/useMonth";
+import type { MonthState } from "@/lib/useMonth";
 import { ceilingLines, yourDay } from "@/lib/yourDay";
 
 /**
- * Under the hero: the two ceilings, each with its top reason, then "Your day"
- * in plain sentences. Drawn from the month's last day; absent when the backend
- * serves no month.
+ * Under the hero: the two ceilings in two equal columns with a hairline between,
+ * the calibration or measured line under them, "How it's computed", then "Your
+ * day" in three to five plain sentences. Drawn from the month's last day; absent
+ * when the backend serves no month.
  */
-export function TheDay({ onHow }: { onHow: () => void }) {
-  const month = useMonth();
+export function TheDay({ month, onHow }: { month: MonthState; onHow: () => void }) {
   const data = useMemo(() => {
     const days = month.month?.days;
     if (!days?.length) return null;
@@ -28,22 +29,31 @@ export function TheDay({ onHow }: { onHow: () => void }) {
   return (
     <>
       <section aria-label="Your two ceilings" className="mt-section">
-        {data.ceilings.map((c, n) => (
-          <div key={c.label} className={`py-3 ${n ? "border-t-[0.5px] border-line" : ""}`}>
-            <p className="type-body m-0 font-semibold text-ink tabular-nums">
-              {c.label} · {Math.round(c.value)}%{n === 0 ? " of your ceiling" : ""}
-            </p>
-            <p className="type-secondary m-0 mt-0.5 text-muted">{c.reason}</p>
-          </div>
-        ))}
-        {data.note ? <p className="type-caption m-0 mb-2 text-muted tabular-nums">{data.note}</p> : null}
-        <button type="button" onClick={onHow} className="type-secondary min-h-11 font-semibold text-ink">
-          How it’s computed
-        </button>
+        <div className="grid grid-cols-2">
+          {data.ceilings.map((c, n) => (
+            <div key={c.label} className={n ? "border-l border-hairline pl-4" : "pr-4"}>
+              <p className="type-secondary m-0 text-muted">{c.label}</p>
+              <p className="type-number m-0 mt-1 text-ink">
+                {Math.round(c.value)}
+                <span aria-hidden="true">%</span>
+                <span className="sr-only"> percent of your ceiling</span>
+              </p>
+              <p className="type-caption m-0 mt-1 text-muted">{c.reason}</p>
+            </div>
+          ))}
+        </div>
+        {data.note ? <p className="type-caption m-0 mt-3 text-muted tabular-nums">{data.note}</p> : null}
+        <div className="mt-2">
+          <Button variant="tertiary" onClick={onHow}>
+            How it’s computed
+          </Button>
+        </div>
       </section>
 
-      <section aria-label="Your day" className="mt-section">
-        <h2 className="type-title m-0 text-ink">Your day</h2>
+      <section aria-labelledby="your-day-title" className="mt-section">
+        <h2 id="your-day-title" className="type-section m-0 text-ink">
+          Your day
+        </h2>
         <p className="type-body m-0 mt-2 text-text">{data.sentences.join(" ")}</p>
       </section>
     </>

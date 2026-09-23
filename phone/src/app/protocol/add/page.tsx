@@ -2,7 +2,7 @@ import { AddItem } from "@/components/protocol/AddItem";
 import { FIXTURES } from "@/lib/api";
 import { fixtureQuery, readFixtureView, type SearchParams } from "@/lib/screens";
 
-/** Add item, pushed from Protocol's "+". */
+/** Add item, from Protocol's "+": the Protocol screen with the sheet open. */
 export default async function AddItemPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = FIXTURES ? await searchParams : {};
   const view = FIXTURES ? readFixtureView(params) : undefined;

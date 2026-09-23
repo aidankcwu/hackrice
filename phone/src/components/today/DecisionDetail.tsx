@@ -1,7 +1,9 @@
 "use client";
 
+import { Pencil } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Shell } from "@/components/Shell";
+import { Button, EmptyState, ErrorState, InsetList, ListRow, MEANING_ICONS } from "@/components/ui";
 import { api, evidenceFrameUrl, type ApiError } from "@/lib/api";
 import {
   buildLedger,
@@ -15,6 +17,7 @@ import {
   type LedgerEntry,
 } from "@/lib/today";
 import type { Decision, DecisionAction } from "@/lib/types";
+import { OUTCOME_ICONS } from "./icons";
 import { OutcomeLabel } from "./OutcomeLabel";
 
 interface Loaded {
@@ -47,22 +50,12 @@ export function DecisionDetail({ id, theme, scale }: { id: string; theme?: "ligh
   return (
     <Shell screen="today" pushed title={entry ? sentence(entry.label) : ""} theme={theme} scale={scale}>
       {loaded?.error ? (
-        <>
-          <p role="alert" className="type-secondary m-0 mt-2 text-cost">
-            {errorSentence(loaded.error)}
-          </p>
-          <button
-            type="button"
-            onClick={() => setAttempt((n) => n + 1)}
-            className="type-body glass-prominent mt-section flex min-h-[50px] w-full items-center justify-center rounded-full px-6 py-2 font-semibold"
-          >
-            Try again
-          </button>
-        </>
+        <ErrorState
+          sentence={errorSentence(loaded.error)}
+          action={<Button onClick={() => setAttempt((n) => n + 1)}>Try again</Button>}
+        />
       ) : null}
-      {loaded && !loaded.error && !entry ? (
-        <p className="type-body m-0 mt-2 text-muted">No longer in today&rsquo;s log.</p>
-      ) : null}
+      {loaded && !loaded.error && !entry ? <EmptyState text="No longer in today’s log." /> : null}
       {entry ? <EntryBody entry={entry} /> : null}
     </Shell>
   );
@@ -79,16 +72,11 @@ function EntryBody({ entry }: { entry: LedgerEntry }) {
 
   return (
     <>
-      {/* A whisper, question or act carries its outcome word on its own row below. */}
-      <p className="type-secondary m-0 mt-1 flex flex-wrap items-center gap-x-2 text-muted tabular-nums">
-        <span>{clockTime(entry.t)}</span>
-        {entry.outcome === "held back" ? (
-          <>
-            <span aria-hidden="true">·</span>
-            <OutcomeLabel outcome="held back" />
-          </>
-        ) : null}
-      </p>
+      {/* A whisper, question or act carries its outcome chip on its own row below. */}
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <span className="type-secondary text-muted tabular-nums">{clockTime(entry.t)}</span>
+        {entry.outcome === "held back" ? <OutcomeLabel outcome="held back" /> : null}
+      </div>
 
       {interpretation ? <p className="type-body m-0 mt-section text-text">{interpretation}</p> : null}
 
@@ -96,26 +84,33 @@ function EntryBody({ entry }: { entry: LedgerEntry }) {
 
       <EvidenceThumbnail decisions={entry.decisions} alt={sentence(entry.label)} />
 
-      {reported ? <p className="type-secondary m-0 mt-section text-text">Wearer reported: {reported}</p> : null}
+      {reported ? (
+        <div className="mt-section">
+          <InsetList label="Wearer reported">
+            <ListRow icon={MEANING_ICONS.people} title={reported} />
+          </InsetList>
+        </div>
+      ) : null}
     </>
   );
 }
 
 /**
- * What was done: whispers and questions word for word from the backend, acts,
- * and logged notes. The backend's own bookkeeping (`annotate`, `watch`) is left out.
+ * What was done, as an inset list: whispers and questions word for word from the
+ * backend, acts, and logged notes. The backend's own bookkeeping (`annotate`,
+ * `watch`) is left out.
  */
 function ActionList({ items }: { items: { decision: Decision; action: DecisionAction }[] }) {
   const shown = items.filter(({ action }) => action.type !== "annotate" && action.type !== "watch");
   if (shown.length === 0) return null;
   return (
-    <ul className="m-0 mt-section list-none border-b-[0.5px] border-line p-0">
-      {shown.map(({ decision, action }, index) => (
-        <li key={`${decision.id}-${index}`} className="border-t-[0.5px] border-line py-4">
-          <ActionRow decision={decision} action={action} />
-        </li>
-      ))}
-    </ul>
+    <div className="mt-section">
+      <InsetList label="What it did">
+        {shown.map(({ decision, action }, index) => (
+          <ActionRow key={`${decision.id}-${index}`} decision={decision} action={action} />
+        ))}
+      </InsetList>
+    </div>
   );
 }
 
@@ -123,22 +118,10 @@ function ActionRow({ decision, action }: { decision: Decision; action: DecisionA
   if (action.type === "speak" || action.type === "ask") {
     // Only a line that reached the wearer carries its outcome word; one that was not said is held back.
     const outcome = decisionOutcome(decision) === "held back" ? "held back" : action.type === "ask" ? "asked" : "whispered";
-    return (
-      <>
-        <OutcomeLabel outcome={outcome} />
-        <p className="type-body m-0 mt-1 text-text">{action.text}</p>
-      </>
-    );
+    return <ListRow icon={OUTCOME_ICONS[outcome]} title={action.text} detail={sentence(outcome)} />;
   }
-  if (action.type === "act") {
-    return (
-      <>
-        <OutcomeLabel outcome="acted" />
-        <p className="type-body m-0 mt-1 text-text">{action.kind}</p>
-      </>
-    );
-  }
-  if (action.type === "log_insight") return <p className="type-body m-0 text-text">{action.text}</p>;
+  if (action.type === "act") return <ListRow icon={OUTCOME_ICONS.acted} title={action.kind} detail="Acted" />;
+  if (action.type === "log_insight") return <ListRow icon={Pencil} title={action.text} detail="Logged" />;
   return null;
 }
 
@@ -177,6 +160,6 @@ function EvidenceThumbnail({ decisions, alt }: { decisions: Decision[]; alt: str
   return (
     // An in-memory object URL from an authorised fetch: next/image cannot load it.
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={frame.url} alt={alt} className="mt-section block aspect-[4/3] w-full rounded-panel bg-surface object-cover" />
+    <img src={frame.url} alt={alt} className="mt-section block aspect-[4/3] w-full rounded-card bg-surface object-cover" />
   );
 }

@@ -140,10 +140,12 @@ export function planFor(days: readonly Day[], index: number, findings: Finding[]
     if (state === "missed") misses.push({ lane, time: end, label: `${label}, missed` });
   };
 
-  // Sleep: up by 6:30 (within the half hour), in bed within 30 min of 22:30 (known once the night is recorded).
+  // Sleep: up by 6:30 (within the half hour), in bed within 30 min of 22:30 (known once the night is recorded; a late bed is missed).
   const wakeOk = Math.abs(day.sleep.wake - WINDOWS.wake) <= 30;
   judge("sleep", 0, WINDOWS.wake, `Asleep until ${T.wake}, up by then`, wakeOk, !wakeOk);
-  judge("sleep", WINDOWS.sleepStart, 1440, `In bed by ${T.bed}`, !!next && passed(1440) && !watched("sleep_regularity"), false);
+  const bedKnown = !!next && passed(1440);
+  const bedLate = !!next && 1440 + next.sleep.bed > WINDOWS.sleepStart + WINDOWS.regularityTolerance;
+  judge("sleep", WINDOWS.sleepStart, 1440, `In bed by ${T.bed}`, bedKnown && !bedLate && !watched("sleep_regularity"), bedKnown && bedLate);
   for (const w of day.sleep.wakings) {
     if (w.start >= 0) ticks.push({ lane: "sleep", time: w.start, kind: "waking", label: `Awake ${w.minutes} min at ${clock(w.start)}${w.baby ? ", the baby" : ""}` });
   }
@@ -205,17 +207,30 @@ export function planFor(days: readonly Day[], index: number, findings: Finding[]
     if (e?.taken) ticks.push({ lane: "peptide", time: e.start, kind: "event", label: `${dose} dose at ${clock(e.start)}` });
   }
 
-  return { date: day.date, sick, segments, ticks, misses: sick ? [] : misses, bars: sick ? [] : barsFor(day, findings) };
+  return { date: day.date, sick, segments, ticks, misses: sick ? [] : misses, bars: sick ? [] : barsFor(day, next, findings) };
 }
 
-/** Violations as bars. Drinks are one bar at the last drink. */
-function barsFor(day: Day, findings: Finding[]): Bar[] {
+/**
+ * Violations as bars, with short strip labels; the sentence goes in the tap
+ * box. Drinks are one bar at the last drink. A late bed (a watch, not a red) is
+ * a bar too, at the bed time, once the night is known.
+ */
+function barsFor(day: Day, next: Day | undefined, findings: Finding[]): Bar[] {
   const byId = new Map(day.events.map((e) => [e.id, e]));
   const bars: Bar[] = [];
   const add = (f: Finding, label: string, what: string, ruleText: string) =>
     bars.push({ id: `${f.rule}-${f.eventId ?? f.time}`, rule: f.rule, time: f.time, label, what, ruleText });
 
   for (const f of findings) {
+    if (f.rule === "sleep_regularity") {
+      if (f.tone !== "watch" || !next) continue;
+      const bed = 1440 + next.sleep.bed;
+      const off = bed - WINDOWS.sleepStart;
+      if (off > WINDOWS.regularityTolerance) {
+        add(f, `Bed ${clock(bed)}`, `In bed at ${clock(bed)}, ${hm(off)} late.`, `in bed within ${WINDOWS.regularityTolerance} min of ${T.bed}.`);
+      }
+      continue;
+    }
     if (f.tone !== "violation") continue;
     const e = f.eventId ? byId.get(f.eventId) : undefined;
     const at = clock(f.time);
@@ -239,12 +254,15 @@ function barsFor(day: Day, findings: Finding[]): Bar[] {
         add(f, `Nap ${at}`, `Nap at ${at}.`, `naps between ${T.napFrom} and ${T.napTo}, ${WINDOWS.napMax} min at most.`);
         break;
       case "co2":
-        if (e?.kind === "co2") add(f, `${e.label} ${at}`, `${e.ppm.toLocaleString("en-US")} ppm of CO2 for ${hm(e.minutes)}.`, `rooms under ${WINDOWS.co2Amber} ppm; over ${WINDOWS.co2Red.toLocaleString("en-US")} is red.`);
+        if (e?.kind === "co2") {
+          const ppm = e.ppm.toLocaleString("en-US");
+          add(f, `${ppm} ppm ${at}`, `${e.label}: ${ppm} ppm of CO2 for ${hm(e.minutes)}.`, `rooms under ${WINDOWS.co2Amber} ppm; over ${WINDOWS.co2Red.toLocaleString("en-US")} is red.`);
+        }
         break;
       case "uv":
         if (e?.kind === "outdoor") {
           const uv = peakUv(day.date, e.start, e.start + e.minutes);
-          add(f, `Outside at UV ${uv}, ${at}`, `${e.minutes} min in direct sun at UV ${uv}, a clear-sky estimate.`, "under 30 min of direct sun when the UV index is 8 or more.");
+          add(f, `UV ${uv}, ${at}`, `${e.minutes} min in direct sun at UV ${uv}, a clear-sky estimate.`, "under 30 min of direct sun when the UV index is 8 or more.");
         }
         break;
       default:
@@ -280,4 +298,5 @@ export const BAR_TITLE: Partial<Record<RuleId, string>> = {
   nap: `Nap after ${T.napLate}`,
   co2: `Room over ${WINDOWS.co2Red.toLocaleString("en-US")} ppm`,
   uv: `Direct sun at UV ${WINDOWS.uvHigh} or more`,
+  sleep_regularity: `Bed after ${clock(WINDOWS.sleepStart + WINDOWS.regularityTolerance)}`,
 };

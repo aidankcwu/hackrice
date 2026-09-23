@@ -4,6 +4,8 @@
  * rounded, signed, or named per `brian-ios-design` and the IOS_SPEC vocabulary.
  */
 import { API_BASE, ApiError, FIXTURES } from "./api";
+import type { Day } from "./month/types";
+import { dayKey, type TestStore } from "./tests";
 import type { Decision, Episode, Healthspan, Reported, Session, Status } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -113,6 +115,58 @@ export function errorSentence(error: ApiError): string {
 
 export function toApiError(reason: unknown): ApiError {
   return reason instanceof ApiError ? reason : new ApiError("", null);
+}
+
+// ---------------------------------------------------------------------------
+// The month's day on Today: the air chip and the mind check
+// ---------------------------------------------------------------------------
+
+/** Chip tones for a room reading: amber over 900 ppm, red over 1,200 (Allen 2016). */
+export const CO2_WARN_PPM = 900;
+export const CO2_BAD_PPM = 1200;
+
+export interface AirChip {
+  /** "Air 1,050 ppm". */
+  text: string;
+  tone: "neutral" | "warn" | "bad";
+  ppm: number;
+}
+
+/** The latest room CO2 reading of the day, as the header chip; null when the glasses saw no room. */
+export function airChip(day: Day | null | undefined): AirChip | null {
+  if (!day) return null;
+  let latest: { start: number; ppm: number } | null = null;
+  for (const event of day.events) {
+    if (event.kind !== "co2") continue;
+    if (!latest || event.start > latest.start) latest = { start: event.start, ppm: event.ppm };
+  }
+  if (!latest) return null;
+  const tone = latest.ppm > CO2_BAD_PPM ? "bad" : latest.ppm > CO2_WARN_PPM ? "warn" : "neutral";
+  return { text: `Air ${latest.ppm.toLocaleString("en-US")} ppm`, tone, ppm: latest.ppm };
+}
+
+/** The mind check is offered from 10:00. */
+export const MIND_CHECK_FROM = 10 * 60;
+
+/** Minutes after local midnight on the phone's clock. */
+export function clockMinutes(now: Date = new Date()): number {
+  return now.getHours() * 60 + now.getMinutes();
+}
+
+/** True when a real PVT run was stored today; seeded history never lands on today. */
+export function pvtTakenToday(store: TestStore, now: Date = new Date()): boolean {
+  const today = dayKey(now);
+  return (store.pvt ?? []).some((entry) => dayKey(new Date(entry.t)) === today);
+}
+
+/**
+ * Whether the Mind check card shows: the day is at or past 10:00 (`until` from
+ * the month's last day, or the clock when there is no month) and no PVT result
+ * exists today.
+ */
+export function mindCheckDue(until: number | null, store: TestStore, now: Date = new Date()): boolean {
+  const minute = until ?? clockMinutes(now);
+  return minute >= MIND_CHECK_FROM && !pvtTakenToday(store, now);
 }
 
 // ---------------------------------------------------------------------------
@@ -267,6 +321,19 @@ export function clockTime(epochSeconds: number): string {
 /** Sentence case for backend labels ("caffeine in frame" → "Caffeine in frame"). */
 export function sentence(text: string): string {
   return text ? text[0].toUpperCase() + text.slice(1) : text;
+}
+
+/**
+ * A ledger row's detail line: the time first, then the episode's kind or the
+ * decision's trigger when it says more than the label ("16:38 · Caffeine sighting").
+ * The backend's silent re-checks (`watch:…`) add nothing and are left out.
+ */
+export function ledgerDetail(entry: LedgerEntry): string {
+  const time = clockTime(entry.t);
+  const raw = entry.episode?.kind ?? entry.decisions[0]?.trigger ?? "";
+  if (!raw || raw.startsWith("watch:")) return time;
+  const words = sentence(raw.replace(/_/g, " "));
+  return words.toLowerCase() === entry.label.toLowerCase() ? time : `${time} · ${words}`;
 }
 
 /** The wearer's answer in plain words: "yes, 2, rice bowl". Empty when nothing was parsed. */

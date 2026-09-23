@@ -1,6 +1,6 @@
 "use client";
 
-import { Sheet } from "@/components/Sheet";
+import { Chip, InsetList, ListRow, Sheet } from "@/components/ui";
 import { RULES, type Rule } from "@/lib/rules";
 import { sourceLine } from "@/lib/sources";
 
@@ -27,20 +27,20 @@ function size(rule: Rule): string {
 }
 
 function claim(rule: Rule): string {
-  if (rule.claim === "measured") return "Measured";
-  if (rule.claim === "assumed") return "Assumed";
-  return "Protocol default";
+  if (rule.claim === "measured") return "measured";
+  if (rule.claim === "assumed") return "assumed";
+  return "protocol default";
 }
 
 /**
- * Every rule in plain words: the window, what breaking it does, how much it
- * costs each ceiling, when it lands and how fast it fades, its grade and the
- * studies behind it.
+ * Every rule in plain words, one inset group each: the name with its grade chip
+ * and the window as the first row; then what breaking it does, how much it costs
+ * each ceiling, when it lands and how fast it fades, and the studies behind it.
  */
 export function HowSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
     <Sheet open={open} onClose={onClose} title="How it’s computed" id="how">
-      <p className="type-secondary m-0 mt-2 text-text">
+      <p className="type-secondary m-0 mt-3 text-text">
         Cognition and Body are the percent of your ceiling you used today. Each rule below costs a share of a ceiling
         when it is broken. Costs multiply across the day, carry into the days after while they fade, and a clean
         streak brings both back to 100.
@@ -49,25 +49,28 @@ export function HowSheet({ open, onClose }: { open: boolean; onClose: () => void
         Grade A: a meta-analysis or a large trial. B: a controlled study or a large cohort. C: a protocol default with no
         study behind the number. Measured: a study gives the number. Assumed: we scaled it.
       </p>
-      <ul className="m-0 mt-4 list-none p-0">
+      <div className="mt-4 flex flex-col gap-3">
         {ORDER.map((id) => {
           const rule = RULES[id];
           return (
-            <li key={id} className="border-t-[0.5px] border-line py-4">
-              <p className="type-body m-0 font-semibold text-ink">{rule.name}</p>
-              <p className="type-secondary m-0 mt-1 text-muted">{rule.window}</p>
-              <p className="type-secondary m-0 mt-2 text-text">{rule.consequence}</p>
-              <p className="type-caption m-0 mt-2 text-muted tabular-nums">
-                {size(rule)} {when(rule)} Grade {rule.grade}, {claim(rule).toLowerCase()}.
-              </p>
-              {rule.assumed ? <p className="type-caption m-0 mt-1 text-muted">{rule.assumed}.</p> : null}
-              {rule.sources.length ? (
-                <p className="type-caption m-0 mt-1 text-muted">{rule.sources.map(sourceLine).join("; ")}</p>
-              ) : null}
-            </li>
+            <InsetList key={id}>
+              <ListRow title={rule.name} detail={rule.window} trailing={<Chip>Grade {rule.grade}</Chip>} />
+              <li className="relative px-4 py-3 before:absolute before:top-0 before:right-0 before:left-4 before:hairline">
+                <p className="type-secondary m-0 text-text">{rule.consequence}</p>
+                <p className="type-caption m-0 mt-2 text-muted tabular-nums">
+                  {size(rule)} {when(rule)} Grade {rule.grade}, {claim(rule)}.
+                </p>
+                {rule.assumed ? <p className="type-caption m-0 mt-1 text-muted">{rule.assumed}.</p> : null}
+                {rule.sources.map((key) => (
+                  <p key={key} className="type-caption m-0 mt-1 text-muted">
+                    {sourceLine(key)}
+                  </p>
+                ))}
+              </li>
+            </InsetList>
           );
         })}
-      </ul>
+      </div>
     </Sheet>
   );
 }

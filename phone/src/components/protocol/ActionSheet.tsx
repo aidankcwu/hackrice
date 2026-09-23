@@ -1,93 +1,39 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
-import { ACTION_LABELS, statusText, toggleAction, windowText, type RowAction } from "@/lib/protocol";
-import type { ProtocolTodayItem } from "@/lib/types";
+import { ActionRow, Sheet } from "@/components/ui";
 
-/**
- * The row's action sheet: the item named at the top, Undo (seen, done) or Mark
- * done (waiting, missed), then Delete, and Cancel apart. A native modal dialog:
- * focus stays inside, Escape and a tap on the dimmed page close it.
- */
-export function ActionSheet({
-  item,
-  onChoose,
-  onClose,
-}: {
-  item: ProtocolTodayItem | null;
-  onChoose: (action: RowAction) => void;
-  onClose: () => void;
-}) {
-  const dialog = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    const element = dialog.current;
-    if (!element) return;
-    if (item && !element.open) element.showModal();
-    if (!item && element.open) element.close();
-  }, [item]);
-
-  const first = item ? toggleAction(item.status) : null;
-
-  return (
-    <dialog
-      ref={dialog}
-      aria-labelledby="protocol-sheet-title"
-      onClose={onClose}
-      // A tap on the dimmed page above the sheet lands on the dialog itself.
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-      className="sheet mx-auto mt-auto mb-0 w-full max-w-[430px] border-0 bg-transparent p-0 text-text backdrop:bg-black/40"
-    >
-      {item && first ? (
-        <div className="px-2" style={{ paddingBottom: "max(8px, env(safe-area-inset-bottom))" }}>
-          <div className="overflow-hidden rounded-panel bg-surface">
-            <header className="px-4 py-4 text-center">
-              <h2 id="protocol-sheet-title" className="type-caption m-0 font-semibold text-muted">
-                {item.name}
-              </h2>
-              <p className="type-caption m-0 text-muted tabular-nums">
-                {windowText(item)} · {statusText(item)}
-              </p>
-            </header>
-            <SheetButton onClick={() => onChoose(first)}>{ACTION_LABELS[first]}</SheetButton>
-            <SheetButton destructive onClick={() => onChoose("delete")}>
-              {ACTION_LABELS.delete}
-            </SheetButton>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="type-body mt-2 flex min-h-14 w-full items-center justify-center rounded-panel bg-surface font-semibold text-ink transition-colors duration-150 active:bg-surface-2"
-          >
-            Cancel
-          </button>
-        </div>
-      ) : null}
-    </dialog>
-  );
+export interface SheetAction {
+  id: string;
+  label: string;
+  destructive?: boolean;
 }
 
-/** `destructive`: Delete in the system destructive style, the one colour outside the data (brian-ios-design). */
-function SheetButton({
-  onClick,
-  destructive = false,
-  children,
-}: {
-  onClick: () => void;
-  destructive?: boolean;
-  children: ReactNode;
-}) {
+export interface ActionSheetProps {
+  /** `null` closes the sheet. */
+  target: { title: string; line: string; actions: SheetAction[] } | null;
+  onChoose: (id: string) => void;
+  onClose: () => void;
+}
+
+/**
+ * A row's action sheet: the item named at the top with its window and status,
+ * then its actions as 56 px rows (the destructive one in bad), and Cancel.
+ * Escape and a tap on the dimmed page close it too.
+ */
+export function ActionSheet({ target, onChoose, onClose }: ActionSheetProps) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`type-body flex min-h-14 w-full items-center justify-center border-t-[0.5px] border-line px-4 transition-colors duration-150 active:bg-surface-2 ${
-        destructive ? "text-destructive" : "text-ink"
-      }`}
-    >
-      {children}
-    </button>
+    <Sheet open={target !== null} onClose={onClose} title={target?.title} id="protocol-actions">
+      {target ? (
+        <>
+          <p className="type-secondary m-0 mt-1 mb-3 text-center text-muted tabular-nums">{target.line}</p>
+          <div className="-mx-card">
+            {target.actions.map((action) => (
+              <ActionRow key={action.id} label={action.label} destructive={action.destructive} onClick={() => onChoose(action.id)} />
+            ))}
+            <ActionRow label="Cancel" onClick={onClose} />
+          </div>
+        </>
+      ) : null}
+    </Sheet>
   );
 }
