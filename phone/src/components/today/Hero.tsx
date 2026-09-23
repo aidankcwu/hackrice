@@ -9,7 +9,9 @@ const TONE: Record<Tone, string> = { earn: "text-earn", cost: "text-cost", zero:
  */
 export function Hero({ healthspan }: { healthspan: Healthspan }) {
   const hours = signed(healthspan.hours_today, "h", "hours");
-  const years = signed(healthspan.years_delta ?? 0, "healthy years");
+  // "healthy" is said once, on the first line; the score line reads "+0.3 years at this pace".
+  const years = signed(healthspan.years_delta ?? 0, "years at this pace");
+  const chip = provenanceChip(healthspan);
   return (
     <section aria-label="Healthy life today" className="rounded-panel bg-surface p-panel">
       <p className={`type-hero m-0 ${TONE[hours.tone]}`}>
@@ -18,9 +20,11 @@ export function Hero({ healthspan }: { healthspan: Healthspan }) {
       </p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <span className="type-secondary text-muted">{hoursWord(healthspan.hours_today)}</span>
-        <span className="type-chip inline-flex min-h-6 items-center rounded-full bg-surface-2 px-2 text-text">
-          {provenanceChip(healthspan)}
-        </span>
+        {chip ? (
+          <span className="type-chip inline-flex min-h-6 items-center rounded-full bg-surface-2 px-2 text-text">
+            {chip}
+          </span>
+        ) : null}
       </div>
       <p className="type-secondary m-0 mt-1 text-text tabular-nums">
         Score {Math.round(healthspan.overall)} · <span aria-hidden="true">{years.text}</span>

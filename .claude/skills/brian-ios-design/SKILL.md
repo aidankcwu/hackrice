@@ -167,6 +167,7 @@ struct SignedHours: View {
 - Capsule chips (12 pt, `BrianType.chip`) are for provenance and signed values only:
   fill `surface2` (neutral), `earnSoft` (gain), `costSoft` (cost). Never green/red text
   in body copy.
+- Destructive actions in sheets (Delete) are the single exception to "colour is for data": system destructive style, `Button(role: .destructive)`, system red.
 - Toolbar and the primary button use Liquid Glass (`.glass`, `.glassProminent`). Content
   surfaces never use glass. Never glass on glass.
 - Icons: SF Symbols only. Trigger families map to exactly these symbols:
@@ -185,7 +186,7 @@ Say what happened, not what the system "thinks". Verbs on buttons: "Start watchi
 Status lines are noun + state: "Glasses connected", "Backend 10.0.0.5", "Watching 14 min".
 Errors: one sentence of cause, one button of fix.
 Empty states are instructions, not consolation. Today, nothing yet: "Put the glasses on.
-Counting starts the moment the camera is up." with the button right under it. Never "No
+Counting starts the moment the camera is up." with the button above it. Never "No
 data available", never an illustration. Vocabulary was settled in F.0 with the human
 and is the list at the top of `docs/IOS_SPEC.md`; it wins over any other string.
 Whisper text comes from the backend and is never rewritten on the phone.

@@ -6,23 +6,30 @@ import { OutcomeLabel } from "./OutcomeLabel";
 /**
  * The timed log: time · family symbol · label · outcome, newest first, between
  * full-width hairlines. Held-back rows go quiet so the ones it spoke on stand
- * out; the footer counts them. A row opens its detail.
+ * out; the footer counts them. A row opens its detail. With no rows yet, the
+ * `empty` instruction stands in their place.
  */
-export function Ledger({ entries, query }: { entries: LedgerEntry[]; query: string }) {
+export function Ledger({ entries, query, empty }: { entries: LedgerEntry[]; query: string; empty: string }) {
   const heldBack = entries.filter((entry) => entry.outcome === "held back").length;
   return (
     <section aria-labelledby="ledger-title" className="mt-section">
       <h2 id="ledger-title" className="type-title m-0 mb-2 text-ink">
         Today
       </h2>
-      <ul className="m-0 list-none border-b-[0.5px] border-line p-0">
-        {entries.map((entry) => (
-          <li key={entry.id} className="border-t-[0.5px] border-line">
-            <LedgerRow entry={entry} href={`/decision/${encodeURIComponent(entry.id)}${query}`} />
-          </li>
-        ))}
-      </ul>
-      <p className="type-caption m-0 mt-4 text-muted">Held back {heldBack} today</p>
+      {entries.length === 0 ? (
+        <p className="type-body m-0 text-text">{empty}</p>
+      ) : (
+        <>
+          <ul className="m-0 list-none border-b-[0.5px] border-line p-0">
+            {entries.map((entry) => (
+              <li key={entry.id} className="border-t-[0.5px] border-line">
+                <LedgerRow entry={entry} href={`/decision/${encodeURIComponent(entry.id)}${query}`} />
+              </li>
+            ))}
+          </ul>
+          <p className="type-caption m-0 mt-4 text-muted">Held back {heldBack} today</p>
+        </>
+      )}
     </section>
   );
 }

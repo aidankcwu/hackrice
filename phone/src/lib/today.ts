@@ -3,7 +3,7 @@
  * decides nothing about health: every number and word here is the backend's,
  * rounded, signed, or named per `brian-ios-design` and the IOS_SPEC vocabulary.
  */
-import { API_BASE, ApiError } from "./api";
+import { API_BASE, ApiError, FIXTURES } from "./api";
 import type { Decision, Episode, Healthspan, Reported, Session, Status } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -54,15 +54,21 @@ const DEVICE: Record<string, "Glasses" | "WHOOP" | "Health"> = {
 };
 const DEVICE_ORDER = ["Glasses", "WHOOP", "Health"] as const;
 
-/** The devices behind today's live numbers, e.g. "Glasses · WHOOP"; "Seeded" when none is live. */
+/**
+ * "Seeded" whenever fixtures mode is on. Otherwise from the payload: the live
+ * sources present, then "Seeded" if any factor is seeded, e.g. "Glasses · WHOOP ·
+ * Seeded". Empty (no chip) when neither.
+ */
 export function provenanceChip(healthspan: Healthspan): string {
+  if (FIXTURES) return "Seeded";
   const live = new Set<string>();
   for (const entry of Object.values(healthspan.provenance ?? {})) {
     const device = entry.source === "live" ? DEVICE[entry.basis] : undefined;
     if (device) live.add(device);
   }
-  const devices = DEVICE_ORDER.filter((device) => live.has(device));
-  return devices.length > 0 ? devices.join(" · ") : "Seeded";
+  const parts: string[] = DEVICE_ORDER.filter((device) => live.has(device));
+  if ((healthspan.factors ?? []).some((factor) => factor.provenance === "seeded")) parts.push("Seeded");
+  return parts.join(" · ");
 }
 
 // ---------------------------------------------------------------------------

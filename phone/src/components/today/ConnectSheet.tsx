@@ -6,11 +6,14 @@ import { useEffect, useRef } from "react";
  * The glasses steps from SetupView's Glasses row, as a sheet the user can close.
  * Until Job 1 the glasses app owns the stream, so this page can only point the
  * way; Today turns to "Watching" by itself once the backend sees frames.
+ *
+ * The glasses app today is Meta's sample, which Job 1 replaces, so the steps name
+ * no buttons. Re-check this wording at Job 1.
  */
 const STEPS = [
-  "Pair the glasses in Meta AI.",
-  "In the glasses app, tap Register, then Start watching.",
-  "Put the glasses on. Counting starts the moment the camera is up.",
+  "Open Meta AI and check the glasses are paired with Developer Mode on.",
+  "Open the glasses app and connect it to the Mac.",
+  "Start the stream.",
 ] as const;
 
 export function ConnectSheet({ open, onClose }: { open: boolean; onClose: () => void }) {

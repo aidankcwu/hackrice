@@ -5,9 +5,10 @@
  *   phone/fixtures/*.json         copies of `ios/Brian/Fixtures/`, captured from the
  *                                 backend in `--source sim` (docs/STATE.md §4). Never edited.
  *   phone/fixtures/design/*.json  the captures with the values the human set for the
- *                                 design screenshots: hours_today 1.4, overall 71, the
+ *                                 design screenshots: hours_today 1.4, overall 71,
+ *                                 years_delta +0.3 (the same sign as the hours), the
  *                                 session started 42 min ago, and every measured
- *                                 provenance source "seeded", so the chip reads "Seeded".
+ *                                 provenance source "seeded".
  *
  * A screenshot URL (one that carries `?screen=`) reads the design set; any other
  * URL reads the captures. Loaded on first use, so a live build never downloads them.

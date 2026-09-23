@@ -6,7 +6,7 @@
   "+1.0 h", "−1.1 h", "0.0 h" (no sign at zero). Label: "healthy life earned today";
   when negative, "healthy life cost today".
 - **Score**: the 0–100 `overall`, just "Score": "Score 76". Its line under the hero:
-  "Score 76 · −0.1 healthy years" (`years_delta`, signed).
+  "Score 76 · −0.1 years at this pace" (`years_delta`, signed).
 - **Whisper**: the line the glasses say in the ear. Noun and verb: "whisper",
   "whispered". Voice toggle: "Whisper through the glasses".
 - **Outcomes** (ledger, trailing): "whispered" · "asked" · "acted" · "held back".
@@ -110,7 +110,7 @@ Order, top to bottom:
    (`reactive-glasses`), the phone never calls `/api/session/*`.
 3. **Hero panel**: `hours_today` as `SignedHours(font: .hero)`, label `Hours.word`:
    "healthy life earned today" / "healthy life cost today". Second line:
-   "Score 71 · +0.3 healthy years" (`overall`, `years_delta`). Source:
+   "Score 71 · +0.3 years at this pace" (`overall`, `years_delta`). Source:
    `GET /api/healthspan`, polled every 30 s while watching and on foreground.
    A provenance chip sits beside the label: Glasses · WHOOP · Health · Seeded, from the
    payload's `provenance`/`measured` fields. All seeded → chip "Seeded", no other change.
@@ -120,8 +120,8 @@ Order, top to bottom:
    back" muted with the row greyed). Footer: "Held back N today" (restraint is visible). Tap → **DecisionDetailView**: interpretation text, actions taken, evidence
    thumbnail from `GET /api/evidence/{decision_id}` when present, "wearer reported" note
    when `reported` is set.
-   Empty: "Put the glasses on. Counting starts the moment the camera is up." with the
-   primary button directly above it.
+   Empty: "Put the glasses on. Counting starts the moment the camera is up." in the
+   ledger's place, with the primary button above it.
 5. Pull to refresh. Nothing else on this screen.
 
 ### ProtocolView (Job 2)

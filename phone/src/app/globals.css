@@ -24,6 +24,10 @@
   --earn-soft: light-dark(#e3f2eb, #0e2a1c); /* fill behind a signed gain chip */
   --cost: light-dark(#c81e1e, #f87171); /* negative hours only */
   --cost-soft: light-dark(#fbe7e7, #301313); /* fill behind a signed cost chip */
+  /* Not a Brian token: iOS system red, what SwiftUI draws for `Button(role:
+     .destructive)`. Destructive actions in sheets only, the single exception to
+     "colour is for data". */
+  --destructive: light-dark(#ff3b30, #ff453a);
 
   --radius-panel: 20px;
 
@@ -72,6 +76,7 @@
   --color-earn-soft: var(--earn-soft);
   --color-cost: var(--cost);
   --color-cost-soft: var(--cost-soft);
+  --color-destructive: var(--destructive);
   --radius-panel: var(--radius-panel);
   --spacing-gutter: var(--space-gutter);
   --spacing-section: var(--space-section);

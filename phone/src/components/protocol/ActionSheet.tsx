@@ -52,7 +52,9 @@ export function ActionSheet({
               </p>
             </header>
             <SheetButton onClick={() => onChoose(first)}>{ACTION_LABELS[first]}</SheetButton>
-            <SheetButton onClick={() => onChoose("delete")}>{ACTION_LABELS.delete}</SheetButton>
+            <SheetButton destructive onClick={() => onChoose("delete")}>
+              {ACTION_LABELS.delete}
+            </SheetButton>
           </div>
           <button
             type="button"
@@ -67,12 +69,23 @@ export function ActionSheet({
   );
 }
 
-function SheetButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+/** `destructive`: Delete in the system destructive style, the one colour outside the data (brian-ios-design). */
+function SheetButton({
+  onClick,
+  destructive = false,
+  children,
+}: {
+  onClick: () => void;
+  destructive?: boolean;
+  children: ReactNode;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="type-body flex min-h-14 w-full items-center justify-center border-t-[0.5px] border-line px-4 text-ink transition-colors duration-150 active:bg-surface-2"
+      className={`type-body flex min-h-14 w-full items-center justify-center border-t-[0.5px] border-line px-4 transition-colors duration-150 active:bg-surface-2 ${
+        destructive ? "text-destructive" : "text-ink"
+      }`}
     >
       {children}
     </button>

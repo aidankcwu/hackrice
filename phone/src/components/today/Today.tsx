@@ -65,8 +65,7 @@ export function Today({ query }: { query: string }) {
         <StatusStrip status={status} session={session} error={error} />
       </div>
 
-      {empty ? <p className="type-body m-0 mt-section text-text">{EMPTY}</p> : null}
-      <div className={empty ? "mt-4" : "mt-section"}>{primary}</div>
+      <div className="mt-section">{primary}</div>
 
       {healthspan ? (
         <div className="mt-section">
@@ -74,7 +73,10 @@ export function Today({ query }: { query: string }) {
         </div>
       ) : null}
 
-      {entries && entries.length > 0 ? <Ledger entries={entries} query={query} /> : null}
+      {/* Nothing seen yet: the instruction sits where the log will be, the button above it. */}
+      {empty || (entries && entries.length > 0) ? (
+        <Ledger entries={entries ?? []} query={query} empty={EMPTY} />
+      ) : null}
 
       <ConnectSheet open={connecting} onClose={() => setConnecting(false)} />
     </>

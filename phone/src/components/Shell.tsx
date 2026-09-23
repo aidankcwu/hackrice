@@ -13,9 +13,15 @@ const ICONS: Record<ScreenId, LucideIcon> = {
   settings: Settings,
 };
 
-/** Tab bar: a 54 px item row inside a 4 px glass rim, floating above the home indicator. */
-const TAB_BAR_HEIGHT = 62;
+/**
+ * Tab bar: a 54 px item row inside a 4 px glass rim and its hairline edge (64 px
+ * where the hairline rounds up to a whole pixel), floating (iOS 26) at the
+ * safe-area inset, or 16 px above the edge when there is none.
+ */
+const TAB_BAR_HEIGHT = 64;
 const TAB_BAR_BOTTOM = "max(16px, env(safe-area-inset-bottom))";
+/** A tab's scrolling list ends this far above the bottom edge: tab-bar height + safe-area inset, so the last row scrolls clear of the bar. */
+const TAB_BAR_CLEARANCE = `calc(${TAB_BAR_HEIGHT}px + ${TAB_BAR_BOTTOM})`;
 
 export interface ShellProps {
   screen: ScreenId;
@@ -78,7 +84,7 @@ export function Shell({ screen, pushed: pushedDetail, title: titleOverride, them
 
       <main
         className="flex-1 px-gutter"
-        style={{ paddingBottom: pushed ? 32 : `calc(${TAB_BAR_HEIGHT}px + ${TAB_BAR_BOTTOM} + 24px)` }}
+        style={{ paddingBottom: pushed ? 32 : TAB_BAR_CLEARANCE }}
       >
         <h1 ref={titleRef} className="type-large-title m-0 pb-2 text-ink">
           {title}

@@ -10,15 +10,18 @@
 // A URL that starts with `/` or `?` is resolved against `PHONE_URL`, the phone
 // fixtures dev server (default http://localhost:3100); a full URL is used as is.
 // Optional third and fourth arguments: width and height (default 390 844).
-// `CHROME` overrides the browser path.
+// `--scroll-end` scrolls the page to its end before the shot (the last row
+// against the tab bar). `CHROME` overrides the browser path.
 import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
-const [target, out, width = "390", height = "844"] = process.argv.slice(2);
+const args = process.argv.slice(2);
+const scrollEnd = args.includes("--scroll-end");
+const [target, out, width = "390", height = "844"] = args.filter((arg) => arg !== "--scroll-end");
 if (!target || !out) {
-  console.error('usage: node scripts/shot.mjs "</path?query | url>" <out.png> [width] [height]');
+  console.error('usage: node scripts/shot.mjs [--scroll-end] "</path?query | url>" <out.png> [width] [height]');
   process.exit(2);
 }
 const PHONE_URL = process.env.PHONE_URL || "http://localhost:3100";
@@ -96,6 +99,12 @@ try {
   await send("Page.navigate", { url });
   await loaded;
   await sleep(1500); // hydration and the first fetch
+  if (scrollEnd) {
+    await send("Runtime.evaluate", {
+      expression: "window.scrollTo(0, document.scrollingElement.scrollHeight)",
+    });
+    await sleep(500); // the inline title fades in under the bar
+  }
   const { data } = await send("Page.captureScreenshot", { format: "png" });
   mkdirSync(dirname(resolve(out)), { recursive: true });
   writeFileSync(resolve(out), Buffer.from(data, "base64"));
