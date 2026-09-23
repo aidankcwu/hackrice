@@ -1,0 +1,11 @@
+node_modules
+.next
+out
+*.log
+*.tsbuildinfo
+.env*
+Dockerfile
+.dockerignore
+# Design screenshots and the screenshot script: not part of the app.
+design
+scripts

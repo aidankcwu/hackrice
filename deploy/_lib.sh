@@ -10,6 +10,8 @@ IMAGE="hackrice-backend:local"
 #: The dashboard image is per tester (hackrice-dashboard:NAME): Next bakes
 #: the /t/NAME/dashboard base path in at build time.
 DASHBOARD_IMAGE="hackrice-dashboard"
+#: Likewise the phone web app (phone/, hackrice-phone:NAME) at /t/NAME/app.
+PHONE_IMAGE="hackrice-phone"
 #: Inside its container every backend listens on 8010 (so the dashboard finds
 #: it at http://backend-NAME:8010). On the host, testers get 8101, 8102, ...
 #: bound to 127.0.0.1 only: for curl on this machine; the world goes via Caddy.
@@ -23,6 +25,22 @@ DASHBOARD_UID=1000
 die() { echo "error: $*" >&2; exit 1; }
 
 compose() { docker compose "$@"; }
+
+# mkdir is atomic on both macOS and Linux, unlike relying on flock(1).
+# Call release_deploy_lock from the caller's EXIT trap.
+acquire_deploy_lock() {
+  DEPLOY_LOCK_DIR="$DEPLOY_DIR/.tester-provision.lock"
+  if ! mkdir "$DEPLOY_LOCK_DIR" 2>/dev/null; then
+    die "another tester operation is running (lock: $DEPLOY_LOCK_DIR; see README if it is stale)"
+  fi
+  printf '%s\n' "$$" > "$DEPLOY_LOCK_DIR/pid"
+}
+
+release_deploy_lock() {
+  [ -n "${DEPLOY_LOCK_DIR:-}" ] || return 0
+  rm -f "$DEPLOY_LOCK_DIR/pid"
+  rmdir "$DEPLOY_LOCK_DIR" 2>/dev/null || true
+}
 
 # Lower-case, digits and dashes: it becomes a URL segment, a compose service
 # name and a DNS name on the compose network, and must be valid as all three.
@@ -57,6 +75,110 @@ render_override() {
     fi
   } > "$tmp"
   mv "$tmp" docker-compose.override.yml
+}
+
+# testers/NAME.yml: the tester's compose services. Args: NAME PORT WITH_DASHBOARD
+# WITH_PHONE (the last two "1" or ""). Written to stdout.
+tester_yml() {
+  local name="$1" port="$2" with_dashboard="$3" with_phone="$4"
+  cat <<YML
+services:
+  backend-$name:
+    extends: { file: tester.yml, service: backend }
+    env_file: [.env, testers/$name.env]
+    ports: ["127.0.0.1:$port:$BACKEND_PORT"]
+    volumes: ["./data/$name:/data"]
+YML
+  if [ -n "$with_dashboard" ]; then
+    cat <<YML
+  dashboard-$name:
+    extends: { file: tester.yml, service: dashboard }
+    image: $DASHBOARD_IMAGE:$name
+    build:
+      context: ../dashboard
+      args: { NEXT_BASE_PATH: /t/$name/dashboard }
+    # Only the token file, never .env: the dashboard needs no API keys.
+    env_file: [testers/$name.env]
+    environment:
+      BACKEND_URL: http://backend-$name:$BACKEND_PORT
+    volumes: ["./data/$name/dashboard:/data"]
+    depends_on: [backend-$name]
+YML
+  fi
+  if [ -n "$with_phone" ]; then
+    cat <<YML
+  phone-$name:
+    extends: { file: tester.yml, service: phone }
+    image: $PHONE_IMAGE:$name
+    build:
+      context: ../phone
+      args: { NEXT_BASE_PATH: /t/$name/app }
+    # Only the token file, never .env: the app holds no API keys. The browser
+    # calls the backend itself, at https://DOMAIN/t/$name, with the token.
+    env_file: [testers/$name.env]
+    environment:
+      BACKEND_URL: http://backend-$name:$BACKEND_PORT
+    depends_on: [backend-$name]
+YML
+  fi
+}
+
+# routes/NAME.caddy: the tester's routes. Args: NAME WITH_DASHBOARD WITH_PHONE.
+# Written to stdout. Only path-matched `handle` blocks: Caddy tries them most
+# specific path first, so /t/NAME/app* and /t/NAME/dashboard* win over the
+# backend's /t/NAME/* whatever the order here (kept in that order anyway).
+tester_route() {
+  local name="$1" with_dashboard="$2" with_phone="$3"
+  cat <<CADDY
+# $name -- written by new_tester.sh
+@root-$name path /t/$name /t/$name/
+redir @root-$name /t/$name/dashboard{?query} 302
+
+CADDY
+  if [ -n "$with_phone" ]; then
+    cat <<CADDY
+# Prefix kept: the phone web app was built with basePath /t/$name/app. It calls
+# the backend below from the browser, same origin, at /t/$name/api/...
+handle /t/$name/app* {
+	reverse_proxy phone-$name:3000 {
+		# Its auth cookie is https-only; say so even though this hop is http.
+		header_up X-Forwarded-Proto https
+	}
+}
+
+CADDY
+  fi
+  if [ -n "$with_dashboard" ]; then
+    cat <<CADDY
+# Prefix kept: the dashboard was built with basePath /t/$name/dashboard.
+handle /t/$name/dashboard* {
+	reverse_proxy dashboard-$name:3000 {
+		# Its auth cookie is https-only; say so even though this hop is http.
+		header_up X-Forwarded-Proto https
+	}
+}
+
+CADDY
+  fi
+  cat <<CADDY
+# Prefix stripped: the backend serves /api, /frames and /ws/glasses at its root.
+handle /t/$name/* {
+	uri strip_prefix /t/$name
+	reverse_proxy backend-$name:$BACKEND_PORT {
+		# A config reload (adding or removing a tester) must not drop this
+		# tester's glasses socket mid-demo. Streams have no idle timeout by
+		# default, so the phone's 10 s pings keep the socket up indefinitely.
+		stream_close_delay 2h
+	}
+}
+CADDY
+}
+
+# The compose services testers/NAME.yml defines (backend-NAME, dashboard-NAME,
+# phone-NAME: a tester added before a service existed has fewer).
+tester_services() {
+  [ -f "testers/$1.yml" ] || return 0
+  sed -n "s/^  \([a-z]*-$1\):\$/\1/p" "testers/$1.yml"
 }
 
 # Ask a running Caddy to re-read its routes. A reload keeps serving the old

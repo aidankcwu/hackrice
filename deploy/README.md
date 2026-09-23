@@ -1,25 +1,31 @@
 # Hosting the backend for testers
 
-Each tester gets their own backend container and their own dashboard
-container, behind one Caddy reverse proxy that handles TLS. The backend is
+Each tester gets three containers: their own backend, their own dashboard
+and their own phone web app (`phone/`, Lukas's Next.js app), behind one Caddy
+reverse proxy that handles TLS. The backend is
 single-user by design: one database, one persona, one session and one
 conversation slot. Running one copy per person keeps all of that without a
 code change.
 
 ```
-phone (Ray-Ban Meta) ─wss─┐
-                          ├─> Caddy :443 ── /t/alice/dashboard* ─> dashboard-alice:3000  (prefix kept)
-browser (dashboard) ─https┘        │
-                                   └──────── /t/alice/*  ─────────> backend-alice:8010    (prefix stripped)
+glasses via iOS app ──wss──┐
+                           ├─> Caddy :443 ─┬─ /t/alice/app*       ─> phone-alice:3000      (prefix kept)
+phone browser (app) ─https─┤               ├─ /t/alice/dashboard* ─> dashboard-alice:3000  (prefix kept)
+browser (dashboard) ─https─┘               └─ /t/alice/*          ─> backend-alice:8010    (prefix stripped)
 ```
+
+The phone web app's browser code calls the backend itself, same origin, at
+`https://DOMAIN/t/alice/api/...` (the last route), with the token as
+`Authorization: Bearer`. The app container serves pages only.
 
 Everything runs in demo mode with seeded data and a preset persona. There
 is no Google Health or Fitbit login (see "What testers cannot do").
 
 ## Ten-minute runbook (fresh Ubuntu VPS, any provider)
 
-Size: 2 vCPU / 4 GB is enough for 2–3 testers. 4 vCPU / 8 GB handles about
-6 (see [cost](#cost-per-tester-per-hour)).
+Size: 2 vCPU / 4 GB is enough for 2 testers. 4 vCPU / 8 GB handles about
+4 (see [memory](#memory-three-containers-per-tester) and
+[cost](#cost-per-tester-per-hour)).
 
 **0. DNS.** Point an A record (for example `brian.example.com`) at the VPS's
 public IP. Open ports 80 and 443 in the provider's firewall. Caddy needs both
@@ -66,11 +72,13 @@ docker compose up -d
 This allocates the next host port (8101, 8102, and so on), generates a
 token, creates `data/alice/`, writes `testers/alice.{yml,env}` and
 `routes/alice.caddy`, and regenerates `docker-compose.override.yml`. It then
-builds alice's dashboard (about a minute, because Next bakes in the
-`/t/alice/dashboard` base path), starts both containers, reloads Caddy and
-prints:
+builds alice's dashboard and phone app (about a minute each, because Next
+bakes in the `/t/alice/dashboard` and `/t/alice/app` base paths), starts all
+three containers, reloads Caddy and prints:
 
 ```
+phone app (the link to send the tester; open it in Safari on the phone):
+  https://brian.example.com/t/alice/app/?token=<TOKEN>
 iOS app (glasses socket):
   wss://brian.example.com/t/alice/ws/glasses?token=<TOKEN>
 dashboard (the link to send the tester):
@@ -79,6 +87,7 @@ backend API base (header X-Access-Token: <token>, or ?token=):
   https://brian.example.com/t/alice
 health (no token needed):
   https://brian.example.com/t/alice/healthz
+  https://brian.example.com/t/alice/app/healthz
 ```
 
 **6. Verify:**
@@ -89,7 +98,11 @@ curl -s -o /dev/null -w '%{http_code}\n' https://brian.example.com/t/alice/api/s
 curl -s -o /dev/null -w '%{http_code}\n' https://brian.example.com/t/alice/api/persona   # 401
 curl -fsS -H "X-Access-Token: $(sed -n 's/^ACCESS_TOKEN=//p' testers/alice.env)" \
      https://brian.example.com/t/alice/api/persona                                  # 200
-docker compose ps                 # backend-alice and dashboard-alice show (healthy)
+curl -fsS https://brian.example.com/t/alice/app/healthz                     # 200, no token
+curl -s -o /dev/null -w '%{http_code}\n' https://brian.example.com/t/alice/app      # 401
+curl -s -o /dev/null -w '%{http_code}\n' \
+     "https://brian.example.com/t/alice/app?token=$(sed -n 's/^ACCESS_TOKEN=//p' testers/alice.env)"  # 200
+docker compose ps                 # backend-alice, dashboard-alice and phone-alice show (healthy)
 ```
 
 **7. Watch it:**
@@ -117,18 +130,52 @@ docker compose restart backend-bob   # a fresh demo: DEMO_RESET_ON_START plus
 
 Adding or removing a tester reloads Caddy. `stream_close_delay` in each
 route keeps the other testers' glasses sockets open across the reload.
-Removal also uses `docker compose rm -sfv`, so that tester's container logs and
+Tester add/remove operations are serialized with the mkdir-based lock
+`deploy/.tester-provision.lock`, which works on both macOS and Linux. If a
+machine crash or `kill -9` leaves that lock behind, first verify that no
+`new_tester.sh` or `remove_tester.sh` process is running (the lock's `pid` file
+records the creator), then remove the stale lock directory and retry.
+Removal stops and deletes all of that tester's containers (backend, dashboard,
+phone app) and their two per-tester images. It uses `docker compose rm -sfv`,
+so that tester's container logs and
 anonymous volumes are removed. The default deletion is permanent and includes
 the database, evidence JPEGs, wearable tokens and dashboard data. Use
 `--archive` only when retention is explicitly intended. `purge_tester.sh NAME`
 is an explicit alias for the permanent default.
 
 To ship new code, run `git pull && docker compose build backend-image && docker compose up -d`.
-For dashboard changes, also run `docker compose build dashboard-NAME` for each tester.
+For dashboard changes, also run `docker compose build dashboard-NAME` for each
+tester; for phone app changes, `docker compose build phone-NAME`; then
+`docker compose up -d` again.
+
+A tester added before the phone app existed has no `phone-NAME`. To give them
+one, remove and re-add them (`--archive` keeps their data, but the token
+changes), or run `./new_tester.sh` for a new name.
 
 ## What a VC's phone needs
 
-One URL, pasted into the iOS app's backend field:
+**The app.** One link, opened in Safari on the phone:
+
+```
+https://brian.example.com/t/alice/app/?token=<TOKEN>
+```
+
+- The app is built with no secret and no backend address. In the browser it
+  derives the backend from its own URL (same origin, `/t/alice`, the `/app`
+  segment dropped), stores the token in `localStorage` under a key namespaced
+  by `/t/alice` (so two testers on one phone do not clobber each other), takes
+  `?token=` out of the address bar, and sends `Authorization: Bearer <token>`
+  on every backend request. Its own pages are gated by the same token (an
+  httpOnly cookie set on the first visit, `path=/t/alice/app`); without it they
+  answer `401` with a short "open the link you were given" page.
+- Share → Add to Home Screen works. The Home Screen app starts at
+  `/t/alice/app` without the token and its storage is separate from Safari's;
+  when iOS carried the cookie over, the app fetches the token back from its own
+  `/t/alice/app/api/token` (answered only to that cookie). If a Home Screen
+  launch shows the 401 page, open the link in Safari again and re-add it.
+- Open without a token: `/t/alice/app/healthz`, the manifest and the icons.
+
+**The glasses.** One URL, pasted into the iOS app's backend field:
 
 ```
 wss://brian.example.com/t/alice/ws/glasses?token=<TOKEN>
@@ -161,7 +208,7 @@ to the same person.
 | Socket refused | accepted, then closed with code `4401` (reason `unauthorized`) |
 | HTTP refused | `401`, with CORS headers so the browser shows the real error |
 | Wearable OAuth callbacks (`HOSTED=1`) | `409` `{"error": "wearable login is not available on hosted testers"}`, before the token check |
-| Prefix | `/t/NAME/` is stripped before the backend; `/t/NAME/dashboard*` is not |
+| Prefix | `/t/NAME/` is stripped before the backend; `/t/NAME/dashboard*` and `/t/NAME/app*` are not (they go to the dashboard and phone app containers), so no backend route may start with `/app` or `/dashboard` |
 | URLs the backend returns | backend-relative paths (`/api/evidence/{id}/{ref}`); join them to `https://DOMAIN/t/NAME` and add `?token=` for image tags |
 | Token format | `secrets.token_urlsafe(32)`: letters, digits, `-` and `_`, safe in a query string |
 
@@ -192,6 +239,22 @@ check must probe **`/healthz`**, not `/docs`. With `ACCESS_TOKEN` set, every
 route but `/healthz` answers `401` without the token, so a `/docs` probe
 fails and Fly keeps restarting a healthy machine.
 
+## Memory: three containers per tester
+
+| Container | `mem_limit` (tester.yml) | Notes |
+|---|---|---|
+| `backend-NAME` | 1 GB | numpy, OpenCV and the pipeline |
+| `dashboard-NAME` | 512 MB | Next server plus a python3 spawned per score request |
+| `phone-NAME` | 256 MB | Next server for pages only; measured at about 40 MB idle |
+| **per tester** | **1.75 GB** | caps, not reservations |
+
+Size the VPS by the caps so no tester can push another into the OOM killer:
+leave about 0.5 GB for the OS, Docker and Caddy, which gives **2 testers on
+4 GB and 4 on 8 GB**. Real use is usually well under the caps, so more fit if
+you watch `docker stats` and accept that risk. Each tester also costs about
+two minutes of build and two per-tester images (`hackrice-dashboard:NAME`,
+`hackrice-phone:NAME`, a few hundred MB of disk each, shared layers aside).
+
 ## Cost per tester per hour
 
 These are estimates. The assumptions are listed so you can redo the math
@@ -203,7 +266,7 @@ someone talking to Bryan.
 | Gemini 2.5 Flash-Lite (T0 tagger) | 1 call per 1.5 s tick = 2,400 calls; ~1,300 input tokens (frame + prompt) and ~150 output each; $0.10/M in, $0.40/M out | ~0.45 |
 | OpenAI (clerk + voice agent, `gpt-5.4-mini`) | ~90 calls (demo-mode wake-ups plus conversation turns); ~5k input and ~400 output tokens each; $0.75/M in, $4.50/M out (check the current rate) | ~0.50 |
 | ElevenLabs | ~30 spoken lines × ~100 chars = 3k chars; $0.15–0.30 per 1k chars depending on plan and model | 0.45–0.90 |
-| VPS | 4 vCPU / 8 GB at about $30–50/month shared by 6 testers (each backend capped at 1 GB, each dashboard at 512 MB) | ~0.01 |
+| VPS | 4 vCPU / 8 GB at about $30–50/month shared by 4 testers (three containers each, see [memory](#memory-three-containers-per-tester)) | ~0.01 |
 | Bandwidth | ~40 KB JPEG per 1.5 s ≈ 100 MB/h inbound, which is free on most providers | ~0 |
 | **Total** | | **≈ $1.50–2.00** |
 
@@ -216,9 +279,10 @@ about $0.01/h. With no frames coming in, nothing calls a model.
 |---|---|
 | `Dockerfile` | the backend image: `src/longevity` + `backend/pipeline`, uv-built, Python 3.11, no dev deps, runs as uid 10001, `HEALTHCHECK` on `/healthz` |
 | `docker-compose.yml` | Caddy, plus the `backend-image` build target |
-| `tester.yml` | the templates `backend` and `dashboard` that every tester's services extend |
+| `tester.yml` | the templates `backend`, `dashboard` and `phone` that every tester's services extend |
 | `Caddyfile` | the site; imports `routes/*.caddy` |
-| `new_tester.sh`, `remove_tester.sh`, `_lib.sh` | the tester lifecycle |
+| `new_tester.sh`, `remove_tester.sh`, `purge_tester.sh`, `_lib.sh` | the tester lifecycle; `_lib.sh` also writes each tester's compose services and Caddy route |
+| `../phone/Dockerfile` | the phone web app image, built per tester with `NEXT_BASE_PATH=/t/NAME/app` |
 | `.env.example` | shared keys, placeholders only; copy to `.env` |
 | generated: `testers/`, `routes/`, `data/`, `docker-compose.override.yml` | per-tester state, git-ignored |
 

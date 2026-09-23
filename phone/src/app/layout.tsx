@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { TokenCapture } from "@/components/TokenCapture";
 import "./globals.css";
 
-// Add to Home Screen: `manifest.webmanifest`, `icon.png` and `apple-icon.png`
+// Add to Home Screen: `manifest.ts` (basePath-aware), `icon.png` and `apple-icon.png`
 // sit beside this file and Next links them. The name matches the native app's
 // CFBundleDisplayName (ios/Brian/project.yml).
 export const metadata: Metadata = {
@@ -29,7 +30,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <TokenCapture />
+        {children}
+      </body>
     </html>
   );
 }

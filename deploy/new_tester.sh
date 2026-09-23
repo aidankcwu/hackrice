@@ -1,24 +1,57 @@
 #!/usr/bin/env bash
-# Add one tester: their own backend and dashboard containers, token, database
-# and port.
+# Add one tester: their own backend, dashboard and phone web app containers,
+# token, database and port.
 #
 #   ./new_tester.sh alice
 #
-# Prints what that tester needs: the glasses socket for the iOS app and the
-# dashboard link, both carrying their token.
+# Prints what that tester needs: the phone app link, the glasses socket for the
+# iOS app and the dashboard link, all carrying their token.
 source "$(dirname "$0")/_lib.sh"
 
 name="${1:-}"
 [ -n "$name" ] || die "usage: ./new_tester.sh NAME"
 valid_name "$name" || die "NAME must be lower-case letters, digits and dashes, starting with a letter (at most 31)"
 need_env
-[ ! -e "testers/$name.env" ] || die "tester '$name' already exists (./remove_tester.sh $name first)"
 command -v docker >/dev/null || die "docker is not installed"
+
+success=""
+env_created=""
+yml_created=""
+route_created=""
+data_created=""
+containers_attempted=""
+services=()
+
+rollback() {
+  local status=$?
+  trap - ERR EXIT INT TERM
+  if [ -z "$success" ]; then
+    [ -n "$containers_attempted" ] && compose rm -sfv "${services[@]}" >/dev/null 2>&1 || true
+    [ -n "$env_created" ] && rm -f "testers/$name.env"
+    [ -n "$yml_created" ] && rm -f "testers/$name.yml"
+    [ -n "$route_created" ] && rm -f "routes/$name.caddy"
+    [ -n "$yml_created" ] && render_override >/dev/null 2>&1 || true
+    [ -n "$route_created" ] && reload_caddy >/dev/null 2>&1 || true
+    [ -n "$data_created" ] && rm -rf -- "data/$name"
+    echo "rolled back failed provisioning for $name" >&2
+  fi
+  release_deploy_lock
+  exit "$status"
+}
+trap rollback ERR EXIT
+trap 'exit 130' INT TERM
+
+acquire_deploy_lock
+[ ! -e "testers/$name.env" ] && [ ! -e "testers/$name.yml" ] && [ ! -e "routes/$name.caddy" ] \
+  || die "tester '$name' already exists (./remove_tester.sh $name first)"
 
 # The dashboard is optional: without dashboard/Dockerfile the tester still gets
 # a backend, and the phone still works.
 with_dashboard=""
 [ -f ../dashboard/Dockerfile ] && with_dashboard=1
+# Likewise the phone web app (phone/, Lukas's Next.js app) at /t/NAME/app.
+with_phone=""
+[ -f ../phone/Dockerfile ] && with_phone=1
 
 # Next free host port: one above the highest any tester holds.
 port=$FIRST_PORT
@@ -34,7 +67,13 @@ token="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))' 2>/dev/nu
   || openssl rand -hex 32)"
 [ "${#token}" -ge 40 ] || die "could not generate a token (need python3 or openssl)"
 
-mkdir -p "data/$name/dashboard" testers routes
+mkdir -p testers routes
+if [ ! -d "data/$name" ]; then
+  mkdir -p "data/$name/dashboard"
+  data_created=1
+else
+  mkdir -p "data/$name/dashboard"
+fi
 
 # Optional preset persona: deploy/persona.txt, copied per tester so a tester's
 # own edits in the dashboard never touch anyone else's.
@@ -46,6 +85,7 @@ fi
 
 # The token file is the only secret here: readable by this user alone.
 # HOST_PORT is bookkeeping for this script; the containers ignore it.
+env_created=1
 (
   umask 077
   cat > "testers/$name.env" <<ENV
@@ -58,70 +98,15 @@ $persona_line
 ENV
 )
 
-{
-  cat <<YML
-services:
-  backend-$name:
-    extends: { file: tester.yml, service: backend }
-    env_file: [.env, testers/$name.env]
-    ports: ["127.0.0.1:$port:$BACKEND_PORT"]
-    volumes: ["./data/$name:/data"]
-YML
-  if [ -n "$with_dashboard" ]; then
-    cat <<YML
-  dashboard-$name:
-    extends: { file: tester.yml, service: dashboard }
-    image: $DASHBOARD_IMAGE:$name
-    build:
-      context: ../dashboard
-      args: { NEXT_BASE_PATH: /t/$name/dashboard }
-    # Only the token file, never .env: the dashboard needs no API keys.
-    env_file: [testers/$name.env]
-    environment:
-      BACKEND_URL: http://backend-$name:$BACKEND_PORT
-    volumes: ["./data/$name/dashboard:/data"]
-    depends_on: [backend-$name]
-YML
-  fi
-} > "testers/$name.yml"
-
-{
-  cat <<CADDY
-# $name -- written by new_tester.sh
-@root-$name path /t/$name /t/$name/
-redir @root-$name /t/$name/dashboard{?query} 302
-
-CADDY
-  if [ -n "$with_dashboard" ]; then
-    cat <<CADDY
-# Prefix kept: the dashboard was built with basePath /t/$name/dashboard.
-handle /t/$name/dashboard* {
-	reverse_proxy dashboard-$name:3000 {
-		# Its auth cookie is https-only; say so even though this hop is http.
-		header_up X-Forwarded-Proto https
-	}
-}
-
-CADDY
-  fi
-  cat <<CADDY
-# Prefix stripped: the backend serves /api, /frames and /ws/glasses at its root.
-handle /t/$name/* {
-	uri strip_prefix /t/$name
-	reverse_proxy backend-$name:$BACKEND_PORT {
-		# A config reload (adding or removing a tester) must not drop this
-		# tester's glasses socket mid-demo. Streams have no idle timeout by
-		# default, so the phone's 10 s pings keep the socket up indefinitely.
-		stream_close_delay 2h
-	}
-}
-CADDY
-} > "routes/$name.caddy"
+yml_created=1
+tester_yml "$name" "$port" "$with_dashboard" "$with_phone" > "testers/$name.yml"
+route_created=1
+tester_route "$name" "$with_dashboard" "$with_phone" > "routes/$name.caddy"
 
 render_override
 
-# The backend image, on first use. (The dashboard image is per tester and is
-# built by `up` below, about a minute each.)
+# The backend image, on first use. (The dashboard and phone images are per
+# tester and are built by `up` below, about a minute each.)
 if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
   echo "building $IMAGE (first tester only, a few minutes) ..."
   compose build backend-image
@@ -134,6 +119,8 @@ docker run --rm --user 0 --entrypoint sh -v "$DEPLOY_DIR/data/$name:/data" "$IMA
 
 services=("backend-$name")
 [ -n "$with_dashboard" ] && services+=("dashboard-$name")
+[ -n "$with_phone" ] && services+=("phone-$name")
+containers_attempted=1
 compose up -d "${services[@]}"
 reload_caddy
 
@@ -152,6 +139,9 @@ tester:      $name
 host port:   $port  (127.0.0.1 only, the backend)
 token:       $token
 
+phone app (the link to send the tester; open it in Safari on the phone):
+  https://$DOMAIN/t/$name/app/?token=$token
+
 iOS app (glasses socket):
   wss://$DOMAIN/t/$name/ws/glasses?token=$token
 
@@ -163,6 +153,7 @@ backend API base (header X-Access-Token: <token>, or ?token=):
 
 health (no token needed):
   https://$DOMAIN/t/$name/healthz
+  https://$DOMAIN/t/$name/app/healthz
 
 check:
   curl -fsS https://$DOMAIN/t/$name/healthz
@@ -171,3 +162,5 @@ logs:
   docker compose logs -f backend-$name
 OUT
 [ -n "$with_dashboard" ] || echo "note: no dashboard/Dockerfile, so no dashboard for $name"
+[ -n "$with_phone" ] || echo "note: no phone/Dockerfile, so no phone app for $name"
+success=1
