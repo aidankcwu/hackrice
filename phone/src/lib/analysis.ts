@@ -35,7 +35,7 @@ export interface Analysis {
   clusters: Cluster[];
   /** "This week: cognition 94% of ceiling, body 96%". */
   summary: string;
-  /** "Biggest lever: caffeine before 12:30". */
+  /** "Biggest lever: caffeine before 13:30". */
   lever: string | null;
   /** What was not red but moved the ceilings: broken nights, sick days. */
   notes: string[];
@@ -50,24 +50,24 @@ const NIGHT: Partial<Record<RuleId, Metric>> = {
   caffeine: "deep",
   alcohol: "rem",
   last_meal: "deep",
-  nicotine: "deep",
-  movement: "bed",
+  exercise_timing: "bed",
   nap: "bed",
   screens: "bed",
   phone_in_bed: "bed",
-  sleep_window: "bed",
+  sleep_regularity: "bed",
 };
 
-/** How the day after tends to feel, in the rules' own terms (to verify, like their effects). */
+/** How the day after tends to feel, in the rules' own terms (assumed, like their effects). */
 const FEEL: Partial<Record<RuleId, string>> = {
-  caffeine: "slower recall, shorter patience",
-  last_meal: "heavier, slower mornings",
-  nicotine: "a flatter, edgier morning",
-  movement: "a slower start",
+  caffeine: "slower recall, shorter patience, and you won't feel it",
+  last_meal: "glucose about 18% higher through the night",
+  exercise_timing: "sleep onset up to 36 min later",
   nap: "a groggy start",
   screens: "a later body clock and a slower start",
   phone_in_bed: "a later body clock and a slower start",
-  sleep_window: "slower reactions and a thinner mood",
+  sleep_regularity: "a later melatonin onset",
+  // Only rooms over 1,200 ppm become bars, so the card carries the red line's range.
+  co2: "decisions 15 to 50% lower in that air",
   uv: "the heat load shows by evening",
 };
 

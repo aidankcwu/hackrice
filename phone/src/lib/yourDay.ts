@@ -4,6 +4,7 @@
  * peptide schedule. Nothing here is invented; every clause comes from a
  * finding, a contribution or an event on the day.
  */
+import { BAR_TITLE } from "./calendar";
 import type { Day } from "./month/types";
 import { reasonLabel, type Contribution, type Operating } from "./operating";
 import { clock, hm, peptideSchedule, WINDOWS, type Finding, type RuleId } from "./rules";
@@ -43,7 +44,10 @@ export function ceilingLines(op: Operating): CeilingLine[] {
 }
 
 /** Rules whose cost lands on tomorrow through tonight's sleep. */
-const THROUGH_SLEEP = new Set<RuleId>(["caffeine", "movement", "last_meal", "alcohol", "screens", "phone_in_bed", "nap"]);
+const THROUGH_SLEEP = new Set<RuleId>(["caffeine", "exercise_timing", "last_meal", "alcohol", "screens", "phone_in_bed", "nap"]);
+
+/** Reds the Calendar draws as bars (calendar.ts `barsFor`); day-level reds such as sleep debt have no bar. */
+const onCalendar = (rule: RuleId): boolean => rule === "alcohol" || rule in BAR_TITLE;
 
 export function yourDay(days: readonly Day[], index: number, findings: Finding[][], operating: Operating[]): string[] {
   const day = days[index];
@@ -68,7 +72,8 @@ export function yourDay(days: readonly Day[], index: number, findings: Finding[]
 
   // Last night, plainly.
   const s = day.sleep;
-  const woken = s.fragmented ? `, woken ${s.wakings.length} times, not your decision` : "";
+  const baby = s.wakings.filter((w) => w.baby).length;
+  const woken = baby ? `, woken ${baby} ${baby === 1 ? "time" : "times"} by the baby, not your decision` : s.fragmented ? `, woken ${s.wakings.length} times` : "";
   out.push(`Slept ${hm(s.minutes)} with ${s.deep} min deep${woken}.`);
   if (day.type === "sick") out.push("Sick day: the protocol is relaxed and nothing is marked red.");
 
@@ -86,7 +91,14 @@ export function yourDay(days: readonly Day[], index: number, findings: Finding[]
     if (THROUGH_SLEEP.has(f.rule)) out.push(`${what} cost tonight's sleep; tomorrow's cognition about ${Math.max(1, Math.round(cog))}% lower.`);
     else out.push(`${what}: ${firstClause(f.line)}.`);
   }
-  if (reds.size > named.length) out.push(`${reds.size - named.length} more ${reds.size - named.length === 1 ? "red" : "reds"} on the calendar.`);
+  // The rest, split by whether the Calendar has a bar to point at.
+  const rest = [...reds.keys()].filter((rule) => !named.some((group) => group[0].rule === rule));
+  const barred = rest.filter(onCalendar).length;
+  const unbarred = rest.length - barred;
+  const more = (n: number) => `${n} more ${n === 1 ? "red" : "reds"}`;
+  if (barred && unbarred) out.push(`${more(barred)} on the calendar and ${unbarred} more today.`);
+  else if (barred) out.push(`${more(barred)} on the calendar.`);
+  else if (unbarred) out.push(`${more(unbarred)} today.`);
 
   // Anything from an earlier day still weighing on today.
   const carried = merged(operating[index].contributions.filter((c) => c.finding.date !== day.date && c.finding.tone === "violation"), "cognition")[0];

@@ -15,6 +15,8 @@
     "rem": 112,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 60,
+    "rhr_bpm": 60,
     "seeded": true
    },
    "events": [
@@ -271,6 +273,8 @@
     "rem": 111,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 53,
+    "rhr_bpm": 60,
     "seeded": true
    },
    "events": [
@@ -428,26 +432,35 @@
      "seeded": true
     },
     {
+     "kind": "co2",
+     "start": 840,
+     "minutes": 90,
+     "ppm": 1050,
+     "label": "Meeting room",
+     "id": "2026-08-25-19",
+     "seeded": true
+    },
+    {
      "kind": "stress",
      "start": 848,
      "scene": "Meeting",
      "hr": 87,
      "resting": 58,
-     "id": "2026-08-25-19",
+     "id": "2026-08-25-20",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 871,
      "ml": 291,
-     "id": "2026-08-25-20",
+     "id": "2026-08-25-21",
      "seeded": true
     },
     {
      "kind": "asked",
      "start": 905,
      "line": "Was that tea or coffee?",
-     "id": "2026-08-25-21",
+     "id": "2026-08-25-22",
      "seeded": true
     },
     {
@@ -456,14 +469,14 @@
      "minutes": 50,
      "label": "Cycling",
      "vigorous": true,
-     "id": "2026-08-25-22",
+     "id": "2026-08-25-23",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 960,
      "ml": 269,
-     "id": "2026-08-25-23",
+     "id": "2026-08-25-24",
      "seeded": true
     },
     {
@@ -471,14 +484,14 @@
      "start": 1027,
      "minutes": 24,
      "label": "Commute",
-     "id": "2026-08-25-24",
+     "id": "2026-08-25-25",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1060,
      "ml": 299,
-     "id": "2026-08-25-25",
+     "id": "2026-08-25-26",
      "seeded": true
     },
     {
@@ -487,7 +500,7 @@
      "label": "Bean chili",
      "food": "whole",
      "thumb": "bowl",
-     "id": "2026-08-25-26",
+     "id": "2026-08-25-27",
      "seeded": true
     },
     {
@@ -495,21 +508,21 @@
      "start": 1080,
      "minutes": 32,
      "label": "Dinner with family",
-     "id": "2026-08-25-27",
+     "id": "2026-08-25-28",
      "seeded": true
     },
     {
      "kind": "sauna",
      "start": 1120,
      "minutes": 22,
-     "id": "2026-08-25-28",
+     "id": "2026-08-25-29",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1183,
      "ml": 295,
-     "id": "2026-08-25-29",
+     "id": "2026-08-25-30",
      "seeded": true
     },
     {
@@ -518,7 +531,7 @@
      "dose": "PM",
      "taken": true,
      "thumb": "pen",
-     "id": "2026-08-25-30",
+     "id": "2026-08-25-31",
      "seeded": true
     },
     {
@@ -526,7 +539,7 @@
      "start": 1208,
      "minutes": 22,
      "device": "phone",
-     "id": "2026-08-25-31",
+     "id": "2026-08-25-32",
      "seeded": true
     }
    ],
@@ -550,6 +563,8 @@
     "rem": 114,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 58,
+    "rhr_bpm": 58,
     "seeded": true
    },
    "events": [
@@ -813,6 +828,8 @@
     "rem": 101,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 60,
+    "rhr_bpm": 58,
     "seeded": true
    },
    "events": [
@@ -970,17 +987,26 @@
      "seeded": true
     },
     {
+     "kind": "co2",
+     "start": 840,
+     "minutes": 90,
+     "ppm": 1050,
+     "label": "Meeting room",
+     "id": "2026-08-27-19",
+     "seeded": true
+    },
+    {
      "kind": "water",
      "start": 872,
      "ml": 262,
-     "id": "2026-08-27-19",
+     "id": "2026-08-27-20",
      "seeded": true
     },
     {
      "kind": "asked",
      "start": 905,
      "line": "Was that tea or coffee?",
-     "id": "2026-08-27-20",
+     "id": "2026-08-27-21",
      "seeded": true
     },
     {
@@ -989,14 +1015,14 @@
      "minutes": 35,
      "label": "Run, 6 km",
      "vigorous": true,
-     "id": "2026-08-27-21",
+     "id": "2026-08-27-22",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 952,
      "ml": 328,
-     "id": "2026-08-27-22",
+     "id": "2026-08-27-23",
      "seeded": true
     },
     {
@@ -1004,14 +1030,14 @@
      "start": 1021,
      "minutes": 18,
      "label": "Commute",
-     "id": "2026-08-27-23",
+     "id": "2026-08-27-24",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1053,
      "ml": 326,
-     "id": "2026-08-27-24",
+     "id": "2026-08-27-25",
      "seeded": true
     },
     {
@@ -1020,7 +1046,7 @@
      "label": "Steak salad",
      "food": "whole",
      "thumb": "salad",
-     "id": "2026-08-27-25",
+     "id": "2026-08-27-26",
      "seeded": true
     },
     {
@@ -1028,21 +1054,21 @@
      "start": 1080,
      "minutes": 32,
      "label": "Dinner with family",
-     "id": "2026-08-27-26",
+     "id": "2026-08-27-27",
      "seeded": true
     },
     {
      "kind": "sauna",
      "start": 1125,
      "minutes": 19,
-     "id": "2026-08-27-27",
+     "id": "2026-08-27-28",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1183,
      "ml": 303,
-     "id": "2026-08-27-28",
+     "id": "2026-08-27-29",
      "seeded": true
     },
     {
@@ -1051,7 +1077,7 @@
      "dose": "PM",
      "taken": true,
      "thumb": "pen",
-     "id": "2026-08-27-29",
+     "id": "2026-08-27-30",
      "seeded": true
     },
     {
@@ -1059,7 +1085,7 @@
      "start": 1216,
      "minutes": 30,
      "device": "phone",
-     "id": "2026-08-27-30",
+     "id": "2026-08-27-31",
      "seeded": true
     }
    ],
@@ -1083,6 +1109,8 @@
     "rem": 108,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 55,
+    "rhr_bpm": 57,
     "seeded": true
    },
    "events": [
@@ -1363,6 +1391,8 @@
     "rem": 115,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 53,
+    "rhr_bpm": 56,
     "seeded": true
    },
    "events": [
@@ -1600,6 +1630,8 @@
     "rem": 107,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 57,
+    "rhr_bpm": 56,
     "seeded": true
    },
    "events": [
@@ -1809,6 +1841,8 @@
     "rem": 100,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 56,
+    "rhr_bpm": 58,
     "seeded": true
    },
    "events": [
@@ -2071,6 +2105,8 @@
     "rem": 105,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 56,
+    "rhr_bpm": 56,
     "seeded": true
    },
    "events": [
@@ -2221,10 +2257,19 @@
      "seeded": true
     },
     {
+     "kind": "co2",
+     "start": 840,
+     "minutes": 90,
+     "ppm": 1050,
+     "label": "Meeting room",
+     "id": "2026-09-01-18",
+     "seeded": true
+    },
+    {
      "kind": "water",
      "start": 863,
      "ml": 267,
-     "id": "2026-09-01-18",
+     "id": "2026-09-01-19",
      "seeded": true
     },
     {
@@ -2233,14 +2278,14 @@
      "minutes": 30,
      "label": "Mobility and core",
      "vigorous": false,
-     "id": "2026-09-01-19",
+     "id": "2026-09-01-20",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 953,
      "ml": 311,
-     "id": "2026-09-01-20",
+     "id": "2026-09-01-21",
      "seeded": true
     },
     {
@@ -2248,14 +2293,14 @@
      "start": 1023,
      "minutes": 23,
      "label": "Commute",
-     "id": "2026-09-01-21",
+     "id": "2026-09-01-22",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1055,
      "ml": 277,
-     "id": "2026-09-01-22",
+     "id": "2026-09-01-23",
      "seeded": true
     },
     {
@@ -2264,7 +2309,7 @@
      "label": "Steak salad",
      "food": "whole",
      "thumb": "salad",
-     "id": "2026-09-01-23",
+     "id": "2026-09-01-24",
      "seeded": true
     },
     {
@@ -2272,21 +2317,21 @@
      "start": 1080,
      "minutes": 35,
      "label": "Dinner with family",
-     "id": "2026-09-01-24",
+     "id": "2026-09-01-25",
      "seeded": true
     },
     {
      "kind": "sauna",
      "start": 1116,
      "minutes": 19,
-     "id": "2026-09-01-25",
+     "id": "2026-09-01-26",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1192,
      "ml": 297,
-     "id": "2026-09-01-26",
+     "id": "2026-09-01-27",
      "seeded": true
     },
     {
@@ -2294,7 +2339,7 @@
      "start": 1205,
      "minutes": 29,
      "device": "phone",
-     "id": "2026-09-01-27",
+     "id": "2026-09-01-28",
      "seeded": true
     },
     {
@@ -2303,7 +2348,7 @@
      "dose": "PM",
      "taken": true,
      "thumb": "pen",
-     "id": "2026-09-01-28",
+     "id": "2026-09-01-29",
      "seeded": true
     }
    ],
@@ -2327,6 +2372,8 @@
     "rem": 113,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 54,
+    "rhr_bpm": 60,
     "seeded": true
    },
    "events": [
@@ -2611,6 +2658,8 @@
       "baby": true
      }
     ],
+    "hrv_ms": 42,
+    "rhr_bpm": 59,
     "seeded": true
    },
    "events": [
@@ -2782,10 +2831,19 @@
      "seeded": true
     },
     {
+     "kind": "co2",
+     "start": 840,
+     "minutes": 90,
+     "ppm": 1050,
+     "label": "Meeting room",
+     "id": "2026-09-03-21",
+     "seeded": true
+    },
+    {
      "kind": "water",
      "start": 866,
      "ml": 283,
-     "id": "2026-09-03-21",
+     "id": "2026-09-03-22",
      "seeded": true
     },
     {
@@ -2794,14 +2852,14 @@
      "minutes": 45,
      "label": "Strength, 45 min",
      "vigorous": true,
-     "id": "2026-09-03-22",
+     "id": "2026-09-03-23",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 955,
      "ml": 267,
-     "id": "2026-09-03-23",
+     "id": "2026-09-03-24",
      "seeded": true
     },
     {
@@ -2809,14 +2867,14 @@
      "start": 1030,
      "minutes": 25,
      "label": "Commute",
-     "id": "2026-09-03-24",
+     "id": "2026-09-03-25",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1050,
      "ml": 272,
-     "id": "2026-09-03-25",
+     "id": "2026-09-03-26",
      "seeded": true
     },
     {
@@ -2825,7 +2883,7 @@
      "label": "Salmon and vegetables",
      "food": "whole",
      "thumb": "fish",
-     "id": "2026-09-03-26",
+     "id": "2026-09-03-27",
      "seeded": true
     },
     {
@@ -2833,21 +2891,21 @@
      "start": 1080,
      "minutes": 34,
      "label": "Dinner with family",
-     "id": "2026-09-03-27",
+     "id": "2026-09-03-28",
      "seeded": true
     },
     {
      "kind": "sauna",
      "start": 1123,
      "minutes": 19,
-     "id": "2026-09-03-28",
+     "id": "2026-09-03-29",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1192,
      "ml": 319,
-     "id": "2026-09-03-29",
+     "id": "2026-09-03-30",
      "seeded": true
     },
     {
@@ -2856,7 +2914,7 @@
      "dose": "PM",
      "taken": true,
      "thumb": "pen",
-     "id": "2026-09-03-30",
+     "id": "2026-09-03-31",
      "seeded": true
     },
     {
@@ -2864,7 +2922,7 @@
      "start": 1210,
      "minutes": 24,
      "device": "phone",
-     "id": "2026-09-03-31",
+     "id": "2026-09-03-32",
      "seeded": true
     }
    ],
@@ -2888,6 +2946,8 @@
     "rem": 114,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 60,
+    "rhr_bpm": 58,
     "seeded": true
    },
    "events": [
@@ -3144,6 +3204,8 @@
     "rem": 109,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 47,
+    "rhr_bpm": 56,
     "seeded": true
    },
    "events": [
@@ -3367,6 +3429,8 @@
     "rem": 97,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 46,
+    "rhr_bpm": 56,
     "seeded": true
    },
    "events": [
@@ -3607,6 +3671,8 @@
     "rem": 112,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 57,
+    "rhr_bpm": 58,
     "seeded": true
    },
    "events": [
@@ -3884,6 +3950,8 @@
     "rem": 107,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 57,
+    "rhr_bpm": 59,
     "seeded": true
    },
    "events": [
@@ -4041,10 +4109,19 @@
      "seeded": true
     },
     {
+     "kind": "co2",
+     "start": 840,
+     "minutes": 90,
+     "ppm": 1050,
+     "label": "Meeting room",
+     "id": "2026-09-08-19",
+     "seeded": true
+    },
+    {
      "kind": "water",
      "start": 866,
      "ml": 296,
-     "id": "2026-09-08-19",
+     "id": "2026-09-08-20",
      "seeded": true
     },
     {
@@ -4053,21 +4130,21 @@
      "minutes": 30,
      "label": "Mobility and core",
      "vigorous": false,
-     "id": "2026-09-08-20",
+     "id": "2026-09-08-21",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 953,
      "ml": 298,
-     "id": "2026-09-08-21",
+     "id": "2026-09-08-22",
      "seeded": true
     },
     {
      "kind": "nap",
      "start": 1000,
      "minutes": 45,
-     "id": "2026-09-08-22",
+     "id": "2026-09-08-23",
      "seeded": true
     },
     {
@@ -4075,14 +4152,14 @@
      "start": 1028,
      "minutes": 23,
      "label": "Commute",
-     "id": "2026-09-08-23",
+     "id": "2026-09-08-24",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1062,
      "ml": 317,
-     "id": "2026-09-08-24",
+     "id": "2026-09-08-25",
      "seeded": true
     },
     {
@@ -4091,7 +4168,7 @@
      "label": "Steak salad",
      "food": "whole",
      "thumb": "salad",
-     "id": "2026-09-08-25",
+     "id": "2026-09-08-26",
      "seeded": true
     },
     {
@@ -4099,21 +4176,21 @@
      "start": 1080,
      "minutes": 29,
      "label": "Dinner with family",
-     "id": "2026-09-08-26",
+     "id": "2026-09-08-27",
      "seeded": true
     },
     {
      "kind": "sauna",
      "start": 1116,
      "minutes": 18,
-     "id": "2026-09-08-27",
+     "id": "2026-09-08-28",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1182,
      "ml": 311,
-     "id": "2026-09-08-28",
+     "id": "2026-09-08-29",
      "seeded": true
     },
     {
@@ -4122,7 +4199,7 @@
      "dose": "PM",
      "taken": true,
      "thumb": "pen",
-     "id": "2026-09-08-29",
+     "id": "2026-09-08-30",
      "seeded": true
     },
     {
@@ -4130,7 +4207,7 @@
      "start": 1214,
      "minutes": 26,
      "device": "phone",
-     "id": "2026-09-08-30",
+     "id": "2026-09-08-31",
      "seeded": true
     }
    ],
@@ -4145,7 +4222,7 @@
   },
   {
    "date": "2026-09-09",
-   "type": "clean",
+   "type": "stale_room",
    "sleep": {
     "bed": -28,
     "wake": 388,
@@ -4154,6 +4231,8 @@
     "rem": 114,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 47,
+    "rhr_bpm": 58,
     "seeded": true
    },
    "events": [
@@ -4296,10 +4375,19 @@
      "seeded": true
     },
     {
+     "kind": "co2",
+     "start": 800,
+     "minutes": 220,
+     "ppm": 1280,
+     "label": "Office, windows shut",
+     "id": "2026-09-09-17",
+     "seeded": true
+    },
+    {
      "kind": "sedentary",
      "start": 805,
      "minutes": 100,
-     "id": "2026-09-09-17",
+     "id": "2026-09-09-18",
      "seeded": true
     },
     {
@@ -4307,7 +4395,7 @@
      "start": 805,
      "minutes": 190,
      "device": "computer",
-     "id": "2026-09-09-18",
+     "id": "2026-09-09-19",
      "seeded": true
     },
     {
@@ -4316,21 +4404,21 @@
      "scene": "Meeting",
      "hr": 88,
      "resting": 58,
-     "id": "2026-09-09-19",
+     "id": "2026-09-09-20",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 864,
      "ml": 317,
-     "id": "2026-09-09-20",
+     "id": "2026-09-09-21",
      "seeded": true
     },
     {
      "kind": "asked",
      "start": 905,
      "line": "Was that tea or coffee?",
-     "id": "2026-09-09-21",
+     "id": "2026-09-09-22",
      "seeded": true
     },
     {
@@ -4339,14 +4427,14 @@
      "minutes": 45,
      "label": "Strength, 45 min",
      "vigorous": true,
-     "id": "2026-09-09-22",
+     "id": "2026-09-09-23",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 962,
      "ml": 283,
-     "id": "2026-09-09-23",
+     "id": "2026-09-09-24",
      "seeded": true
     },
     {
@@ -4354,14 +4442,14 @@
      "start": 1023,
      "minutes": 26,
      "label": "Commute",
-     "id": "2026-09-09-24",
+     "id": "2026-09-09-25",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1052,
      "ml": 307,
-     "id": "2026-09-09-25",
+     "id": "2026-09-09-26",
      "seeded": true
     },
     {
@@ -4370,7 +4458,7 @@
      "label": "Bean chili",
      "food": "whole",
      "thumb": "bowl",
-     "id": "2026-09-09-26",
+     "id": "2026-09-09-27",
      "seeded": true
     },
     {
@@ -4378,14 +4466,14 @@
      "start": 1080,
      "minutes": 32,
      "label": "Dinner with family",
-     "id": "2026-09-09-27",
+     "id": "2026-09-09-28",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1190,
      "ml": 291,
-     "id": "2026-09-09-28",
+     "id": "2026-09-09-29",
      "seeded": true
     },
     {
@@ -4393,7 +4481,7 @@
      "start": 1206,
      "minutes": 23,
      "device": "phone",
-     "id": "2026-09-09-29",
+     "id": "2026-09-09-30",
      "seeded": true
     },
     {
@@ -4402,7 +4490,7 @@
      "dose": "PM",
      "taken": true,
      "thumb": "pen",
-     "id": "2026-09-09-30",
+     "id": "2026-09-09-31",
      "seeded": true
     }
    ],
@@ -4447,6 +4535,8 @@
       "baby": true
      }
     ],
+    "hrv_ms": 51,
+    "rhr_bpm": 58,
     "seeded": true
    },
    "events": [
@@ -4625,10 +4715,19 @@
      "seeded": true
     },
     {
+     "kind": "co2",
+     "start": 840,
+     "minutes": 90,
+     "ppm": 1050,
+     "label": "Meeting room",
+     "id": "2026-09-10-22",
+     "seeded": true
+    },
+    {
      "kind": "water",
      "start": 866,
      "ml": 267,
-     "id": "2026-09-10-22",
+     "id": "2026-09-10-23",
      "seeded": true
     },
     {
@@ -4637,7 +4736,7 @@
      "scene": "Meeting",
      "hr": 85,
      "resting": 58,
-     "id": "2026-09-10-23",
+     "id": "2026-09-10-24",
      "seeded": true
     },
     {
@@ -4646,14 +4745,14 @@
      "minutes": 50,
      "label": "Cycling",
      "vigorous": true,
-     "id": "2026-09-10-24",
+     "id": "2026-09-10-25",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 960,
      "ml": 308,
-     "id": "2026-09-10-25",
+     "id": "2026-09-10-26",
      "seeded": true
     },
     {
@@ -4661,14 +4760,14 @@
      "start": 1022,
      "minutes": 21,
      "label": "Commute",
-     "id": "2026-09-10-26",
+     "id": "2026-09-10-27",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1050,
      "ml": 305,
-     "id": "2026-09-10-27",
+     "id": "2026-09-10-28",
      "seeded": true
     },
     {
@@ -4677,7 +4776,7 @@
      "label": "Salmon and vegetables",
      "food": "whole",
      "thumb": "fish",
-     "id": "2026-09-10-28",
+     "id": "2026-09-10-29",
      "seeded": true
     },
     {
@@ -4685,21 +4784,21 @@
      "start": 1080,
      "minutes": 35,
      "label": "Dinner with family",
-     "id": "2026-09-10-29",
+     "id": "2026-09-10-30",
      "seeded": true
     },
     {
      "kind": "sauna",
      "start": 1125,
      "minutes": 22,
-     "id": "2026-09-10-30",
+     "id": "2026-09-10-31",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1192,
      "ml": 326,
-     "id": "2026-09-10-31",
+     "id": "2026-09-10-32",
      "seeded": true
     },
     {
@@ -4708,7 +4807,7 @@
      "dose": "PM",
      "taken": true,
      "thumb": "pen",
-     "id": "2026-09-10-32",
+     "id": "2026-09-10-33",
      "seeded": true
     },
     {
@@ -4716,7 +4815,7 @@
      "start": 1219,
      "minutes": 20,
      "device": "phone",
-     "id": "2026-09-10-33",
+     "id": "2026-09-10-34",
      "seeded": true
     }
    ],
@@ -4740,6 +4839,8 @@
     "rem": 107,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 54,
+    "rhr_bpm": 58,
     "seeded": true
    },
    "events": [
@@ -5026,6 +5127,8 @@
     "rem": 113,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 46,
+    "rhr_bpm": 58,
     "seeded": true
    },
    "events": [
@@ -5194,6 +5297,8 @@
     "rem": 97,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 47,
+    "rhr_bpm": 66,
     "seeded": true
    },
    "events": [
@@ -5322,6 +5427,8 @@
     "rem": 97,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 52,
+    "rhr_bpm": 57,
     "seeded": true
    },
    "events": [
@@ -5578,6 +5685,8 @@
     "rem": 99,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 53,
+    "rhr_bpm": 59,
     "seeded": true
    },
    "events": [
@@ -5742,10 +5851,19 @@
      "seeded": true
     },
     {
+     "kind": "co2",
+     "start": 840,
+     "minutes": 90,
+     "ppm": 1050,
+     "label": "Meeting room",
+     "id": "2026-09-15-20",
+     "seeded": true
+    },
+    {
      "kind": "water",
      "start": 870,
      "ml": 264,
-     "id": "2026-09-15-20",
+     "id": "2026-09-15-21",
      "seeded": true
     },
     {
@@ -5754,7 +5872,7 @@
      "scene": "Meeting",
      "hr": 82,
      "resting": 58,
-     "id": "2026-09-15-21",
+     "id": "2026-09-15-22",
      "seeded": true
     },
     {
@@ -5763,14 +5881,14 @@
      "minutes": 30,
      "label": "Mobility and core",
      "vigorous": false,
-     "id": "2026-09-15-22",
+     "id": "2026-09-15-23",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 956,
      "ml": 284,
-     "id": "2026-09-15-23",
+     "id": "2026-09-15-24",
      "seeded": true
     },
     {
@@ -5778,14 +5896,14 @@
      "start": 1025,
      "minutes": 25,
      "label": "Commute",
-     "id": "2026-09-15-24",
+     "id": "2026-09-15-25",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1061,
      "ml": 287,
-     "id": "2026-09-15-25",
+     "id": "2026-09-15-26",
      "seeded": true
     },
     {
@@ -5794,7 +5912,7 @@
      "label": "Salmon and vegetables",
      "food": "whole",
      "thumb": "fish",
-     "id": "2026-09-15-26",
+     "id": "2026-09-15-27",
      "seeded": true
     },
     {
@@ -5802,21 +5920,21 @@
      "start": 1080,
      "minutes": 34,
      "label": "Dinner with family",
-     "id": "2026-09-15-27",
+     "id": "2026-09-15-28",
      "seeded": true
     },
     {
      "kind": "sauna",
      "start": 1116,
      "minutes": 20,
-     "id": "2026-09-15-28",
+     "id": "2026-09-15-29",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1185,
      "ml": 323,
-     "id": "2026-09-15-29",
+     "id": "2026-09-15-30",
      "seeded": true
     },
     {
@@ -5824,7 +5942,7 @@
      "start": 1205,
      "minutes": 27,
      "device": "phone",
-     "id": "2026-09-15-30",
+     "id": "2026-09-15-31",
      "seeded": true
     },
     {
@@ -5833,7 +5951,7 @@
      "dose": "PM",
      "taken": true,
      "thumb": "pen",
-     "id": "2026-09-15-31",
+     "id": "2026-09-15-32",
      "seeded": true
     }
    ],
@@ -5857,6 +5975,8 @@
     "rem": 103,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 52,
+    "rhr_bpm": 59,
     "seeded": true
    },
    "events": [
@@ -6141,6 +6261,8 @@
       "baby": true
      }
     ],
+    "hrv_ms": 44,
+    "rhr_bpm": 57,
     "seeded": true
    },
    "events": [
@@ -6312,19 +6434,28 @@
      "seeded": true
     },
     {
+     "kind": "co2",
+     "start": 840,
+     "minutes": 90,
+     "ppm": 1050,
+     "label": "Meeting room",
+     "id": "2026-09-17-21",
+     "seeded": true
+    },
+    {
      "kind": "stress",
      "start": 849,
      "scene": "Meeting",
      "hr": 82,
      "resting": 58,
-     "id": "2026-09-17-21",
+     "id": "2026-09-17-22",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 864,
      "ml": 265,
-     "id": "2026-09-17-22",
+     "id": "2026-09-17-23",
      "seeded": true
     },
     {
@@ -6333,14 +6464,14 @@
      "minutes": 30,
      "label": "Mobility and core",
      "vigorous": false,
-     "id": "2026-09-17-23",
+     "id": "2026-09-17-24",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 953,
      "ml": 278,
-     "id": "2026-09-17-24",
+     "id": "2026-09-17-25",
      "seeded": true
     },
     {
@@ -6348,14 +6479,14 @@
      "start": 1020,
      "minutes": 22,
      "label": "Commute",
-     "id": "2026-09-17-25",
+     "id": "2026-09-17-26",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1051,
      "ml": 330,
-     "id": "2026-09-17-26",
+     "id": "2026-09-17-27",
      "seeded": true
     },
     {
@@ -6364,7 +6495,7 @@
      "label": "Salmon and vegetables",
      "food": "whole",
      "thumb": "fish",
-     "id": "2026-09-17-27",
+     "id": "2026-09-17-28",
      "seeded": true
     },
     {
@@ -6372,21 +6503,21 @@
      "start": 1080,
      "minutes": 25,
      "label": "Dinner with family",
-     "id": "2026-09-17-28",
+     "id": "2026-09-17-29",
      "seeded": true
     },
     {
      "kind": "sauna",
      "start": 1121,
      "minutes": 18,
-     "id": "2026-09-17-29",
+     "id": "2026-09-17-30",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1185,
      "ml": 320,
-     "id": "2026-09-17-30",
+     "id": "2026-09-17-31",
      "seeded": true
     },
     {
@@ -6395,7 +6526,7 @@
      "dose": "PM",
      "taken": true,
      "thumb": "pen",
-     "id": "2026-09-17-31",
+     "id": "2026-09-17-32",
      "seeded": true
     },
     {
@@ -6403,7 +6534,7 @@
      "start": 1218,
      "minutes": 21,
      "device": "phone",
-     "id": "2026-09-17-32",
+     "id": "2026-09-17-33",
      "seeded": true
     }
    ],
@@ -6427,6 +6558,8 @@
     "rem": 114,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 60,
+    "rhr_bpm": 59,
     "seeded": true
    },
    "events": [
@@ -6730,6 +6863,8 @@
     "rem": 62,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 41.5,
+    "rhr_bpm": 64.8,
     "seeded": true
    },
    "events": [
@@ -6974,6 +7109,8 @@
     "rem": 95,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 59,
+    "rhr_bpm": 59,
     "seeded": true
    },
    "events": [
@@ -7200,6 +7337,8 @@
     "rem": 95,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 52,
+    "rhr_bpm": 59,
     "seeded": true
    },
    "events": [
@@ -7480,6 +7619,8 @@
     "rem": 122,
     "fragmented": false,
     "wakings": [],
+    "hrv_ms": 57,
+    "rhr_bpm": 56,
     "seeded": true
    },
    "events": [
@@ -7630,10 +7771,19 @@
      "seeded": true
     },
     {
+     "kind": "co2",
+     "start": 840,
+     "minutes": 90,
+     "ppm": 1050,
+     "label": "Meeting room",
+     "id": "2026-09-22-18",
+     "seeded": true
+    },
+    {
      "kind": "water",
      "start": 863,
      "ml": 322,
-     "id": "2026-09-22-18",
+     "id": "2026-09-22-19",
      "seeded": true
     },
     {
@@ -7642,28 +7792,28 @@
      "minutes": 35,
      "label": "Run, 6 km",
      "vigorous": true,
-     "id": "2026-09-22-19",
+     "id": "2026-09-22-20",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 959,
      "ml": 289,
-     "id": "2026-09-22-20",
+     "id": "2026-09-22-21",
      "seeded": true
     },
     {
      "kind": "caffeine",
      "start": 970,
      "drink": "coffee",
-     "id": "2026-09-22-21",
+     "id": "2026-09-22-22",
      "seeded": true
     },
     {
      "kind": "whispered",
      "start": 971,
      "line": "That coffee lands in tonight's sleep.",
-     "id": "2026-09-22-22",
+     "id": "2026-09-22-23",
      "seeded": true
     },
     {
@@ -7671,14 +7821,14 @@
      "start": 1024,
      "minutes": 19,
      "label": "Commute",
-     "id": "2026-09-22-23",
+     "id": "2026-09-22-24",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1059,
      "ml": 261,
-     "id": "2026-09-22-24",
+     "id": "2026-09-22-25",
      "seeded": true
     },
     {
@@ -7687,7 +7837,7 @@
      "label": "Chicken, rice and greens",
      "food": "whole",
      "thumb": "plate",
-     "id": "2026-09-22-25",
+     "id": "2026-09-22-26",
      "seeded": true
     },
     {
@@ -7695,21 +7845,21 @@
      "start": 1080,
      "minutes": 24,
      "label": "Dinner with family",
-     "id": "2026-09-22-26",
+     "id": "2026-09-22-27",
      "seeded": true
     },
     {
      "kind": "sauna",
      "start": 1118,
      "minutes": 21,
-     "id": "2026-09-22-27",
+     "id": "2026-09-22-28",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1183,
      "ml": 323,
-     "id": "2026-09-22-28",
+     "id": "2026-09-22-29",
      "seeded": true
     },
     {
@@ -7718,7 +7868,7 @@
      "dose": "PM",
      "taken": true,
      "thumb": "pen",
-     "id": "2026-09-22-29",
+     "id": "2026-09-22-30",
      "seeded": true
     },
     {
@@ -7726,7 +7876,7 @@
      "start": 1213,
      "minutes": 25,
      "device": "phone",
-     "id": "2026-09-22-30",
+     "id": "2026-09-22-31",
      "seeded": true
     }
    ],

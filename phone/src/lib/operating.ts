@@ -103,7 +103,7 @@ export function reasonLabel(f: Finding, onDate: string): string {
   const when = f.date === onDate ? "" : ` ${relativeDay(f.date, onDate)}`;
   const at = f.eventId ? ` at ${clockOf(f.time)}` : "";
   const name = SHORT[f.rule];
-  if (f.rule === "sleep_fragmented" || f.rule === "sleep_short" || f.rule === "sleep_deep") {
+  if (f.rule === "postpartum" || f.rule === "sleep_debt" || f.rule === "sleep_deep") {
     return f.date === onDate ? `${name} last night` : `${name}${when}`;
   }
   return `${name}${at}${when}`;
@@ -111,32 +111,33 @@ export function reasonLabel(f: Finding, onDate: string): string {
 
 const SHORT: Record<RuleId, string> = {
   caffeine: "Coffee",
-  movement: "Late workout",
-  last_meal: "Late dinner",
-  eating_window: "Early first meal",
-  food_quality: "Processed food",
-  skipped_meal: "Skipped meal",
+  sleep_debt: "Sleep debt",
   alcohol: "Drinks",
-  nicotine: "Nicotine",
+  exercise_timing: "Late workout",
+  last_meal: "Late dinner",
   screens: "Screens after 21:30",
   phone_in_bed: "Phone in bed",
+  co2: "Stale air",
+  sleep_regularity: "Bedtime drift",
+  social_jetlag: "Social jetlag",
+  morning_light: "No morning light",
+  nature: "Little daylight",
+  conversation: "Little time with people",
+  hydration: "Under 2 L of water",
   nap: "Late nap",
+  sauna: "Sauna",
+  postpartum: "Broken sleep",
+  skipped_meal: "Skipped meal",
+  sick: "Sick day",
+  peptide: "Missed dose",
+  uv: "Midday sun",
+  eating_window: "Early first meal",
+  food_quality: "Processed food",
   sedentary: "Long seated block",
-  sauna_cold: "Cold close to bed",
   stress: "Stress spike",
   air: "Bad air",
-  uv: "Midday sun",
-  peptide: "Missed dose",
-  sleep_window: "Late bedtime",
-  sleep_short: "Short sleep",
-  sleep_fragmented: "Broken sleep",
   sleep_deep: "Little deep sleep",
   wake_anchor: "Wake time off",
-  morning_light: "No morning light",
-  daylight: "Little daylight",
-  people: "Little time with people",
-  water: "Under 2 L of water",
-  sick: "Sick day",
 };
 
 /**

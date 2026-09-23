@@ -8,7 +8,7 @@
  */
 import type { Day, MonthEvent } from "./month/types";
 import { sunTimes } from "./month/sun";
-import { HOUSTON, WINDOWS, clock, daylightMinutes, peakUv, type Finding, type RuleId } from "./rules";
+import { HOUSTON, WINDOWS, caffeineCutoff, clock, daylightMinutes, hm, peakUv, type Finding, type RuleId } from "./rules";
 
 export type LaneId = "sleep" | "light" | "caffeine" | "food" | "move" | "screens" | "peptide";
 
@@ -55,11 +55,26 @@ export interface Bar {
   time: number;
   /** "Coffee 16:10". */
   label: string;
-  /** What broke the rule: "Caffeine after 12:30." */
+  /** What broke the rule: "Caffeine after 13:30." */
   what: string;
-  /** The rule itself, no effect: "last caffeine 10 h before bed." */
+  /** The rule itself, no effect: "last caffeine 9 h before bed." */
   ruleText: string;
 }
+
+const T = {
+  wake: clock(WINDOWS.wake),
+  bed: clock(WINDOWS.sleepStart),
+  caffeine: clock(WINDOWS.caffeineEnd),
+  caffeineStrong: clock(WINDOWS.caffeineEndStrong),
+  eatFrom: clock(WINDOWS.eatingStart),
+  eatTo: clock(WINDOWS.eatingEnd),
+  moveBy: clock(WINDOWS.moveBy),
+  moveRed: clock(WINDOWS.moveAmberUntil),
+  napFrom: clock(WINDOWS.napStart),
+  napTo: clock(WINDOWS.napEnd),
+  napLate: clock(WINDOWS.napLate),
+  screensOff: clock(WINDOWS.screensOff),
+} as const;
 
 export interface DayPlan {
   date: string;
@@ -94,7 +109,6 @@ export function shortDate(date: string): string {
 // ---------------------------------------------------------------------------
 
 const DRINK: Record<"coffee" | "tea" | "energy_drink", string> = { coffee: "Coffee", tea: "Tea", energy_drink: "Energy drink" };
-const DEVICE: Record<"computer" | "phone", string> = { computer: "Computer", phone: "Phone" };
 
 type Of<K extends MonthEvent["kind"]> = Extract<MonthEvent, { kind: K }>;
 
@@ -111,6 +125,7 @@ export function planFor(days: readonly Day[], index: number, findings: Finding[]
   const { events } = day;
   const passed = (t: number) => day.until >= t;
   const violated = (rule: RuleId) => findings.some((f) => f.rule === rule && f.tone === "violation");
+  const watched = (rule: RuleId) => findings.some((f) => f.rule === rule && f.tone === "watch");
   const sun = sunTimes(day.date, HOUSTON.lat, HOUSTON.lon, HOUSTON.utcOffset);
   const of = <K extends MonthEvent["kind"]>(kind: K) => events.filter((e): e is Of<K> => e.kind === kind);
 
@@ -125,10 +140,10 @@ export function planFor(days: readonly Day[], index: number, findings: Finding[]
     if (state === "missed") misses.push({ lane, time: end, label: `${label}, missed` });
   };
 
-  // Sleep: up by 6:30 (within the half hour), in bed by 22:30 (known once the night is recorded).
+  // Sleep: up by 6:30 (within the half hour), in bed within 30 min of 22:30 (known once the night is recorded).
   const wakeOk = Math.abs(day.sleep.wake - WINDOWS.wake) <= 30;
-  judge("sleep", 0, WINDOWS.wake, "Asleep until 6:30, up by then", wakeOk, !wakeOk);
-  judge("sleep", WINDOWS.sleepStart, 1440, "In bed by 22:30", !!next && passed(1440) && !violated("sleep_window"), false);
+  judge("sleep", 0, WINDOWS.wake, `Asleep until ${T.wake}, up by then`, wakeOk, !wakeOk);
+  judge("sleep", WINDOWS.sleepStart, 1440, `In bed by ${T.bed}`, !!next && passed(1440) && !watched("sleep_regularity"), false);
   for (const w of day.sleep.wakings) {
     if (w.start >= 0) ticks.push({ lane: "sleep", time: w.start, kind: "waking", label: `Awake ${w.minutes} min at ${clock(w.start)}${w.baby ? ", the baby" : ""}` });
   }
@@ -139,20 +154,20 @@ export function planFor(days: readonly Day[], index: number, findings: Finding[]
   // Light: morning light in the first hour, then 60 min of daylight by sunset.
   const outdoor = of("outdoor");
   const morning = outdoor.some((e) => e.sunlight && e.minutes >= 10 && e.start <= day.sleep.wake + 60);
-  judge("light", WINDOWS.wake, WINDOWS.wake + 60, "Morning light, 6:30 to 7:30", morning, !morning);
+  judge("light", WINDOWS.wake, WINDOWS.wake + 60, `Morning light, ${T.wake} to ${clock(WINDOWS.wake + 60)}`, morning, !morning);
   const daylight = daylightMinutes(day, sun.sunset);
   const enough = daylight >= WINDOWS.daylightTarget;
-  judge("light", WINDOWS.wake + 60, sun.sunset, `60 min of daylight by sunset ${clock(sun.sunset)}, ${daylight} min`, enough, !enough);
+  judge("light", WINDOWS.wake + 60, sun.sunset, `${WINDOWS.daylightTarget} min of daylight by sunset ${clock(sun.sunset)}, ${daylight} min`, enough, !enough);
   for (const e of outdoor) ticks.push({ lane: "light", time: e.start, kind: "event", minutes: e.minutes, label: `Outside ${e.minutes} min at ${clock(e.start)}` });
 
-  // Caffeine: every cup inside 6:30 to 12:30.
+  // Caffeine: every cup inside 6:30 to 13:30, 9 h before bed (an energy drink or a double by 9:30).
   const caffeine = of("caffeine");
-  judge("caffeine", WINDOWS.wake, WINDOWS.caffeineEnd, "Caffeine 6:30 to 12:30", !violated("caffeine") && passed(WINDOWS.caffeineEnd), false);
+  judge("caffeine", WINDOWS.wake, WINDOWS.caffeineEnd, `Caffeine ${T.wake} to ${T.caffeine}`, !violated("caffeine") && passed(WINDOWS.caffeineEnd), false);
   for (const e of caffeine) {
-    if (e.start <= WINDOWS.caffeineEnd) ticks.push({ lane: "caffeine", time: e.start, kind: "event", label: `${DRINK[e.drink]} at ${clock(e.start)}` });
+    if (e.start <= caffeineCutoff(e.drink, e.strength)) ticks.push({ lane: "caffeine", time: e.start, kind: "event", label: `${DRINK[e.drink]} at ${clock(e.start)}` });
   }
 
-  // Food: every meal inside 10:00 to 18:30; a skipped meal is a miss, not a bar.
+  // Food: every meal inside 10:00 to 19:00; a skipped meal is a miss, not a bar.
   const meals = of("meal");
   const skipped = of("skipped_meal").length > 0;
   const early = meals.some((m) => m.start < WINDOWS.eatingStart);
@@ -160,7 +175,7 @@ export function planFor(days: readonly Day[], index: number, findings: Finding[]
     "food",
     WINDOWS.eatingStart,
     WINDOWS.eatingEnd,
-    "Meals 10:00 to 18:30",
+    `Meals ${T.eatFrom} to ${T.eatTo}`,
     meals.length > 0 && !skipped && !early && !violated("last_meal") && passed(WINDOWS.eatingEnd),
     skipped,
   );
@@ -168,18 +183,18 @@ export function planFor(days: readonly Day[], index: number, findings: Finding[]
     if (e.start <= WINDOWS.eatingEnd) ticks.push({ lane: "food", time: e.start, kind: "event", label: `Meal at ${clock(e.start)}` });
   }
 
-  // Move: a workout finished by 16:30. Sauna and cold are ticks here too.
+  // Move: anything vigorous finished by 18:30, 4 h before bed; moderate any time. Sauna and cold are ticks here too.
   const workouts = of("workout");
-  judge("move", WINDOWS.wake, WINDOWS.moveBy, "Movement done by 16:30", workouts.some((w) => w.start + w.minutes <= WINDOWS.moveBy), workouts.length === 0);
+  judge("move", WINDOWS.wake, WINDOWS.moveBy, `Vigorous done by ${T.moveBy}`, workouts.some((w) => !w.vigorous || w.start + w.minutes <= WINDOWS.moveBy), workouts.length === 0);
   for (const e of workouts) {
-    if (e.start < WINDOWS.lateWorkout || !e.vigorous) ticks.push({ lane: "move", time: e.start, kind: "event", label: `${e.label.split(",")[0]}, ${e.minutes} min at ${clock(e.start)}` });
+    if (!e.vigorous || e.start + e.minutes <= WINDOWS.moveAmberUntil) ticks.push({ lane: "move", time: e.start, kind: "event", label: `${e.label.split(",")[0]}, ${e.minutes} min at ${clock(e.start)}` });
   }
   for (const e of [...of("sauna"), ...of("cold")]) {
     ticks.push({ lane: "move", time: e.start, kind: "event", label: `${e.kind === "sauna" ? "Sauna" : "Cold plunge"}, ${e.minutes} min at ${clock(e.start)}` });
   }
 
   // Screens: off from 21:30.
-  judge("screens", WINDOWS.screensOff, 1440, "Screens off from 21:30", !violated("screens") && !violated("phone_in_bed") && passed(1440), false);
+  judge("screens", WINDOWS.screensOff, 1440, `Screens off from ${T.screensOff}`, !watched("screens") && !violated("phone_in_bed") && passed(1440), false);
 
   // Peptide: each dose inside its window.
   for (const dose of ["AM", "PM"] as const) {
@@ -190,11 +205,11 @@ export function planFor(days: readonly Day[], index: number, findings: Finding[]
     if (e?.taken) ticks.push({ lane: "peptide", time: e.start, kind: "event", label: `${dose} dose at ${clock(e.start)}` });
   }
 
-  return { date: day.date, sick, segments, ticks, misses: sick ? [] : misses, bars: sick ? [] : barsFor(day, next, findings) };
+  return { date: day.date, sick, segments, ticks, misses: sick ? [] : misses, bars: sick ? [] : barsFor(day, findings) };
 }
 
 /** Violations as bars. Drinks are one bar at the last drink. */
-function barsFor(day: Day, next: Day | undefined, findings: Finding[]): Bar[] {
+function barsFor(day: Day, findings: Finding[]): Bar[] {
   const byId = new Map(day.events.map((e) => [e.id, e]));
   const bars: Bar[] = [];
   const add = (f: Finding, label: string, what: string, ruleText: string) =>
@@ -206,31 +221,26 @@ function barsFor(day: Day, next: Day | undefined, findings: Finding[]): Bar[] {
     const at = clock(f.time);
     switch (f.rule) {
       case "caffeine":
-        if (e?.kind === "caffeine") add(f, `${DRINK[e.drink]} ${at}`, "Caffeine after 12:30.", "last caffeine 10 h before bed.");
+        if (e?.kind === "caffeine") {
+          const strong = e.drink === "energy_drink" || e.strength === "double";
+          add(f, `${DRINK[e.drink]} ${at}`, `Caffeine after ${strong ? T.caffeineStrong : T.caffeine}.`, strong ? "an energy drink or a double 13 h before bed." : "last caffeine 9 h before bed.");
+        }
         break;
       case "last_meal":
-        if (e?.kind === "meal") add(f, `${mealWord(e.start)} ${at}`, `${mealWord(e.start)} after 18:30.`, "last meal 4 h before bed.");
+        if (e?.kind === "meal") add(f, `${mealWord(e.start)} ${at}`, `${mealWord(e.start)} after ${T.eatTo}.`, "last meal 3 to 4 h before bed.");
         break;
-      case "movement":
-        if (e?.kind === "workout") add(f, `${e.label.split(",")[0]} ${at}`, `Hard exercise at ${at}.`, "vigorous movement done by 16:30.");
-        break;
-      case "nicotine":
-        add(f, `Nicotine ${at}`, `Nicotine at ${at}.`, "no nicotine, at any hour.");
-        break;
-      case "screens":
-        if (e?.kind === "screen") add(f, `${DEVICE[e.device]} ${at}`, `${DEVICE[e.device]} on after 21:30.`, "screens off at 21:30.");
+      case "exercise_timing":
+        if (e?.kind === "workout") add(f, `${e.label.split(",")[0]} ${at}`, `Vigorous exercise ending after ${T.moveRed}.`, `vigorous exercise done by ${T.moveBy}, 4 h before bed.`);
         break;
       case "phone_in_bed":
         add(f, `Phone in bed ${at}`, `Phone in bed at ${at}.`, "the phone stays out of the bedroom.");
         break;
       case "nap":
-        add(f, `Nap ${at}`, `Nap at ${at}.`, "naps between 13:00 and 15:00, 20 min at most.");
+        add(f, `Nap ${at}`, `Nap at ${at}.`, `naps between ${T.napFrom} and ${T.napTo}, ${WINDOWS.napMax} min at most.`);
         break;
-      case "sleep_window": {
-        const bed = next ? clock(1440 + next.sleep.bed) : at;
-        add(f, `Bed ${bed}`, `In bed at ${bed}.`, "in bed by 22:30.");
+      case "co2":
+        if (e?.kind === "co2") add(f, `${e.label} ${at}`, `${e.ppm.toLocaleString("en-US")} ppm of CO2 for ${hm(e.minutes)}.`, `rooms under ${WINDOWS.co2Amber} ppm; over ${WINDOWS.co2Red.toLocaleString("en-US")} is red.`);
         break;
-      }
       case "uv":
         if (e?.kind === "outdoor") {
           const uv = peakUv(day.date, e.start, e.start + e.minutes);
@@ -261,14 +271,13 @@ function barsFor(day: Day, next: Day | undefined, findings: Finding[]): Bar[] {
 
 /** Bar titles for the Analysis cards, one per rule. */
 export const BAR_TITLE: Partial<Record<RuleId, string>> = {
-  caffeine: "Caffeine after 12:30",
+  caffeine: `Caffeine after ${T.caffeine}`,
   alcohol: "Alcohol",
-  nicotine: "Nicotine",
-  last_meal: "Last meal after 18:30",
-  movement: "Hard exercise after 19:00",
-  screens: "Screens after 21:30",
+  last_meal: `Last meal after ${T.eatTo}`,
+  exercise_timing: `Vigorous exercise ending after ${T.moveRed}`,
+  screens: `Screens after ${T.screensOff}`,
   phone_in_bed: "Phone in bed",
-  nap: "Nap after 16:00",
-  sleep_window: "In bed after 23:00",
-  uv: "Direct sun at UV 8 or more",
+  nap: `Nap after ${T.napLate}`,
+  co2: `Room over ${WINDOWS.co2Red.toLocaleString("en-US")} ppm`,
+  uv: `Direct sun at UV ${WINDOWS.uvHigh} or more`,
 };

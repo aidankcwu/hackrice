@@ -21,7 +21,8 @@ export type DayType =
   | "crying_baby"
   | "sick"
   | "social_evening"
-  | "midday_sun";
+  | "midday_sun"
+  | "stale_room";
 
 export type FoodClass = "whole" | "fast_food" | "sweets" | "ultra_processed";
 
@@ -37,7 +38,7 @@ interface Span extends Base {
 }
 
 export type MonthEvent =
-  | (Base & { kind: "caffeine"; drink: "coffee" | "tea" | "energy_drink" })
+  | (Base & { kind: "caffeine"; drink: "coffee" | "tea" | "energy_drink"; strength?: "single" | "double" })
   | (Base & { kind: "meal"; label: string; food: FoodClass; thumb: string })
   | (Base & { kind: "skipped_meal"; meal: "breakfast" | "lunch" | "dinner" })
   | (Base & { kind: "alcohol"; drinks: number; label: string })
@@ -57,6 +58,8 @@ export type MonthEvent =
   | (Span & { kind: "drive"; label: string })
   | (Span & { kind: "work"; label: string })
   | (Base & { kind: "stress"; scene: string; hr: number; resting: number })
+  /** Indoor CO2 seen by the glasses' room sensor, ppm, over the span. */
+  | (Base & { kind: "co2"; ppm: number; minutes: number; label: string })
   | (Base & {
       kind: "mind_check";
       ms: number;
@@ -91,6 +94,10 @@ export interface Sleep {
   rem: number;
   fragmented: boolean;
   wakings: NightWaking[];
+  /** Overnight heart-rate variability, ms; null when the watch was off. */
+  hrv_ms: number | null;
+  /** Overnight resting heart rate, bpm; null when the watch was off. */
+  rhr_bpm: number | null;
   seeded: true;
 }
 

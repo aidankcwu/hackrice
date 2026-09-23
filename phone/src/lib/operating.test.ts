@@ -26,7 +26,7 @@ function cleanDay(date: string, extra: EventDraft[] = []): Day {
   return {
     date,
     type: "clean",
-    sleep: { bed: -90, wake: 390, minutes: 470, deep: 100, rem: 110, fragmented: false, wakings: [], seeded: true },
+    sleep: { bed: -90, wake: 390, minutes: 480, deep: 100, rem: 110, fragmented: false, wakings: [], hrv_ms: 56, rhr_bpm: 58, seeded: true },
     events,
     aqi: 40,
     weather: { high_f: 90, summary: "Clear" },
@@ -83,7 +83,8 @@ describe("the two ceilings", () => {
     const series = days.map((_, i) => operatingFor(days, i, findings).cognition);
     const worst = Math.min(...series);
     const worstAt = series.indexOf(worst);
-    expect(worst).toBeLessThan(90);
+    // Coffee 3%, dinner 1% and three drinks at 2% each land on the morning after.
+    expect(worst).toBeLessThan(92);
     // From the worst day on, every day is at least as good as the one before, ending at 100.
     for (let i = worstAt + 1; i < series.length; i++) expect(series[i]).toBeGreaterThanOrEqual(series[i - 1]);
     expect(series.at(-1)).toBe(100);

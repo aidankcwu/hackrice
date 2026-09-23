@@ -2,12 +2,13 @@
 
 import { Sheet } from "@/components/Sheet";
 import { RULES, type Rule } from "@/lib/rules";
+import { sourceLine } from "@/lib/sources";
 
 const ORDER: Rule["id"][] = [
-  "caffeine", "last_meal", "eating_window", "skipped_meal", "food_quality", "alcohol", "nicotine",
-  "movement", "sedentary", "nap", "screens", "phone_in_bed", "sleep_window", "sleep_short",
-  "sleep_deep", "sleep_fragmented", "wake_anchor", "morning_light", "daylight", "people", "water",
-  "peptide", "sauna_cold", "stress", "air", "sick",
+  "caffeine", "sleep_debt", "alcohol", "exercise_timing", "last_meal", "screens", "phone_in_bed", "co2",
+  "sleep_regularity", "social_jetlag", "morning_light", "nature", "conversation", "hydration", "nap", "sauna",
+  "postpartum", "skipped_meal", "eating_window", "food_quality", "sedentary", "stress", "air", "uv", "peptide",
+  "sleep_deep", "wake_anchor", "sick",
 ];
 
 function when(rule: Rule): string {
@@ -21,13 +22,20 @@ function size(rule: Rule): string {
   const parts: string[] = [];
   if (rule.effect.cognition) parts.push(`about ${Math.round(rule.effect.cognition * 1000) / 10}% of cognition`);
   if (rule.effect.body) parts.push(`about ${Math.round(rule.effect.body * 1000) / 10}% of body`);
-  return parts.length ? `Costs ${parts.join(" and ")}.` : "Drawn, not scored: the cost shows up in the night that follows.";
+  const sleep = rule.sleepMinutes ? ` About ${rule.sleepMinutes} min of sleep that night.` : "";
+  return parts.length ? `Costs ${parts.join(" and ")}.${sleep}` : `Drawn, not scored.${sleep}`;
+}
+
+function claim(rule: Rule): string {
+  if (rule.claim === "measured") return "Measured";
+  if (rule.claim === "assumed") return "Assumed";
+  return "Protocol default";
 }
 
 /**
  * Every rule in plain words: the window, what breaking it does, how much it
- * costs each ceiling, when it lands and how fast it fades. Every number is a
- * working estimate until its source is checked.
+ * costs each ceiling, when it lands and how fast it fades, its grade and the
+ * studies behind it.
  */
 export function HowSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
@@ -37,7 +45,10 @@ export function HowSheet({ open, onClose }: { open: boolean; onClose: () => void
         when it is broken. Costs multiply across the day, carry into the days after while they fade, and a clean
         streak brings both back to 100.
       </p>
-      <p className="type-caption m-0 mt-2 text-muted">Every number here is an estimate. Sources are marked to verify.</p>
+      <p className="type-caption m-0 mt-2 text-muted">
+        Grade A: a meta-analysis or a large trial. B: a controlled study or a large cohort. C: a protocol default with no
+        study behind the number. Measured: a study gives the number. Assumed: we scaled it.
+      </p>
       <ul className="m-0 mt-4 list-none p-0">
         {ORDER.map((id) => {
           const rule = RULES[id];
@@ -47,8 +58,12 @@ export function HowSheet({ open, onClose }: { open: boolean; onClose: () => void
               <p className="type-secondary m-0 mt-1 text-muted">{rule.window}</p>
               <p className="type-secondary m-0 mt-2 text-text">{rule.consequence}</p>
               <p className="type-caption m-0 mt-2 text-muted tabular-nums">
-                {size(rule)} {when(rule)} Source: {rule.source}.
+                {size(rule)} {when(rule)} Grade {rule.grade}, {claim(rule).toLowerCase()}.
               </p>
+              {rule.assumed ? <p className="type-caption m-0 mt-1 text-muted">{rule.assumed}.</p> : null}
+              {rule.sources.length ? (
+                <p className="type-caption m-0 mt-1 text-muted">{rule.sources.map(sourceLine).join("; ")}</p>
+              ) : null}
             </li>
           );
         })}

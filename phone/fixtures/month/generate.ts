@@ -9,6 +9,14 @@
  * least once. A day's type shapes its own events and the night that follows
  * it (the next day's `sleep`): late caffeine thins the next night's deep
  * sleep, drinks cut REM, a crying-baby day's own night is fragmented.
+ *
+ * Every night also carries overnight HRV and resting heart rate. The baseline
+ * draws from its own generator (seeded by the date), so adding it left every
+ * other draw in place; drinks, short sleep, a sick day and a crying-baby night
+ * move it by fixed amounts (Grosicki 2026 for the drinks).
+ *
+ * Office air: a meeting room at 1,050 ppm on Tuesdays and Thursdays, and one
+ * stale_room day with the windows shut at 1,280 ppm. Neither draws randomness.
  */
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -20,11 +28,11 @@ const COUNT = 30;
 /** The last day is today; its record stops here (20:15). */
 const TODAY_UNTIL = 20 * 60 + 15;
 
-/** Index 0 is 2026-08-24, a Monday. A perfect day never follows a red day, so it reads 97 to 100. */
+/** Index 0 is 2026-08-24, a Monday. A perfect day never follows a red day; only the sleep debt behind it moves its ceilings. */
 const TYPES: DayType[] = [
   "clean", "clean", "late_caffeine", "clean", "perfect", "clean", "clean",
   "skipped_lunch", "clean", "late_dinner", "crying_baby", "late_workout", "social_evening", "perfect",
-  "late_caffeine", "late_nap", "clean", "crying_baby", "screens_in_bed", "travel", "sick",
+  "late_caffeine", "late_nap", "stale_room", "crying_baby", "screens_in_bed", "travel", "sick",
   "clean", "clean", "late_caffeine", "crying_baby", "drinking_night", "late_caffeine", "midday_sun",
   "perfect", "late_caffeine",
 ];
@@ -151,6 +159,8 @@ function buildEvents(date: string, type: DayType, r: () => number): { events: Dr
       if (r() < 0.45) b.add({ kind: "stress", start: at(14, b.int(5, 40)), scene: "Meeting", hr: b.int(82, 90), resting: 58 });
       b.add({ kind: "screen", start: at(9, 5), minutes: 170, device: "computer" });
       b.add({ kind: "screen", start: at(13, 25), minutes: 190, device: "computer" });
+      // Tuesday and Thursday afternoons in the meeting room, door closed.
+      if (wd === 1 || wd === 3) b.add({ kind: "co2", start: at(14, 0), minutes: 90, ppm: 1050, label: "Meeting room" });
     } else {
       b.add({ kind: "outdoor", start: at(9, b.int(30, 50)), minutes: b.int(45, 70), label: "Park with the stroller", sunlight: true });
       b.add({ kind: "conversation", start: at(9, b.int(30, 50)), minutes: b.int(35, 55), label: "Walk with Maya" });
@@ -289,12 +299,18 @@ function buildEvents(date: string, type: DayType, r: () => number): { events: Dr
       b.add({ kind: "conversation", start: at(14, 0), minutes: 40, label: "Market with Maya" });
       break;
 
+    case "stale_room":
+      // A clean day in an office with the windows shut all afternoon.
+      b.add({ kind: "co2", start: at(13, 20), minutes: 220, ppm: 1280, label: "Office, windows shut" });
+      break;
+
     case "clean":
       break;
   }
 
-  // Asked: a question to close a gap, some days.
-  if (type === "clean" && r() < 0.35) b.add({ kind: "asked", start: at(15, 5), line: "Was that tea or coffee?" });
+  // Asked: a question to close a gap, some days. A stale_room day is a clean day
+  // with bad air, so it keeps the same draw.
+  if ((type === "clean" || type === "stale_room") && r() < 0.35) b.add({ kind: "asked", start: at(15, 5), line: "Was that tea or coffee?" });
 
   const held_back = type === "perfect" ? b.int(2, 4) : b.int(5, 14);
   return { events: b.events, held_back };
@@ -304,7 +320,33 @@ function buildEvents(date: string, type: DayType, r: () => number): { events: Dr
 // The night that ends on a day's morning
 // ---------------------------------------------------------------------------
 
-function buildSleep(prevType: DayType, ownType: DayType, r: () => number): Sleep {
+/** Sleep under 6.5 h counts as short for the overnight HRV. */
+const SHORT_SLEEP = 390;
+
+/**
+ * Overnight HRV (ms) and resting heart rate (bpm). The baseline comes from a
+ * generator of its own so the day's main stream is untouched; each effect is a
+ * fixed step: per drink the night before rhr +2.6 and hrv −3.5 (Grosicki 2026),
+ * short sleep hrv −6, a sick day hrv −12 and rhr +6, a crying-baby night hrv −4.
+ */
+function heart(date: string, minutes: number, ownType: DayType, prevDrinks: number): { hrv_ms: number; rhr_bpm: number } {
+  const h = rng(seedOf(`${date}:heart`));
+  const k = (lo: number, hi: number) => lo + Math.floor(h() * (hi - lo + 1));
+  let hrv = k(52, 60);
+  let rhr = k(56, 60);
+  hrv -= 3.5 * prevDrinks;
+  rhr += 2.6 * prevDrinks;
+  if (minutes < SHORT_SLEEP) hrv -= 6;
+  if (ownType === "sick") {
+    hrv -= 12;
+    rhr += 6;
+  }
+  if (ownType === "crying_baby") hrv -= 4;
+  const tenth = (n: number) => Math.round(n * 10) / 10;
+  return { hrv_ms: tenth(hrv), rhr_bpm: tenth(rhr) };
+}
+
+function buildSleep(date: string, prevType: DayType, ownType: DayType, prevDrinks: number, r: () => number): Sleep {
   const j = (lo: number, hi: number) => lo + Math.floor(r() * (hi - lo + 1));
   let bed = -90 + j(-8, 10); // 22:30 is 90 min before midnight
   let wake = 390 + j(-6, 12); // 06:30
@@ -375,6 +417,7 @@ function buildSleep(prevType: DayType, ownType: DayType, r: () => number): Sleep
 
   const awake = wakings.reduce((sum, w) => sum + w.minutes, 0);
   const minutes = wake - bed - latency - awake;
+  const { hrv_ms, rhr_bpm } = heart(date, minutes, ownType, prevDrinks);
   return {
     bed,
     wake,
@@ -383,8 +426,15 @@ function buildSleep(prevType: DayType, ownType: DayType, r: () => number): Sleep
     rem: Math.max(45, rem),
     fragmented: wakings.length > 0,
     wakings,
+    hrv_ms,
+    rhr_bpm,
     seeded: true,
   };
+}
+
+/** Standard drinks logged on a day; they land in the night that follows. */
+function drinksOn(events: MonthEvent[]): number {
+  return events.reduce((sum, e) => (e.kind === "alcohol" ? sum + e.drinks : sum), 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -395,10 +445,12 @@ const SUMMARIES = ["Humid, sun", "Afternoon storms", "Clear and hot", "Partly cl
 
 function buildMonth(): Month {
   const dates = isoDates(END, COUNT);
-  const days: Day[] = dates.map((date, i) => {
+  const days: Day[] = [];
+  dates.forEach((date, i) => {
     const r = rng(seedOf(date));
     const type = TYPES[i];
-    const sleep = buildSleep(i > 0 ? TYPES[i - 1] : "clean", type, r);
+    const prev = i > 0 ? days[i - 1] : null;
+    const sleep = buildSleep(date, prev ? prev.type : "clean", type, prev ? drinksOn(prev.events) : 0, r);
     const last = i === COUNT - 1;
     const { events, held_back } = buildEvents(date, type, r);
     const until = last ? TODAY_UNTIL : 1440;
@@ -407,7 +459,7 @@ function buildMonth(): Month {
       .sort((a, b) => a.start - b.start)
       .map((e, n) => ({ ...e, id: `${date}-${String(n).padStart(2, "0")}`, seeded: true }) as MonthEvent);
     const aqi = date === "2026-09-09" ? 118 : 30 + Math.floor(r() * 28);
-    return {
+    days.push({
       date,
       type,
       sleep,
@@ -417,7 +469,7 @@ function buildMonth(): Month {
       held_back,
       until,
       seeded: true,
-    };
+    });
   });
   return { city: "Houston", lat: 29.7604, lon: -95.3698, utc_offset: -5, days, seeded: true };
 }
