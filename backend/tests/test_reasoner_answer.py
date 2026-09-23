@@ -39,8 +39,13 @@ async def test_answer_timeout_finalises_and_releases_slot(tmp_path):
     row = PendingQuestion(id="q_deadbeef", created_t=1, question="Question?",
                           status="answered", answer_text="yes", answer_t=2)
     db.insert_question(row)
+    before = asyncio.all_tasks()
     assert reasoner.try_answer(row, "yes", 2)
-    await asyncio.sleep(.03)
+    (answer,) = asyncio.all_tasks() - before
+    # Await the answer task itself, not a 30 ms sleep: Windows' loop clock ticks
+    # every 15.6 ms, so the sleep and the .01 s deadline could land in the same
+    # tick and the check ran before the timeout path finished (~1 run in 15).
+    await answer
     assert not reasoner.busy
     stored = db.get_question(row.id)
     assert stored.parsed["note"] == "parse failed: TimeoutError"

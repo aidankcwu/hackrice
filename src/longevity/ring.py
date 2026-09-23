@@ -18,6 +18,7 @@ Sizing: at 1 Hz with ~40 KB JPEGs (§2.2), a 90 s window is ~90 entries and ~3.5
 from __future__ import annotations
 
 import heapq
+import math
 import threading
 import time
 from dataclasses import dataclass
@@ -30,6 +31,10 @@ from .tick import FRAME_TTL_S, ref_is_live
 # real time, which happens under `replay --speed 10`, and it exists so a wrong
 # timestamp can never grow the buffer without limit.
 DEFAULT_MAX_FRAMES = 256
+
+# Headroom over `ttl_s * fps_hint` when the cap is derived from a frame rate, so jitter
+# around the nominal rate does not cap-evict frames the TTL would still keep.
+FPS_CAP_SLACK = 16
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +66,8 @@ class RingStats:
     evicted_cap: int
     hits: int
     misses: int
+    max_frames: int
+    fps_hint: float | None
 
 
 class FrameRing:
@@ -81,10 +88,22 @@ class FrameRing:
     """
 
     def __init__(
-        self, ttl_s: float = FRAME_TTL_S, max_frames: int = DEFAULT_MAX_FRAMES
+        self,
+        ttl_s: float = FRAME_TTL_S,
+        max_frames: int | None = None,
+        *,
+        fps_hint: float | None = None,
     ) -> None:
+        """The cap is `max_frames` if given; else `ceil(ttl_s * fps_hint) + 16`, so the
+        ring holds a full TTL of frames at that rate (7 fps -> 646); else 256."""
         self.ttl_s = ttl_s
-        self.max_frames = max_frames
+        self.fps_hint = fps_hint
+        if max_frames is not None:
+            self._max_frames = max_frames
+        elif fps_hint is not None:
+            self._max_frames = math.ceil(ttl_s * fps_hint) + FPS_CAP_SLACK
+        else:
+            self._max_frames = DEFAULT_MAX_FRAMES
         self._frames: dict[str, StoredFrame] = {}
         self._order: list[tuple[float, str]] = []  # min-heap by capture time
         self._bytes = 0
@@ -94,6 +113,11 @@ class FrameRing:
         self._evicted_cap = 0
         self._hits = 0
         self._misses = 0
+
+    @property
+    def max_frames(self) -> int:
+        """The effective cap, fixed at construction."""
+        return self._max_frames
 
     def _is_live(self, ref: str, t: float, now: float) -> bool:
         """§12.3's 90 s window, taken from `tick.ref_is_live` so the rule has one home.
@@ -218,6 +242,8 @@ class FrameRing:
                 evicted_cap=self._evicted_cap,
                 hits=self._hits,
                 misses=self._misses,
+                max_frames=self._max_frames,
+                fps_hint=self.fps_hint,
             )
 
     @property

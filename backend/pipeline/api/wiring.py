@@ -8,8 +8,11 @@ import logging
 import time
 from collections import deque
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
+from ..actions.autopilot import Autopilot, config_act_veto
+from ..actions.handlers import make_act_sender
 from ..actions.speech import SpeechLimiter, default_speak_fn, set_speak_fn, spoken
 from ..actions.questions import QuestionManager
 from ..bus import TickBus
@@ -22,7 +25,9 @@ from ..frames import FrameStore, InMemoryFrameStore
 from ..gate.gate import TriggerGate
 from ..gate.triggers import CallableBiometricFeed, default_triggers
 from ..models import Tick
+from ..protocol.adherence import AdherenceMatcher
 from ..reasoner.client import make_answer_parser, make_client
+from ..reasoner.factory import build_reasoner_extras
 from ..reasoner.reasoner import Reasoner
 from ..scoring.scorer import Scorer
 from ..seed.generate import resting_hr_for, seed_database, seven_day_summary
@@ -49,6 +54,13 @@ class Clock:
         return self.wall_start + (tick_t - self.sim_start_t) / self.speed
 
 
+#: A session opens on the first tick of a stream and closes once the ticks have
+#: stopped for this long -- the wearer took the glasses off, or the phone
+#: stopped sending. Longer than a dropped frame or two, shorter than a pause
+#: anyone would sit through in a demo.
+AUTO_SESSION_IDLE_S = 25.0
+
+
 class Pipeline:
     """The live objects and lifecycle of one pipeline instance."""
 
@@ -58,7 +70,9 @@ class Pipeline:
                  reasoner: Reasoner, episodes: EpisodeBuilder, gate: TriggerGate,
                  questions: QuestionManager, source: SimSource | None,
                  conversation: ConversationAgent | None = None,
-                 capture=None, clock: Clock | None = None) -> None:
+                 capture=None, clock: Clock | None = None,
+                 adherence: AdherenceMatcher | None = None,
+                 autopilot: Autopilot | None = None) -> None:
         self.settings = settings
         self.source_name = source_name
         self.reasoner_mode = reasoner_mode
@@ -76,6 +90,11 @@ class Pipeline:
         self.conversation = conversation
         self.source = source
         self.capture = capture
+        #: Closes dose windows on the tick clock (PLAN 2.2); its sightings
+        #: arrive through ``reasoner.on_evidence``.
+        self.adherence = adherence
+        #: The two rule-based acts (PLAN 4.1), checked on the tick clock.
+        self.autopilot = autopilot
         # Live capture uses wall time unchanged; simulation scales its own clock.
         if clock is None:
             assert source is not None
@@ -84,10 +103,11 @@ class Pipeline:
         self.clock = clock
         self.biometrics_start_t = clock.sim_start_t
         self.started_at: float | None = None
+        self.background_tasks: set = set()
         self.last_tick: Tick | None = None
         self.sessions = SessionManager(
             db, gate, speech, episodes,
-            lambda: self.last_tick.t if self.last_tick is not None else time.time(),
+            self._session_clock,
             reasoner=reasoner,
         )
         self._tasks: list[asyncio.Task[None]] = []
@@ -101,6 +121,86 @@ class Pipeline:
         self._last_tick_wall: float | None = None
         self._t1_error_snapshot = (0, 0)
         self._t1_snapshot_at = time.monotonic()
+        #: ``speak_fn.warm`` from the capture branch: opens the ElevenLabs
+        #: connection at start so the first cue of the demo does not also pay
+        #: the TLS handshake. Never raises, spends no credit.
+        self._speech_warm = None
+
+    def _session_clock(self) -> float:
+        """The tick clock, advanced by real elapsed time when ticks have stalled.
+
+        Sessions are stamped on the tick clock so a recap's window lines up
+        with the ticks inside it. But ``last_tick.t`` freezes the instant the
+        stream stalls, and a session started and ended across a stall was
+        stamped with the same moment twice -- a zero-length window, and a log
+        entry covering nothing. Seen live: the phone stopped sending while its
+        socket stayed open, and an eight-second session recorded 0.0 s.
+        """
+
+        tick = self.last_tick
+        if tick is None or self._last_tick_wall is None:
+            return self.clock.wall_to_tick(time.time())
+        drift = max(0.0, time.time() - self._last_tick_wall)
+        return tick.t + drift * self.clock.speed
+
+    def spawn_recap(self, session_id: str) -> None:
+        """Generate one session's recap on a task. Never raises into the caller."""
+
+        from ..recap.builder import build_recap  # local: recap imports scoring
+
+        async def generate() -> None:
+            try:
+                await build_recap(self, session_id=session_id, speak=False)
+            except Exception:  # noqa: BLE001 -- a failed recap must not be silent
+                log.exception("session %s ended but its recap failed", session_id)
+
+        try:
+            task = asyncio.create_task(generate())
+        except RuntimeError:  # pragma: no cover - no loop (unit tests)
+            log.error("cannot generate a recap for %s: no running loop", session_id)
+            return
+        self.background_tasks.add(task)
+        task.add_done_callback(self.background_tasks.discard)
+
+    def _auto_session_open(self) -> None:
+        """Open a session on the first tick of a stream, if none is open.
+
+        The glasses are the control: a session is exactly the stretch the
+        wearer was streaming. Nobody should have to remember a button on a
+        dashboard, and in a demo nobody does.
+        """
+
+        if not getattr(self.settings, "auto_session", True):
+            return
+        try:
+            if self.sessions.current() is not None:
+                return
+            session = self.sessions.start(time.strftime("%H:%M", time.localtime()))
+            log.info("session: %s auto-started on the first frame", session.id)
+        except Exception:  # pragma: no cover - defensive
+            log.exception("could not auto-start a session")
+
+    def _auto_session_close(self) -> None:
+        """Close the open session once the frames have stopped, and recap it."""
+
+        if not getattr(self.settings, "auto_session", True):
+            return
+        if self._last_tick_wall is None:
+            return
+        if time.time() - self._last_tick_wall < AUTO_SESSION_IDLE_S:
+            return
+        try:
+            if self.sessions.current() is None:
+                return
+            ended = self.sessions.end()
+        except Exception:  # pragma: no cover - defensive
+            log.exception("could not auto-end the session")
+            return
+        if ended is None:
+            return
+        log.info("session: %s auto-ended after %.0f s without a frame",
+                 ended.id, AUTO_SESSION_IDLE_S)
+        self.spawn_recap(ended.id)
 
     async def start(self) -> None:
         if self._tasks:
@@ -117,22 +217,46 @@ class Pipeline:
 
         async def downstream() -> None:
             async for tick in downstream_sub:
-                self._ai_window.append((tick.t, tick.ai is not None))
+                # Publish-on-landing re-sends the newest tick with its ai block
+                # once Gemini lands (capture.bridge): same tick, now with eyes.
+                resend = self.last_tick is not None and tick.tick_id == self.last_tick.tick_id
                 self._last_tick_wall = time.time()
+                self.last_tick = tick
+                self._auto_session_open()
+                if self._ai_window and self._ai_window[-1][0] == tick.t:
+                    # A re-send of the newest tick with its ai attached
+                    # (publish-on-landing): one tick, not two, in the coverage.
+                    self._ai_window[-1] = (tick.t, tick.ai is not None)
+                else:
+                    self._ai_window.append((tick.t, tick.ai is not None))
                 while self._ai_window and tick.t - self._ai_window[0][0] > 60.0:
                     self._ai_window.popleft()
-                self.db.insert_tick(tick)
+                self.db.insert_tick(tick)  # INSERT OR REPLACE: the re-send wins
+                # The episode builder knows a re-send by its tick_id and only
+                # adds the new evidence; the gate replaces it in its window.
                 self.episodes.on_tick(tick)
                 self.gate.on_tick(tick)
-                self.questions.expire(tick.t)
+                if self.adherence is not None:
+                    self.adherence.on_tick(tick.t)
+                if self.autopilot is not None:
+                    self.autopilot.on_tick(tick.t)
+                if not resend:
+                    self.questions.expire(tick.t)
                 self.last_tick = tick
                 self._score_event.set()
-                if (tick.seq + 1) % 30 == 0:
+                if not resend and (tick.seq + 1) % 30 == 0:
                     stats = self.db.stats()
                     log.info("status: ticks=%d decisions=%d ai_coverage=%.2f",
                              stats["tick_count"], stats["decision_count"],
                              stats["ai_tick_count"] / stats["tick_count"]
                              if stats["tick_count"] else 0.0)
+
+        async def auto_session_watchdog() -> None:
+            while True:
+                await asyncio.sleep(5.0)
+                if self._stopping:
+                    return
+                self._auto_session_close()
 
         async def score_periodically() -> None:
             while True:
@@ -152,8 +276,15 @@ class Pipeline:
         self._tasks = [
             asyncio.create_task(downstream(), name="pipeline-downstream"),
             asyncio.create_task(score_periodically(), name="pipeline-scorer"),
+            asyncio.create_task(auto_session_watchdog(), name="pipeline-auto-session"),
         ]
         self.questions.start()
+        # Only on the real glasses: replay and webcam runs (and their tests)
+        # have no phone to speak to and must not reach the network.
+        if self._speech_warm is not None and self.source_name == "glasses":
+            warm = asyncio.create_task(self._speech_warm(), name="speech-warm")
+            self.background_tasks.add(warm)
+            warm.add_done_callback(self.background_tasks.discard)
         if self.capture is not None:
             await self.capture.start()
         else:
@@ -186,6 +317,7 @@ class Pipeline:
 
     def status(self) -> dict[str, object]:
         stats = self.db.stats()
+        capture_stats = self.capture.stats() if self.capture is not None else None
         tick_count = stats["tick_count"]
         session = self.sessions.current()
         session_status = None
@@ -197,6 +329,9 @@ class Pipeline:
             }
         result: dict[str, object] = {
             "demo_mode": self.settings.demo_mode,
+            # GATE_READS_WATCH: whether the gate and the episode builder read
+            # the tick's watch block (the startup "perception:" line says it too).
+            "gate_reads_watch": self.settings.capture.gate_reads_watch,
             "source": self.source_name,
             "uptime_s": max(0.0, time.time() - self.started_at)
             if self.started_at is not None else 0.0,
@@ -215,14 +350,29 @@ class Pipeline:
             "conversation": (None if self.conversation is None
                              else self.conversation.stats()),
             "speech_spoken": len(spoken),
-            "health": self._health(),
+            "health": self._health(capture_stats),
             "session": session_status,
         }
-        if self.capture is not None:
-            result["capture"] = self.capture.stats()
+        if capture_stats is not None:
+            # watcher / labeler / watcher_error pass through from the bridge
+            # unchanged; the stale threshold rides alongside so the dashboard
+            # judges heartbeat age by the same number the health rule uses.
+            hb, dormant_hb = self._heartbeat_settings()
+            result["capture"] = {
+                **capture_stats,
+                "labeler_stale_after_s": labeler_stale_after_s(
+                    capture_stats.get("labeler"), hb, dormant_hb),
+            }
         return result
 
-    def _health(self) -> dict[str, object]:
+    def _heartbeat_settings(self) -> tuple[float, float]:
+        cs = getattr(self.capture, "capture_settings", None)
+        return (float(getattr(cs, "labeler_heartbeat_s", DEFAULT_HEARTBEAT_S)),
+                float(getattr(cs, "labeler_dormant_heartbeat_s", DEFAULT_DORMANT_HEARTBEAT_S)))
+
+    def _health(self, capture_stats: dict | None = None) -> dict[str, object]:
+        if capture_stats is None and self.capture is not None:
+            capture_stats = self.capture.stats()
         phone = self.capture.link.stats() if self.capture is not None else None
         # Ticks stopped -> the window is history, not "now". Wall clock on purpose:
         # this is about whether the process is alive, not about the tick clock.
@@ -241,29 +391,86 @@ class Pipeline:
             speech: dict[str, object] = {"mode": "console"}
         else:
             speech = self.capture.speech_stats()
+        hb, dormant_hb = self._heartbeat_settings()
         problems = health_problems(
             source=self.source_name, phone=phone, ai_coverage=coverage,
             ai_ticks=len(window), tagger=tagger, t1=t1,
             t1_error_snapshot=self._t1_error_snapshot, speech=speech,
-            ticks_stale=ticks_stale,
+            ticks_stale=ticks_stale, capture=capture_stats,
+            heartbeat_s=hb, dormant_heartbeat_s=dormant_hb,
         )
         now = time.monotonic()
         if now - self._t1_snapshot_at >= 300:
             self._t1_error_snapshot = (int(t1["dropped_error"]), int(t1["dropped_timeout"]))
             self._t1_snapshot_at = now
+        # Problem names stay bare so they match one remedy each; any text a
+        # problem carries goes here, keyed by its name.
+        details: dict[str, str] = {}
+        if "watcher_unavailable" in problems and capture_stats:
+            details["watcher_unavailable"] = str(capture_stats["watcher_error"])
         return {"phone": phone, "t0": t0, "t1": t1, "speech": speech,
-                "ok": not problems, "problems": problems}
+                "ok": not problems, "problems": problems, "details": details}
+
+
+#: CaptureSettings defaults, for a capture object that does not expose its settings.
+DEFAULT_HEARTBEAT_S = 60.0
+DEFAULT_DORMANT_HEARTBEAT_S = 300.0
+#: The tagger's hard ceiling when its stats do not report one (vlm.DEFAULT_CEILING_S).
+DEFAULT_WAKE_CEILING_MS = 3000.0
+
+
+def labeler_stale_after_s(labeler, heartbeat_s: float = DEFAULT_HEARTBEAT_S,
+                          dormant_heartbeat_s: float = DEFAULT_DORMANT_HEARTBEAT_S) -> float:
+    """Heartbeat age past which the labeler counts as stale: two missed beats
+    at the cadence its current mode runs (dormant beats slower)."""
+    mode = labeler.get("mode") if isinstance(labeler, dict) else None
+    return 2 * (dormant_heartbeat_s if mode == "dormant" else heartbeat_s)
+
+
+def _num(value) -> float | None:
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def _labeler_problems(capture: dict, tagger, heartbeat_s: float,
+                      dormant_heartbeat_s: float) -> list[str]:
+    """With the watcher on an absent `ai` means nothing was worth a call, so
+    coverage is meaningless; heartbeat age and wake latency say whether the
+    labeler is alive (docs/PERCEPTION.md "Tick")."""
+    labeler = capture.get("labeler")
+    labeler = labeler if isinstance(labeler, dict) else {}
+    tagger = tagger if isinstance(tagger, dict) else {}
+    problems: list[str] = []
+    by_kind = tagger.get("by_kind")
+    started = (sum(int(v.get("started", 0)) for v in by_kind.values() if isinstance(v, dict))
+               if isinstance(by_kind, dict) else 0)
+    started = started or int(_num(labeler.get("frames_sent_per_hour")) or 0)
+    age = _num(labeler.get("last_heartbeat_age_s"))
+    if (started > 0 and age is not None
+            and age > labeler_stale_after_s(labeler, heartbeat_s, dormant_heartbeat_s)):
+        problems.append("labeler_heartbeat_stale")
+    wake_ms = _num(labeler.get("last_wake_latency_ms"))
+    ceiling_s = _num(tagger.get("ceiling_s"))
+    ceiling_ms = ceiling_s * 1000 if ceiling_s is not None else DEFAULT_WAKE_CEILING_MS
+    if wake_ms is not None and wake_ms > ceiling_ms:
+        problems.append("labeler_wake_slow")
+    return problems
 
 
 def health_problems(*, source: str, phone, ai_coverage: float, ai_ticks: int,
                     tagger, t1, t1_error_snapshot, speech,
-                    ticks_stale: bool = False) -> list[str]:
+                    ticks_stale: bool = False, capture: dict | None = None,
+                    heartbeat_s: float = DEFAULT_HEARTBEAT_S,
+                    dormant_heartbeat_s: float = DEFAULT_DORMANT_HEARTBEAT_S) -> list[str]:
     """Apply the documented demo rules; each problem name maps to one visible remedy.
 
     phone_disconnected  glasses source and no phone socket        -> tap Connect / check IP
     no_packets_10s      phone socket up but no frame in 10 s      -> glasses not streaming
     no_ticks_60s        T0 has not produced a tick in 60 s        -> capture source is dead
     ai_coverage_low     <50% of the last 60 s of ticks carry `ai` -> Gemini slow / key
+                        (watcher off only; with it on, the two rules below)
+    labeler_heartbeat_stale  no heartbeat call in 2 beats (after a first call) -> Gemini / cap
+    labeler_wake_slow   last wake-up call slower than the tagger ceiling -> Gemini slow
+    watcher_unavailable WATCHER=1 but the model failed to load -> health.details has the error
     vlm_errors          >5 VLM errors in the last 50 calls        -> Gemini key / quota
     t1_errors           reasoner errors or timeouts since snapshot -> OpenAI key / network
     tts_failing         last ElevenLabs call failed               -> key / voice / quota
@@ -280,8 +487,13 @@ def health_problems(*, source: str, phone, ai_coverage: float, ai_ticks: int,
             problems.append("no_packets_10s")
     if ticks_stale:
         problems.append("no_ticks_60s")
-    if ai_ticks >= 20 and ai_coverage < 0.5:
+    capture = capture if isinstance(capture, dict) else {}
+    if capture.get("watcher") is not None:
+        problems.extend(_labeler_problems(capture, tagger, heartbeat_s, dormant_heartbeat_s))
+    elif ai_ticks >= 20 and ai_coverage < 0.5:
         problems.append("ai_coverage_low")
+    if capture.get("watcher_error"):
+        problems.append("watcher_unavailable")
     if tagger is not None and tagger["errors"] > 5:
         problems.append("vlm_errors")
     if (t1["dropped_error"], t1["dropped_timeout"]) > tuple(t1_error_snapshot):
@@ -289,6 +501,80 @@ def health_problems(*, source: str, phone, ai_coverage: float, ai_ticks: int,
     if speech.get("last_error"):
         problems.append("tts_failing")
     return problems
+
+
+#: What ``scripts/demo_reset.py`` clears: short-term memory only (what was
+#: said, asked and settled today), never anything measured. The script keeps
+#: its own copy so it runs without the package's wiring; a test pins the two
+#: lists equal so they cannot drift.
+DEMO_RESET_TABLES = ("conversations", "pending_questions", "today_summary",
+                     "profile_lines", "recaps", "sessions")
+DEMO_RESET_ALL_TABLES = DEMO_RESET_TABLES + (
+    "ticks", "episodes", "decisions", "escalated_frames",
+)
+
+
+def demo_reset(db: Database, *, all_data: bool = False) -> int:
+    """Clear the short-term memory tables, returning how many rows went.
+
+    Same clearing as ``scripts/demo_reset.py --yes``. A hosted tester's
+    container restarts into a blank day this way: without it the voice agent
+    would remember the tester's rehearsal and skip the coffee question.
+    """
+
+    cleared = 0
+    with db._lock:
+        for table in (DEMO_RESET_ALL_TABLES if all_data else DEMO_RESET_TABLES):
+            try:
+                cleared += db.conn.execute(f"DELETE FROM {table}").rowcount or 0
+            except Exception:  # noqa: BLE001 -- a table this schema lacks is not an error
+                log.debug("demo reset: no table %s", table)
+        if all_data:
+            try:
+                cleared += db.conn.execute(
+                    "DELETE FROM biometric_series WHERE origin = 'live'"
+                ).rowcount or 0
+            except Exception:  # noqa: BLE001 -- old schemas may lack origin
+                log.debug("demo reset: no live biometric series")
+        db.conn.commit()
+    return cleared
+
+
+def load_persona_file(db: Database, path) -> bool:
+    """Seed the persona override from a file, once. True when it was loaded.
+
+    Only when the database has no override yet: a tester who rewrites the
+    persona in the dashboard keeps their edit across a container restart.
+    A missing or empty file is logged and skipped, never fatal -- the built-in
+    persona is a working fallback, a backend that will not start is not.
+    """
+
+    if db.get_persona() is not None:
+        return False
+    try:
+        text = Path(path).expanduser().read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        log.error("PERSONA_FILE %s unreadable (%s); using the built-in persona", path, exc)
+        return False
+    if not text:
+        log.warning("PERSONA_FILE %s is empty; using the built-in persona", path)
+        return False
+    db.set_persona(text)
+    log.info("persona: loaded %d chars from %s", len(text), path)
+    return True
+
+
+def apply_startup_presets(db: Database, settings: Settings) -> None:
+    """DEMO_RESET_ON_START, then PERSONA_FILE. Reset first: it never touches
+    the persona, so the order only matters for reading the log."""
+
+    if getattr(settings, "demo_reset_on_start", False):
+        all_data = getattr(settings, "demo_reset_all", False)
+        log.info("demo reset on start%s: cleared %d rows",
+                 " (all)" if all_data else "", demo_reset(db, all_data=all_data))
+    persona_file = getattr(settings, "persona_file", None)
+    if persona_file:
+        load_persona_file(db, persona_file)
 
 
 def build_pipeline(settings: Settings, *,
@@ -300,18 +586,25 @@ def build_pipeline(settings: Settings, *,
                    flow: str | None = None) -> Pipeline:
     """Build the graph in dependency order without starting any tasks."""
     db = Database(settings.db_path).connect().init_schema()
+    apply_startup_presets(db, settings)
     bus = TickBus()
     capture = None
     sim_source = None
+    speech_warm = None
     if source == "sim":
         frame_store: FrameStore = InMemoryFrameStore(ttl_s=settings.frame_ttl_s)
     else:
         from ..capture.bridge import LongevityCapture
         from ..capture.frames import RingFrameStore
         from ..capture.speak import make_speak_fn
+        from dotenv import load_dotenv
+        # settings.capture is read once, here, and CaptureSettings reads only the
+        # process environment: load backend/.env first (as the bridge itself
+        # does) so WATCHER=... and DECIDER=... in that file still apply.
+        load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
         capture = LongevityCapture(
             settings, source=source, our_bus=bus, dir=dir, speed=speed, loop=loop,
-            camera=camera, vlm=vlm, flow=flow,
+            camera=camera, vlm=vlm, flow=flow, capture_settings=settings.capture,
         )
         missing = []
         if not callable(getattr(capture, "send_question", None)):
@@ -329,6 +622,7 @@ def build_pipeline(settings: Settings, *,
         speak_fn = make_speak_fn(capture.link, settings)
         capture._speech_stats = speak_fn.stats  # type: ignore[attr-defined]
         set_speak_fn(speak_fn)
+        speech_warm = getattr(speak_fn, "warm", None)
     end_day = day_key(time.time())
     if seed_db:
         seed_database(db, end_day=end_day)
@@ -337,6 +631,8 @@ def build_pipeline(settings: Settings, *,
     speech = SpeechLimiter(timings.speech_min_gap, timings.speech_max_per_hour)
     client = make_client(settings, reasoner_mode)
     parser = make_answer_parser(settings, reasoner_mode)
+    # DECIDER=clerk (the default) gives decider=None: the clerk path, unchanged.
+    extras = build_reasoner_extras(settings.decider, client)
 
     async def console_send(question) -> bool:
         log.info("ASK: %s", question.question)
@@ -361,7 +657,9 @@ def build_pipeline(settings: Settings, *,
     )
     reasoner = Reasoner(db, frame_store, client, speech, settings,
                         seven_day_summary=lambda: seven_day_summary(db, end_day),
-                        parser=parser, questions=questions)
+                        parser=parser, questions=questions, **extras.as_kwargs())
+    adherence = AdherenceMatcher(db, speech)
+    reasoner.on_evidence = adherence.on_evidence
     # The third agent (docs/CONVERSATION_DESIGN.md). Built after the reasoner
     # because it borrows `_extend_episode_label`, and attached back onto it so
     # `speak`/`ask` become hand-offs rather than utterances.
@@ -369,13 +667,29 @@ def build_pipeline(settings: Settings, *,
         db, frame_store, make_voice_client(settings, reasoner_mode), speech,
         settings, questions=questions, reasoner=reasoner,
         now_fn=lambda: clock.wall_to_tick(time.time()),
+        mouth_guard=settings.mouth_busy_guard,
+        quiet_max_s=settings.decider.quiet_max_s,
     )
     reasoner.conversation = conversation
     questions.conversation = conversation
     questions.reasoner = reasoner
     if capture is not None:
         setattr(capture.link, "on_answer", questions.on_answer)
-    episodes = EpisodeBuilder(db, timings)
+        # `act` goes down the socket speech uses; `act_result` comes back up it.
+        reasoner.handler.send_act = make_act_sender(capture.link)
+        # The `look` action asks the labeler one question about the newest frame
+        # (US-M03); without the capture object every look is `look_unavailable`.
+        reasoner.handler.capture = capture
+        setattr(capture.link, "on_act_result", reasoner.handler.on_act_result)
+    # What may act is config (AUTOPILOT_ACTS / AUTOPILOT_QUIET_DAYS), not persona.
+    reasoner.handler.act_veto = config_act_veto(settings.autopilot_acts,
+                                                settings.autopilot_quiet_days)
+    autopilot = Autopilot(db, reasoner.handler,
+                          outdoor_target_min=settings.outdoor_target_min,
+                          wind_down_hhmm=settings.wind_down_hhmm,
+                          lat=settings.air_lat, lon=settings.air_lon)
+    episodes = EpisodeBuilder(db, timings,
+                              reads_watch=settings.capture.gate_reads_watch)
     # SPEC §14.3: the biometric_anomaly trigger reads the seeded wearable HR
     # series on the tick clock; the gate never imports the seed modules.
     # A live wearable pushing into /api/wearables/ingest lands in the same
@@ -386,9 +700,29 @@ def build_pipeline(settings: Settings, *,
         lambda: resting_hr_for(db, end_day),
         db.latest_biometric,
     )
+    # Persona cues skip the clerk on the way to the mouth: the gate hands them
+    # to the voice agent through `fast_path` on the tick they appear, and the
+    # clerk wakes beside it only to write the moment down. Everything else
+    # still goes gate -> clerk -> (maybe) voice agent.
+    # Kill switches (config.Settings): FAST_PATH=0 leaves cues on the clerk
+    # path (fast_path=None is the gate's own "no fast path" branch), and
+    # CUE_TRIGGER=0 removes the one-tick cue trigger altogether. With
+    # FAST_PATH=0 the cue also loses its global-gap exemption: that exemption
+    # is justified only because a cue skips the clerk's queue. One line at
+    # startup says which were in effect, so a rehearsal log is never ambiguous.
+    log.info("switches: %s", settings.switches_line())
+    log.info("perception: %s", settings.perception_line())
     gate = TriggerGate(default_triggers(timings, settings.demo_mode, feed=feed,
-                                       keyword_triggers=settings.keyword_triggers), timings, db,
-                       episodes, reasoner.try_escalate, settings.demo_mode, feed=feed)
+                                       keyword_triggers=settings.keyword_triggers,
+                                       cues=settings.cue_trigger,
+                                       cue_bypass_gap=settings.fast_path,
+                                       reads_watch=settings.capture.gate_reads_watch,
+                                       watch_thresholds=settings.capture.thresholds(),
+                                       novelty_enter=settings.capture.watch_novelty_enter),
+                       timings, db,
+                       episodes, reasoner.try_escalate, settings.demo_mode, feed=feed,
+                       fast_path=reasoner.fast_path if settings.fast_path else None)
+    reasoner.handler.gate = gate  # an armed `watch` re-escalates through `escalate_armed` (US-M05)
     if source == "sim":
         set_speak_fn(default_speak_fn)
         sim_source = SimSource(scenario or DEFAULT_SCENARIO, frame_store, speed=speed,
@@ -401,9 +735,15 @@ def build_pipeline(settings: Settings, *,
         biometric_start = now
     if seed_db:
         seed_biometric_series(db, biometric_start)
-    return Pipeline(settings=settings, source_name=source,
-                    reasoner_mode=reasoner_mode, speed=speed, db=db,
-                    frame_store=frame_store, bus=bus, scorer=scorer, speech=speech,
-                    reasoner=reasoner, episodes=episodes, gate=gate,
-                    questions=questions, conversation=conversation,
-                    source=sim_source, capture=capture, clock=clock)
+    pipeline = Pipeline(settings=settings, source_name=source,
+                        reasoner_mode=reasoner_mode, speed=speed, db=db,
+                        frame_store=frame_store, bus=bus, scorer=scorer, speech=speech,
+                        reasoner=reasoner, episodes=episodes, gate=gate,
+                        questions=questions, conversation=conversation,
+                        source=sim_source, capture=capture, clock=clock,
+                        adherence=adherence, autopilot=autopilot)
+    pipeline._speech_warm = speech_warm
+    # Re-warm on every conversation open as well, on the real glasses only
+    # (replay and webcam runs have no phone and must not reach the network).
+    conversation.speech_warm = speech_warm if source == "glasses" else None
+    return pipeline

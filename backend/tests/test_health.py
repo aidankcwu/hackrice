@@ -82,3 +82,108 @@ def test_no_ticks_is_measured_from_start_when_none_ever_arrived(tmp_path) -> Non
 
     pipeline.started_at = time.time()
     assert "no_ticks_60s" not in pipeline._health()["problems"]
+
+
+# --- Watcher on: labeler health replaces AI coverage (docs/PERCEPTION.md "Tick") ---
+
+def _labeler(**over):
+    base = {"calls_per_hour": {"heartbeat": 1, "wake": 1}, "capped": False,
+            "last_heartbeat_age_s": 10.0, "last_wake_latency_ms": 900.0,
+            "frames_sent_per_hour": 2, "mode": "idle"}
+    base.update(over)
+    return base
+
+
+def _capture(watcher=True, **labeler):
+    return {"watcher": {"frames": 10} if watcher else None,
+            "labeler": _labeler(**labeler), "watcher_error": None}
+
+
+def test_watcher_on_stale_heartbeat_replaces_the_coverage_rule() -> None:
+    problems = _problems(capture=_capture(last_heartbeat_age_s=121.0),
+                         ai_coverage=0.0, ai_ticks=40)
+    assert "labeler_heartbeat_stale" in problems
+    assert "ai_coverage_low" not in problems
+
+
+def test_watcher_on_fresh_heartbeat_is_healthy_at_zero_coverage() -> None:
+    problems = _problems(capture=_capture(last_heartbeat_age_s=30.0),
+                         ai_coverage=0.0, ai_ticks=40)
+    assert "labeler_heartbeat_stale" not in problems
+    assert "ai_coverage_low" not in problems
+    assert problems == []
+
+
+def test_dormant_heartbeat_is_judged_by_the_dormant_cadence() -> None:
+    dormant = _capture(last_heartbeat_age_s=500.0, mode="dormant")
+    assert "labeler_heartbeat_stale" not in _problems(capture=dormant)
+    dormant = _capture(last_heartbeat_age_s=601.0, mode="dormant")
+    assert "labeler_heartbeat_stale" in _problems(capture=dormant)
+
+
+def test_stale_heartbeat_needs_a_started_call() -> None:
+    none_yet = _capture(last_heartbeat_age_s=500.0, frames_sent_per_hour=0)
+    assert "labeler_heartbeat_stale" not in _problems(
+        capture=none_yet, tagger={"errors": 0, "by_kind": {"heartbeat": {"started": 0}}})
+    assert "labeler_heartbeat_stale" in _problems(
+        capture=none_yet, tagger={"errors": 0, "by_kind": {"heartbeat": {"started": 3}}})
+
+
+def test_slow_wake_is_flagged_against_the_tagger_ceiling() -> None:
+    assert "labeler_wake_slow" in _problems(capture=_capture(last_wake_latency_ms=3100.0))
+    assert "labeler_wake_slow" not in _problems(capture=_capture(last_wake_latency_ms=2900.0))
+    tagger = {"errors": 0, "ceiling_s": 2.0}
+    assert "labeler_wake_slow" in _problems(
+        capture=_capture(last_wake_latency_ms=2500.0), tagger=tagger)
+
+
+def test_watcher_off_keeps_the_coverage_rule() -> None:
+    off = _capture(watcher=False, last_heartbeat_age_s=900.0, last_wake_latency_ms=9000.0)
+    problems = _problems(capture=off, ai_coverage=0.1, ai_ticks=25)
+    assert "ai_coverage_low" in problems
+    assert "labeler_heartbeat_stale" not in problems
+    assert "labeler_wake_slow" not in problems
+
+
+def test_watcher_error_is_surfaced() -> None:
+    broken = {"watcher": None, "labeler": _labeler(), "watcher_error": "ImportError: open_clip"}
+    assert "watcher_unavailable" in _problems(capture=broken)
+    assert "watcher_unavailable" not in _problems(capture=_capture())
+
+
+def test_pipeline_health_carries_the_watcher_error_text(tmp_path) -> None:
+    from pipeline.api.wiring import build_pipeline
+    from pipeline.config import Settings
+
+    pipeline = build_pipeline(
+        Settings(db_path=tmp_path / "health.db"),
+        source="sim", reasoner_mode="fake", speed=1,
+    )
+    pipeline.capture = FakeCapture({"watcher": None, "labeler": _labeler(),
+                                    "watcher_error": "ImportError: open_clip"})
+    health = pipeline._health()
+    assert "watcher_unavailable" in health["problems"]
+    assert health["details"]["watcher_unavailable"] == "ImportError: open_clip"
+
+
+class _Stats:
+    def __init__(self, value):
+        self._value = value
+
+    def stats(self):
+        return self._value
+
+
+class FakeCapture:
+    """Just enough of LongevityCapture for `Pipeline.status()` and `_health()`."""
+
+    def __init__(self, stats, tagger=None):
+        self._stats = stats
+        self.link = _Stats({"connected": 1, "latest_age_s": 1.0, "connected_for_s": 30.0})
+        self.tagger = _Stats(tagger or {"errors": 0, "ceiling_s": 3.0})
+
+    def stats(self):
+        return self._stats
+
+    def speech_stats(self):
+        return {"mode": "none"}

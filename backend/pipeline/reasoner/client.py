@@ -21,6 +21,7 @@ from typing import Any, Literal, Protocol, runtime_checkable
 
 from ..config import Settings
 from ..models import FOOD_TYPES, Episode, PendingQuestion
+from .effort import DEFAULT_EFFORT, create_with_effort
 from .prompts import ANSWER_OBJECTIVE
 from .schema import (
     ANSWER_TEXT_FORMAT,
@@ -41,6 +42,7 @@ __all__ = [
     "OpenAIReasonerClient",
     "FakeReasonerClient",
     "make_client",
+    "usage_counts",
     "AnswerParser",
     "OpenAIAnswerParser",
     "FakeAnswerParser",
@@ -65,6 +67,74 @@ def _strip_fences(text: str) -> str:
     return _FENCE.sub("", text).strip()
 
 
+#: Wall-clock budget for one T1 request. Measured p99 is ~5.5 s and the max
+#: ~6.8 s; a call still running at 8 s has already missed its moment, and the
+#: SDK default (read 600 s) would hold the reasoner's single slot while every
+#: cue in the meantime is dropped as t1_busy.
+T1_TIMEOUT_S = 8.0
+#: Connecting is either quick (35-55 ms measured) or broken; fail it fast.
+T1_CONNECT_TIMEOUT_S = 2.0
+#: One retry, not the SDK's two: a single transient 429/5xx is worth one more
+#: go, but two back-offs (0.5-8 s each) would burn the whole moment. It only
+#: helps a *fast* failure: after an 8 s timeout the reasoner's 9 s deadline
+#: (``reasoner.T1_DEADLINE_S``) cancels the retry about a second in. Kept
+#: anyway, because the clerk is never on the cue's spoken path (the fast path
+#: speaks without it) and a quick 429 retried is a wake-up saved.
+T1_MAX_RETRIES = 1
+#: How long an idle connection is kept open. httpx's default is 5 s, but
+#: wake-ups are ~9 s apart (p50), so nearly every call paid a fresh TCP+TLS
+#: handshake. Two minutes covers the gaps in a live demo.
+T1_KEEPALIVE_S = 120.0
+
+
+def _t1_http(timeout_s: float) -> tuple[Any, Any]:
+    """One pooled HTTP client for every T1 call, with a long keep-alive.
+
+    Returns ``(timeout, http_client)``. The timeout is handed to the SDK as
+    well as to the pool because the SDK applies its own per request, and a
+    bare float there would stretch the connect budget to the full 8 s.
+    Built on the SDK's own default client class so its redirect defaults still
+    apply. The SDK moved from ``httpx`` to ``httpx2``; take whichever it uses
+    so the ``Limits``/``Timeout`` objects are ones its client accepts.
+    """
+
+    from openai import DefaultAsyncHttpxClient
+
+    try:
+        import httpx2 as _httpx  # type: ignore[import-not-found]
+    except ImportError:  # pragma: no cover - older SDKs use httpx
+        import httpx as _httpx  # type: ignore[no-redef]
+
+    timeout = _httpx.Timeout(timeout_s, connect=T1_CONNECT_TIMEOUT_S)
+    return timeout, DefaultAsyncHttpxClient(
+        timeout=timeout,
+        limits=_httpx.Limits(
+            max_connections=10,
+            max_keepalive_connections=4,
+            keepalive_expiry=T1_KEEPALIVE_S,
+        ),
+    )
+
+
+def usage_counts(usage: dict[str, Any] | None) -> dict[str, int | None]:
+    """The four token counts worth watching, flattened from Responses ``usage``.
+
+    ``cached`` is the one that proves the prompt cache is hitting (the system
+    prompt is ordered for it); ``reasoning`` shows whether effort=minimal is in
+    force. Missing fields are ``None`` -- a fake or older model reports none.
+    """
+
+    usage = usage or {}
+    in_details = usage.get("input_tokens_details") or {}
+    out_details = usage.get("output_tokens_details") or {}
+    return {
+        "input": usage.get("input_tokens"),
+        "cached": in_details.get("cached_tokens"),
+        "output": usage.get("output_tokens"),
+        "reasoning": out_details.get("reasoning_tokens"),
+    }
+
+
 class OpenAIReasonerClient:
     """The real T1 call: Responses API, strict JSON schema, inline images."""
 
@@ -72,9 +142,10 @@ class OpenAIReasonerClient:
         self,
         api_key: str,
         model: str,
-        timeout: float | None = None,
+        timeout: float | None = T1_TIMEOUT_S,
         client: Any | None = None,
-        reasoning_effort: str | None = "minimal",
+        reasoning_effort: str | None = DEFAULT_EFFORT,
+        max_retries: int = T1_MAX_RETRIES,
     ) -> None:
         if not api_key:
             raise RuntimeError("OpenAIReasonerClient requires an API key")
@@ -85,36 +156,51 @@ class OpenAIReasonerClient:
         else:
             from openai import AsyncOpenAI
 
-            self._client = AsyncOpenAI(api_key=api_key, timeout=timeout)
+            # One AsyncOpenAI for the life of the process, over one pooled
+            # HTTP client, so consecutive wake-ups reuse a warm connection.
+            http_timeout, http_client = _t1_http(
+                T1_TIMEOUT_S if timeout is None else timeout
+            )
+            self._client = AsyncOpenAI(
+                api_key=api_key,
+                timeout=http_timeout,
+                max_retries=max_retries,
+                http_client=http_client,
+            )
 
     async def complete(
         self, input_messages: list[dict[str, Any]]
     ) -> tuple[T1Response, dict[str, Any]]:
         started = time.perf_counter()
-        kwargs: dict[str, Any] = dict(
-            model=self.model, input=input_messages, text=T1_TEXT_FORMAT
+        # T1 is a perception + decision call, not a puzzle: the lowest effort
+        # the model accepts. ``minimal`` was rejected with a 400 on every call
+        # by gpt-5.4-mini; the shared ladder pays that at most once a process.
+        response, _effort = await create_with_effort(
+            self._client, self.model, self.reasoning_effort,
+            dict(model=self.model, input=input_messages, text=T1_TEXT_FORMAT),
+            label="T1",
         )
-        # T1 is a perception + decision call, not a puzzle: low reasoning
-        # effort cuts latency. Retry without it for models that reject it.
-        if self.reasoning_effort:
-            kwargs["reasoning"] = {"effort": self.reasoning_effort}
-        try:
-            response = await self._client.responses.create(**kwargs)
-        except Exception as exc:  # noqa: BLE001
-            if "reasoning" in kwargs and "reasoning" in str(exc).lower():
-                kwargs.pop("reasoning")
-                response = await self._client.responses.create(**kwargs)
-            else:
-                raise
         latency_ms = int((time.perf_counter() - started) * 1000)
         raw = getattr(response, "output_text", None) or ""
 
         parsed = self._parse(raw)
 
+        usage = self._usage(response)
+        model = getattr(response, "model", None) or self.model
+        tokens = usage_counts(usage)
+        # One line per call: the only way to see from a live run whether the
+        # prompt cache hits (cached ~ input) and where the tokens go.
+        log.info(
+            "T1 %s %d ms tokens in=%s cached=%s out=%s reasoning=%s raw_len=%d",
+            model, latency_ms, tokens["input"], tokens["cached"],
+            tokens["output"], tokens["reasoning"], len(raw),
+        )
+
         meta: dict[str, Any] = {
-            "model": getattr(response, "model", None) or self.model,
+            "model": model,
             "latency_ms": latency_ms,
-            "usage": self._usage(response),
+            "usage": usage,
+            "tokens": tokens,
             "raw_len": len(raw),
         }
         return parsed, meta
@@ -514,7 +600,7 @@ class OpenAIAnswerParser:
         model: str,
         timeout: float | None = 10.0,
         client: Any | None = None,
-        reasoning_effort: str | None = "minimal",
+        reasoning_effort: str | None = DEFAULT_EFFORT,
     ) -> None:
         if not api_key:
             raise RuntimeError("OpenAIAnswerParser requires an API key")
@@ -533,23 +619,17 @@ class OpenAIAnswerParser:
         transcript: str,
         episode: Episode | None = None,
     ) -> AnswerParse:
-        kwargs: dict[str, Any] = dict(
-            model=self.model,
-            input=_answer_messages(question, transcript, episode),
-            text=ANSWER_TEXT_FORMAT,
-        )
         # Same trade as T1: this is comprehension, not a puzzle, and the
-        # wearer is waiting. Retry without it for models that reject it.
-        if self.reasoning_effort:
-            kwargs["reasoning"] = {"effort": self.reasoning_effort}
-        try:
-            response = await self._client.responses.create(**kwargs)
-        except Exception as exc:  # noqa: BLE001
-            if "reasoning" in kwargs and "reasoning" in str(exc).lower():
-                kwargs.pop("reasoning")
-                response = await self._client.responses.create(**kwargs)
-            else:
-                raise
+        # wearer is waiting. Same ladder, same process-wide memory.
+        response, _effort = await create_with_effort(
+            self._client, self.model, self.reasoning_effort,
+            dict(
+                model=self.model,
+                input=_answer_messages(question, transcript, episode),
+                text=ANSWER_TEXT_FORMAT,
+            ),
+            label="answer parser",
+        )
         return self._parse(getattr(response, "output_text", None) or "")
 
     @staticmethod

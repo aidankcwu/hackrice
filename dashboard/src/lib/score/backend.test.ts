@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BackendOffline, clearEvidenceCache, daysEnding, loadDayInputs, pivotSeeded, WINDOW_DAYS } from "./backend";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { apiBase, authInit, BackendOffline, daysEnding, fetchHealthspanWeek, fetchJson, loadDayInputs, pivotSeeded, WINDOW_DAYS, withToken } from "./backend";
 
 const BASE = "http://localhost:8016";
 const TICK_T = new Date(2026, 8, 12, 18, 0, 0).getTime() / 1000;
@@ -23,12 +23,13 @@ const OK: Routes = {
   "/api/status": { last_tick_t: TICK_T, tick_count: 1200, source: "glasses", demo_mode: false },
   "/api/seeded": [{ day: TODAY, metric: "steps", value: 5500 }],
   "/api/episodes": [],
-  "/api/decisions": [],
   "/api/wearables/status": { metrics: [], live_connected: false, live_devices: [], catalogue: {} },
 };
 
-beforeEach(() => clearEvidenceCache());
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
 
 describe("pivotSeeded", () => {
   it("pivots long rows and drops anything unusable", () => {
@@ -89,5 +90,91 @@ describe("loadDayInputs", () => {
     await expect(loadDayInputs(BASE)).rejects.toBeInstanceOf(BackendOffline);
     stubFetch({ ...OK, "/api/seeded": null });
     await expect(loadDayInputs(BASE)).rejects.toBeInstanceOf(BackendOffline);
+  });
+
+  it("sends ACCESS_TOKEN as X-Access-Token on every server-side fetch", async () => {
+    vi.stubEnv("ACCESS_TOKEN", "sekret");
+    const seen: Array<string | null> = [];
+    const routes: Routes = {
+      ...OK,
+      "/api/episodes?day=2026-09-12": [{ id: "ep1", start_t: TICK_T - 60, end_t: TICK_T, category: "screen" }],
+      "/api/decisions": [{ id: "d1", episode_id: "ep1", t: TICK_T }],
+    };
+    vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
+      seen.push(new Headers(init?.headers).get("X-Access-Token"));
+      const path = url.slice(BASE.length);
+      const key = Object.keys(routes).sort((a, b) => b.length - a.length).find((k) => path.startsWith(k));
+      if (key === undefined) return Promise.resolve(new Response("no route", { status: 404 }));
+      return Promise.resolve(new Response(JSON.stringify(routes[key]), { status: 200 }));
+    });
+    const { days } = await loadDayInputs(BASE);
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((h) => h === "sekret")).toBe(true);
+    expect(days.length).toBe(WINDOW_DAYS);
+  });
+});
+
+describe("apiBase", () => {
+  it("prefers BACKEND_URL, then NEXT_PUBLIC_API_BASE, then localhost:8010", () => {
+    vi.stubEnv("BACKEND_URL", "http://backend-alice:8010/");
+    vi.stubEnv("NEXT_PUBLIC_API_BASE", "http://ignored:1");
+    expect(apiBase()).toBe("http://backend-alice:8010");
+    vi.stubEnv("BACKEND_URL", "");
+    expect(apiBase()).toBe("http://ignored:1");
+    vi.stubEnv("NEXT_PUBLIC_API_BASE", "");
+    expect(apiBase()).toBe("http://localhost:8010");
+  });
+});
+
+describe("fetchHealthspanWeek", () => {
+  const PROFILE = { age: 20, sex: "M", goal: "athlete", bedtime_hh: 23, bedtime_source: "seeded" };
+  const WEEK = { day: TODAY, days: [{ day: TODAY, hours_today: 0.95 }], today: { day: TODAY, hours_today: 0.95, profile: PROFILE } };
+
+  it("pins the day, asks for the seven-day window and passes the goal", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", (url: string) => {
+      seen.push(url);
+      return Promise.resolve(new Response(JSON.stringify(WEEK), { status: 200 }));
+    });
+    const week = await fetchHealthspanWeek(BASE, TODAY, "athlete");
+    expect(seen).toEqual([`${BASE}/api/healthspan?day=${TODAY}&days=${WINDOW_DAYS}&goal=athlete`]);
+    expect(week.today.hours_today).toBe(0.95);
+  });
+
+  it("is BackendOffline on a failed route or a body without today, never a partial score", async () => {
+    stubFetch({ "/api/healthspan": null });
+    await expect(fetchHealthspanWeek(BASE, TODAY, "average")).rejects.toBeInstanceOf(BackendOffline);
+    stubFetch({ "/api/healthspan": { day: TODAY, days: [] } });
+    await expect(fetchHealthspanWeek(BASE, TODAY, "average")).rejects.toBeInstanceOf(BackendOffline);
+  });
+
+  it("refuses a score that does not say whose it is, rather than guessing an age or sex for the header", async () => {
+    for (const profile of [undefined, { ...PROFILE, age: undefined }, { ...PROFILE, age: "41" }, { ...PROFILE, age: null }, { ...PROFILE, sex: null }]) {
+      stubFetch({ "/api/healthspan": { ...WEEK, today: { ...WEEK.today, profile } } });
+      await expect(fetchHealthspanWeek(BASE, TODAY, "average"), JSON.stringify(profile ?? null)).rejects.toThrow(/no profile \{age, sex\}/);
+    }
+  });
+});
+
+describe("NEXT_PUBLIC_API_TOKEN (docs/DEPLOY.md)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("sends nothing extra when unset", () => {
+    vi.stubEnv("NEXT_PUBLIC_API_TOKEN", "");
+    expect(authInit()).toEqual({});
+    expect(withToken(`${BASE}/api/evidence/d/f`)).toBe(`${BASE}/api/evidence/d/f`);
+  });
+
+  it("puts the token header on server fetches and ?token= on header-less URLs when set", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_TOKEN", "t k");
+    const seen: Array<RequestInit | undefined> = [];
+    vi.stubGlobal("fetch", (_url: string, init?: RequestInit) => {
+      seen.push(init);
+      return Promise.resolve(new Response("{}", { status: 200 }));
+    });
+    await fetchJson(BASE, "/api/status");
+    expect(seen[0]?.headers).toEqual({ "X-Access-Token": "t k" });
+    expect(withToken(`${BASE}/api/evidence/d/f`)).toBe(`${BASE}/api/evidence/d/f?token=t%20k`);
+    expect(withToken(`${BASE}/api/protocol/export.csv?days=14`)).toBe(`${BASE}/api/protocol/export.csv?days=14&token=t%20k`);
   });
 });

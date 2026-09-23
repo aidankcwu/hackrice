@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ApiResult } from "@/lib/api";
+import { appFetch } from "@/lib/runtime";
 import { usePoll } from "@/lib/usePoll";
 import { GOALS } from "@/lib/score/types";
 import type { DashboardData, Goal } from "@/lib/score/types";
@@ -22,14 +23,15 @@ const looksLikeDashboard = (v: unknown): v is DashboardData =>
 
 /** Throws on any failure so usePoll keeps the last good payload instead of swapping in a fixture. */
 async function fetchScore(goal: Goal): Promise<ApiResult<DashboardData>> {
-  const res = await fetch(`/api/score?goal=${encodeURIComponent(goal)}`, {
+  const res = await appFetch(`/api/score?goal=${encodeURIComponent(goal)}`, {
     cache: "no-store",
     signal: AbortSignal.timeout(8000),
   });
   if (!res.ok) throw new Error(`/api/score ${res.status}`);
   const json: unknown = await res.json();
   if (!looksLikeDashboard(json)) throw new Error("/api/score: unexpected payload");
-  return { data: json, mock: json.source.mode === "mock" };
+  // `/api/score` has no fixture behind it (loader.ts): every payload is live.
+  return { data: json, mock: false };
 }
 
 export function BrianLive({ initial, intervalMs = 5000 }: BrianLiveProps) {
@@ -71,14 +73,5 @@ export function BrianLive({ initial, intervalMs = 5000 }: BrianLiveProps) {
     };
   }, [goal, refresh]);
 
-  const onGoalChange = useCallback((next: Goal) => {
-    setGoal(next);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, next);
-    } catch {
-      // Not persisting is fine; the choice still applies for this visit.
-    }
-  }, []);
-
-  return <BrianDashboard data={poll.data ?? initial} goal={goal} onGoalChange={onGoalChange} updating={updating} />;
+  return <BrianDashboard data={poll.data ?? initial} updating={updating} />;
 }

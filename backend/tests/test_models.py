@@ -16,11 +16,13 @@ from pipeline.models import (
     HEALTHY_FOOD_TYPES,
     HOME_SCENES,
     OUTDOOR_SCENES,
+    PEOPLE_COUNTS,
     SCENES,
     UNHEALTHY_FOOD_TYPES,
     AiBlock,
     SensorBlock,
     Tick,
+    WatchBlock,
     phash_distance,
 )
 
@@ -251,6 +253,44 @@ def test_enum_menus_mirror_person_as_source_of_truth() -> None:
     assert list(ACTIVITIES) == ai_fields.ACTIVITY
     assert list(FOOD_TYPES) == ai_fields.FOOD_TYPE
     assert list(DRINKS) == ai_fields.DRINK
+    assert list(PEOPLE_COUNTS) == ai_fields.PEOPLE_COUNT
+
+
+def test_every_field_a_emits_is_a_declared_ai_block_field() -> None:
+    """A field A adds must be mirrored here, or it rides along untyped via extra."""
+
+    assert set(ai_fields.FIELD_ORDER) <= set(AiBlock.model_fields)
+
+
+def test_coerced_block_validates_and_round_trips_the_hand_and_crowd_fields() -> None:
+    raw = ai_fields.coerce({
+        "scene": "office", "in_hand": "Rice Krispies Treat",
+        "phone_in_hand": False, "people_count": "6+",
+    })
+    tick = _bare_tick({"as_of": 1.0, "age_ms": 0, **raw})
+    assert tick.held() == "rice krispies treat"
+    assert tick.flag("phone_in_hand") is False
+    assert tick.enum("people_count") == "6+"
+    assert Tick.model_validate_json(tick.model_dump_json()) == tick
+
+
+def test_hand_and_crowd_fields_are_tri_state() -> None:
+    # Not reported (an older producer), or reported as unknown/null: all None.
+    tick = _bare_tick({"as_of": 1.0, "age_ms": 0, "scene": "office"})
+    assert tick.held() is None
+    assert tick.flag("phone_in_hand") is None
+    assert tick.enum("people_count") is None
+    assert "in_hand" not in tick.ai.model_dump()  # absent stays absent downstream
+    unknown = _bare_tick({"as_of": 1.0, "age_ms": 0, "people_count": "unknown",
+                          "in_hand": None, "phone_in_hand": None})
+    assert unknown.enum("people_count") is None and unknown.held() is None
+    # Stale ai is unknown too, even when the hand was reported.
+    stale = _bare_tick({"as_of": 1.0, "age_ms": 9000, "in_hand": "cucumber",
+                        "phone_in_hand": True, "people_count": "3-5"})
+    assert (stale.held(), stale.flag("phone_in_hand"), stale.enum("people_count")) == (
+        None, None, None)
+    with pytest.raises(ValidationError):
+        _bare_tick({"as_of": 1.0, "age_ms": 0, "people_count": "lots"})
 
 
 def test_named_families_mirror_and_stay_inside_their_menus() -> None:
@@ -285,3 +325,75 @@ def test_widened_menus_validate_and_read_back() -> None:
     assert tick.enum("activity") == "computer_use"
     assert tick.enum("food_type") == "rice_bowl"
     assert tick.ai is not None and tick.ai.drink == "boba"
+
+
+# -- watch block (docs/PERCEPTION.md "Tick") ---------------------------------
+
+WATCH = {
+    "v": 1,
+    "model": "mobileclip2-s0",
+    "frames": 10,
+    "usable": 9,
+    "scores": {"food_present": 0.71, "caffeine_visible": 0.12},
+    "novelty": 0.34,
+    "hot": ["food_present"],
+    "woke": "food_present",
+}
+
+
+def _spec_with_watch() -> dict:
+    data = json.loads(SPEC_TICK_JSON)
+    return {**{k: v for k, v in data.items() if k not in ("ai", "frame_ref")},
+            "watch": dict(WATCH), "ai": data["ai"], "frame_ref": data["frame_ref"]}
+
+
+def test_watch_block_defaults() -> None:
+    block = WatchBlock()
+    assert (block.v, block.model, block.frames, block.usable) == (1, "", 0, 0)
+    assert block.scores == {} and block.hot == [] and block.novelty == 0.0
+    assert block.woke is None
+    assert WatchBlock().scores is not block.scores
+
+
+def test_tick_without_watch_validates_and_dumps_without_it() -> None:
+    tick = Tick.model_validate(json.loads(SPEC_TICK_JSON))
+    assert tick.watch is None
+    assert "watch" not in json.loads(tick.model_dump_json())
+    assert "watch" not in tick.model_dump()
+
+
+def test_tick_with_watch_round_trips() -> None:
+    original = _spec_with_watch()
+    tick = Tick.model_validate(original)
+    assert tick.watch is not None and tick.watch.model == "mobileclip2-s0"
+    assert json.loads(tick.model_dump_json()) == original
+    assert tick.model_dump()["watch"] == WATCH
+    assert list(tick.model_dump()) == list(original)
+
+
+def test_watch_null_woke_round_trips() -> None:
+    original = _spec_with_watch()
+    original["watch"]["woke"] = None
+    assert json.loads(Tick.model_validate(original).model_dump_json()) == original
+
+
+def test_watch_unknown_keys_ignored() -> None:
+    data = _spec_with_watch()
+    data["watch"]["future_stat"] = 3
+    tick = Tick.model_validate(data)
+    assert tick.watch is not None
+    assert "future_stat" not in tick.watch.model_dump()
+
+
+def test_watch_score_and_hot() -> None:
+    tick = Tick.model_validate(_spec_with_watch())
+    assert tick.watch_score("food_present") == 0.71
+    assert tick.watch_score("screen_present") is None
+    assert tick.watch_hot("food_present") is True
+    assert tick.watch_hot("caffeine_visible") is False
+
+
+def test_watch_helpers_without_block() -> None:
+    tick = _bare_tick(None)
+    assert tick.watch_score("food_present") is None
+    assert tick.watch_hot("food_present") is False

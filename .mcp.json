@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "meta-wearables-docs": {
+      "type": "http",
+      "url": "https://mcp.developer.meta.com/wearables"
+    },
+    "apple-docs": {
+      "command": "npx",
+      "args": ["-y", "@kimsungwhee/apple-docs-mcp@latest"]
+    }
+  }
+}

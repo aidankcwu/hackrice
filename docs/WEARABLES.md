@@ -85,6 +85,11 @@ watch too, and it gets samples in seconds rather than minutes.
 
    Resting HR goes into the daily `seeded` table (SPEC §14.2), not the intraday
    series — it is a once-a-night number and the scorer already reads it there.
+   Those daily rows are written with `source: "whoop_live"`, never `"whoop"`:
+   `"whoop"` is what the SPEC §6 demo seed writes, so only `whoop_live` reads
+   as live (`LIVE_DAILY_SOURCES` in `backend/pipeline/scoring/scorer.py`, and
+   the dashboard's `LIVE_SOURCES`). Intraday samples keep device `whoop`; their
+   `origin='live'` already marks them real.
 
 4. A `pipeline.wearables.whoop_sync` poller that does the OAuth refresh and the
    polling loop is **subtask S8b**; today a cron job with `curl` is enough.

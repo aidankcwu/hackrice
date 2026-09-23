@@ -1,0 +1,41 @@
+# Fly.io config for the Brian backend. Steps and every env var: docs/DEPLOY.md.
+# Set `app` to the name you created with `fly apps create`.
+app = "brian-backend"
+primary_region = "dfw"
+
+[build]
+  dockerfile = "Dockerfile"
+
+# Non-secret config. Secrets (API_TOKEN and the model keys) go in `fly secrets set`.
+[env]
+  PORT = "8010"
+  SOURCE = "glasses"
+  REASONER = "openai"
+  VLM = "gemini"
+
+# SQLite, its WAL and the OAuth token files (DATA_DIR=/data, set in the Dockerfile).
+[[mounts]]
+  source = "brian_data"
+  destination = "/data"
+
+# Fly terminates TLS; the app speaks plain HTTP/WS on internal_port.
+[http_service]
+  internal_port = 8010
+  force_https = true
+  # Always on: scale-to-zero would drop the glasses WebSocket mid-demo.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  # /healthz is the one path outside the token gate (pipeline/api/auth.py OPEN_PATHS).
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "30s"
+    timeout = "5s"
+    method = "GET"
+    path = "/healthz"
+
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1

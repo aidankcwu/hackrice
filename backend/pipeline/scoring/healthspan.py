@@ -35,12 +35,17 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
+from typing import TYPE_CHECKING, get_args
+from urllib.parse import quote
 
 import numpy as np
 
 from ..config import Settings
 from ..db import Database, day_key
 from ..models import HEALTHY_FOOD_TYPES, Episode
+
+if TYPE_CHECKING:
+    from ..reasoner.evidence import EvidenceStore
 from . import brian_score as bs
 from .scorer import (
     LIVE_DAILY_SOURCES,
@@ -59,7 +64,11 @@ from .thresholds import DEFAULT_BEDTIME_H
 # the §8 scores is a device the By-layer panel stops calling "Seeded" in the
 # same edit. See that constant for why it is not ``wearables.DEVICES``.
 __all__ = ["healthspan_for_day", "healthspan_registry", "healthspan_week", "lite_payload",
-           "profile_from_settings", "LIVE_DAILY_SOURCES", "MAX_WEEK_DAYS", "NATURE_SCENES"]
+           "profile_from_settings", "GOALS", "LIVE_DAILY_SOURCES", "MAX_WEEK_DAYS", "NATURE_SCENES"]
+
+#: The four ``brian_score.Profile`` goals, read off the ``PROFILE_GOAL`` setting's
+#: own type so the route's ``?goal=`` and the setting can never accept different sets.
+GOALS: tuple[str, ...] = get_args(Settings.model_fields["profile_goal"].annotation)
 
 
 # Known engine quirks (brian_score.py stays verbatim; each is handled or
@@ -96,6 +105,9 @@ MAX_DRINKS_PER_DAY = 6
 #: Evidence pins Today renders (screens.md §1.4). Merged episodes, newest last;
 #: a day with more shows the most recent 12 and says so.
 MAX_PINS_TODAY = 12
+#: Seconds either side of today's episodes scanned for the decisions that saved
+#: their evidence frames. Only ``episode_id`` decides the match; this bounds the read.
+FRAME_SCAN_SLACK_S = 600.0
 #: Tonight's screen window, hours after local midnight of ``day`` (22:00 -> 05:00 next morning).
 NIGHT_SCREEN_WINDOW = (22.0, 29.0)
 #: Daylight band for the bright-light fallback when no phone row exists (coarse, no solar model).
@@ -787,7 +799,36 @@ def _adherence_state(d: _DayData) -> dict[str, list[float]] | None:
 # -- pins -------------------------------------------------------------------
 
 
-def _engine_episode(e: Episode) -> dict | None:
+def _frame_urls(db: Database, evidence: EvidenceStore | None,
+                episodes: list[Episode]) -> dict[str, str]:
+    """Episode id -> the evidence frame its pin shows (STATE.md §7).
+
+    Frames live 90 s in RAM; the only ones that survive are those the reasoner
+    copied at escalation. So an episode's picture is the newest saved frame of
+    the newest decision on it that is not dropped and kept one -- a dropped
+    (``t1_busy``) decision carries the episode id but never copies frames. The
+    path is server-relative, like the recap's ``frame_url``, because the client
+    knows its own API base and token. No evidence store, no pictures.
+    """
+
+    if evidence is None or not episodes:
+        return {}
+    wanted = {e.id for e in episodes}
+    t0 = min(e.start_t for e in episodes) - FRAME_SCAN_SLACK_S
+    t1 = max(_end(e) for e in episodes) + FRAME_SCAN_SLACK_S
+    out: dict[str, str] = {}
+    for decision in reversed(db.decisions_between(t0, t1)):  # newest first
+        episode_id = decision.episode_id
+        if decision.dropped or episode_id not in wanted or episode_id in out:
+            continue
+        frames = evidence.list(decision.id)  # oldest first
+        if frames:
+            out[episode_id] = (f"/api/evidence/{quote(decision.id, safe='')}/"
+                               f"{quote(frames[-1]['frame_ref'], safe='')}")
+    return out
+
+
+def _engine_episode(e: Episode, frame_url: str | None = None) -> dict | None:
     """An engine-shaped episode dict for ``pins_from_episodes`` (design §D), or None."""
 
     common = {
@@ -795,8 +836,8 @@ def _engine_episode(e: Episode) -> dict | None:
         "minutes": e.duration_s / 60.0,
         "scene": e.dominant.get("scene"),
         "label": None,
-        # Frames live 90 s in RAM and are only reachable per decision.
-        "frame_url": None,
+        # The pin's picture (`_frame_urls`), or None when no frame survived.
+        "frame_url": frame_url,
     }
     if e.kind == "meal":
         label = str(e.dominant.get("food_type", "untyped")).replace("_", " ")
@@ -876,13 +917,20 @@ def _jsonable(x):
     return x
 
 
-def profile_from_settings(settings: Settings, bedtime_hh: float) -> bs.Profile:
-    """The engine profile from ``PROFILE_*`` settings plus the day's bedtime."""
+def profile_from_settings(settings: Settings, bedtime_hh: float,
+                          goal: str | None = None) -> bs.Profile:
+    """The engine profile from ``PROFILE_*`` settings plus the day's bedtime.
 
+    ``goal`` overrides ``PROFILE_GOAL`` for one request (``/api/healthspan?goal=``);
+    it must be one of :data:`GOALS`, which the route checks before calling.
+    """
+
+    if goal is not None and goal not in GOALS:
+        raise ValueError(f"goal must be one of {', '.join(GOALS)}")
     return bs.Profile(
         age=settings.profile_age,
         sex=settings.profile_sex.strip().upper()[:1] or "M",
-        goal=settings.profile_goal,
+        goal=goal if goal is not None else settings.profile_goal,
         cyp1a2_slow=settings.profile_cyp1a2_slow,
         bedtime_hh=bedtime_hh,
     )
@@ -892,11 +940,14 @@ def profile_from_settings(settings: Settings, bedtime_hh: float) -> bs.Profile:
 
 
 def healthspan_for_day(db: Database, settings: Settings, day: str, *,
-                       now_t: float | None = None) -> dict:
+                       now_t: float | None = None, goal: str | None = None,
+                       evidence: EvidenceStore | None = None) -> dict:
     """The ``/api/healthspan`` payload for ``day`` (design §C).
 
-    Raises ``ValueError`` on a malformed ``day``; the route maps it to 400.
-    ``now_t`` only sets ``as_of_hh`` when it falls inside ``day``.
+    Raises ``ValueError`` on a malformed ``day`` or an unknown ``goal``; the
+    route maps both to 400. ``now_t`` only sets ``as_of_hh`` when it falls
+    inside ``day``. ``goal`` overrides ``PROFILE_GOAL`` for this call only, and
+    ``evidence`` (the reasoner's store) gives each pin its saved frame.
     """
 
     date.fromisoformat(day)
@@ -920,7 +971,7 @@ def healthspan_for_day(db: Database, settings: Settings, day: str, *,
     else:
         bedtime = Obs(DEFAULT_BEDTIME_H, "missing", "assumed",
                       f"assumed {_fmt_hour(DEFAULT_BEDTIME_H)} (no seeded bed_time row)")
-    profile = profile_from_settings(settings, bedtime.value)
+    profile = profile_from_settings(settings, bedtime.value, goal)
 
     all_obs = _day_obs(today, profile)
     all_obs.update(_week_obs([data[d] for d in trail7]))
@@ -958,7 +1009,9 @@ def healthspan_for_day(db: Database, settings: Settings, day: str, *,
         o = all_obs[row["key"]]
         row.update(provenance=o.source, basis=o.basis, detail=o.detail)
 
-    engine_eps = [ep for ep in (_engine_episode(e) for e in today.episodes) if ep is not None]
+    frames = _frame_urls(db, evidence, today.episodes)
+    engine_eps = [ep for ep in (_engine_episode(e, frames.get(e.id)) for e in today.episodes)
+                  if ep is not None]
     all_pins = _reconcile_pins(bs.pins_from_episodes(engine_eps, day_score, forecast), engine_eps,
                                profile, all_obs["day_light_min"])
     # Today shows at most MAX_PINS_TODAY of the merged episodes; the count says
@@ -1050,20 +1103,22 @@ def lite_payload(full: dict) -> dict:
 
 
 def healthspan_week(db: Database, settings: Settings, day: str, days: int, *,
-                    now_t: float | None = None) -> dict:
+                    now_t: float | None = None, goal: str | None = None,
+                    evidence: EvidenceStore | None = None) -> dict:
     """``{"days": [lite payload per day, oldest first], "today": full payload}``.
 
     ``days`` is clamped to 1..:data:`MAX_WEEK_DAYS`; each day is scored
-    independently, exactly as ``?day=`` would score it.
+    independently, exactly as ``?day=`` would score it, all under the same
+    ``goal``. Only the full ``today`` carries pins, so only it reads ``evidence``.
     """
 
     date.fromisoformat(day)
     n = max(1, min(MAX_WEEK_DAYS, int(days)))
     window = Scorer.week_days(day, n)
-    today = healthspan_for_day(db, settings, day, now_t=now_t)
+    today = healthspan_for_day(db, settings, day, now_t=now_t, goal=goal, evidence=evidence)
     return {
         "day": day,
-        "days": [lite_payload(healthspan_for_day(db, settings, d) if d != day else today)
+        "days": [lite_payload(healthspan_for_day(db, settings, d, goal=goal) if d != day else today)
                  for d in window],
         "today": today,
     }

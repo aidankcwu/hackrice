@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import io
-import statistics
 import time
 
 import numpy as np
@@ -112,29 +111,79 @@ def test_replay_is_deterministic(corpus):
     assert len(runs[0]) == 12
 
 
-def test_replay_holds_cadence_without_drift(corpus):
-    """A3 done-when: a steady 1 Hz.
+# speed=10 makes a step 0.1 s. Not faster: Windows' default timer tick is 15.6 ms, and on
+# Python 3.11 `time.monotonic()` (the clock asyncio schedules on) ticks at the same
+# 15.6 ms, so any one wake-up can land a tick or two late.
+CADENCE_SPEED = 10.0
+# The consumer's per-frame work, as a fraction of a step. It blocks the loop, like a
+# downstream stage that is slow but keeps up.
+CADENCE_WORK = 0.25
 
-    Run at speed=20 so the test costs ~0.5 s rather than 12 s. Drift is a property of
-    the pacing algorithm, not the interval, so a compressed run still catches a
-    `sleep(interval)`-in-a-loop regression.
-    """
-    src = ReplaySource(corpus, speed=20.0)
+
+async def _stamp_with_work(frames, work_s):
+    """Stamp each frame on arrival, then hold the event loop for `work_s`."""
     stamps = []
+    async for _ in frames:
+        stamps.append(time.perf_counter())  # QPC; monotonic() is a 15.6 ms tick here
+        while time.perf_counter() < stamps[-1] + work_s:
+            pass
+    return stamps
 
-    async def run():
-        async for _ in src.frames():
-            stamps.append(time.monotonic())
 
-    asyncio.run(run())
+def _drift(stamps, step):
+    """How far the schedule slid from the first half of the run to the second, in seconds.
+
+    `stamps[i] - i * step` is where frame 0 would have been had every gap been exactly
+    `step`. A deadline pacer keeps that anchor put: each frame is late by its own
+    wake-up and no more. A sleep-in-a-loop pacer walks it forward by every frame's work
+    and overshoot. Lateness only adds, so the earliest anchor in each half is the one
+    that shrugs off a stall, including a slow first frame while the thread pool spins up.
+    """
+    anchors = [t - i * step for i, t in enumerate(stamps)]
+    half = len(anchors) // 2
+    return min(anchors[half:]) - min(anchors[:half])
+
+
+def test_replay_holds_cadence_without_drift(corpus):
+    """A3 done-when: a steady 1 Hz, and a slow consumer does not push the schedule.
+
+    Run at speed=10 so the test costs ~1.1 s rather than 12 s. The step is 0.1 s because
+    of timer resolution (see CADENCE_SPEED): at speed=20 the old ±25 % mean-gap bound was
+    12.5 ms, under one 15.6 ms tick, and a single late wake-up on a loaded machine failed
+    it. At 0.1 s the drift bound is three ticks.
+
+    Drift is a property of the pacing algorithm, not the interval, so a compressed run
+    still catches a `sleep(interval)`-in-a-loop regression;
+    `test_cadence_check_catches_sleep_in_a_loop` proves this assertion fails for one.
+    """
+    src = ReplaySource(corpus, speed=CADENCE_SPEED)
     step = src.interval / src.speed
-    gaps = [b - a for a, b in zip(stamps, stamps[1:])]
-    elapsed = stamps[-1] - stamps[0]
-    ideal = step * (len(stamps) - 1)
+    stamps = asyncio.run(_stamp_with_work(src.frames(), step * CADENCE_WORK))
 
-    assert statistics.mean(gaps) == pytest.approx(step, abs=step * 0.25)
-    # Cumulative drift is the real assertion: overshoot must not accumulate.
-    assert abs(elapsed - ideal) < step * 0.5
+    assert len(stamps) == 12
+    # Cumulative drift is the real assertion: overshoot must not accumulate. It also
+    # holds the average gap well inside the old ±25 % bound.
+    assert abs(_drift(stamps, step)) < step * 0.5
+
+
+def test_cadence_check_catches_sleep_in_a_loop():
+    """The drift bound above must fail for the pacer ReplaySource exists to avoid.
+
+    Same consumer, step, frame count and assertion; only the pacer differs. The
+    consumer's work lands between sleeps, so every gap is at least step + work, and the
+    anchor walks 6 x 25 ms between halves against a 50 ms bound. asyncio cannot shave
+    that much off a sleep, so this does not flake.
+    """
+    step = 1.0 / CADENCE_SPEED
+
+    async def naive(n):
+        for _ in range(n):
+            yield None
+            await asyncio.sleep(step)
+
+    stamps = asyncio.run(_stamp_with_work(naive(12), step * CADENCE_WORK))
+
+    assert abs(_drift(stamps, step)) >= step * 0.5
 
 
 def test_replay_loops(corpus):

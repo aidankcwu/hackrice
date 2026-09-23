@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Bar, BarChart, Rectangle, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import type { BarShapeProps } from "recharts";
+import { appFetch } from "@/lib/runtime";
 import { T, fmtH, tone } from "@/lib/tokens";
 import {
   annotationsFromWeek,
@@ -131,7 +132,7 @@ function useNarration(annotations: readonly Annotation[], days: readonly string[
     if (annotations.length === 0) return;
     void (async () => {
       try {
-        const res = await fetch("/api/narrate", {
+        const res = await appFetch("/api/narrate", {
           method: "POST",
           cache: "no-store",
           headers: { "content-type": "application/json" },

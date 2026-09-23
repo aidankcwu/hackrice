@@ -5,8 +5,8 @@
  * Windows too.
  *
  * `GET /api/score?goal=<Goal>` — the whole `DashboardData` the page renders, for
- * the client-side poll. 502 when the backend or the engine is down; there is no
- * offline stand-in.
+ * the client-side poll: the backend's `/api/healthspan` under that goal
+ * (loader.ts). 502 when the backend is down; there is no offline stand-in.
  */
 import { NextResponse } from "next/server";
 import { EngineError, runEngine } from "@/lib/score/engine";

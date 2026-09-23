@@ -12,21 +12,25 @@
  * `Instruments.tsx` draws what this returns and `instruments.test.ts` asserts it.
  */
 
-import { PROVENANCE_LABEL, type Provenance } from "./provenance";
+import {
+  chipFor,
+  FACTOR_METRIC,
+  FACTOR_ORIGIN,
+  factorProvenance,
+  glassesGap,
+  PROVENANCE_LABEL,
+  type ObsProvenance,
+  type PageSource,
+  type Provenance,
+} from "./provenance";
+
+// The payload's provenance row and its chip live in provenance.ts, where the
+// By-layer panel reads them too; re-exported for the tiles' callers.
+export { chipFor, type ObsProvenance };
 
 // ---------------------------------------------------------------------------
 // What the payload gives us
 // ---------------------------------------------------------------------------
-
-/** `provenance[key]` in the healthspan payload (backend/pipeline/scoring/healthspan.py). */
-export interface ObsProvenance {
-  /** `live` = summed over the glasses' episodes, `seeded` = an integration row as-is, `derived` = a proxy of either, `missing` = no measurement at all. */
-  source: "live" | "seeded" | "derived" | "missing";
-  /** Which stream filed it: `glasses`, `phone`, `whoop`, `apple_watch`, `pvt`, `openaq`, `user`. */
-  basis: string;
-  /** One sentence on how the number was arrived at, or why there isn't one. */
-  detail: string;
-}
 
 /**
  * Everything the five tiles read. Deliberately narrower than the whole
@@ -85,32 +89,111 @@ export function statusOf(at: number | null, target: number, lowerIsBetter = fals
 // Provenance chip
 // ---------------------------------------------------------------------------
 
-/**
- * The payload's `basis` → one of the five chips in the footer legend. `whoop`
- * and `apple_watch` are both the wearable; `phone` rows in the demo database are
- * the seed, so they read "Seeded" rather than claiming a live sensor. A missing
- * observation is "Imputed" whatever filed the attempt, matching how the engine
- * scores it at the population reference.
- */
-export function chipFor(p: ObsProvenance | undefined): Provenance {
-  if (!p || p.source === "missing") return "imputed";
-  switch (p.basis) {
-    case "glasses":
-      return "glasses";
-    case "whoop":
-    case "apple_watch":
-      return "whoop";
-    case "pvt":
-    case "user":
-      return "entered";
-    default:
-      // `phone`, `openaq`, and anything a later integration adds: a row used
-      // as-is from the seeded database until a real device files it.
-      return "seeded";
-  }
+export const chipLabel = (p: Provenance): string => PROVENANCE_LABEL[p];
+
+/** The engine factor fields a tile's provenance is built from. */
+export interface FactorRow {
+  key: string;
+  label: string;
+  measured: boolean;
 }
 
-export const chipLabel = (p: Provenance): string => PROVENANCE_LABEL[p];
+/**
+ * Leading indicators a tile reads that are not engine factors, so no
+ * `factors[].measured` exists for them. Only `night_screen_min` is read: the
+ * clock tile's forecast delay is computed from it alone (`forecast_tonight`).
+ * It is the glasses' `screen_block` minutes after 22:00, summed by the engine's
+ * `observations_from_app`, so its presence in `observations` on a day the
+ * glasses filed any episode is the measurement (the engine writes 0 even on a
+ * day they did not — `glassesGap` rules that out) and `FACTOR_ORIGIN` names
+ * the stream.
+ */
+const LEADING_READ: Readonly<Record<string, (v: number) => string>> = {
+  night_screen_min: (v) => `${withUnit(v, "min")} of screens after 22:00`,
+};
+
+/**
+ * `InstrumentSource.provenance` for a payload that carries no per-key
+ * provenance of its own: each factor's chip comes from `factorProvenance` (the
+ * By-layer panel's derivation), written back as the `ObsProvenance` that
+ * `chipFor` reads as that same chip. Never a hard-coded source: a factor the
+ * glasses measured is Glasses, a HealthKit row is Apple Health, a demo-seed row
+ * is Seeded, and an unmeasured one is `missing` with the voice.md string — or,
+ * when it is a glasses value the day's coverage cannot back, with that reason
+ * ("no glasses episodes today").
+ *
+ * With `observations`, the leading indicators in `LEADING_READ` get the same
+ * derivation, measured exactly when the engine put a number in `observations`
+ * (and the glasses were on). A factor of the same key, should the engine grow
+ * one, wins.
+ */
+export function instrumentProvenance(
+  factors: readonly FactorRow[],
+  source: PageSource,
+  observations?: Readonly<Record<string, number>>,
+): Record<string, ObsProvenance> {
+  const leading: FactorRow[] =
+    observations === undefined
+      ? []
+      : Object.entries(LEADING_READ)
+          .filter(([key]) => !factors.some((f) => f.key === key))
+          .map(([key, describe]) => {
+            const v = finite(observations[key]);
+            return { key, label: v === null ? UNMEASURED : describe(v), measured: v !== null };
+          });
+  return Object.fromEntries(
+    [...leading, ...factors].map((f): [string, ObsProvenance] => {
+      const chip = factorProvenance(f.key, f.measured, source);
+      switch (chip) {
+        case "imputed":
+          return [f.key, { source: "missing", basis: FACTOR_ORIGIN[f.key] ?? "glasses", detail: glassesGap(f.key, source) ?? UNMEASURED }];
+        case "seeded":
+          // The row's own source, as the backend's `seeded` basis carries it.
+          return [f.key, { source: "seeded", basis: source.wearable_sources?.[FACTOR_METRIC[f.key] ?? f.key] ?? "seed", detail: f.label }];
+        case "entered":
+          return [f.key, { source: "live", basis: "user", detail: f.label }];
+        default:
+          // glasses, whoop, fitbit, healthkit: the stream is the basis.
+          return [f.key, { source: "live", basis: chip, detail: f.label }];
+      }
+    }),
+  );
+}
+
+/**
+ * The payload's `observations` less every glasses value the day's coverage
+ * cannot back, so a tile that reads a number straight from `observations`
+ * finds none rather than the engine's default 0.
+ */
+export function coveredObservations(
+  observations: Readonly<Record<string, number>>,
+  source: PageSource,
+): Record<string, number> {
+  return Object.fromEntries(Object.entries(observations).filter(([key]) => glassesGap(key, source) === null));
+}
+
+/**
+ * Everything the five tiles read, from the shaped dashboard's own fields. The
+ * backend's provenance rows (`source.provenance`) win for every key they cover —
+ * chip and reason are then exactly what the score was computed from — and the
+ * re-derivation only fills keys the payload has no row for.
+ */
+export function instrumentSource(d: {
+  factors: readonly FactorRow[];
+  source: PageSource;
+  observations: Readonly<Record<string, number>>;
+  forecast: InstrumentSource["forecast"];
+  bedtime_hh: number;
+}): InstrumentSource {
+  return {
+    observations: coveredObservations(d.observations, d.source),
+    provenance: { ...instrumentProvenance(d.factors, d.source, d.observations), ...d.source.provenance },
+    forecast: d.forecast,
+    bedtime_hh: d.bedtime_hh,
+    // Empty until the days=7 window is wired: no sparkline, never a flat line at zero.
+    trailing: [],
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Formatting helpers (en-US, pinned so server and client render the same string)

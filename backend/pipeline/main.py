@@ -6,12 +6,14 @@ import argparse
 import asyncio
 import contextlib
 import logging
+import os
 import signal
 from pathlib import Path
 
 import uvicorn
 
 from .api.app import create_app
+from .api.auth import install_log_redaction
 from .api.wiring import build_pipeline
 from .bus import Subscription
 from .config import Settings
@@ -71,15 +73,31 @@ async def run_headless(args: argparse.Namespace, settings: Settings) -> int:
     return 0
 
 
+def default_port() -> int:
+    """``$PORT`` when it is a usable port number, else 8010 (the Mac's port).
+
+    A malformed PORT falls back rather than raising: the backend starting on
+    the rehearsed port beats a container stuck in a restart loop over a typo.
+    """
+    raw = os.environ.get("PORT", "").strip()
+    try:
+        port = int(raw)
+    except ValueError:
+        return 8010
+    return port if 0 < port < 65536 else 8010
+
+
 def build_parser() -> argparse.ArgumentParser:
+    # Defaults come from Settings, i.e. the environment (SOURCE, REASONER, VLM,
+    # PORT, DB_PATH, ...), so a container needs no flags (docs/DEPLOY.md).
     defaults = Settings()
     parser = argparse.ArgumentParser(prog="pipeline", description=__doc__)
     parser.add_argument("--source", choices=["sim", "glasses", "webcam", "replay"],
-                        default="sim")
+                        default=defaults.source)
     parser.add_argument("--dir", help="frame corpus directory for replay")
     parser.add_argument("--loop", action="store_true", help="loop a replay corpus")
     parser.add_argument("--camera", type=int, default=0, help="webcam device index")
-    parser.add_argument("--vlm", choices=["gemini", "fake", "off"], default="gemini",
+    parser.add_argument("--vlm", choices=["gemini", "fake", "off"], default=defaults.vlm,
                         help="T0 tagger; fake/off need no Gemini key")
     parser.add_argument("--flow", choices=["numpy", "opencv", "off"], default=None)
     parser.add_argument("--speed", type=float, default=1.0)
@@ -88,10 +106,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tick-interval", dest="tick_interval_s", type=float,
                         default=defaults.tick_interval_s,
                         help="seconds between ticks (glasses emit every 1.5 s)")
-    parser.add_argument("--reasoner", choices=["openai", "fake"], default="fake")
+    parser.add_argument("--reasoner", choices=["openai", "fake"], default=defaults.reasoner)
     parser.add_argument("--db", default=str(defaults.db_path))
     parser.add_argument("--fresh", action="store_true", help="delete the DB and WAL files before startup")
-    parser.add_argument("--port", type=int, default=8010)
+    # PORT from the environment, as container platforms set it; the flag wins.
+    parser.add_argument("--port", type=int, default=default_port())
     parser.add_argument("--no-seed", action="store_true")
     parser.add_argument("--headless", action="store_true")
     parser.add_argument("--demo-mode", dest="demo_mode", action="store_true",
@@ -119,6 +138,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.fresh:
         fresh_database(settings.db_path)
         logging.getLogger(__name__).info("fresh database: %s", settings.db_path)
+    # One line that says whether this backend is open or locked, never the
+    # token itself: container logs get pasted into chats.
+    logging.getLogger(__name__).info(
+        "access token: %s%s", "required" if settings.access_token.strip() else "off (open)",
+        f"; public prefix {settings.root_path}" if settings.root_path else "")
     if args.headless:
         try:
             return asyncio.run(run_headless(args, settings))
@@ -129,7 +153,15 @@ def main(argv: list[str] | None = None) -> int:
         speed=args.speed, seed_db=not args.no_seed, dir=args.dir, loop=args.loop,
         camera=args.camera, vlm=args.vlm, flow=args.flow,
     )
-    uvicorn.run(app, host="0.0.0.0", port=args.port, log_level="info")
+    # root_path: the public prefix the proxy strips (/t/NAME). uvicorn puts it
+    # back into each request's path so a redirect the app builds leads back
+    # through the proxy; Starlette strips it again before routing.
+    config = uvicorn.Config(app, host="0.0.0.0", port=args.port, log_level="info",
+                            root_path=settings.root_path.rstrip("/"))
+    # After Config, which (re)configures uvicorn's loggers: the phone's socket
+    # URL carries ?token=, and uvicorn logs every path it serves.
+    install_log_redaction()
+    uvicorn.Server(config).run()
     return 0
 
 

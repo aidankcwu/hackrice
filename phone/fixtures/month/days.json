@@ -1,0 +1,7894 @@
+{
+ "city": "Houston",
+ "lat": 29.7604,
+ "lon": -95.3698,
+ "utc_offset": -5,
+ "days": [
+  {
+   "date": "2026-08-24",
+   "type": "clean",
+   "sleep": {
+    "bed": -95,
+    "wake": 396,
+    "minutes": 481,
+    "deep": 100,
+    "rem": 112,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 60,
+    "rhr_bpm": 60,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "caffeine",
+     "start": 433,
+     "drink": "coffee",
+     "id": "2026-08-24-00",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 437,
+     "minutes": 12,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-08-24-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 457,
+     "ml": 322,
+     "id": "2026-08-24-02",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 511,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-08-24-03",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 513,
+     "minutes": 22,
+     "label": "Commute",
+     "id": "2026-08-24-04",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 540,
+     "minutes": 180,
+     "label": "Office",
+     "id": "2026-08-24-05",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 545,
+     "minutes": 170,
+     "device": "computer",
+     "id": "2026-08-24-06",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 568,
+     "ms": 315,
+     "lapses": 0,
+     "energy": 3,
+     "mood": 4,
+     "clarity": 4,
+     "id": "2026-08-24-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 595,
+     "ml": 294,
+     "id": "2026-08-24-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 605,
+     "label": "Eggs and greens",
+     "food": "whole",
+     "thumb": "eggs",
+     "id": "2026-08-24-09",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 623,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-08-24-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 685,
+     "ml": 260,
+     "id": "2026-08-24-11",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 690,
+     "drink": "tea",
+     "id": "2026-08-24-12",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 737,
+     "minutes": 37,
+     "label": "Lunch with Maya",
+     "id": "2026-08-24-13",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 739,
+     "label": "Rice bowl with chicken",
+     "food": "whole",
+     "thumb": "rice_bowl",
+     "id": "2026-08-24-14",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 769,
+     "ml": 273,
+     "id": "2026-08-24-15",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 777,
+     "minutes": 25,
+     "label": "Walk outside",
+     "sunlight": true,
+     "id": "2026-08-24-16",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 800,
+     "minutes": 200,
+     "label": "Office",
+     "id": "2026-08-24-17",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 805,
+     "minutes": 190,
+     "device": "computer",
+     "id": "2026-08-24-18",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 871,
+     "ml": 312,
+     "id": "2026-08-24-19",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 932,
+     "minutes": 35,
+     "label": "Run, 6 km",
+     "vigorous": true,
+     "id": "2026-08-24-20",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 951,
+     "ml": 322,
+     "id": "2026-08-24-21",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 1028,
+     "minutes": 25,
+     "label": "Commute",
+     "id": "2026-08-24-22",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1060,
+     "ml": 269,
+     "id": "2026-08-24-23",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1078,
+     "label": "Steak salad",
+     "food": "whole",
+     "thumb": "salad",
+     "id": "2026-08-24-24",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 24,
+     "label": "Dinner with family",
+     "id": "2026-08-24-25",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1180,
+     "ml": 282,
+     "id": "2026-08-24-26",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1209,
+     "minutes": 25,
+     "device": "phone",
+     "id": "2026-08-24-27",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1215,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-08-24-28",
+     "seeded": true
+    }
+   ],
+   "aqi": 53,
+   "weather": {
+    "high_f": 94,
+    "summary": "Afternoon storms"
+   },
+   "held_back": 10,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-08-25",
+   "type": "clean",
+   "sleep": {
+    "bed": -84,
+    "wake": 385,
+    "minutes": 461,
+    "deep": 100,
+    "rem": 111,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 53,
+    "rhr_bpm": 60,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "outdoor",
+     "start": 433,
+     "minutes": 11,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-08-25-00",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 438,
+     "drink": "coffee",
+     "id": "2026-08-25-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 456,
+     "ml": 307,
+     "id": "2026-08-25-02",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 515,
+     "minutes": 21,
+     "label": "Commute",
+     "id": "2026-08-25-03",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 526,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-08-25-04",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 540,
+     "minutes": 180,
+     "label": "Office",
+     "id": "2026-08-25-05",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 545,
+     "minutes": 170,
+     "device": "computer",
+     "id": "2026-08-25-06",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 563,
+     "ms": 292,
+     "lapses": 0,
+     "energy": 4,
+     "mood": 4,
+     "clarity": 5,
+     "id": "2026-08-25-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 590,
+     "ml": 273,
+     "id": "2026-08-25-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 615,
+     "label": "Oats with nuts",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-08-25-09",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 628,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-08-25-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 681,
+     "ml": 309,
+     "id": "2026-08-25-11",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 735,
+     "minutes": 39,
+     "label": "Lunch with Maya",
+     "id": "2026-08-25-12",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 742,
+     "label": "Chicken and vegetables",
+     "food": "whole",
+     "thumb": "plate",
+     "id": "2026-08-25-13",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 761,
+     "ml": 329,
+     "id": "2026-08-25-14",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 776,
+     "minutes": 22,
+     "label": "Walk outside",
+     "sunlight": true,
+     "id": "2026-08-25-15",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 800,
+     "minutes": 200,
+     "label": "Office",
+     "id": "2026-08-25-16",
+     "seeded": true
+    },
+    {
+     "kind": "sedentary",
+     "start": 805,
+     "minutes": 110,
+     "id": "2026-08-25-17",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 805,
+     "minutes": 190,
+     "device": "computer",
+     "id": "2026-08-25-18",
+     "seeded": true
+    },
+    {
+     "kind": "co2",
+     "start": 840,
+     "minutes": 90,
+     "ppm": 1050,
+     "label": "Meeting room",
+     "id": "2026-08-25-19",
+     "seeded": true
+    },
+    {
+     "kind": "stress",
+     "start": 848,
+     "scene": "Meeting",
+     "hr": 87,
+     "resting": 58,
+     "id": "2026-08-25-20",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 871,
+     "ml": 291,
+     "id": "2026-08-25-21",
+     "seeded": true
+    },
+    {
+     "kind": "asked",
+     "start": 905,
+     "line": "Was that tea or coffee?",
+     "id": "2026-08-25-22",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 932,
+     "minutes": 50,
+     "label": "Cycling",
+     "vigorous": true,
+     "id": "2026-08-25-23",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 960,
+     "ml": 269,
+     "id": "2026-08-25-24",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 1027,
+     "minutes": 24,
+     "label": "Commute",
+     "id": "2026-08-25-25",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1060,
+     "ml": 299,
+     "id": "2026-08-25-26",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1069,
+     "label": "Bean chili",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-08-25-27",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 32,
+     "label": "Dinner with family",
+     "id": "2026-08-25-28",
+     "seeded": true
+    },
+    {
+     "kind": "sauna",
+     "start": 1120,
+     "minutes": 22,
+     "id": "2026-08-25-29",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1183,
+     "ml": 295,
+     "id": "2026-08-25-30",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1202,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-08-25-31",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1208,
+     "minutes": 22,
+     "device": "phone",
+     "id": "2026-08-25-32",
+     "seeded": true
+    }
+   ],
+   "aqi": 52,
+   "weather": {
+    "high_f": 88,
+    "summary": "Humid, sun"
+   },
+   "held_back": 13,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-08-26",
+   "type": "late_caffeine",
+   "sleep": {
+    "bed": -93,
+    "wake": 387,
+    "minutes": 469,
+    "deep": 97,
+    "rem": 114,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 58,
+    "rhr_bpm": 58,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "caffeine",
+     "start": 436,
+     "drink": "coffee",
+     "id": "2026-08-26-00",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 437,
+     "minutes": 15,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-08-26-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 455,
+     "ml": 309,
+     "id": "2026-08-26-02",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 510,
+     "minutes": 19,
+     "label": "Commute",
+     "id": "2026-08-26-03",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 512,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-08-26-04",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 540,
+     "minutes": 180,
+     "label": "Office",
+     "id": "2026-08-26-05",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 545,
+     "minutes": 170,
+     "device": "computer",
+     "id": "2026-08-26-06",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 560,
+     "ms": 298,
+     "lapses": 1,
+     "energy": 5,
+     "mood": 3,
+     "clarity": 4,
+     "id": "2026-08-26-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 597,
+     "ml": 292,
+     "id": "2026-08-26-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 617,
+     "label": "Eggs and greens",
+     "food": "whole",
+     "thumb": "eggs",
+     "id": "2026-08-26-09",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 626,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-08-26-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 681,
+     "ml": 271,
+     "id": "2026-08-26-11",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 740,
+     "minutes": 38,
+     "label": "Lunch with Maya",
+     "id": "2026-08-26-12",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 741,
+     "label": "Salad with salmon",
+     "food": "whole",
+     "thumb": "salad",
+     "id": "2026-08-26-13",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 761,
+     "ml": 302,
+     "id": "2026-08-26-14",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 779,
+     "minutes": 22,
+     "label": "Walk outside",
+     "sunlight": true,
+     "id": "2026-08-26-15",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 800,
+     "minutes": 200,
+     "label": "Office",
+     "id": "2026-08-26-16",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 805,
+     "minutes": 190,
+     "device": "computer",
+     "id": "2026-08-26-17",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 869,
+     "ml": 281,
+     "id": "2026-08-26-18",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 936,
+     "minutes": 50,
+     "label": "Cycling",
+     "vigorous": true,
+     "id": "2026-08-26-19",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 957,
+     "ml": 293,
+     "id": "2026-08-26-20",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 970,
+     "drink": "coffee",
+     "id": "2026-08-26-21",
+     "seeded": true
+    },
+    {
+     "kind": "whispered",
+     "start": 971,
+     "line": "That coffee lands in tonight's sleep.",
+     "id": "2026-08-26-22",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 1025,
+     "minutes": 23,
+     "label": "Commute",
+     "id": "2026-08-26-23",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1061,
+     "ml": 308,
+     "id": "2026-08-26-24",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1076,
+     "label": "Salmon and vegetables",
+     "food": "whole",
+     "thumb": "fish",
+     "id": "2026-08-26-25",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 25,
+     "label": "Dinner with family",
+     "id": "2026-08-26-26",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1184,
+     "ml": 285,
+     "id": "2026-08-26-27",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1207,
+     "minutes": 27,
+     "device": "phone",
+     "id": "2026-08-26-28",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1211,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-08-26-29",
+     "seeded": true
+    }
+   ],
+   "aqi": 30,
+   "weather": {
+    "high_f": 91,
+    "summary": "Partly cloudy"
+   },
+   "held_back": 10,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-08-27",
+   "type": "clean",
+   "sleep": {
+    "bed": -68,
+    "wake": 385,
+    "minutes": 428,
+    "deep": 72,
+    "rem": 101,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 60,
+    "rhr_bpm": 58,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "outdoor",
+     "start": 437,
+     "minutes": 12,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-08-27-00",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 437,
+     "drink": "coffee",
+     "id": "2026-08-27-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 456,
+     "ml": 304,
+     "id": "2026-08-27-02",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 504,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-08-27-03",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 518,
+     "minutes": 19,
+     "label": "Commute",
+     "id": "2026-08-27-04",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 540,
+     "minutes": 180,
+     "label": "Office",
+     "id": "2026-08-27-05",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 545,
+     "minutes": 170,
+     "device": "computer",
+     "id": "2026-08-27-06",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 557,
+     "ms": 296,
+     "lapses": 2,
+     "energy": 4,
+     "mood": 5,
+     "clarity": 4,
+     "id": "2026-08-27-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 597,
+     "ml": 300,
+     "id": "2026-08-27-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 605,
+     "label": "Oats with nuts",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-08-27-09",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 624,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-08-27-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 681,
+     "ml": 310,
+     "id": "2026-08-27-11",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 695,
+     "drink": "tea",
+     "id": "2026-08-27-12",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 736,
+     "minutes": 35,
+     "label": "Lunch with Maya",
+     "id": "2026-08-27-13",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 740,
+     "label": "Rice bowl with chicken",
+     "food": "whole",
+     "thumb": "rice_bowl",
+     "id": "2026-08-27-14",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 768,
+     "ml": 287,
+     "id": "2026-08-27-15",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 777,
+     "minutes": 18,
+     "label": "Walk outside",
+     "sunlight": true,
+     "id": "2026-08-27-16",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 800,
+     "minutes": 200,
+     "label": "Office",
+     "id": "2026-08-27-17",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 805,
+     "minutes": 190,
+     "device": "computer",
+     "id": "2026-08-27-18",
+     "seeded": true
+    },
+    {
+     "kind": "co2",
+     "start": 840,
+     "minutes": 90,
+     "ppm": 1050,
+     "label": "Meeting room",
+     "id": "2026-08-27-19",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 872,
+     "ml": 262,
+     "id": "2026-08-27-20",
+     "seeded": true
+    },
+    {
+     "kind": "asked",
+     "start": 905,
+     "line": "Was that tea or coffee?",
+     "id": "2026-08-27-21",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 934,
+     "minutes": 35,
+     "label": "Run, 6 km",
+     "vigorous": true,
+     "id": "2026-08-27-22",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 952,
+     "ml": 328,
+     "id": "2026-08-27-23",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 1021,
+     "minutes": 18,
+     "label": "Commute",
+     "id": "2026-08-27-24",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1053,
+     "ml": 326,
+     "id": "2026-08-27-25",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1075,
+     "label": "Steak salad",
+     "food": "whole",
+     "thumb": "salad",
+     "id": "2026-08-27-26",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 32,
+     "label": "Dinner with family",
+     "id": "2026-08-27-27",
+     "seeded": true
+    },
+    {
+     "kind": "sauna",
+     "start": 1125,
+     "minutes": 19,
+     "id": "2026-08-27-28",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1183,
+     "ml": 303,
+     "id": "2026-08-27-29",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1213,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-08-27-30",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1216,
+     "minutes": 30,
+     "device": "phone",
+     "id": "2026-08-27-31",
+     "seeded": true
+    }
+   ],
+   "aqi": 55,
+   "weather": {
+    "high_f": 88,
+    "summary": "Humid, sun"
+   },
+   "held_back": 5,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-08-28",
+   "type": "perfect",
+   "sleep": {
+    "bed": -87,
+    "wake": 388,
+    "minutes": 467,
+    "deep": 108,
+    "rem": 108,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 55,
+    "rhr_bpm": 57,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "outdoor",
+     "start": 432,
+     "minutes": 11,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-08-28-00",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 433,
+     "drink": "coffee",
+     "id": "2026-08-28-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 461,
+     "ml": 295,
+     "id": "2026-08-28-02",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 513,
+     "minutes": 23,
+     "label": "Commute",
+     "id": "2026-08-28-03",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 522,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-08-28-04",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 540,
+     "minutes": 180,
+     "label": "Office",
+     "id": "2026-08-28-05",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 545,
+     "minutes": 170,
+     "device": "computer",
+     "id": "2026-08-28-06",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 567,
+     "ms": 319,
+     "lapses": 0,
+     "energy": 4,
+     "mood": 4,
+     "clarity": 3,
+     "id": "2026-08-28-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 587,
+     "ml": 295,
+     "id": "2026-08-28-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 615,
+     "label": "Greek yogurt and berries",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-08-28-09",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 628,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-08-28-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 650,
+     "ml": 300,
+     "id": "2026-08-28-11",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 682,
+     "ml": 281,
+     "id": "2026-08-28-12",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 736,
+     "label": "Chicken and vegetables",
+     "food": "whole",
+     "thumb": "plate",
+     "id": "2026-08-28-13",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 741,
+     "minutes": 27,
+     "label": "Lunch with Maya",
+     "id": "2026-08-28-14",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 760,
+     "ml": 262,
+     "id": "2026-08-28-15",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 776,
+     "minutes": 17,
+     "label": "Walk outside",
+     "sunlight": true,
+     "id": "2026-08-28-16",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 800,
+     "minutes": 200,
+     "label": "Office",
+     "id": "2026-08-28-17",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 805,
+     "minutes": 190,
+     "device": "computer",
+     "id": "2026-08-28-18",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 868,
+     "ml": 275,
+     "id": "2026-08-28-19",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 940,
+     "minutes": 35,
+     "label": "Run, 6 km",
+     "vigorous": true,
+     "id": "2026-08-28-20",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 958,
+     "ml": 284,
+     "id": "2026-08-28-21",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 980,
+     "minutes": 25,
+     "label": "Evening walk",
+     "sunlight": true,
+     "id": "2026-08-28-22",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 980,
+     "minutes": 25,
+     "label": "Call with Dad",
+     "id": "2026-08-28-23",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 1027,
+     "minutes": 21,
+     "label": "Commute",
+     "id": "2026-08-28-24",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1056,
+     "ml": 318,
+     "id": "2026-08-28-25",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1076,
+     "label": "Chicken, rice and greens",
+     "food": "whole",
+     "thumb": "plate",
+     "id": "2026-08-28-26",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 23,
+     "label": "Dinner with family",
+     "id": "2026-08-28-27",
+     "seeded": true
+    },
+    {
+     "kind": "sauna",
+     "start": 1120,
+     "minutes": 20,
+     "id": "2026-08-28-28",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1185,
+     "ml": 282,
+     "id": "2026-08-28-29",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1215,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-08-28-30",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1218,
+     "minutes": 22,
+     "device": "phone",
+     "id": "2026-08-28-31",
+     "seeded": true
+    }
+   ],
+   "aqi": 44,
+   "weather": {
+    "high_f": 89,
+    "summary": "Afternoon storms"
+   },
+   "held_back": 3,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-08-29",
+   "type": "clean",
+   "sleep": {
+    "bed": -92,
+    "wake": 388,
+    "minutes": 466,
+    "deep": 114,
+    "rem": 115,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 53,
+    "rhr_bpm": 56,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "caffeine",
+     "start": 433,
+     "drink": "coffee",
+     "id": "2026-08-29-00",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 438,
+     "minutes": 11,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-08-29-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 455,
+     "ml": 295,
+     "id": "2026-08-29-02",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 518,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-08-29-03",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 564,
+     "ms": 307,
+     "lapses": 2,
+     "energy": 5,
+     "mood": 4,
+     "clarity": 3,
+     "id": "2026-08-29-04",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 582,
+     "minutes": 59,
+     "label": "Park with the stroller",
+     "sunlight": true,
+     "id": "2026-08-29-05",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 582,
+     "minutes": 38,
+     "label": "Walk with Maya",
+     "id": "2026-08-29-06",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 587,
+     "ml": 296,
+     "id": "2026-08-29-07",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 615,
+     "label": "Eggs and greens",
+     "food": "whole",
+     "thumb": "eggs",
+     "id": "2026-08-29-08",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 627,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-08-29-09",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 682,
+     "ml": 260,
+     "id": "2026-08-29-10",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 690,
+     "drink": "tea",
+     "id": "2026-08-29-11",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 762,
+     "ml": 323,
+     "id": "2026-08-29-12",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 766,
+     "label": "Salad with salmon",
+     "food": "whole",
+     "thumb": "salad",
+     "id": "2026-08-29-13",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 860,
+     "ml": 329,
+     "id": "2026-08-29-14",
+     "seeded": true
+    },
+    {
+     "kind": "asked",
+     "start": 905,
+     "line": "Was that tea or coffee?",
+     "id": "2026-08-29-15",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 910,
+     "minutes": 23,
+     "label": "Groceries",
+     "id": "2026-08-29-16",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 940,
+     "minutes": 45,
+     "label": "Strength, 45 min",
+     "vigorous": true,
+     "id": "2026-08-29-17",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 960,
+     "ml": 313,
+     "id": "2026-08-29-18",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1050,
+     "ml": 307,
+     "id": "2026-08-29-19",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1070,
+     "label": "Chicken, rice and greens",
+     "food": "whole",
+     "thumb": "plate",
+     "id": "2026-08-29-20",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 30,
+     "label": "Dinner with family",
+     "id": "2026-08-29-21",
+     "seeded": true
+    },
+    {
+     "kind": "sauna",
+     "start": 1119,
+     "minutes": 19,
+     "id": "2026-08-29-22",
+     "seeded": true
+    },
+    {
+     "kind": "cold",
+     "start": 1155,
+     "minutes": 3,
+     "id": "2026-08-29-23",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1181,
+     "ml": 296,
+     "id": "2026-08-29-24",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1205,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-08-29-25",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1209,
+     "minutes": 29,
+     "device": "phone",
+     "id": "2026-08-29-26",
+     "seeded": true
+    }
+   ],
+   "aqi": 41,
+   "weather": {
+    "high_f": 93,
+    "summary": "Partly cloudy"
+   },
+   "held_back": 13,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-08-30",
+   "type": "clean",
+   "sleep": {
+    "bed": -80,
+    "wake": 385,
+    "minutes": 457,
+    "deep": 92,
+    "rem": 107,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 57,
+    "rhr_bpm": 56,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "outdoor",
+     "start": 432,
+     "minutes": 14,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-08-30-00",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 433,
+     "drink": "coffee",
+     "id": "2026-08-30-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 456,
+     "ml": 283,
+     "id": "2026-08-30-02",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 520,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-08-30-03",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 559,
+     "ms": 306,
+     "lapses": 2,
+     "energy": 5,
+     "mood": 3,
+     "clarity": 4,
+     "id": "2026-08-30-04",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 576,
+     "minutes": 70,
+     "label": "Park with the stroller",
+     "sunlight": true,
+     "id": "2026-08-30-05",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 583,
+     "minutes": 40,
+     "label": "Walk with Maya",
+     "id": "2026-08-30-06",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 586,
+     "ml": 303,
+     "id": "2026-08-30-07",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 617,
+     "label": "Greek yogurt and berries",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-08-30-08",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 624,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-08-30-09",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 686,
+     "ml": 318,
+     "id": "2026-08-30-10",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 768,
+     "label": "Chicken and vegetables",
+     "food": "whole",
+     "thumb": "plate",
+     "id": "2026-08-30-11",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 772,
+     "ml": 300,
+     "id": "2026-08-30-12",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 864,
+     "ml": 311,
+     "id": "2026-08-30-13",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 913,
+     "minutes": 15,
+     "label": "Groceries",
+     "id": "2026-08-30-14",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 931,
+     "minutes": 30,
+     "label": "Mobility and core",
+     "vigorous": false,
+     "id": "2026-08-30-15",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 960,
+     "ml": 304,
+     "id": "2026-08-30-16",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1052,
+     "ml": 281,
+     "id": "2026-08-30-17",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1065,
+     "label": "Bean chili",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-08-30-18",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 32,
+     "label": "Dinner with family",
+     "id": "2026-08-30-19",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1186,
+     "ml": 266,
+     "id": "2026-08-30-20",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1202,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-08-30-21",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1210,
+     "minutes": 23,
+     "device": "phone",
+     "id": "2026-08-30-22",
+     "seeded": true
+    }
+   ],
+   "aqi": 55,
+   "weather": {
+    "high_f": 91,
+    "summary": "Clear and hot"
+   },
+   "held_back": 10,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-08-31",
+   "type": "skipped_lunch",
+   "sleep": {
+    "bed": -98,
+    "wake": 402,
+    "minutes": 486,
+    "deep": 100,
+    "rem": 100,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 56,
+    "rhr_bpm": 58,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "caffeine",
+     "start": 436,
+     "drink": "coffee",
+     "id": "2026-08-31-00",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 438,
+     "minutes": 14,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-08-31-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 453,
+     "ml": 286,
+     "id": "2026-08-31-02",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 513,
+     "minutes": 24,
+     "label": "Commute",
+     "id": "2026-08-31-03",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 515,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-08-31-04",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 540,
+     "minutes": 180,
+     "label": "Office",
+     "id": "2026-08-31-05",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 545,
+     "minutes": 170,
+     "device": "computer",
+     "id": "2026-08-31-06",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 565,
+     "ms": 307,
+     "lapses": 2,
+     "energy": 5,
+     "mood": 3,
+     "clarity": 5,
+     "id": "2026-08-31-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 586,
+     "ml": 321,
+     "id": "2026-08-31-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 607,
+     "label": "Greek yogurt and berries",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-08-31-09",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 624,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-08-31-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 679,
+     "ml": 324,
+     "id": "2026-08-31-11",
+     "seeded": true
+    },
+    {
+     "kind": "acted",
+     "start": 690,
+     "line": "Added a 20-minute lunch block to your calendar.",
+     "id": "2026-08-31-12",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 768,
+     "ml": 291,
+     "id": "2026-08-31-13",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 777,
+     "minutes": 25,
+     "label": "Walk outside",
+     "sunlight": true,
+     "id": "2026-08-31-14",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 800,
+     "minutes": 200,
+     "label": "Office",
+     "id": "2026-08-31-15",
+     "seeded": true
+    },
+    {
+     "kind": "sedentary",
+     "start": 805,
+     "minutes": 103,
+     "id": "2026-08-31-16",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 805,
+     "minutes": 190,
+     "device": "computer",
+     "id": "2026-08-31-17",
+     "seeded": true
+    },
+    {
+     "kind": "skipped_meal",
+     "start": 840,
+     "meal": "lunch",
+     "id": "2026-08-31-18",
+     "seeded": true
+    },
+    {
+     "kind": "stress",
+     "start": 845,
+     "scene": "Meeting",
+     "hr": 83,
+     "resting": 58,
+     "id": "2026-08-31-19",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 865,
+     "ml": 316,
+     "id": "2026-08-31-20",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 933,
+     "minutes": 45,
+     "label": "Strength, 45 min",
+     "vigorous": true,
+     "id": "2026-08-31-21",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 953,
+     "ml": 328,
+     "id": "2026-08-31-22",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 1030,
+     "minutes": 20,
+     "label": "Commute",
+     "id": "2026-08-31-23",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1055,
+     "ml": 292,
+     "id": "2026-08-31-24",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 30,
+     "label": "Dinner with family",
+     "id": "2026-08-31-25",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1090,
+     "label": "Pasta, a large plate",
+     "food": "whole",
+     "thumb": "pasta",
+     "id": "2026-08-31-26",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1182,
+     "ml": 311,
+     "id": "2026-08-31-27",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1205,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-08-31-28",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1220,
+     "minutes": 30,
+     "device": "phone",
+     "id": "2026-08-31-29",
+     "seeded": true
+    }
+   ],
+   "aqi": 39,
+   "weather": {
+    "high_f": 91,
+    "summary": "Humid, sun"
+   },
+   "held_back": 14,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-09-01",
+   "type": "clean",
+   "sleep": {
+    "bed": -81,
+    "wake": 401,
+    "minutes": 473,
+    "deep": 112,
+    "rem": 105,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 56,
+    "rhr_bpm": 56,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "caffeine",
+     "start": 436,
+     "drink": "coffee",
+     "id": "2026-09-01-00",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 438,
+     "minutes": 14,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-09-01-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 452,
+     "ml": 313,
+     "id": "2026-09-01-02",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 517,
+     "minutes": 20,
+     "label": "Commute",
+     "id": "2026-09-01-03",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 523,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-01-04",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 540,
+     "minutes": 180,
+     "label": "Office",
+     "id": "2026-09-01-05",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 545,
+     "minutes": 170,
+     "device": "computer",
+     "id": "2026-09-01-06",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 558,
+     "ms": 302,
+     "lapses": 1,
+     "energy": 3,
+     "mood": 5,
+     "clarity": 5,
+     "id": "2026-09-01-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 593,
+     "ml": 318,
+     "id": "2026-09-01-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 615,
+     "label": "Greek yogurt and berries",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-09-01-09",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 628,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-09-01-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 685,
+     "ml": 306,
+     "id": "2026-09-01-11",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 735,
+     "minutes": 28,
+     "label": "Lunch with Maya",
+     "id": "2026-09-01-12",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 741,
+     "label": "Chicken and vegetables",
+     "food": "whole",
+     "thumb": "plate",
+     "id": "2026-09-01-13",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 760,
+     "ml": 295,
+     "id": "2026-09-01-14",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 775,
+     "minutes": 19,
+     "label": "Walk outside",
+     "sunlight": true,
+     "id": "2026-09-01-15",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 800,
+     "minutes": 200,
+     "label": "Office",
+     "id": "2026-09-01-16",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 805,
+     "minutes": 190,
+     "device": "computer",
+     "id": "2026-09-01-17",
+     "seeded": true
+    },
+    {
+     "kind": "co2",
+     "start": 840,
+     "minutes": 90,
+     "ppm": 1050,
+     "label": "Meeting room",
+     "id": "2026-09-01-18",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 863,
+     "ml": 267,
+     "id": "2026-09-01-19",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 933,
+     "minutes": 30,
+     "label": "Mobility and core",
+     "vigorous": false,
+     "id": "2026-09-01-20",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 953,
+     "ml": 311,
+     "id": "2026-09-01-21",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 1023,
+     "minutes": 23,
+     "label": "Commute",
+     "id": "2026-09-01-22",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1055,
+     "ml": 277,
+     "id": "2026-09-01-23",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1075,
+     "label": "Steak salad",
+     "food": "whole",
+     "thumb": "salad",
+     "id": "2026-09-01-24",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 35,
+     "label": "Dinner with family",
+     "id": "2026-09-01-25",
+     "seeded": true
+    },
+    {
+     "kind": "sauna",
+     "start": 1116,
+     "minutes": 19,
+     "id": "2026-09-01-26",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1192,
+     "ml": 297,
+     "id": "2026-09-01-27",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1205,
+     "minutes": 29,
+     "device": "phone",
+     "id": "2026-09-01-28",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1205,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-01-29",
+     "seeded": true
+    }
+   ],
+   "aqi": 55,
+   "weather": {
+    "high_f": 93,
+    "summary": "Partly cloudy"
+   },
+   "held_back": 14,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-09-02",
+   "type": "late_dinner",
+   "sleep": {
+    "bed": -97,
+    "wake": 386,
+    "minutes": 469,
+    "deep": 100,
+    "rem": 113,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 54,
+    "rhr_bpm": 60,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "outdoor",
+     "start": 437,
+     "minutes": 12,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-09-02-00",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 438,
+     "drink": "coffee",
+     "id": "2026-09-02-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 461,
+     "ml": 316,
+     "id": "2026-09-02-02",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 518,
+     "minutes": 21,
+     "label": "Commute",
+     "id": "2026-09-02-03",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 526,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-02-04",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 540,
+     "minutes": 180,
+     "label": "Office",
+     "id": "2026-09-02-05",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 545,
+     "minutes": 170,
+     "device": "computer",
+     "id": "2026-09-02-06",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 559,
+     "ms": 310,
+     "lapses": 1,
+     "energy": 3,
+     "mood": 4,
+     "clarity": 3,
+     "id": "2026-09-02-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 591,
+     "ml": 291,
+     "id": "2026-09-02-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 618,
+     "label": "Eggs and greens",
+     "food": "whole",
+     "thumb": "eggs",
+     "id": "2026-09-02-09",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 625,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-09-02-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 675,
+     "ml": 270,
+     "id": "2026-09-02-11",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 703,
+     "drink": "coffee",
+     "id": "2026-09-02-12",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 740,
+     "minutes": 35,
+     "label": "Lunch with Maya",
+     "id": "2026-09-02-13",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 744,
+     "label": "Lentil soup and bread",
+     "food": "whole",
+     "thumb": "soup",
+     "id": "2026-09-02-14",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 763,
+     "ml": 279,
+     "id": "2026-09-02-15",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 779,
+     "minutes": 23,
+     "label": "Walk outside",
+     "sunlight": true,
+     "id": "2026-09-02-16",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 800,
+     "minutes": 200,
+     "label": "Office",
+     "id": "2026-09-02-17",
+     "seeded": true
+    },
+    {
+     "kind": "sedentary",
+     "start": 805,
+     "minutes": 106,
+     "id": "2026-09-02-18",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 805,
+     "minutes": 190,
+     "device": "computer",
+     "id": "2026-09-02-19",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 866,
+     "ml": 273,
+     "id": "2026-09-02-20",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 930,
+     "minutes": 30,
+     "label": "Mobility and core",
+     "vigorous": false,
+     "id": "2026-09-02-21",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 950,
+     "ml": 304,
+     "id": "2026-09-02-22",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 1025,
+     "minutes": 26,
+     "label": "Commute",
+     "id": "2026-09-02-23",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1059,
+     "ml": 262,
+     "id": "2026-09-02-24",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1185,
+     "ml": 311,
+     "id": "2026-09-02-25",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1200,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-02-26",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1216,
+     "minutes": 29,
+     "device": "phone",
+     "id": "2026-09-02-27",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1240,
+     "label": "Burger and fries",
+     "food": "fast_food",
+     "thumb": "burger",
+     "id": "2026-09-02-28",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1240,
+     "minutes": 30,
+     "label": "Late dinner with Sam",
+     "id": "2026-09-02-29",
+     "seeded": true
+    }
+   ],
+   "aqi": 49,
+   "weather": {
+    "high_f": 95,
+    "summary": "Clear and hot"
+   },
+   "held_back": 14,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-09-03",
+   "type": "crying_baby",
+   "sleep": {
+    "bed": -78,
+    "wake": 387,
+    "minutes": 379,
+    "deep": 49,
+    "rem": 76,
+    "fragmented": true,
+    "wakings": [
+     {
+      "start": 40,
+      "minutes": 20,
+      "baby": true
+     },
+     {
+      "start": 135,
+      "minutes": 21,
+      "baby": true
+     },
+     {
+      "start": 230,
+      "minutes": 18,
+      "baby": true
+     },
+     {
+      "start": 305,
+      "minutes": 15,
+      "baby": true
+     }
+    ],
+    "hrv_ms": 42,
+    "rhr_bpm": 59,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "outdoor",
+     "start": 433,
+     "minutes": 16,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-09-03-00",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 437,
+     "drink": "coffee",
+     "id": "2026-09-03-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 459,
+     "ml": 263,
+     "id": "2026-09-03-02",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 515,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-03-03",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 518,
+     "minutes": 23,
+     "label": "Commute",
+     "id": "2026-09-03-04",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 540,
+     "minutes": 180,
+     "label": "Office",
+     "id": "2026-09-03-05",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 545,
+     "minutes": 170,
+     "device": "computer",
+     "id": "2026-09-03-06",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 554,
+     "ms": 322,
+     "lapses": 0,
+     "energy": 3,
+     "mood": 5,
+     "clarity": 3,
+     "id": "2026-09-03-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 597,
+     "ml": 260,
+     "id": "2026-09-03-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 611,
+     "label": "Greek yogurt and berries",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-09-03-09",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 627,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-09-03-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 677,
+     "ml": 286,
+     "id": "2026-09-03-11",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 715,
+     "drink": "coffee",
+     "id": "2026-09-03-12",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 715,
+     "drink": "coffee",
+     "id": "2026-09-03-13",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 735,
+     "minutes": 38,
+     "label": "Lunch with Maya",
+     "id": "2026-09-03-14",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 743,
+     "label": "Chicken and vegetables",
+     "food": "whole",
+     "thumb": "plate",
+     "id": "2026-09-03-15",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 764,
+     "ml": 329,
+     "id": "2026-09-03-16",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 778,
+     "minutes": 16,
+     "label": "Walk outside",
+     "sunlight": true,
+     "id": "2026-09-03-17",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 800,
+     "minutes": 200,
+     "label": "Office",
+     "id": "2026-09-03-18",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 805,
+     "minutes": 190,
+     "device": "computer",
+     "id": "2026-09-03-19",
+     "seeded": true
+    },
+    {
+     "kind": "nap",
+     "start": 810,
+     "minutes": 20,
+     "id": "2026-09-03-20",
+     "seeded": true
+    },
+    {
+     "kind": "co2",
+     "start": 840,
+     "minutes": 90,
+     "ppm": 1050,
+     "label": "Meeting room",
+     "id": "2026-09-03-21",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 866,
+     "ml": 283,
+     "id": "2026-09-03-22",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 938,
+     "minutes": 45,
+     "label": "Strength, 45 min",
+     "vigorous": true,
+     "id": "2026-09-03-23",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 955,
+     "ml": 267,
+     "id": "2026-09-03-24",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 1030,
+     "minutes": 25,
+     "label": "Commute",
+     "id": "2026-09-03-25",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1050,
+     "ml": 272,
+     "id": "2026-09-03-26",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1071,
+     "label": "Salmon and vegetables",
+     "food": "whole",
+     "thumb": "fish",
+     "id": "2026-09-03-27",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 34,
+     "label": "Dinner with family",
+     "id": "2026-09-03-28",
+     "seeded": true
+    },
+    {
+     "kind": "sauna",
+     "start": 1123,
+     "minutes": 19,
+     "id": "2026-09-03-29",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1192,
+     "ml": 319,
+     "id": "2026-09-03-30",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1203,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-03-31",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1210,
+     "minutes": 24,
+     "device": "phone",
+     "id": "2026-09-03-32",
+     "seeded": true
+    }
+   ],
+   "aqi": 32,
+   "weather": {
+    "high_f": 90,
+    "summary": "Humid, sun"
+   },
+   "held_back": 11,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-09-04",
+   "type": "late_workout",
+   "sleep": {
+    "bed": -96,
+    "wake": 397,
+    "minutes": 479,
+    "deep": 95,
+    "rem": 114,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 60,
+    "rhr_bpm": 58,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "outdoor",
+     "start": 432,
+     "minutes": 16,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-09-04-00",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 433,
+     "drink": "coffee",
+     "id": "2026-09-04-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 450,
+     "ml": 291,
+     "id": "2026-09-04-02",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 512,
+     "minutes": 24,
+     "label": "Commute",
+     "id": "2026-09-04-03",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 514,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-04-04",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 540,
+     "minutes": 180,
+     "label": "Office",
+     "id": "2026-09-04-05",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 545,
+     "minutes": 170,
+     "device": "computer",
+     "id": "2026-09-04-06",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 564,
+     "ms": 301,
+     "lapses": 0,
+     "energy": 5,
+     "mood": 5,
+     "clarity": 3,
+     "id": "2026-09-04-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 595,
+     "ml": 291,
+     "id": "2026-09-04-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 619,
+     "label": "Eggs and greens",
+     "food": "whole",
+     "thumb": "eggs",
+     "id": "2026-09-04-09",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 627,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-09-04-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 678,
+     "ml": 284,
+     "id": "2026-09-04-11",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 739,
+     "minutes": 37,
+     "label": "Lunch with Maya",
+     "id": "2026-09-04-12",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 744,
+     "label": "Lentil soup and bread",
+     "food": "whole",
+     "thumb": "soup",
+     "id": "2026-09-04-13",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 762,
+     "ml": 278,
+     "id": "2026-09-04-14",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 779,
+     "minutes": 21,
+     "label": "Walk outside",
+     "sunlight": true,
+     "id": "2026-09-04-15",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 800,
+     "minutes": 200,
+     "label": "Office",
+     "id": "2026-09-04-16",
+     "seeded": true
+    },
+    {
+     "kind": "sedentary",
+     "start": 805,
+     "minutes": 117,
+     "id": "2026-09-04-17",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 805,
+     "minutes": 190,
+     "device": "computer",
+     "id": "2026-09-04-18",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 868,
+     "ml": 302,
+     "id": "2026-09-04-19",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 954,
+     "ml": 313,
+     "id": "2026-09-04-20",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 1028,
+     "minutes": 21,
+     "label": "Commute",
+     "id": "2026-09-04-21",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1061,
+     "ml": 300,
+     "id": "2026-09-04-22",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1076,
+     "label": "Steak salad",
+     "food": "whole",
+     "thumb": "salad",
+     "id": "2026-09-04-23",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 33,
+     "label": "Dinner with family",
+     "id": "2026-09-04-24",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 1170,
+     "minutes": 55,
+     "label": "Run, 8 km",
+     "vigorous": true,
+     "id": "2026-09-04-25",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1181,
+     "ml": 270,
+     "id": "2026-09-04-26",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1207,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-04-27",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1219,
+     "minutes": 24,
+     "device": "phone",
+     "id": "2026-09-04-28",
+     "seeded": true
+    }
+   ],
+   "aqi": 33,
+   "weather": {
+    "high_f": 94,
+    "summary": "Afternoon storms"
+   },
+   "held_back": 11,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-09-05",
+   "type": "social_evening",
+   "sleep": {
+    "bed": -31,
+    "wake": 385,
+    "minutes": 387,
+    "deep": 82,
+    "rem": 109,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 47,
+    "rhr_bpm": 56,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "outdoor",
+     "start": 433,
+     "minutes": 16,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-09-05-00",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 434,
+     "drink": "coffee",
+     "id": "2026-09-05-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 459,
+     "ml": 315,
+     "id": "2026-09-05-02",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 501,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-05-03",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 562,
+     "ms": 307,
+     "lapses": 2,
+     "energy": 4,
+     "mood": 5,
+     "clarity": 4,
+     "id": "2026-09-05-04",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 581,
+     "minutes": 50,
+     "label": "Walk with Maya",
+     "id": "2026-09-05-05",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 589,
+     "minutes": 55,
+     "label": "Park with the stroller",
+     "sunlight": true,
+     "id": "2026-09-05-06",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 593,
+     "ml": 280,
+     "id": "2026-09-05-07",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 615,
+     "label": "Oats with nuts",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-09-05-08",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 625,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-09-05-09",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 684,
+     "ml": 307,
+     "id": "2026-09-05-10",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 697,
+     "drink": "tea",
+     "id": "2026-09-05-11",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 765,
+     "ml": 272,
+     "id": "2026-09-05-12",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 770,
+     "label": "Chicken and vegetables",
+     "food": "whole",
+     "thumb": "plate",
+     "id": "2026-09-05-13",
+     "seeded": true
+    },
+    {
+     "kind": "nap",
+     "start": 815,
+     "minutes": 18,
+     "id": "2026-09-05-14",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 866,
+     "ml": 260,
+     "id": "2026-09-05-15",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 908,
+     "minutes": 19,
+     "label": "Groceries",
+     "id": "2026-09-05-16",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 940,
+     "minutes": 45,
+     "label": "Strength, 45 min",
+     "vigorous": true,
+     "id": "2026-09-05-17",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 952,
+     "ml": 302,
+     "id": "2026-09-05-18",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1058,
+     "ml": 304,
+     "id": "2026-09-05-19",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1155,
+     "minutes": 165,
+     "label": "Friends over",
+     "id": "2026-09-05-20",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1175,
+     "label": "Tacos",
+     "food": "whole",
+     "thumb": "tacos",
+     "id": "2026-09-05-21",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1191,
+     "ml": 260,
+     "id": "2026-09-05-22",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1206,
+     "minutes": 21,
+     "device": "phone",
+     "id": "2026-09-05-23",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1207,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-05-24",
+     "seeded": true
+    }
+   ],
+   "aqi": 38,
+   "weather": {
+    "high_f": 88,
+    "summary": "Clear and hot"
+   },
+   "held_back": 13,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-09-06",
+   "type": "perfect",
+   "sleep": {
+    "bed": -3,
+    "wake": 388,
+    "minutes": 382,
+    "deep": 110,
+    "rem": 97,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 46,
+    "rhr_bpm": 56,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "outdoor",
+     "start": 433,
+     "minutes": 13,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-09-06-00",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 434,
+     "drink": "coffee",
+     "id": "2026-09-06-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 454,
+     "ml": 311,
+     "id": "2026-09-06-02",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 506,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-06-03",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 563,
+     "ms": 322,
+     "lapses": 0,
+     "energy": 4,
+     "mood": 3,
+     "clarity": 4,
+     "id": "2026-09-06-04",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 570,
+     "minutes": 51,
+     "label": "Park with the stroller",
+     "sunlight": true,
+     "id": "2026-09-06-05",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 571,
+     "minutes": 44,
+     "label": "Walk with Maya",
+     "id": "2026-09-06-06",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 594,
+     "ml": 271,
+     "id": "2026-09-06-07",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 618,
+     "label": "Oats with nuts",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-09-06-08",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 625,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-09-06-09",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 650,
+     "ml": 300,
+     "id": "2026-09-06-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 684,
+     "ml": 262,
+     "id": "2026-09-06-11",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 761,
+     "ml": 327,
+     "id": "2026-09-06-12",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 767,
+     "label": "Rice bowl with chicken",
+     "food": "whole",
+     "thumb": "rice_bowl",
+     "id": "2026-09-06-13",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 864,
+     "ml": 304,
+     "id": "2026-09-06-14",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 916,
+     "minutes": 22,
+     "label": "Groceries",
+     "id": "2026-09-06-15",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 931,
+     "minutes": 45,
+     "label": "Strength, 45 min",
+     "vigorous": true,
+     "id": "2026-09-06-16",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 961,
+     "ml": 288,
+     "id": "2026-09-06-17",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 980,
+     "minutes": 25,
+     "label": "Evening walk",
+     "sunlight": true,
+     "id": "2026-09-06-18",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 980,
+     "minutes": 25,
+     "label": "Call with Dad",
+     "id": "2026-09-06-19",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1062,
+     "ml": 312,
+     "id": "2026-09-06-20",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1076,
+     "label": "Salmon and vegetables",
+     "food": "whole",
+     "thumb": "fish",
+     "id": "2026-09-06-21",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 29,
+     "label": "Dinner with family",
+     "id": "2026-09-06-22",
+     "seeded": true
+    },
+    {
+     "kind": "sauna",
+     "start": 1120,
+     "minutes": 20,
+     "id": "2026-09-06-23",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1183,
+     "ml": 277,
+     "id": "2026-09-06-24",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1210,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-06-25",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1213,
+     "minutes": 23,
+     "device": "phone",
+     "id": "2026-09-06-26",
+     "seeded": true
+    }
+   ],
+   "aqi": 45,
+   "weather": {
+    "high_f": 88,
+    "summary": "Afternoon storms"
+   },
+   "held_back": 3,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-09-07",
+   "type": "late_caffeine",
+   "sleep": {
+    "bed": -92,
+    "wake": 388,
+    "minutes": 471,
+    "deep": 112,
+    "rem": 112,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 57,
+    "rhr_bpm": 58,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "caffeine",
+     "start": 434,
+     "drink": "coffee",
+     "id": "2026-09-07-00",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 435,
+     "minutes": 14,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-09-07-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 458,
+     "ml": 263,
+     "id": "2026-09-07-02",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 507,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-07-03",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 512,
+     "minutes": 22,
+     "label": "Commute",
+     "id": "2026-09-07-04",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 540,
+     "minutes": 180,
+     "label": "Office",
+     "id": "2026-09-07-05",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 545,
+     "minutes": 170,
+     "device": "computer",
+     "id": "2026-09-07-06",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 566,
+     "ms": 314,
+     "lapses": 2,
+     "energy": 4,
+     "mood": 5,
+     "clarity": 4,
+     "id": "2026-09-07-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 586,
+     "ml": 320,
+     "id": "2026-09-07-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 619,
+     "label": "Greek yogurt and berries",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-09-07-09",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 625,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-09-07-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 683,
+     "ml": 273,
+     "id": "2026-09-07-11",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 697,
+     "drink": "tea",
+     "id": "2026-09-07-12",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 735,
+     "label": "Salad with salmon",
+     "food": "whole",
+     "thumb": "salad",
+     "id": "2026-09-07-13",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 737,
+     "minutes": 39,
+     "label": "Lunch with Maya",
+     "id": "2026-09-07-14",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 764,
+     "ml": 277,
+     "id": "2026-09-07-15",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 776,
+     "minutes": 18,
+     "label": "Walk outside",
+     "sunlight": true,
+     "id": "2026-09-07-16",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 800,
+     "minutes": 200,
+     "label": "Office",
+     "id": "2026-09-07-17",
+     "seeded": true
+    },
+    {
+     "kind": "sedentary",
+     "start": 805,
+     "minutes": 113,
+     "id": "2026-09-07-18",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 805,
+     "minutes": 190,
+     "device": "computer",
+     "id": "2026-09-07-19",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 861,
+     "ml": 299,
+     "id": "2026-09-07-20",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 931,
+     "minutes": 30,
+     "label": "Mobility and core",
+     "vigorous": false,
+     "id": "2026-09-07-21",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 956,
+     "ml": 326,
+     "id": "2026-09-07-22",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 970,
+     "drink": "coffee",
+     "id": "2026-09-07-23",
+     "seeded": true
+    },
+    {
+     "kind": "whispered",
+     "start": 971,
+     "line": "That coffee lands in tonight's sleep.",
+     "id": "2026-09-07-24",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 1029,
+     "minutes": 23,
+     "label": "Commute",
+     "id": "2026-09-07-25",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1053,
+     "ml": 322,
+     "id": "2026-09-07-26",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1067,
+     "label": "Salmon and vegetables",
+     "food": "whole",
+     "thumb": "fish",
+     "id": "2026-09-07-27",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 24,
+     "label": "Dinner with family",
+     "id": "2026-09-07-28",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1190,
+     "ml": 302,
+     "id": "2026-09-07-29",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1201,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-07-30",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1217,
+     "minutes": 26,
+     "device": "phone",
+     "id": "2026-09-07-31",
+     "seeded": true
+    }
+   ],
+   "aqi": 34,
+   "weather": {
+    "high_f": 90,
+    "summary": "Partly cloudy"
+   },
+   "held_back": 11,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-09-08",
+   "type": "late_nap",
+   "sleep": {
+    "bed": -78,
+    "wake": 402,
+    "minutes": 451,
+    "deep": 61,
+    "rem": 107,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 57,
+    "rhr_bpm": 59,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "outdoor",
+     "start": 434,
+     "minutes": 11,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-09-08-00",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 438,
+     "drink": "coffee",
+     "id": "2026-09-08-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 450,
+     "ml": 293,
+     "id": "2026-09-08-02",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 513,
+     "minutes": 20,
+     "label": "Commute",
+     "id": "2026-09-08-03",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 516,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-08-04",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 540,
+     "minutes": 180,
+     "label": "Office",
+     "id": "2026-09-08-05",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 545,
+     "minutes": 170,
+     "device": "computer",
+     "id": "2026-09-08-06",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 554,
+     "ms": 317,
+     "lapses": 1,
+     "energy": 3,
+     "mood": 4,
+     "clarity": 4,
+     "id": "2026-09-08-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 589,
+     "ml": 319,
+     "id": "2026-09-08-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 611,
+     "label": "Greek yogurt and berries",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-09-08-09",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 626,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-09-08-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 682,
+     "ml": 292,
+     "id": "2026-09-08-11",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 743,
+     "minutes": 29,
+     "label": "Lunch with Maya",
+     "id": "2026-09-08-12",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 745,
+     "label": "Lentil soup and bread",
+     "food": "whole",
+     "thumb": "soup",
+     "id": "2026-09-08-13",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 768,
+     "ml": 312,
+     "id": "2026-09-08-14",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 775,
+     "minutes": 24,
+     "label": "Walk outside",
+     "sunlight": true,
+     "id": "2026-09-08-15",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 800,
+     "minutes": 200,
+     "label": "Office",
+     "id": "2026-09-08-16",
+     "seeded": true
+    },
+    {
+     "kind": "sedentary",
+     "start": 805,
+     "minutes": 99,
+     "id": "2026-09-08-17",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 805,
+     "minutes": 190,
+     "device": "computer",
+     "id": "2026-09-08-18",
+     "seeded": true
+    },
+    {
+     "kind": "co2",
+     "start": 840,
+     "minutes": 90,
+     "ppm": 1050,
+     "label": "Meeting room",
+     "id": "2026-09-08-19",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 866,
+     "ml": 296,
+     "id": "2026-09-08-20",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 931,
+     "minutes": 30,
+     "label": "Mobility and core",
+     "vigorous": false,
+     "id": "2026-09-08-21",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 953,
+     "ml": 298,
+     "id": "2026-09-08-22",
+     "seeded": true
+    },
+    {
+     "kind": "nap",
+     "start": 1000,
+     "minutes": 45,
+     "id": "2026-09-08-23",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 1028,
+     "minutes": 23,
+     "label": "Commute",
+     "id": "2026-09-08-24",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1062,
+     "ml": 317,
+     "id": "2026-09-08-25",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1074,
+     "label": "Steak salad",
+     "food": "whole",
+     "thumb": "salad",
+     "id": "2026-09-08-26",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 29,
+     "label": "Dinner with family",
+     "id": "2026-09-08-27",
+     "seeded": true
+    },
+    {
+     "kind": "sauna",
+     "start": 1116,
+     "minutes": 18,
+     "id": "2026-09-08-28",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1182,
+     "ml": 311,
+     "id": "2026-09-08-29",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1206,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-08-30",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1214,
+     "minutes": 26,
+     "device": "phone",
+     "id": "2026-09-08-31",
+     "seeded": true
+    }
+   ],
+   "aqi": 41,
+   "weather": {
+    "high_f": 92,
+    "summary": "Clear and hot"
+   },
+   "held_back": 12,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-09-09",
+   "type": "stale_room",
+   "sleep": {
+    "bed": -28,
+    "wake": 388,
+    "minutes": 382,
+    "deep": 93,
+    "rem": 114,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 47,
+    "rhr_bpm": 58,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "caffeine",
+     "start": 434,
+     "drink": "coffee",
+     "id": "2026-09-09-00",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 437,
+     "minutes": 16,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-09-09-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 462,
+     "ml": 296,
+     "id": "2026-09-09-02",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 515,
+     "minutes": 18,
+     "label": "Commute",
+     "id": "2026-09-09-03",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 529,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-09-04",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 540,
+     "minutes": 180,
+     "label": "Office",
+     "id": "2026-09-09-05",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 545,
+     "minutes": 170,
+     "device": "computer",
+     "id": "2026-09-09-06",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 559,
+     "ms": 301,
+     "lapses": 1,
+     "energy": 3,
+     "mood": 5,
+     "clarity": 4,
+     "id": "2026-09-09-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 595,
+     "ml": 269,
+     "id": "2026-09-09-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 620,
+     "label": "Eggs and greens",
+     "food": "whole",
+     "thumb": "eggs",
+     "id": "2026-09-09-09",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 624,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-09-09-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 675,
+     "ml": 318,
+     "id": "2026-09-09-11",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 744,
+     "label": "Salad with salmon",
+     "food": "whole",
+     "thumb": "salad",
+     "id": "2026-09-09-12",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 744,
+     "minutes": 26,
+     "label": "Lunch with Maya",
+     "id": "2026-09-09-13",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 769,
+     "ml": 295,
+     "id": "2026-09-09-14",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 779,
+     "minutes": 18,
+     "label": "Walk outside",
+     "sunlight": true,
+     "id": "2026-09-09-15",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 800,
+     "minutes": 200,
+     "label": "Office",
+     "id": "2026-09-09-16",
+     "seeded": true
+    },
+    {
+     "kind": "co2",
+     "start": 800,
+     "minutes": 220,
+     "ppm": 1280,
+     "label": "Office, windows shut",
+     "id": "2026-09-09-17",
+     "seeded": true
+    },
+    {
+     "kind": "sedentary",
+     "start": 805,
+     "minutes": 100,
+     "id": "2026-09-09-18",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 805,
+     "minutes": 190,
+     "device": "computer",
+     "id": "2026-09-09-19",
+     "seeded": true
+    },
+    {
+     "kind": "stress",
+     "start": 846,
+     "scene": "Meeting",
+     "hr": 88,
+     "resting": 58,
+     "id": "2026-09-09-20",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 864,
+     "ml": 317,
+     "id": "2026-09-09-21",
+     "seeded": true
+    },
+    {
+     "kind": "asked",
+     "start": 905,
+     "line": "Was that tea or coffee?",
+     "id": "2026-09-09-22",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 940,
+     "minutes": 45,
+     "label": "Strength, 45 min",
+     "vigorous": true,
+     "id": "2026-09-09-23",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 962,
+     "ml": 283,
+     "id": "2026-09-09-24",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 1023,
+     "minutes": 26,
+     "label": "Commute",
+     "id": "2026-09-09-25",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1052,
+     "ml": 307,
+     "id": "2026-09-09-26",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1070,
+     "label": "Bean chili",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-09-09-27",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 32,
+     "label": "Dinner with family",
+     "id": "2026-09-09-28",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1190,
+     "ml": 291,
+     "id": "2026-09-09-29",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1206,
+     "minutes": 23,
+     "device": "phone",
+     "id": "2026-09-09-30",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1206,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-09-31",
+     "seeded": true
+    }
+   ],
+   "aqi": 118,
+   "weather": {
+    "high_f": 92,
+    "summary": "Clear and hot"
+   },
+   "held_back": 12,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-09-10",
+   "type": "crying_baby",
+   "sleep": {
+    "bed": -84,
+    "wake": 386,
+    "minutes": 399,
+    "deep": 64,
+    "rem": 95,
+    "fragmented": true,
+    "wakings": [
+     {
+      "start": 40,
+      "minutes": 13,
+      "baby": true
+     },
+     {
+      "start": 135,
+      "minutes": 24,
+      "baby": true
+     },
+     {
+      "start": 230,
+      "minutes": 16,
+      "baby": true
+     },
+     {
+      "start": 305,
+      "minutes": 8,
+      "baby": true
+     }
+    ],
+    "hrv_ms": 51,
+    "rhr_bpm": 58,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "caffeine",
+     "start": 434,
+     "drink": "coffee",
+     "id": "2026-09-10-00",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 438,
+     "minutes": 11,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-09-10-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 453,
+     "ml": 277,
+     "id": "2026-09-10-02",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 507,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-10-03",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 518,
+     "minutes": 18,
+     "label": "Commute",
+     "id": "2026-09-10-04",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 540,
+     "minutes": 180,
+     "label": "Office",
+     "id": "2026-09-10-05",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 545,
+     "minutes": 170,
+     "device": "computer",
+     "id": "2026-09-10-06",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 562,
+     "ms": 299,
+     "lapses": 1,
+     "energy": 5,
+     "mood": 4,
+     "clarity": 3,
+     "id": "2026-09-10-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 593,
+     "ml": 272,
+     "id": "2026-09-10-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 610,
+     "label": "Greek yogurt and berries",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-09-10-09",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 622,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-09-10-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 680,
+     "ml": 320,
+     "id": "2026-09-10-11",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 693,
+     "drink": "coffee",
+     "id": "2026-09-10-12",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 715,
+     "drink": "coffee",
+     "id": "2026-09-10-13",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 739,
+     "minutes": 28,
+     "label": "Lunch with Maya",
+     "id": "2026-09-10-14",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 741,
+     "label": "Rice bowl with chicken",
+     "food": "whole",
+     "thumb": "rice_bowl",
+     "id": "2026-09-10-15",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 768,
+     "ml": 283,
+     "id": "2026-09-10-16",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 778,
+     "minutes": 18,
+     "label": "Walk outside",
+     "sunlight": true,
+     "id": "2026-09-10-17",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 800,
+     "minutes": 200,
+     "label": "Office",
+     "id": "2026-09-10-18",
+     "seeded": true
+    },
+    {
+     "kind": "sedentary",
+     "start": 805,
+     "minutes": 110,
+     "id": "2026-09-10-19",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 805,
+     "minutes": 190,
+     "device": "computer",
+     "id": "2026-09-10-20",
+     "seeded": true
+    },
+    {
+     "kind": "nap",
+     "start": 810,
+     "minutes": 20,
+     "id": "2026-09-10-21",
+     "seeded": true
+    },
+    {
+     "kind": "co2",
+     "start": 840,
+     "minutes": 90,
+     "ppm": 1050,
+     "label": "Meeting room",
+     "id": "2026-09-10-22",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 866,
+     "ml": 267,
+     "id": "2026-09-10-23",
+     "seeded": true
+    },
+    {
+     "kind": "stress",
+     "start": 868,
+     "scene": "Meeting",
+     "hr": 85,
+     "resting": 58,
+     "id": "2026-09-10-24",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 938,
+     "minutes": 50,
+     "label": "Cycling",
+     "vigorous": true,
+     "id": "2026-09-10-25",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 960,
+     "ml": 308,
+     "id": "2026-09-10-26",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 1022,
+     "minutes": 21,
+     "label": "Commute",
+     "id": "2026-09-10-27",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1050,
+     "ml": 305,
+     "id": "2026-09-10-28",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1078,
+     "label": "Salmon and vegetables",
+     "food": "whole",
+     "thumb": "fish",
+     "id": "2026-09-10-29",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 35,
+     "label": "Dinner with family",
+     "id": "2026-09-10-30",
+     "seeded": true
+    },
+    {
+     "kind": "sauna",
+     "start": 1125,
+     "minutes": 22,
+     "id": "2026-09-10-31",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1192,
+     "ml": 326,
+     "id": "2026-09-10-32",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1202,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-10-33",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1219,
+     "minutes": 20,
+     "device": "phone",
+     "id": "2026-09-10-34",
+     "seeded": true
+    }
+   ],
+   "aqi": 44,
+   "weather": {
+    "high_f": 95,
+    "summary": "Partly cloudy"
+   },
+   "held_back": 11,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-09-11",
+   "type": "screens_in_bed",
+   "sleep": {
+    "bed": -90,
+    "wake": 402,
+    "minutes": 479,
+    "deep": 103,
+    "rem": 107,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 54,
+    "rhr_bpm": 58,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "outdoor",
+     "start": 434,
+     "minutes": 11,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-09-11-00",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 434,
+     "drink": "coffee",
+     "id": "2026-09-11-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 451,
+     "ml": 301,
+     "id": "2026-09-11-02",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 511,
+     "minutes": 22,
+     "label": "Commute",
+     "id": "2026-09-11-03",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 517,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-11-04",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 540,
+     "minutes": 180,
+     "label": "Office",
+     "id": "2026-09-11-05",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 545,
+     "minutes": 170,
+     "device": "computer",
+     "id": "2026-09-11-06",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 569,
+     "ms": 302,
+     "lapses": 2,
+     "energy": 4,
+     "mood": 3,
+     "clarity": 4,
+     "id": "2026-09-11-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 591,
+     "ml": 276,
+     "id": "2026-09-11-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 606,
+     "label": "Greek yogurt and berries",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-09-11-09",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 628,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-09-11-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 682,
+     "ml": 325,
+     "id": "2026-09-11-11",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 741,
+     "label": "Rice bowl with chicken",
+     "food": "whole",
+     "thumb": "rice_bowl",
+     "id": "2026-09-11-12",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 742,
+     "minutes": 40,
+     "label": "Lunch with Maya",
+     "id": "2026-09-11-13",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 767,
+     "ml": 324,
+     "id": "2026-09-11-14",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 776,
+     "minutes": 16,
+     "label": "Walk outside",
+     "sunlight": true,
+     "id": "2026-09-11-15",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 800,
+     "minutes": 200,
+     "label": "Office",
+     "id": "2026-09-11-16",
+     "seeded": true
+    },
+    {
+     "kind": "sedentary",
+     "start": 805,
+     "minutes": 110,
+     "id": "2026-09-11-17",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 805,
+     "minutes": 190,
+     "device": "computer",
+     "id": "2026-09-11-18",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 864,
+     "ml": 314,
+     "id": "2026-09-11-19",
+     "seeded": true
+    },
+    {
+     "kind": "stress",
+     "start": 872,
+     "scene": "Meeting",
+     "hr": 88,
+     "resting": 58,
+     "id": "2026-09-11-20",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 933,
+     "minutes": 45,
+     "label": "Strength, 45 min",
+     "vigorous": true,
+     "id": "2026-09-11-21",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 962,
+     "ml": 272,
+     "id": "2026-09-11-22",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 1022,
+     "minutes": 18,
+     "label": "Commute",
+     "id": "2026-09-11-23",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1062,
+     "ml": 260,
+     "id": "2026-09-11-24",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1075,
+     "label": "Chicken, rice and greens",
+     "food": "whole",
+     "thumb": "plate",
+     "id": "2026-09-11-25",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 30,
+     "label": "Dinner with family",
+     "id": "2026-09-11-26",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1187,
+     "ml": 281,
+     "id": "2026-09-11-27",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1207,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-11-28",
+     "seeded": true
+    },
+    {
+     "kind": "acted",
+     "start": 1290,
+     "line": "Screens shielded until 07:00.",
+     "id": "2026-09-11-29",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1305,
+     "minutes": 60,
+     "device": "phone",
+     "id": "2026-09-11-30",
+     "seeded": true
+    },
+    {
+     "kind": "phone_in_bed",
+     "start": 1370,
+     "minutes": 55,
+     "id": "2026-09-11-31",
+     "seeded": true
+    },
+    {
+     "kind": "whispered",
+     "start": 1372,
+     "line": "Phone down. Sleep is ten minutes away.",
+     "id": "2026-09-11-32",
+     "seeded": true
+    }
+   ],
+   "aqi": 38,
+   "weather": {
+    "high_f": 88,
+    "summary": "Clear and hot"
+   },
+   "held_back": 12,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-09-12",
+   "type": "travel",
+   "sleep": {
+    "bed": -5,
+    "wake": 270,
+    "minutes": 250,
+    "deep": 82,
+    "rem": 113,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 46,
+    "rhr_bpm": 58,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "drive",
+     "start": 300,
+     "minutes": 45,
+     "label": "To the airport",
+     "id": "2026-09-12-00",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 400,
+     "label": "Breakfast sandwich",
+     "food": "ultra_processed",
+     "thumb": "sandwich",
+     "id": "2026-09-12-01",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 405,
+     "drink": "coffee",
+     "id": "2026-09-12-02",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 460,
+     "minutes": 225,
+     "label": "Flight IAH to SFO",
+     "id": "2026-09-12-03",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 510,
+     "ml": 250,
+     "id": "2026-09-12-04",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 600,
+     "dose": "AM",
+     "taken": false,
+     "thumb": null,
+     "id": "2026-09-12-05",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 730,
+     "label": "Airport pastry",
+     "food": "sweets",
+     "thumb": "pastry",
+     "id": "2026-09-12-06",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 735,
+     "ml": 250,
+     "id": "2026-09-12-07",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 810,
+     "drink": "energy_drink",
+     "id": "2026-09-12-08",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 830,
+     "minutes": 50,
+     "label": "Rideshare to the hotel",
+     "id": "2026-09-12-09",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 920,
+     "minutes": 12,
+     "label": "Hotel courtyard",
+     "sunlight": false,
+     "id": "2026-09-12-10",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 940,
+     "minutes": 150,
+     "label": "Hotel room, laptop",
+     "id": "2026-09-12-11",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 940,
+     "minutes": 150,
+     "device": "computer",
+     "id": "2026-09-12-12",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 960,
+     "ml": 250,
+     "id": "2026-09-12-13",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1110,
+     "minutes": 20,
+     "label": "Client call",
+     "id": "2026-09-12-14",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1170,
+     "ml": 250,
+     "id": "2026-09-12-15",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1245,
+     "label": "Hotel burger",
+     "food": "fast_food",
+     "thumb": "burger",
+     "id": "2026-09-12-16",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1255,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-12-17",
+     "seeded": true
+    }
+   ],
+   "aqi": 55,
+   "weather": {
+    "high_f": 90,
+    "summary": "Partly cloudy"
+   },
+   "held_back": 13,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-09-13",
+   "type": "sick",
+   "sleep": {
+    "bed": -85,
+    "wake": 460,
+    "minutes": 537,
+    "deep": 93,
+    "rem": 97,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 47,
+    "rhr_bpm": 66,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "water",
+     "start": 480,
+     "ml": 300,
+     "id": "2026-09-13-00",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 545,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-13-01",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 570,
+     "drink": "tea",
+     "id": "2026-09-13-02",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 640,
+     "ms": 384,
+     "lapses": 5,
+     "energy": 1,
+     "mood": 2,
+     "clarity": 2,
+     "id": "2026-09-13-03",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 660,
+     "ml": 300,
+     "id": "2026-09-13-04",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 750,
+     "label": "Chicken soup",
+     "food": "whole",
+     "thumb": "soup",
+     "id": "2026-09-13-05",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 810,
+     "ml": 300,
+     "id": "2026-09-13-06",
+     "seeded": true
+    },
+    {
+     "kind": "nap",
+     "start": 840,
+     "minutes": 90,
+     "id": "2026-09-13-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 990,
+     "ml": 300,
+     "id": "2026-09-13-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1080,
+     "label": "Toast and broth",
+     "food": "whole",
+     "thumb": "soup",
+     "id": "2026-09-13-09",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1140,
+     "minutes": 60,
+     "device": "phone",
+     "id": "2026-09-13-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1185,
+     "ml": 300,
+     "id": "2026-09-13-11",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1320,
+     "dose": "PM",
+     "taken": false,
+     "thumb": null,
+     "id": "2026-09-13-12",
+     "seeded": true
+    }
+   ],
+   "aqi": 56,
+   "weather": {
+    "high_f": 88,
+    "summary": "Partly cloudy"
+   },
+   "held_back": 14,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-09-14",
+   "type": "clean",
+   "sleep": {
+    "bed": -135,
+    "wake": 450,
+    "minutes": 574,
+    "deep": 105,
+    "rem": 97,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 52,
+    "rhr_bpm": 57,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "caffeine",
+     "start": 433,
+     "drink": "coffee",
+     "id": "2026-09-14-00",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 437,
+     "minutes": 12,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-09-14-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 452,
+     "ml": 328,
+     "id": "2026-09-14-02",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 512,
+     "minutes": 24,
+     "label": "Commute",
+     "id": "2026-09-14-03",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 530,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-14-04",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 540,
+     "minutes": 180,
+     "label": "Office",
+     "id": "2026-09-14-05",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 545,
+     "minutes": 170,
+     "device": "computer",
+     "id": "2026-09-14-06",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 561,
+     "ms": 306,
+     "lapses": 2,
+     "energy": 4,
+     "mood": 4,
+     "clarity": 3,
+     "id": "2026-09-14-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 593,
+     "ml": 305,
+     "id": "2026-09-14-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 620,
+     "label": "Oats with nuts",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-09-14-09",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 624,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-09-14-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 685,
+     "ml": 294,
+     "id": "2026-09-14-11",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 735,
+     "minutes": 29,
+     "label": "Lunch with Maya",
+     "id": "2026-09-14-12",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 736,
+     "label": "Lentil soup and bread",
+     "food": "whole",
+     "thumb": "soup",
+     "id": "2026-09-14-13",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 772,
+     "ml": 321,
+     "id": "2026-09-14-14",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 779,
+     "minutes": 21,
+     "label": "Walk outside",
+     "sunlight": true,
+     "id": "2026-09-14-15",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 800,
+     "minutes": 200,
+     "label": "Office",
+     "id": "2026-09-14-16",
+     "seeded": true
+    },
+    {
+     "kind": "sedentary",
+     "start": 805,
+     "minutes": 97,
+     "id": "2026-09-14-17",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 805,
+     "minutes": 190,
+     "device": "computer",
+     "id": "2026-09-14-18",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 869,
+     "ml": 283,
+     "id": "2026-09-14-19",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 935,
+     "minutes": 45,
+     "label": "Strength, 45 min",
+     "vigorous": true,
+     "id": "2026-09-14-20",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 955,
+     "ml": 310,
+     "id": "2026-09-14-21",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 1027,
+     "minutes": 25,
+     "label": "Commute",
+     "id": "2026-09-14-22",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1053,
+     "ml": 274,
+     "id": "2026-09-14-23",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1078,
+     "label": "Chicken, rice and greens",
+     "food": "whole",
+     "thumb": "plate",
+     "id": "2026-09-14-24",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 23,
+     "label": "Dinner with family",
+     "id": "2026-09-14-25",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1188,
+     "ml": 312,
+     "id": "2026-09-14-26",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1203,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-14-27",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1214,
+     "minutes": 20,
+     "device": "phone",
+     "id": "2026-09-14-28",
+     "seeded": true
+    }
+   ],
+   "aqi": 52,
+   "weather": {
+    "high_f": 95,
+    "summary": "Partly cloudy"
+   },
+   "held_back": 13,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-09-15",
+   "type": "clean",
+   "sleep": {
+    "bed": -85,
+    "wake": 390,
+    "minutes": 463,
+    "deep": 107,
+    "rem": 99,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 53,
+    "rhr_bpm": 59,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "outdoor",
+     "start": 437,
+     "minutes": 16,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-09-15-00",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 437,
+     "drink": "coffee",
+     "id": "2026-09-15-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 458,
+     "ml": 295,
+     "id": "2026-09-15-02",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 515,
+     "minutes": 18,
+     "label": "Commute",
+     "id": "2026-09-15-03",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 521,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-15-04",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 540,
+     "minutes": 180,
+     "label": "Office",
+     "id": "2026-09-15-05",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 545,
+     "minutes": 170,
+     "device": "computer",
+     "id": "2026-09-15-06",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 558,
+     "ms": 315,
+     "lapses": 1,
+     "energy": 4,
+     "mood": 4,
+     "clarity": 3,
+     "id": "2026-09-15-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 590,
+     "ml": 311,
+     "id": "2026-09-15-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 612,
+     "label": "Oats with nuts",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-09-15-09",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 624,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-09-15-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 677,
+     "ml": 268,
+     "id": "2026-09-15-11",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 694,
+     "drink": "coffee",
+     "id": "2026-09-15-12",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 739,
+     "label": "Chicken and vegetables",
+     "food": "whole",
+     "thumb": "plate",
+     "id": "2026-09-15-13",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 744,
+     "minutes": 26,
+     "label": "Lunch with Maya",
+     "id": "2026-09-15-14",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 763,
+     "ml": 317,
+     "id": "2026-09-15-15",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 778,
+     "minutes": 25,
+     "label": "Walk outside",
+     "sunlight": true,
+     "id": "2026-09-15-16",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 800,
+     "minutes": 200,
+     "label": "Office",
+     "id": "2026-09-15-17",
+     "seeded": true
+    },
+    {
+     "kind": "sedentary",
+     "start": 805,
+     "minutes": 100,
+     "id": "2026-09-15-18",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 805,
+     "minutes": 190,
+     "device": "computer",
+     "id": "2026-09-15-19",
+     "seeded": true
+    },
+    {
+     "kind": "co2",
+     "start": 840,
+     "minutes": 90,
+     "ppm": 1050,
+     "label": "Meeting room",
+     "id": "2026-09-15-20",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 870,
+     "ml": 264,
+     "id": "2026-09-15-21",
+     "seeded": true
+    },
+    {
+     "kind": "stress",
+     "start": 879,
+     "scene": "Meeting",
+     "hr": 82,
+     "resting": 58,
+     "id": "2026-09-15-22",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 937,
+     "minutes": 30,
+     "label": "Mobility and core",
+     "vigorous": false,
+     "id": "2026-09-15-23",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 956,
+     "ml": 284,
+     "id": "2026-09-15-24",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 1025,
+     "minutes": 25,
+     "label": "Commute",
+     "id": "2026-09-15-25",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1061,
+     "ml": 287,
+     "id": "2026-09-15-26",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1071,
+     "label": "Salmon and vegetables",
+     "food": "whole",
+     "thumb": "fish",
+     "id": "2026-09-15-27",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 34,
+     "label": "Dinner with family",
+     "id": "2026-09-15-28",
+     "seeded": true
+    },
+    {
+     "kind": "sauna",
+     "start": 1116,
+     "minutes": 20,
+     "id": "2026-09-15-29",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1185,
+     "ml": 323,
+     "id": "2026-09-15-30",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1205,
+     "minutes": 27,
+     "device": "phone",
+     "id": "2026-09-15-31",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1209,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-15-32",
+     "seeded": true
+    }
+   ],
+   "aqi": 36,
+   "weather": {
+    "high_f": 94,
+    "summary": "Clear and hot"
+   },
+   "held_back": 14,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-09-16",
+   "type": "late_caffeine",
+   "sleep": {
+    "bed": -81,
+    "wake": 401,
+    "minutes": 473,
+    "deep": 110,
+    "rem": 103,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 52,
+    "rhr_bpm": 59,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "caffeine",
+     "start": 432,
+     "drink": "coffee",
+     "id": "2026-09-16-00",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 438,
+     "minutes": 14,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-09-16-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 452,
+     "ml": 260,
+     "id": "2026-09-16-02",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 506,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-16-03",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 515,
+     "minutes": 22,
+     "label": "Commute",
+     "id": "2026-09-16-04",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 540,
+     "minutes": 180,
+     "label": "Office",
+     "id": "2026-09-16-05",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 545,
+     "minutes": 170,
+     "device": "computer",
+     "id": "2026-09-16-06",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 566,
+     "ms": 300,
+     "lapses": 0,
+     "energy": 3,
+     "mood": 5,
+     "clarity": 4,
+     "id": "2026-09-16-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 594,
+     "ml": 329,
+     "id": "2026-09-16-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 615,
+     "label": "Oats with nuts",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-09-16-09",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 624,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-09-16-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 677,
+     "ml": 274,
+     "id": "2026-09-16-11",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 741,
+     "label": "Salad with salmon",
+     "food": "whole",
+     "thumb": "salad",
+     "id": "2026-09-16-12",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 745,
+     "minutes": 35,
+     "label": "Lunch with Maya",
+     "id": "2026-09-16-13",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 768,
+     "ml": 309,
+     "id": "2026-09-16-14",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 776,
+     "minutes": 20,
+     "label": "Walk outside",
+     "sunlight": true,
+     "id": "2026-09-16-15",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 800,
+     "minutes": 200,
+     "label": "Office",
+     "id": "2026-09-16-16",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 805,
+     "minutes": 190,
+     "device": "computer",
+     "id": "2026-09-16-17",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 862,
+     "ml": 300,
+     "id": "2026-09-16-18",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 933,
+     "minutes": 35,
+     "label": "Run, 6 km",
+     "vigorous": true,
+     "id": "2026-09-16-19",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 955,
+     "ml": 326,
+     "id": "2026-09-16-20",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 970,
+     "drink": "coffee",
+     "id": "2026-09-16-21",
+     "seeded": true
+    },
+    {
+     "kind": "whispered",
+     "start": 971,
+     "line": "That coffee lands in tonight's sleep.",
+     "id": "2026-09-16-22",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 1025,
+     "minutes": 25,
+     "label": "Commute",
+     "id": "2026-09-16-23",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1055,
+     "ml": 308,
+     "id": "2026-09-16-24",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1071,
+     "label": "Salmon and vegetables",
+     "food": "whole",
+     "thumb": "fish",
+     "id": "2026-09-16-25",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 26,
+     "label": "Dinner with family",
+     "id": "2026-09-16-26",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1182,
+     "ml": 328,
+     "id": "2026-09-16-27",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1205,
+     "minutes": 26,
+     "device": "phone",
+     "id": "2026-09-16-28",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1206,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-16-29",
+     "seeded": true
+    }
+   ],
+   "aqi": 54,
+   "weather": {
+    "high_f": 95,
+    "summary": "Clear and hot"
+   },
+   "held_back": 8,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-09-17",
+   "type": "crying_baby",
+   "sleep": {
+    "bed": -77,
+    "wake": 396,
+    "minutes": 386,
+    "deep": 40,
+    "rem": 91,
+    "fragmented": true,
+    "wakings": [
+     {
+      "start": 40,
+      "minutes": 12,
+      "baby": true
+     },
+     {
+      "start": 135,
+      "minutes": 15,
+      "baby": true
+     },
+     {
+      "start": 230,
+      "minutes": 18,
+      "baby": true
+     },
+     {
+      "start": 305,
+      "minutes": 13,
+      "baby": true
+     }
+    ],
+    "hrv_ms": 44,
+    "rhr_bpm": 57,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "caffeine",
+     "start": 432,
+     "drink": "coffee",
+     "id": "2026-09-17-00",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 435,
+     "minutes": 15,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-09-17-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 460,
+     "ml": 306,
+     "id": "2026-09-17-02",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 513,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-17-03",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 514,
+     "minutes": 23,
+     "label": "Commute",
+     "id": "2026-09-17-04",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 540,
+     "minutes": 180,
+     "label": "Office",
+     "id": "2026-09-17-05",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 545,
+     "minutes": 170,
+     "device": "computer",
+     "id": "2026-09-17-06",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 558,
+     "ms": 299,
+     "lapses": 0,
+     "energy": 5,
+     "mood": 5,
+     "clarity": 3,
+     "id": "2026-09-17-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 589,
+     "ml": 278,
+     "id": "2026-09-17-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 613,
+     "label": "Oats with nuts",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-09-17-09",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 628,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-09-17-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 681,
+     "ml": 320,
+     "id": "2026-09-17-11",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 715,
+     "drink": "coffee",
+     "id": "2026-09-17-12",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 739,
+     "label": "Chicken and vegetables",
+     "food": "whole",
+     "thumb": "plate",
+     "id": "2026-09-17-13",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 742,
+     "minutes": 28,
+     "label": "Lunch with Maya",
+     "id": "2026-09-17-14",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 767,
+     "ml": 290,
+     "id": "2026-09-17-15",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 778,
+     "minutes": 21,
+     "label": "Walk outside",
+     "sunlight": true,
+     "id": "2026-09-17-16",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 800,
+     "minutes": 200,
+     "label": "Office",
+     "id": "2026-09-17-17",
+     "seeded": true
+    },
+    {
+     "kind": "sedentary",
+     "start": 805,
+     "minutes": 97,
+     "id": "2026-09-17-18",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 805,
+     "minutes": 190,
+     "device": "computer",
+     "id": "2026-09-17-19",
+     "seeded": true
+    },
+    {
+     "kind": "nap",
+     "start": 810,
+     "minutes": 20,
+     "id": "2026-09-17-20",
+     "seeded": true
+    },
+    {
+     "kind": "co2",
+     "start": 840,
+     "minutes": 90,
+     "ppm": 1050,
+     "label": "Meeting room",
+     "id": "2026-09-17-21",
+     "seeded": true
+    },
+    {
+     "kind": "stress",
+     "start": 849,
+     "scene": "Meeting",
+     "hr": 82,
+     "resting": 58,
+     "id": "2026-09-17-22",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 864,
+     "ml": 265,
+     "id": "2026-09-17-23",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 937,
+     "minutes": 30,
+     "label": "Mobility and core",
+     "vigorous": false,
+     "id": "2026-09-17-24",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 953,
+     "ml": 278,
+     "id": "2026-09-17-25",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 1020,
+     "minutes": 22,
+     "label": "Commute",
+     "id": "2026-09-17-26",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1051,
+     "ml": 330,
+     "id": "2026-09-17-27",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1075,
+     "label": "Salmon and vegetables",
+     "food": "whole",
+     "thumb": "fish",
+     "id": "2026-09-17-28",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 25,
+     "label": "Dinner with family",
+     "id": "2026-09-17-29",
+     "seeded": true
+    },
+    {
+     "kind": "sauna",
+     "start": 1121,
+     "minutes": 18,
+     "id": "2026-09-17-30",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1185,
+     "ml": 320,
+     "id": "2026-09-17-31",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1214,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-17-32",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1218,
+     "minutes": 21,
+     "device": "phone",
+     "id": "2026-09-17-33",
+     "seeded": true
+    }
+   ],
+   "aqi": 56,
+   "weather": {
+    "high_f": 94,
+    "summary": "Partly cloudy"
+   },
+   "held_back": 9,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-09-18",
+   "type": "drinking_night",
+   "sleep": {
+    "bed": -96,
+    "wake": 393,
+    "minutes": 476,
+    "deep": 94,
+    "rem": 114,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 60,
+    "rhr_bpm": 59,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "caffeine",
+     "start": 433,
+     "drink": "coffee",
+     "id": "2026-09-18-00",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 436,
+     "minutes": 16,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-09-18-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 453,
+     "ml": 278,
+     "id": "2026-09-18-02",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 505,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-18-03",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 511,
+     "minutes": 21,
+     "label": "Commute",
+     "id": "2026-09-18-04",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 540,
+     "minutes": 180,
+     "label": "Office",
+     "id": "2026-09-18-05",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 545,
+     "minutes": 170,
+     "device": "computer",
+     "id": "2026-09-18-06",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 555,
+     "ms": 308,
+     "lapses": 1,
+     "energy": 4,
+     "mood": 5,
+     "clarity": 3,
+     "id": "2026-09-18-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 587,
+     "ml": 292,
+     "id": "2026-09-18-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 608,
+     "label": "Oats with nuts",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-09-18-09",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 625,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-09-18-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 676,
+     "ml": 316,
+     "id": "2026-09-18-11",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 738,
+     "minutes": 27,
+     "label": "Lunch with Maya",
+     "id": "2026-09-18-12",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 745,
+     "label": "Salad with salmon",
+     "food": "whole",
+     "thumb": "salad",
+     "id": "2026-09-18-13",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 760,
+     "ml": 305,
+     "id": "2026-09-18-14",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 778,
+     "minutes": 24,
+     "label": "Walk outside",
+     "sunlight": true,
+     "id": "2026-09-18-15",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 800,
+     "minutes": 200,
+     "label": "Office",
+     "id": "2026-09-18-16",
+     "seeded": true
+    },
+    {
+     "kind": "sedentary",
+     "start": 805,
+     "minutes": 120,
+     "id": "2026-09-18-17",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 805,
+     "minutes": 190,
+     "device": "computer",
+     "id": "2026-09-18-18",
+     "seeded": true
+    },
+    {
+     "kind": "stress",
+     "start": 870,
+     "scene": "Meeting",
+     "hr": 87,
+     "resting": 58,
+     "id": "2026-09-18-19",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 872,
+     "ml": 270,
+     "id": "2026-09-18-20",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 937,
+     "minutes": 45,
+     "label": "Strength, 45 min",
+     "vigorous": true,
+     "id": "2026-09-18-21",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 960,
+     "ml": 315,
+     "id": "2026-09-18-22",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 1026,
+     "minutes": 19,
+     "label": "Commute",
+     "id": "2026-09-18-23",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1058,
+     "ml": 316,
+     "id": "2026-09-18-24",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1160,
+     "minutes": 150,
+     "label": "Friends at the bar",
+     "id": "2026-09-18-25",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1182,
+     "ml": 292,
+     "id": "2026-09-18-26",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1185,
+     "label": "Burger and fries",
+     "food": "fast_food",
+     "thumb": "burger",
+     "id": "2026-09-18-27",
+     "seeded": true
+    },
+    {
+     "kind": "alcohol",
+     "start": 1190,
+     "drinks": 1,
+     "label": "Wine",
+     "id": "2026-09-18-28",
+     "seeded": true
+    },
+    {
+     "kind": "alcohol",
+     "start": 1245,
+     "drinks": 1,
+     "label": "Wine",
+     "id": "2026-09-18-29",
+     "seeded": true
+    },
+    {
+     "kind": "whispered",
+     "start": 1247,
+     "line": "Water with the next one gets most of tonight back.",
+     "id": "2026-09-18-30",
+     "seeded": true
+    },
+    {
+     "kind": "alcohol",
+     "start": 1310,
+     "drinks": 1,
+     "label": "Cocktail",
+     "id": "2026-09-18-31",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1320,
+     "dose": "PM",
+     "taken": false,
+     "thumb": null,
+     "id": "2026-09-18-32",
+     "seeded": true
+    },
+    {
+     "kind": "nicotine",
+     "start": 1355,
+     "label": "Vape in hand",
+     "id": "2026-09-18-33",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1390,
+     "minutes": 40,
+     "device": "phone",
+     "id": "2026-09-18-34",
+     "seeded": true
+    }
+   ],
+   "aqi": 53,
+   "weather": {
+    "high_f": 94,
+    "summary": "Partly cloudy"
+   },
+   "held_back": 7,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-09-19",
+   "type": "late_caffeine",
+   "sleep": {
+    "bed": 39,
+    "wake": 435,
+    "minutes": 385,
+    "deep": 71,
+    "rem": 62,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 41.5,
+    "rhr_bpm": 64.8,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "outdoor",
+     "start": 436,
+     "minutes": 11,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-09-19-00",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 437,
+     "drink": "coffee",
+     "id": "2026-09-19-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 456,
+     "ml": 322,
+     "id": "2026-09-19-02",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 523,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-19-03",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 561,
+     "ms": 293,
+     "lapses": 1,
+     "energy": 3,
+     "mood": 5,
+     "clarity": 3,
+     "id": "2026-09-19-04",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 572,
+     "minutes": 49,
+     "label": "Walk with Maya",
+     "id": "2026-09-19-05",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 573,
+     "minutes": 45,
+     "label": "Park with the stroller",
+     "sunlight": true,
+     "id": "2026-09-19-06",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 595,
+     "ml": 308,
+     "id": "2026-09-19-07",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 608,
+     "label": "Eggs and greens",
+     "food": "whole",
+     "thumb": "eggs",
+     "id": "2026-09-19-08",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 625,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-09-19-09",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 686,
+     "ml": 320,
+     "id": "2026-09-19-10",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 760,
+     "label": "Salad with salmon",
+     "food": "whole",
+     "thumb": "salad",
+     "id": "2026-09-19-11",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 762,
+     "ml": 309,
+     "id": "2026-09-19-12",
+     "seeded": true
+    },
+    {
+     "kind": "nap",
+     "start": 825,
+     "minutes": 17,
+     "id": "2026-09-19-13",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 869,
+     "ml": 323,
+     "id": "2026-09-19-14",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 909,
+     "minutes": 16,
+     "label": "Groceries",
+     "id": "2026-09-19-15",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 936,
+     "minutes": 30,
+     "label": "Mobility and core",
+     "vigorous": false,
+     "id": "2026-09-19-16",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 960,
+     "ml": 278,
+     "id": "2026-09-19-17",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 970,
+     "drink": "coffee",
+     "id": "2026-09-19-18",
+     "seeded": true
+    },
+    {
+     "kind": "whispered",
+     "start": 971,
+     "line": "That coffee lands in tonight's sleep.",
+     "id": "2026-09-19-19",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1051,
+     "ml": 322,
+     "id": "2026-09-19-20",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1066,
+     "label": "Steak salad",
+     "food": "whole",
+     "thumb": "salad",
+     "id": "2026-09-19-21",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 27,
+     "label": "Dinner with family",
+     "id": "2026-09-19-22",
+     "seeded": true
+    },
+    {
+     "kind": "sauna",
+     "start": 1122,
+     "minutes": 20,
+     "id": "2026-09-19-23",
+     "seeded": true
+    },
+    {
+     "kind": "cold",
+     "start": 1155,
+     "minutes": 3,
+     "id": "2026-09-19-24",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1183,
+     "ml": 267,
+     "id": "2026-09-19-25",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1212,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-19-26",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1216,
+     "minutes": 23,
+     "device": "phone",
+     "id": "2026-09-19-27",
+     "seeded": true
+    }
+   ],
+   "aqi": 33,
+   "weather": {
+    "high_f": 95,
+    "summary": "Afternoon storms"
+   },
+   "held_back": 13,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-09-20",
+   "type": "midday_sun",
+   "sleep": {
+    "bed": -65,
+    "wake": 401,
+    "minutes": 438,
+    "deep": 65,
+    "rem": 95,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 59,
+    "rhr_bpm": 59,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "outdoor",
+     "start": 432,
+     "minutes": 15,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-09-20-00",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 437,
+     "drink": "coffee",
+     "id": "2026-09-20-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 450,
+     "ml": 319,
+     "id": "2026-09-20-02",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 521,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-20-03",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 570,
+     "ms": 312,
+     "lapses": 2,
+     "energy": 5,
+     "mood": 4,
+     "clarity": 5,
+     "id": "2026-09-20-04",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 584,
+     "minutes": 45,
+     "label": "Walk with Maya",
+     "id": "2026-09-20-05",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 589,
+     "minutes": 65,
+     "label": "Park with the stroller",
+     "sunlight": true,
+     "id": "2026-09-20-06",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 596,
+     "ml": 276,
+     "id": "2026-09-20-07",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 611,
+     "label": "Oats with nuts",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-09-20-08",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 626,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-09-20-09",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 679,
+     "ml": 291,
+     "id": "2026-09-20-10",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 767,
+     "label": "Chicken and vegetables",
+     "food": "whole",
+     "thumb": "plate",
+     "id": "2026-09-20-11",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 772,
+     "ml": 278,
+     "id": "2026-09-20-12",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 840,
+     "minutes": 55,
+     "label": "Farmers market, no shade",
+     "sunlight": true,
+     "id": "2026-09-20-13",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 840,
+     "minutes": 40,
+     "label": "Market with Maya",
+     "id": "2026-09-20-14",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 860,
+     "ml": 317,
+     "id": "2026-09-20-15",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 911,
+     "minutes": 22,
+     "label": "Groceries",
+     "id": "2026-09-20-16",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 934,
+     "minutes": 50,
+     "label": "Cycling",
+     "vigorous": true,
+     "id": "2026-09-20-17",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 961,
+     "ml": 321,
+     "id": "2026-09-20-18",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1055,
+     "ml": 327,
+     "id": "2026-09-20-19",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1073,
+     "label": "Chicken, rice and greens",
+     "food": "whole",
+     "thumb": "plate",
+     "id": "2026-09-20-20",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 22,
+     "label": "Dinner with family",
+     "id": "2026-09-20-21",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1183,
+     "ml": 276,
+     "id": "2026-09-20-22",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1201,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-20-23",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1209,
+     "minutes": 30,
+     "device": "phone",
+     "id": "2026-09-20-24",
+     "seeded": true
+    }
+   ],
+   "aqi": 49,
+   "weather": {
+    "high_f": 94,
+    "summary": "Clear and hot"
+   },
+   "held_back": 11,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-09-21",
+   "type": "perfect",
+   "sleep": {
+    "bed": -85,
+    "wake": 388,
+    "minutes": 459,
+    "deep": 109,
+    "rem": 95,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 52,
+    "rhr_bpm": 59,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "caffeine",
+     "start": 433,
+     "drink": "coffee",
+     "id": "2026-09-21-00",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 435,
+     "minutes": 16,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-09-21-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 450,
+     "ml": 323,
+     "id": "2026-09-21-02",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 508,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-21-03",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 516,
+     "minutes": 24,
+     "label": "Commute",
+     "id": "2026-09-21-04",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 540,
+     "minutes": 180,
+     "label": "Office",
+     "id": "2026-09-21-05",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 545,
+     "minutes": 170,
+     "device": "computer",
+     "id": "2026-09-21-06",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 553,
+     "ms": 299,
+     "lapses": 2,
+     "energy": 5,
+     "mood": 5,
+     "clarity": 3,
+     "id": "2026-09-21-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 594,
+     "ml": 294,
+     "id": "2026-09-21-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 619,
+     "label": "Oats with nuts",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-09-21-09",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 626,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-09-21-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 650,
+     "ml": 300,
+     "id": "2026-09-21-11",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 680,
+     "ml": 291,
+     "id": "2026-09-21-12",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 736,
+     "minutes": 35,
+     "label": "Lunch with Maya",
+     "id": "2026-09-21-13",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 743,
+     "label": "Lentil soup and bread",
+     "food": "whole",
+     "thumb": "soup",
+     "id": "2026-09-21-14",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 772,
+     "ml": 322,
+     "id": "2026-09-21-15",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 779,
+     "minutes": 20,
+     "label": "Walk outside",
+     "sunlight": true,
+     "id": "2026-09-21-16",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 800,
+     "minutes": 200,
+     "label": "Office",
+     "id": "2026-09-21-17",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 805,
+     "minutes": 190,
+     "device": "computer",
+     "id": "2026-09-21-18",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 865,
+     "ml": 320,
+     "id": "2026-09-21-19",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 930,
+     "minutes": 35,
+     "label": "Run, 6 km",
+     "vigorous": true,
+     "id": "2026-09-21-20",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 951,
+     "ml": 311,
+     "id": "2026-09-21-21",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 980,
+     "minutes": 25,
+     "label": "Evening walk",
+     "sunlight": true,
+     "id": "2026-09-21-22",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 980,
+     "minutes": 25,
+     "label": "Call with Dad",
+     "id": "2026-09-21-23",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 1020,
+     "minutes": 23,
+     "label": "Commute",
+     "id": "2026-09-21-24",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1057,
+     "ml": 268,
+     "id": "2026-09-21-25",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1075,
+     "label": "Salmon and vegetables",
+     "food": "whole",
+     "thumb": "fish",
+     "id": "2026-09-21-26",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 32,
+     "label": "Dinner with family",
+     "id": "2026-09-21-27",
+     "seeded": true
+    },
+    {
+     "kind": "sauna",
+     "start": 1120,
+     "minutes": 20,
+     "id": "2026-09-21-28",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1182,
+     "ml": 329,
+     "id": "2026-09-21-29",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1207,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-21-30",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1210,
+     "minutes": 24,
+     "device": "phone",
+     "id": "2026-09-21-31",
+     "seeded": true
+    }
+   ],
+   "aqi": 49,
+   "weather": {
+    "high_f": 91,
+    "summary": "Partly cloudy"
+   },
+   "held_back": 3,
+   "until": 1440,
+   "seeded": true
+  },
+  {
+   "date": "2026-09-22",
+   "type": "late_caffeine",
+   "sleep": {
+    "bed": -92,
+    "wake": 388,
+    "minutes": 466,
+    "deep": 118,
+    "rem": 122,
+    "fragmented": false,
+    "wakings": [],
+    "hrv_ms": 57,
+    "rhr_bpm": 56,
+    "seeded": true
+   },
+   "events": [
+    {
+     "kind": "outdoor",
+     "start": 433,
+     "minutes": 13,
+     "label": "Porch, first light",
+     "sunlight": true,
+     "id": "2026-09-22-00",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 437,
+     "drink": "coffee",
+     "id": "2026-09-22-01",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 458,
+     "ml": 261,
+     "id": "2026-09-22-02",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 511,
+     "minutes": 21,
+     "label": "Commute",
+     "id": "2026-09-22-03",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 527,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-22-04",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 540,
+     "minutes": 180,
+     "label": "Office",
+     "id": "2026-09-22-05",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 545,
+     "minutes": 170,
+     "device": "computer",
+     "id": "2026-09-22-06",
+     "seeded": true
+    },
+    {
+     "kind": "mind_check",
+     "start": 558,
+     "ms": 300,
+     "lapses": 1,
+     "energy": 5,
+     "mood": 5,
+     "clarity": 4,
+     "id": "2026-09-22-07",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 596,
+     "ml": 284,
+     "id": "2026-09-22-08",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 605,
+     "label": "Greek yogurt and berries",
+     "food": "whole",
+     "thumb": "bowl",
+     "id": "2026-09-22-09",
+     "seeded": true
+    },
+    {
+     "kind": "supplements",
+     "start": 625,
+     "label": "Omega-3 and vitamin D",
+     "id": "2026-09-22-10",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 685,
+     "ml": 300,
+     "id": "2026-09-22-11",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 738,
+     "minutes": 32,
+     "label": "Lunch with Maya",
+     "id": "2026-09-22-12",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 741,
+     "label": "Lentil soup and bread",
+     "food": "whole",
+     "thumb": "soup",
+     "id": "2026-09-22-13",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 764,
+     "ml": 322,
+     "id": "2026-09-22-14",
+     "seeded": true
+    },
+    {
+     "kind": "outdoor",
+     "start": 779,
+     "minutes": 21,
+     "label": "Walk outside",
+     "sunlight": true,
+     "id": "2026-09-22-15",
+     "seeded": true
+    },
+    {
+     "kind": "work",
+     "start": 800,
+     "minutes": 200,
+     "label": "Office",
+     "id": "2026-09-22-16",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 805,
+     "minutes": 190,
+     "device": "computer",
+     "id": "2026-09-22-17",
+     "seeded": true
+    },
+    {
+     "kind": "co2",
+     "start": 840,
+     "minutes": 90,
+     "ppm": 1050,
+     "label": "Meeting room",
+     "id": "2026-09-22-18",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 863,
+     "ml": 322,
+     "id": "2026-09-22-19",
+     "seeded": true
+    },
+    {
+     "kind": "workout",
+     "start": 934,
+     "minutes": 35,
+     "label": "Run, 6 km",
+     "vigorous": true,
+     "id": "2026-09-22-20",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 959,
+     "ml": 289,
+     "id": "2026-09-22-21",
+     "seeded": true
+    },
+    {
+     "kind": "caffeine",
+     "start": 970,
+     "drink": "coffee",
+     "id": "2026-09-22-22",
+     "seeded": true
+    },
+    {
+     "kind": "whispered",
+     "start": 971,
+     "line": "That coffee lands in tonight's sleep.",
+     "id": "2026-09-22-23",
+     "seeded": true
+    },
+    {
+     "kind": "drive",
+     "start": 1024,
+     "minutes": 19,
+     "label": "Commute",
+     "id": "2026-09-22-24",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1059,
+     "ml": 261,
+     "id": "2026-09-22-25",
+     "seeded": true
+    },
+    {
+     "kind": "meal",
+     "start": 1065,
+     "label": "Chicken, rice and greens",
+     "food": "whole",
+     "thumb": "plate",
+     "id": "2026-09-22-26",
+     "seeded": true
+    },
+    {
+     "kind": "conversation",
+     "start": 1080,
+     "minutes": 24,
+     "label": "Dinner with family",
+     "id": "2026-09-22-27",
+     "seeded": true
+    },
+    {
+     "kind": "sauna",
+     "start": 1118,
+     "minutes": 21,
+     "id": "2026-09-22-28",
+     "seeded": true
+    },
+    {
+     "kind": "water",
+     "start": 1183,
+     "ml": 323,
+     "id": "2026-09-22-29",
+     "seeded": true
+    },
+    {
+     "kind": "peptide",
+     "start": 1204,
+     "dose": "PM",
+     "taken": true,
+     "thumb": "pen",
+     "id": "2026-09-22-30",
+     "seeded": true
+    },
+    {
+     "kind": "screen",
+     "start": 1213,
+     "minutes": 25,
+     "device": "phone",
+     "id": "2026-09-22-31",
+     "seeded": true
+    }
+   ],
+   "aqi": 47,
+   "weather": {
+    "high_f": 94,
+    "summary": "Clear and hot"
+   },
+   "held_back": 6,
+   "until": 1215,
+   "seeded": true
+  }
+ ],
+ "seeded": true
+}

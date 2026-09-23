@@ -76,6 +76,12 @@ export function PersonaPanel({ variant = "dark" }: { variant?: "dark" | "light" 
 
   const [draft, setDraft] = useState("");
   const [dirty, setDirty] = useState(false);
+  // The server text this draft was derived from. If the stored persona moves
+  // on underneath an unsaved box -- another tab, a script, a teammate -- saving
+  // would silently replace the newer one with whatever is on screen. It did:
+  // a stale box overwrote a tested persona minutes before a demo.
+  const [basedOn, setBasedOn] = useState("");
+  const [confirmOverwrite, setConfirmOverwrite] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: "ok" | "bad"; text: string }>();
 
@@ -85,15 +91,24 @@ export function PersonaPanel({ variant = "dark" }: { variant?: "dark" | "light" 
 
   // The poll keeps running while the box is being edited, so it may only write
   // into the textarea while nobody has typed in it.
-  useEffect(() => { if (!dirty) setDraft(serverText); }, [serverText, dirty]);
+  useEffect(() => {
+    if (!dirty) { setDraft(serverText); setBasedOn(serverText); }
+  }, [serverText, dirty]);
 
   const save = async () => {
     if (busy || offline) return;
+    if (!confirmOverwrite && serverText !== basedOn) {
+      setConfirmOverwrite(true);
+      setNotice({ tone: "bad", text: "the stored persona changed since you started editing — Save again to overwrite it" });
+      return;
+    }
     setBusy(true);
     setNotice(undefined);
     try {
       const next = await api.savePersona(draft);
       setDirty(false);
+      setConfirmOverwrite(false);
+      setBasedOn(next.text);
       setDraft(next.text);
       setNotice(next.source === "custom"
         ? { tone: "ok", text: "saved" }
@@ -130,7 +145,7 @@ export function PersonaPanel({ variant = "dark" }: { variant?: "dark" | "light" 
       <div className={c.body}>
         <textarea
           value={draft}
-          onChange={e => { setDraft(e.target.value); setDirty(true); }}
+          onChange={e => { setDraft(e.target.value); setDirty(true); setConfirmOverwrite(false); }}
           rows={8}
           disabled={offline}
           aria-label="The persona T1 is briefed with"

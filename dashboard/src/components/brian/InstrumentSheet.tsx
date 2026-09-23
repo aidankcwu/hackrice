@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef } from "react";
+import { withBasePath } from "@/lib/runtime";
 import { T } from "@/lib/tokens";
 import { chipLabel, type InstrumentTile } from "@/lib/score/instruments";
 import { PROVENANCE_HINT } from "@/lib/score/provenance";
@@ -115,7 +116,7 @@ export function InstrumentSheet({ tile, open, onClose }: InstrumentSheetProps) {
           </span>
           {tile.action && (
             <a
-              href={tile.action.href}
+              href={withBasePath(tile.action.href)}
               className="tile inline-flex h-11 items-center rounded-full px-5 text-sm font-semibold"
               style={{ background: T.bg, color: T.ink }}
             >

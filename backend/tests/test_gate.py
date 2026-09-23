@@ -17,8 +17,11 @@ from pipeline.gate import (
     keyword_trigger,
 )
 from pipeline.gate.triggers import change_trigger, wearable_now_line
-from pipeline.models import AiBlock, Escalation, PendingCheck, SensorBlock, Tick
+from pipeline.models import AiBlock, Escalation, PendingCheck, SensorBlock, Tick, WatchBlock
 from pipeline.sim import DEFAULT_SCENARIO, SimSource
+
+#: Every gate test that must not change with GATE_READS_WATCH runs both ways.
+READS_WATCH = pytest.mark.parametrize("reads_watch", [False, True])
 
 
 def tick(seq: int, **ai: object) -> Tick:
@@ -29,11 +32,30 @@ def tick(seq: int, **ai: object) -> Tick:
     )
 
 
-def test_gate_episode_suppression_drop_and_watch(tmp_path) -> None:
+def watch_tick(seq: int, scores: dict[str, float] | None = None, *,
+               novelty: float = 0.0, **ai: object) -> Tick:
+    """A tick carrying a ``watch`` block; ``hot`` follows the 0.60 default enter."""
+
+    scores = scores or {}
+    current = tick(seq, **ai)
+    current.watch = WatchBlock(
+        frames=10, usable=10, scores=scores, novelty=novelty,
+        hot=[name for name, score in scores.items() if score >= 0.60],
+    )
+    return current
+
+
+def trigger_named(name: str, **kwargs: object) -> Trigger:
+    return next(t for t in default_triggers(Timings.demo(), True, **kwargs) if t.name == name)
+
+
+@READS_WATCH
+def test_gate_episode_suppression_drop_and_watch(tmp_path, reads_watch: bool) -> None:
     db = Database(tmp_path / "gate.db").connect().init_schema()
-    episodes = EpisodeBuilder(db, Timings.demo())
+    episodes = EpisodeBuilder(db, Timings.demo(), reads_watch=reads_watch)
     seen = []
-    gate = TriggerGate(default_triggers(Timings.demo(), True), Timings.demo(), db, episodes, lambda e: seen.append(e) is None, True)
+    gate = TriggerGate(default_triggers(Timings.demo(), True, reads_watch=reads_watch),
+                       Timings.demo(), db, episodes, lambda e: seen.append(e) is None, True)
     for i in range(8):
         current = tick(i, scene="restaurant", activity="eating", food_present=True)
         episodes.on_tick(current)
@@ -63,18 +85,20 @@ def test_cooldown_and_global_gap(tmp_path) -> None:
     accepted = []
     triggers = [
         Trigger("a", lambda w: w[-1].seq in {0, 20}, 30, None, "a"),
-        Trigger("b", lambda w: w[-1].seq in {3, 40}, 0, None, "b"),  # 3 s: inside the 5 s global gap
+        Trigger("b", lambda w: w[-1].seq in {1, 40}, 0, None, "b"),  # 1 s: inside the 2 s global gap
     ]
+    assert Timings.demo().global_escalation_min_gap == 2.0
     gate = TriggerGate(triggers, Timings.demo(), db, episodes, lambda e: accepted.append(e) is None, True)
-    for i in (0, 3, 20, 40):
+    for i in (0, 1, 20, 40):
         gate.on_tick(tick(i))
     assert [e.trigger for e in accepted] == ["a", "b"]
     assert gate.suppressed == {"b": 1, "a": 1}
     db.close()
 
 
+@READS_WATCH
 @pytest.mark.parametrize("interval_s", [1.0, 1.5])
-def test_default_scenario(tmp_path, interval_s: float) -> None:
+def test_default_scenario(tmp_path, interval_s: float, reads_watch: bool) -> None:
     """The scripted day escalates identically at 1 Hz and at the glasses' 1.5 s.
 
     Scenario segments are scripted in *seconds*, so a 1.5 s cadence puts ~13
@@ -82,13 +106,17 @@ def test_default_scenario(tmp_path, interval_s: float) -> None:
     down by :meth:`Timings.scaled_hits`, and the day must still produce the
     same six triggers and the same episode kinds -- otherwise the gate is
     silently tuned for a stream that does not exist (SPEC §3, §12.2).
+
+    The sim carries no ``watch`` block, so GATE_READS_WATCH must not change
+    a thing here: every sustained trigger falls back to today's rule.
     """
 
     timings = Timings.demo(tick_interval_s=interval_s)
     db = Database(tmp_path / "scenario.db").connect().init_schema()
-    episodes = EpisodeBuilder(db, timings)
+    episodes = EpisodeBuilder(db, timings, reads_watch=reads_watch)
     escalations = []
-    gate = TriggerGate(default_triggers(timings, True), timings, db, episodes, lambda e: escalations.append(e) is None, True)
+    gate = TriggerGate(default_triggers(timings, True, reads_watch=reads_watch), timings, db,
+                       episodes, lambda e: escalations.append(e) is None, True)
     source = SimSource(DEFAULT_SCENARIO, frame_store=None, speed=1, seed=0,
                        interval_s=interval_s)
     for _ in range(400):
@@ -101,6 +129,10 @@ def test_default_scenario(tmp_path, interval_s: float) -> None:
         "food_in_frame", "screen_sustained", "people_sustained",
         "outdoor_sustained", "caffeine_seen", "alcohol_seen", "change",
     } - {"people_sustained"}, names
+    # The scripted evening is phone_use at home with `screen_present` and no
+    # laptop anywhere: the phone's own screen. That is not "phone at the
+    # laptop" (it used to be, and so was walking on stage checking a phone).
+    assert not [e for e in escalations if e.trigger == "cue"]
     bound_triggers = {
         "food_in_frame", "screen_sustained", "outdoor_sustained",
     }
@@ -115,24 +147,28 @@ def test_default_scenario(tmp_path, interval_s: float) -> None:
     db.close()
 
 
-def test_sighting_triggers_stay_reachable_at_the_slow_cadence(tmp_path) -> None:
+@READS_WATCH
+def test_sighting_triggers_stay_reachable_at_the_slow_cadence(tmp_path, reads_watch: bool) -> None:
     """A cup seen once inside the 10 s window is a cup (S9).
 
     ``caffeine_seen`` is a point observation, two hits at 1 Hz; scaled to 1.5 s
     that floors to one. The window does not scale -- only the count does.
+    A point sighting is labeler-only under ``reads_watch`` too: a cold
+    ``watch`` block on the tick must not veto it.
     """
 
     timings = Timings.demo(tick_interval_s=1.5)
     db = Database(tmp_path / "sight.db").connect().init_schema()
-    episodes = EpisodeBuilder(db, timings)
+    episodes = EpisodeBuilder(db, timings, reads_watch=reads_watch)
     escalations = []
-    gate = TriggerGate(default_triggers(timings, True), timings, db, episodes,
-                       lambda e: escalations.append(e) is None, True)
+    gate = TriggerGate(default_triggers(timings, True, reads_watch=reads_watch), timings, db,
+                       episodes, lambda e: escalations.append(e) is None, True)
     # One positive tick, on a 1.5 s clock, with nothing else in the window.
     current = Tick(
         tick_id="t_0", t=0.0, seq=0,
         sensor=SensorBlock(frame_delta=0.1, phash=f"{0:016x}"),
         ai=AiBlock(age_ms=0, caffeine_visible=True), frame_ref="f_0",
+        watch=WatchBlock(scores={"caffeine_visible": 0.1}, hot=[]),
     )
     episodes.on_tick(current)
     gate.on_tick(current)
@@ -140,12 +176,14 @@ def test_sighting_triggers_stay_reachable_at_the_slow_cadence(tmp_path) -> None:
     db.close()
 
 
-def test_suppressed_trigger_does_not_block_others(tmp_path) -> None:
+@READS_WATCH
+def test_suppressed_trigger_does_not_block_others(tmp_path, reads_watch: bool) -> None:
     """A screen_block already escalated must not stop caffeine_seen firing."""
     db = Database(tmp_path / "s.db").connect().init_schema()
-    episodes = EpisodeBuilder(db, Timings.demo())
+    episodes = EpisodeBuilder(db, Timings.demo(), reads_watch=reads_watch)
     escalations = []
-    gate = TriggerGate(default_triggers(Timings.demo(), True), Timings.demo(), db, episodes, lambda e: escalations.append(e) is None, True)
+    gate = TriggerGate(default_triggers(Timings.demo(), True, reads_watch=reads_watch),
+                       Timings.demo(), db, episodes, lambda e: escalations.append(e) is None, True)
     seq = 0
     for _ in range(30):  # screen only -> screen_sustained fires, screen_block opens
         t = tick(seq, screen_present=True); seq += 1
@@ -200,14 +238,14 @@ def test_change_trigger_scene_activity_object_and_in_hand() -> None:
     trigger = change_trigger(Timings.demo())
     window = [
         tick(0, scene="home", activity="computer_use", objects=["laptop"]),
-        tick(1, scene="outdoor_other", activity="standing", food_present=True,
+        tick(1, scene="outdoor_other", activity="walking", food_present=True,
              caption="holding a snack bar in hand", objects=["snack bar"]),
-        tick(2, scene="outdoor_other", activity="standing", food_present=True,
+        tick(2, scene="outdoor_other", activity="walking", food_present=True,
              caption="holding a snack bar in hand", objects=["snack bar"]),
     ]
     assert trigger.predicate(window)
     reason, extra = trigger.enrich(window)  # type: ignore[misc]
-    for fragment in ("scene home -> outdoor_other", "activity computer_use -> standing",
+    for fragment in ("scene home -> outdoor_other", "activity computer_use -> walking",
                      "new object: snack bar", "food in hand"):
         assert fragment in reason
     assert extra and "Visual transition:" in extra[0]
@@ -363,12 +401,167 @@ def test_a_short_series_is_not_enough(tmp_path) -> None:
     db.close()
 
 
-def test_default_triggers_appends_the_biometric_trigger_last() -> None:
-    plain = default_triggers(Timings.demo(), True)
-    withfeed = default_triggers(Timings.demo(), True, feed=StubFeed(100.0))
+@READS_WATCH
+def test_default_triggers_appends_the_biometric_trigger_last(reads_watch: bool) -> None:
+    plain = default_triggers(Timings.demo(), True, reads_watch=reads_watch)
+    withfeed = default_triggers(Timings.demo(), True, feed=StubFeed(100.0), reads_watch=reads_watch)
     assert [t.name for t in plain] == [t.name for t in withfeed[:-1]]
     assert withfeed[-1].name == "biometric_anomaly"
     assert withfeed[-1].cooldown_s == Timings.demo().biometric_cooldown
+
+
+# -- reads_watch: the watcher proves how long, the labeler what (PERCEPTION.md phase 3)
+
+
+#: (trigger, the watcher concept it reads, the ai reading that confirms it today).
+SUSTAINED = pytest.mark.parametrize("name, concept, confirm", [
+    ("screen_sustained", "screen_present", dict(screen_present=True)),
+    ("people_sustained", "people_interacting", dict(people_present=True, people_interacting=True)),
+    ("outdoor_sustained", "vegetation_visible", dict(vegetation_visible=True)),
+    ("food_in_frame", "food_present", dict(activity="eating")),
+])
+
+
+def hot_window(concept: str, hot: int, total: int = 10, confirm_at: dict[int, dict] | None = None,
+               score: float = 0.7) -> list[Tick]:
+    """``total`` watch-bearing ticks at 1 Hz, the first ``hot`` of them hot on
+    ``concept``; ``confirm_at`` puts a fresh ai reading on the ticks it names."""
+
+    confirm_at = confirm_at or {}
+    return [
+        watch_tick(i, {concept: score if i < hot else 0.1}, **confirm_at.get(i, {}))
+        for i in range(total)
+    ]
+
+
+@SUSTAINED
+def test_hot_majority_with_one_confirming_ai_fires(name: str, concept: str, confirm: dict) -> None:
+    """70 % of the watch-bearing ticks hot, one confirming ai reading: fires.
+    The same window is one fresh hit, far short of today's count, so with the
+    switch off it must not."""
+
+    window = hot_window(concept, hot=7, confirm_at={4: confirm})
+    assert trigger_named(name, reads_watch=True).predicate(window)
+    # (demo food_min_hits is 1, so one eating tick was already enough there)
+    assert trigger_named(name, reads_watch=False).predicate(window) == (name == "food_in_frame")
+
+
+@SUSTAINED
+def test_hot_majority_without_a_confirming_ai_does_not_fire(name: str, concept: str, confirm: dict) -> None:
+    """The watcher alone is never a §9 boolean: no fresh ai in the window, no fire."""
+
+    assert not trigger_named(name, reads_watch=True).predicate(hot_window(concept, hot=7))
+    stale = hot_window(concept, hot=7, confirm_at={4: confirm})
+    stale[4].ai.age_ms = 9999  # type: ignore[union-attr]
+    assert not trigger_named(name, reads_watch=True).predicate(stale)
+
+
+@SUSTAINED
+def test_confirming_ai_with_a_cold_watcher_does_not_fire(name: str, concept: str, confirm: dict) -> None:
+    """Enough labeler hits to fire today, but the watcher saw the concept on
+    only 30 % of its ticks: the watcher owns persistence, so no fire."""
+
+    window = hot_window(concept, hot=3, confirm_at={7: confirm, 8: confirm, 9: confirm})
+    assert trigger_named(name, reads_watch=False).predicate(window)
+    assert not trigger_named(name, reads_watch=True).predicate(window)
+
+
+@SUSTAINED
+def test_a_window_without_watch_falls_back_to_todays_rule(name: str, concept: str, confirm: dict) -> None:
+    """Replay and the webcam carry no ``watch``: the switch changes nothing there."""
+
+    enough = [tick(i, **confirm) for i in range(3)]
+    short = [tick(i, **confirm) for i in range(3) if i < 1] + [tick(2)]
+    for reads_watch in (False, True):
+        assert trigger_named(name, reads_watch=reads_watch).predicate(enough)
+        assert (trigger_named(name, reads_watch=reads_watch).predicate(short)
+                == (name == "food_in_frame"))  # demo food_min_hits is 1
+
+
+def test_a_tick_without_watch_counts_neither_way() -> None:
+    """7 hot of 10 watch-bearing ticks stays 70 % however many blind ticks sit between."""
+
+    window = hot_window("screen_present", hot=7, confirm_at={0: dict(screen_present=True)})
+    window[3:3] = [tick(100 + i) for i in range(5)]  # blind ticks, in the same window
+    for i, t in enumerate(window):  # keep time monotonic inside the window
+        t.t = float(i)
+    assert trigger_named("screen_sustained", reads_watch=True).predicate(window)
+
+
+def test_watch_thresholds_set_the_enter_bar() -> None:
+    window = hot_window("screen_present", hot=7, confirm_at={4: dict(screen_present=True)}, score=0.7)
+    assert trigger_named("screen_sustained", reads_watch=True,
+                         watch_thresholds={"screen_present": (0.65, 0.4)}).predicate(window)
+    assert not trigger_named("screen_sustained", reads_watch=True,
+                             watch_thresholds={"screen_present": (0.8, 0.5)}).predicate(window)
+
+
+def test_point_sightings_ignore_the_watcher() -> None:
+    """``caffeine_seen`` stays labeler-only: a cold watch block does not veto it."""
+
+    window = [watch_tick(i, {"caffeine_visible": 0.05}, caffeine_visible=True) for i in range(3)]
+    for reads_watch in (False, True):
+        assert trigger_named("caffeine_seen", reads_watch=reads_watch).predicate(window)
+
+
+def test_novelty_on_two_consecutive_ticks_fires_change() -> None:
+    change = trigger_named("change", reads_watch=True)
+    one = [watch_tick(0, novelty=0.1), watch_tick(1, novelty=0.5)]
+    assert not change.predicate(one)
+    two = one + [watch_tick(2, novelty=0.5)]
+    assert change.predicate(two)
+    reason, extra = change.enrich(two)  # type: ignore[misc]
+    assert "novelty" in reason
+    assert extra and "novelty" in extra[0]
+    # The existing budget applies: once accepted, the cooldown holds it.
+    change.on_fired(2.0)  # type: ignore[misc]
+    assert not change.predicate(two + [watch_tick(3, novelty=0.5)])
+    # Below enter, or with the switch off, novelty is not an input.
+    assert not trigger_named("change", reads_watch=True, novelty_enter=0.6).predicate(two)
+    assert not trigger_named("change", reads_watch=False).predicate(two)
+
+
+def test_novelty_change_reaches_the_gate_with_its_reason(tmp_path) -> None:
+    db = Database(tmp_path / "novelty.db").connect().init_schema()
+    episodes = EpisodeBuilder(db, Timings.demo(), reads_watch=True)
+    escalations: list[Escalation] = []
+    gate = TriggerGate(default_triggers(Timings.demo(), True, reads_watch=True), Timings.demo(),
+                       db, episodes, lambda e: escalations.append(e) is None, True)
+    for i, novelty in enumerate((0.1, 0.1, 0.5, 0.5)):
+        gate.on_tick(watch_tick(i, novelty=novelty))
+    assert [e.trigger for e in escalations] == ["change"]
+    assert "novelty" in escalations[0].reason
+    db.close()
+
+
+def test_watch_persistence_reaches_the_gate_and_binds_its_episode(tmp_path) -> None:
+    """End to end: a hot watcher plus one Gemini confirmation escalates
+    ``screen_sustained`` once, and the ``screen_block`` that opens on the
+    labeler's own (unchanged) entry rule is bound to it, so the trigger does
+    not fire a second time for the same block."""
+
+    db = Database(tmp_path / "persist.db").connect().init_schema()
+    episodes = EpisodeBuilder(db, Timings.demo(), reads_watch=True)
+    escalations: list[Escalation] = []
+    gate = TriggerGate(default_triggers(Timings.demo(), True, reads_watch=True), Timings.demo(),
+                       db, episodes, lambda e: escalations.append(e) is None, True)
+    # Three Gemini hits open the episode (entry rules unchanged) ...
+    for i in range(3):
+        current = watch_tick(i, {"screen_present": 0.7}, screen_present=True)
+        episodes.on_tick(current)
+        gate.on_tick(current)
+    block = episodes.open_episodes()["screen_block"]
+    # ... then the watcher carries it with no more labeler calls, past the 20 s
+    # cooldown but inside the (unchanged) 32 s labeler-silence close.
+    for i in range(3, 30):
+        current = watch_tick(i, {"screen_present": 0.7})
+        episodes.on_tick(current)
+        gate.on_tick(current)
+    names = [e.trigger for e in escalations]
+    assert names.count("screen_sustained") == 1, names
+    assert block.id in gate._escalated_episode_ids
+    assert "screen_block" in episodes.open_episodes()  # the watcher kept it open
+    db.close()
 
 
 def test_callable_feed_adapts_injected_callables_and_swallows_failures() -> None:
@@ -475,3 +668,18 @@ def test_a_gate_without_a_feed_attaches_nothing(tmp_path) -> None:
         gate.on_tick(t)
     assert escalations and escalations[0].extra_text == []
     db.close()
+
+
+def test_a_sustained_trigger_needs_its_hit_count_of_watch_ticks() -> None:
+    """One hot watch tick plus one confirmation is not "sustained": the watch rule
+    only applies once the window holds the trigger's own hit count of watch-bearing
+    ticks; before that today's rule judges the window (and it needs its hits too)."""
+
+    demo = Timings.demo()
+    hits = max(1, round(demo.screen_sustained_min_hits / demo.tick_interval_s))
+    trigger = next(t for t in default_triggers(demo, True, reads_watch=True)
+                   if t.name == "screen_sustained")
+    first = [watch_tick(0, {"screen_present": 0.9}, screen_present=True)]
+    assert not trigger.predicate(first)
+    window = [watch_tick(i, {"screen_present": 0.9}, screen_present=(i == 0)) for i in range(hits)]
+    assert trigger.predicate(window)

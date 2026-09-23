@@ -24,6 +24,8 @@ __all__ = [
     "VoiceReply",
     "VOICE_JSON_SCHEMA",
     "VOICE_TEXT_FORMAT",
+    "VOICE_OPEN_JSON_SCHEMA",
+    "VOICE_OPEN_TEXT_FORMAT",
     "UTTERANCE_MAX_CHARS",
 ]
 
@@ -119,19 +121,26 @@ class VoiceReply(BaseModel):
         return text[:UTTERANCE_MAX_CHARS].rstrip()
 
 
+#: The two fields every turn has. Shared (not copied) so the opening schema
+#: and the reply schema can never describe ``utterance`` or ``kind``
+#: differently. ``utterance`` stays first: the line is what the wearer is
+#: waiting for, and moving ``kind`` ahead of it changed nothing measurable.
+_UTTERANCE: dict[str, Any] = {
+    "type": "string",
+    "description": "The one line to say aloud, in the persona's voice. "
+    'Empty string ("") to stay silent.',
+}
+_KIND: dict[str, Any] = {
+    "type": "string",
+    "enum": ["question", "statement"],
+    "description": "A question opens the microphone; a statement ends "
+    "the conversation.",
+}
+
 VOICE_JSON_SCHEMA: dict[str, Any] = _obj(
     {
-        "utterance": {
-            "type": "string",
-            "description": "The one line to say aloud, in the persona's voice. "
-            'Empty string ("") to stay silent.',
-        },
-        "kind": {
-            "type": "string",
-            "enum": ["question", "statement"],
-            "description": "A question opens the microphone; a statement ends "
-            "the conversation.",
-        },
+        "utterance": _UTTERANCE,
+        "kind": _KIND,
         "settled": _obj(
             {
                 "confirmed": {
@@ -176,5 +185,32 @@ VOICE_TEXT_FORMAT: dict[str, Any] = {
         "name": "voice_turn",
         "strict": True,
         "schema": VOICE_JSON_SCHEMA,
+    }
+}
+
+#: The opening turn's schema: just the line and its shape.
+#:
+#: Under ``strict`` every property is required, so the full schema made the
+#: model write ``settled`` (four nulls), ``heard`` and ``done`` on every
+#: opening -- ~30-45 output tokens, ~0.3 s at ~8.7 ms/token, all of it thrown
+#: away: nothing has been said yet, so an opening settles nothing (the prompt
+#: says so, and ``_write_back`` drops unheard facts anyway); ``heard`` is
+#: reply-only by definition; and ``done`` is not read -- a statement always
+#: closes and a question always opens the microphone, by code. The missing
+#: fields take :class:`VoiceReply`'s defaults (nothing settled, heard, done).
+VOICE_OPEN_JSON_SCHEMA: dict[str, Any] = _obj(
+    {
+        "utterance": _UTTERANCE,
+        "kind": _KIND,
+    }
+)
+
+#: ``text=`` for an opening turn; reply turns keep :data:`VOICE_TEXT_FORMAT`.
+VOICE_OPEN_TEXT_FORMAT: dict[str, Any] = {
+    "format": {
+        "type": "json_schema",
+        "name": "voice_open",
+        "strict": True,
+        "schema": VOICE_OPEN_JSON_SCHEMA,
     }
 }

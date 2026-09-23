@@ -1,17 +1,20 @@
 /**
  * The contract between three things:
  *
- *   1. the Python scoring engine (`lib/score/brian_score.py`, `run_from_json`)
- *      — `EngineRequest` in, `EnginePayload` out;
- *   2. the adapter (`src/lib/score/adapter.ts`) that builds an `EngineRequest`
- *      from the pipeline's own store (episodes, seeded wearable rows, decisions
- *      with evidence frames) and shapes the result into `DashboardData`;
+ *   1. the backend's `GET /api/healthspan?days=N` (backend/pipeline/scoring/
+ *      healthspan.py over the same `brian_score` engine) — `HealthspanWeek`, a
+ *      full `EnginePayload` for today plus per-day hours, with the backend's own
+ *      coverage rule and per-factor provenance already applied;
+ *   2. `shape.ts`, which turns that payload plus the day inputs `backend.ts`
+ *      reads (seeded rows, episodes) into `DashboardData`;
  *   3. the UI (`src/components/brian/BrianDashboard.tsx`) which reads
  *      `DashboardData` and nothing else.
  *
+ * `EngineRequest` is still the body `POST /api/score` hands the local engine
+ * (`run_from_json`) — the brief's contract — but no dashboard number comes from it.
  * Field names on the engine side mirror the Python exactly (snake_case).
  */
-import type { Provenance } from "./provenance";
+import type { GlassesCoverage, ObsProvenance, Provenance } from "./provenance";
 
 // ---------------------------------------------------------------------------
 // Engine request
@@ -183,6 +186,10 @@ export interface EngineFactor {
   grade: EvidenceGrade;
   measured: boolean;
   source: string;
+  /** The backend adapter's provenance for the dose (`/api/healthspan` factors only). */
+  provenance?: ObsProvenance["source"];
+  basis?: string;
+  detail?: string;
 }
 
 export type LedgerStatus = "on_track" | "at_risk" | "behind";
@@ -262,7 +269,43 @@ export interface EnginePayload {
 }
 
 // ---------------------------------------------------------------------------
-// Adapter inputs (one per calendar day, from the pipeline's own store)
+// Backend healthspan payload (GET /api/healthspan, docs/API.md)
+// ---------------------------------------------------------------------------
+
+/**
+ * The full `/api/healthspan` payload: the engine's `to_payload` keys (the
+ * `EnginePayload` fields shape.ts reads — same names, no renames) plus the
+ * adapter's own. Only the adapter keys the dashboard reads are typed here.
+ */
+export interface HealthspanPayload extends EnginePayload {
+  /** ISO date scored. */
+  day: string;
+  /**
+   * The profile the engine ran with (`PROFILE_AGE` / `PROFILE_SEX`, the request's
+   * goal, the day's bedtime); `bedtime_source` is `missing` when 23:00 was assumed.
+   */
+  profile: { age: number; sex: string; goal: Goal; bedtime_hh: number; bedtime_source: string };
+  /** Per observation key: which stream filed it, or `missing` (imputed, earns nothing). */
+  provenance: Record<string, ObsProvenance>;
+  /** `factor_days` is the trailing week; `uncovered_days` those with no glasses episode. */
+  window: { factor_days: string[]; uncovered_days: string[] };
+}
+
+/** One trailing day as `?days=N` returns it: no factors, pins or provenance. */
+export interface HealthspanLiteDay {
+  day: string;
+  hours_today: number;
+}
+
+/** `GET /api/healthspan?days=N`: per-day hours oldest first, and today's full payload. */
+export interface HealthspanWeek {
+  day: string;
+  days: HealthspanLiteDay[];
+  today: HealthspanPayload;
+}
+
+// ---------------------------------------------------------------------------
+// Day inputs (one per calendar day, from the pipeline's own store)
 // ---------------------------------------------------------------------------
 
 /** A pipeline episode as `GET /api/episodes` returns it (see backend models.Episode). */
@@ -279,20 +322,18 @@ export interface PipelineEpisode {
 }
 
 /**
- * Everything the adapter needs for one day. `seeded` is the pivot of the
- * long-format `GET /api/seeded` rows for that day (`metric -> value`), keys as
- * in backend/pipeline/seed/fixtures.py (`sleep_hours`, `bed_time`,
- * `hrv_rmssd_ratio`, `sleep_regularity_sri`, `steps`, `vilpa_minutes`,
- * `strain`, `night_noise_db`, `recovery_score`, `resting_hr`,
- * `journal_caffeine_late`, `journal_alcohol`, …).
+ * One day's raw rows for the seven-day table and the adherence log. `seeded` is
+ * the pivot of the long-format `GET /api/seeded` rows for that day
+ * (`metric -> value`), keys as in backend/pipeline/seed/fixtures.py
+ * (`sleep_hours`, `bed_time`, `hrv_rmssd_ratio`, `sleep_regularity_sri`,
+ * `steps`, `vilpa_minutes`, `strain`, `night_noise_db`, `recovery_score`,
+ * `resting_hr`, `journal_caffeine_late`, `journal_alcohol`, …).
  */
 export interface DayInputs {
   /** ISO date, local. */
   date: string;
   episodes: PipelineEpisode[];
   seeded: Record<string, number>;
-  /** Evidence frame URL per episode id, when a decision on that episode kept one. */
-  frameUrls: Record<string, string>;
   isToday: boolean;
   /** "Now" on the tick clock (unix seconds) — closes open episodes and dates the payload. */
   nowT: number;
@@ -457,7 +498,8 @@ export interface CurrenciesView {
 }
 
 export interface DataSource {
-  mode: "live" | "mock";
+  /** Always "live": the loader has no offline fixture (loader.ts), so there is no other mode. */
+  mode: "live";
   api_base: string;
   /** The day being scored, ISO. */
   day: string;
@@ -467,6 +509,10 @@ export interface DataSource {
   last_tick_t?: number;
   /** Today's `seeded` rows by metric -> the `source` that wrote each (`fitbit`, `whoop`, `phone`...). */
   wearable_sources?: Record<string, string>;
+  /** Whether the glasses filed any episode today / this week; `shapeDashboard` sets it from the backend's `window`. */
+  glasses_coverage?: GlassesCoverage;
+  /** The backend's per-key provenance for the scored day; every chip reads it where it has a row (provenance.ts). */
+  provenance?: Record<string, ObsProvenance>;
 }
 
 /**
@@ -490,7 +536,8 @@ export interface WearableStat {
 export interface DashboardData {
   /** Unix seconds when this payload was built. */
   generated_at: number;
-  source: DataSource;
+  /** Always carries `glasses_coverage`: a glasses zero is gated on it (provenance.ts `glassesGap`). */
+  source: DataSource & { glasses_coverage: GlassesCoverage };
   person: Person;
   overall: number;
   hours_today: number;
@@ -520,6 +567,6 @@ export interface DashboardData {
   factors: EngineFactor[];
   insights: EngineInsight[];
   observations: Record<string, number>;
-  /** Wall time the engine subprocess took, for the "<1.5 s" acceptance check. */
+  /** Wall time of the backend's `/api/healthspan` round trip (it runs the engine), for the "<1.5 s" check. */
   engine_ms: number;
 }

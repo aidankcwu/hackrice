@@ -1,21 +1,25 @@
 /**
- * Server-only orchestration: backend fetch → adapter → engine → shape.
- * `loadDashboardData` is what the page and `GET /api/score` call.
+ * Server-only orchestration: backend fetch → shape. `loadDashboardData` is what
+ * the page and `GET /api/score` call.
+ *
+ * Every number is the backend's: `GET /api/healthspan` runs the engine over the
+ * pipeline's own store with the adapter's coverage rule — a zero from the
+ * glasses counts only on a day that has episodes — and its provenance per
+ * factor. The dashboard no longer builds an engine request of its own, so it
+ * cannot score a no-episode day's default zeros as sightings.
  *
  * There is no offline stand-in. When the backend cannot be reached the load
  * rejects with `BackendOffline` and the page renders its offline state — a
  * fabricated day that looks like a real score is worse than no score (R1).
  */
 import "server-only";
-import { buildDayRequests } from "./adapter";
-import { apiBase, loadDayInputs, type LiveDataSource } from "./backend";
-import { runEngineBatch } from "./engine";
+import { apiBase, fetchHealthspanWeek, loadDayInputs, type LiveDataSource } from "./backend";
 import { shapeDashboard } from "./shape";
 import { GOALS, type DashboardData, type Goal, type Person } from "./types";
 
 export interface LoadOptions {
   goal?: Goal;
-  /** Overrides NEXT_PUBLIC_API_BASE. */
+  /** Overrides BACKEND_URL / NEXT_PUBLIC_API_BASE. */
   apiBase?: string;
 }
 
@@ -24,10 +28,13 @@ export interface LoadOptions {
 // ---------------------------------------------------------------------------
 
 /**
- * The wearer is Bryan (R2). Age and sex only reach the engine's
- * `remaining_life_years`, so they are a declared profile, not a measurement.
+ * The wearer is Bryan (R2). Only what the backend has no field for is read
+ * here: the name and the device string. Age and sex are the backend's
+ * `PROFILE_AGE` / `PROFILE_SEX`, taken from the payload's `profile` by
+ * `shapeDashboard`, so the header describes the person the score was computed
+ * for; the goal is the one passed through (`?goal=`).
  */
-const PERSON_DEFAULTS = { name: "Bryan", age: 20, sex: "M" } as const;
+const DEFAULT_NAME = "Bryan";
 
 /** Shown when the glasses are the only thing actually reporting. */
 const NO_WEARABLE_DEVICE = "Ray-Ban Meta · no wearable connected";
@@ -54,15 +61,10 @@ function deviceLabel(source: LiveDataSource): string {
   return devices.length === 0 ? NO_WEARABLE_DEVICE : `Ray-Ban Meta + ${devices.join(" + ")}`;
 }
 
-function personFromEnv(goal: Goal, source: LiveDataSource): Omit<Person, "bedtime_hh"> {
+function personFromEnv(goal: Goal, source: LiveDataSource): Omit<Person, "age" | "sex" | "bedtime_hh"> {
   const env = process.env;
-  const age = Number.parseInt(envValue(env, "PERSON_AGE") ?? "", 10);
-  // Same rule as the engine's `remaining_life_years`: anything starting with F is female.
-  const sex = (envValue(env, "PERSON_SEX") ?? PERSON_DEFAULTS.sex).trim().toUpperCase();
   return {
-    name: envValue(env, "PERSON_NAME")?.trim() || PERSON_DEFAULTS.name,
-    age: Number.isInteger(age) && age > 0 ? age : PERSON_DEFAULTS.age,
-    sex: sex.startsWith("F") ? "F" : "M",
+    name: envValue(env, "PERSON_NAME")?.trim() || DEFAULT_NAME,
     goal,
     profileLabel: goalLabel(goal),
     device: envValue(env, "DEVICE")?.trim() || deviceLabel(source),
@@ -76,17 +78,15 @@ function personFromEnv(goal: Goal, source: LiveDataSource): Omit<Person, "bedtim
 async function build(goal: Goal, base: string): Promise<DashboardData> {
   // Throws `BackendOffline` when the pipeline is unreachable; nothing substitutes for it.
   const { days, source } = await loadDayInputs(base);
-  const person = personFromEnv(goal, source);
-  const requests = buildDayRequests(days, { age: person.age, sex: person.sex, goal });
   const started = performance.now();
-  const payloads = await runEngineBatch(requests);
+  // The day the rows were read for, under the goal the picker chose.
+  const healthspan = await fetchHealthspanWeek(base, source.day, goal);
   const engineMs = Math.round(performance.now() - started);
-  const bedtime_hh = requests[requests.length - 1]?.profile?.bedtime_hh ?? 23;
-  return shapeDashboard({ payloads, days, person: { ...person, bedtime_hh }, source, engineMs });
+  return shapeDashboard({ healthspan, days, person: personFromEnv(goal, source), source, engineMs });
 }
 
 // ---------------------------------------------------------------------------
-// Cache — one engine run at a time per (goal, base)
+// Cache — one backend load at a time per (goal, base)
 // ---------------------------------------------------------------------------
 
 const RESULT_TTL_MS = 2000;
@@ -104,7 +104,7 @@ export function clearLoaderCache(): void {
 }
 
 // Not `async` on purpose: callers must receive the cached promise itself so
-// concurrent polls share one engine run rather than one wrapper each.
+// concurrent polls share one backend load rather than one wrapper each.
 export function loadDashboardData(opts: LoadOptions = {}): Promise<DashboardData> {
   const goal = resolveGoal(opts.goal);
   const base = opts.apiBase ?? apiBase();

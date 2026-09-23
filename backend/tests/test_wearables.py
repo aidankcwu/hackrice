@@ -2,20 +2,27 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 
-from pipeline.db import Database
+from pipeline.db import Database, day_key
+from pipeline.models import SeededRow
+from pipeline.scoring.scorer import LIVE_DAILY_SOURCES, Scorer, row_provenance
+from pipeline.seed.generate import seed_database
 from pipeline.wearables import DEVICES, LIVE_METRICS, Sample
 from pipeline.wearables.adapters import (
+    WHOOP_LIVE_SOURCE,
     WHOOP_SKIN_TEMP_BASELINE_C,
     health_auto_export_to_samples,
+    healthkit_seeded_rows,
+    healthkit_to_samples,
+    is_healthkit,
     parse_health_auto_export_date,
     whoop_seeded_rows,
     whoop_to_samples,
 )
-from pipeline.wearables.ingest import MAX_CLOCK_SKEW_S, ingest, ingest_samples
+from pipeline.wearables.ingest import MAX_CLOCK_SKEW_S, ingest, ingest_samples, parse_payload
 
 NOW = 1_757_700_000.0  # 2025-09-12T18:00Z, a fixed clock for every test here
 
@@ -31,7 +38,7 @@ def db(tmp_path):
 
 
 def test_catalogue_is_internally_consistent() -> None:
-    assert set(DEVICES) == {"apple_watch", "whoop", "oura", "sim", "fitbit"}
+    assert set(DEVICES) == {"apple_watch", "whoop", "oura", "sim", "fitbit", "healthkit"}
     for metric, info in LIVE_METRICS.items():
         assert info.devices, metric
         assert set(info.devices) <= set(DEVICES), metric
@@ -178,7 +185,31 @@ def test_whoop_recovery_maps_hrv_spo2_and_a_temperature_deviation() -> None:
 
     rows = whoop_seeded_rows(WHOOP_RECOVERY)
     assert len(rows) == 1
-    assert (rows[0].metric, rows[0].value, rows[0].source) == ("resting_hr", 57.0, "whoop")
+    assert (rows[0].metric, rows[0].value, rows[0].source) == ("resting_hr", 57.0, "whoop_live")
+
+
+def test_a_whoop_push_reads_live_and_the_demo_seed_still_reads_seeded(db) -> None:
+    day = day_key(NOW)
+    seed_database(db, end_day=day)
+    seeded = {r.metric: r for r in db.list_seeded(day, day)}
+    # SPEC §6 demo seed rows keep "whoop" and stay seeded, in the scorer too.
+    assert seeded["resting_hr"].source == seeded["sleep_hours"].source == "whoop"
+    assert row_provenance("whoop") == "seeded"
+    sleep = next(s for s in Scorer(db).score_day(day) if s.metric == "sleep_hours")
+    assert sleep.source == "seeded"
+
+    # A real WHOOP push replaces the night's resting HR under whoop_live.
+    assert db.insert_seeded_rows(whoop_seeded_rows(WHOOP_RECOVERY)) == 1
+    resting = next(r for r in db.list_seeded(day, day) if r.metric == "resting_hr")
+    assert (resting.value, resting.source) == (57.0, WHOOP_LIVE_SOURCE)
+    assert WHOOP_LIVE_SOURCE == "whoop_live" and WHOOP_LIVE_SOURCE in LIVE_DAILY_SOURCES
+    assert row_provenance(resting.source) == "live"
+
+    # And the §8 scorer labels a whoop_live daily row live, naming the device.
+    db.insert_seeded_rows([SeededRow(day=day, metric="sleep_hours", value=7.4,
+                                     unit="hours", source=WHOOP_LIVE_SOURCE)])
+    sleep = next(s for s in Scorer(db).score_day(day) if s.metric == "sleep_hours")
+    assert sleep.source == "live" and "live from whoop_live" in (sleep.note or "")
 
 
 def test_whoop_cycle_sleep_and_workout() -> None:
@@ -202,6 +233,69 @@ def test_whoop_accepts_a_collection_page_and_an_explicit_type() -> None:
     assert as_pairs(whoop_to_samples(hinted)) == {("strain", 3.3)}
     assert whoop_to_samples({"score": {}}) == []
     assert whoop_to_samples("nonsense") == []
+
+
+# -- HealthKit (the phone's own sync, PLAN 3.2) ----------------------------
+
+#: Local wall clock, so ``day_key`` agrees on every machine's zone.
+HK_DAY = date(2026, 9, 21)
+HK_NOW = datetime.combine(HK_DAY, time(10, 0)).timestamp()
+HK_WAKE = datetime.combine(HK_DAY, time(6, 30)).timestamp()
+
+
+def healthkit_body() -> dict:
+    """The 3.2 body: STATE.md §5 shape, ``source: "healthkit"``."""
+
+    return {"source": "healthkit", "samples": [
+        {"t": HK_WAKE, "metric": "sleep_hours", "value": 7.25, "unit": "hours"},
+        {"t": HK_WAKE, "metric": "resting_hr", "value": 54, "unit": "bpm"},
+        {"t": HK_WAKE, "metric": "hrv_sdnn", "value": 48.5, "unit": "ms"},
+        {"t": HK_NOW, "metric": "steps", "value": 4210, "unit": "count"},
+    ]}
+
+
+def test_healthkit_body_is_recognised_by_source_or_device() -> None:
+    assert is_healthkit(healthkit_body())
+    assert is_healthkit({"device": "HealthKit", "samples": []})
+    assert not is_healthkit(canonical()) and not is_healthkit([])
+
+
+def test_healthkit_daily_numbers_become_live_rows_filed_like_fitbit() -> None:
+    samples, result = parse_payload(healthkit_body())
+    assert result["rejected"] == 0
+    rows = {r.metric: r for r in healthkit_seeded_rows(samples)}
+
+    assert set(rows) == {"sleep_hours", "resting_hr", "hrv_rmssd_ms", "steps"}
+    assert all(r.source == "healthkit" for r in rows.values())
+    # Last night is filed under the evening it began; the rest under today.
+    yesterday = (HK_DAY - timedelta(days=1)).isoformat()
+    assert (rows["sleep_hours"].day, rows["sleep_hours"].value) == (yesterday, 7.25)
+    assert rows["steps"].day == rows["resting_hr"].day == HK_DAY.isoformat()
+    assert (rows["hrv_rmssd_ms"].value, rows["hrv_rmssd_ms"].unit) == (48.5, "ms")
+    # The scorer calls every one of them a live device, never "Seeded".
+    assert {row_provenance(r.source) for r in rows.values()} == {"live"}
+
+
+def test_healthkit_sleep_in_minutes_and_undatable_rows() -> None:
+    minutes = [Sample(t=HK_WAKE, metric="sleep", value=435, unit="min", device="healthkit")]
+    assert healthkit_seeded_rows(minutes)[0].value == pytest.approx(7.25)
+    garbled = [Sample(t=HK_NOW * 1e6, metric="steps", value=1, device="healthkit"),
+               Sample(t=HK_NOW, metric="steps", value=float("nan"), device="healthkit")]
+    assert healthkit_seeded_rows(garbled) == []
+
+
+def test_healthkit_hrv_is_also_an_intraday_reading(db: Database) -> None:
+    samples, result = parse_payload(healthkit_body())
+    intraday = healthkit_to_samples(samples)
+    assert [(s.metric, s.value, s.device) for s in intraday] == [("hrv_rmssd", 48.5, "healthkit")]
+
+    stored = ingest_samples(db, intraday, now=HK_NOW, result=result)
+    assert stored == {"accepted": 1, "rejected": 0, "reasons": {}}
+    assert db.latest_biometric("hrv_rmssd") == (HK_WAKE, 48.5, "healthkit", "live")
+    # A catalogue metric in the same body still goes through the plain ingest.
+    plain = ingest(db, {"device": "healthkit", "samples": [
+        {"t": HK_NOW, "metric": "heart_rate", "value": 61}]}, now=HK_NOW)
+    assert plain["accepted"] == 1
 
 
 # -- ingest ---------------------------------------------------------------

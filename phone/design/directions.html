@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brian Today directions</title>
+<style>
+  :root {
+    --sys: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    --chrome-bg: #E4E4E7; --chrome-ink: #111113; --chrome-muted: #5B5B61; --chrome-line: #CFCFD4; --chrome-card: #F4F4F5;
+  }
+  :root[data-mode="dark"] {
+    --chrome-bg: #232326; --chrome-ink: #F2F2F4; --chrome-muted: #A1A1A8; --chrome-line: #3A3A3F; --chrome-card: #2C2C30;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--chrome-bg); color: var(--chrome-ink); font: 15px/1.45 var(--sys); -webkit-font-smoothing: antialiased; }
+  button, textarea { font: inherit; color: inherit; }
+
+  /* page chrome (not part of the design) */
+  .intro { max-width: 1240px; padding: 32px 32px 8px; }
+  .intro h1 { font-size: 22px; font-weight: 600; margin: 0 0 8px; }
+  .intro p { margin: 0 0 8px; color: var(--chrome-muted); max-width: 820px; }
+  .seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--chrome-line); margin: 8px 0 0; }
+  .seg button { border: 0; background: transparent; padding: 6px 16px; border-radius: 7px; cursor: pointer; min-height: 32px; }
+  .seg button[aria-pressed="true"] { background: var(--chrome-card); font-weight: 600; }
+  .cols { display: flex; flex-wrap: wrap; gap: 40px; padding: 24px 32px 64px; align-items: flex-start; }
+  .col { width: 390px; flex: none; }
+  .col > header h2 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+  .col > header p { margin: 0 0 16px; color: var(--chrome-muted); min-height: 88px; }
+  .specs { margin-top: 24px; }
+  .specs h3 { font-size: 13px; font-weight: 600; margin: 20px 0 8px; color: var(--chrome-muted); }
+  .specs table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .specs th { text-align: left; font-weight: 600; color: var(--chrome-muted); padding: 0 0 4px; }
+  .specs td { padding: 3px 0; border-top: 1px solid var(--chrome-line); vertical-align: middle; }
+  .specs td:first-child { width: 88px; }
+  .sw { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: -2px; margin-right: 6px; outline: 1px solid var(--chrome-line); }
+  .hex { font-variant-numeric: tabular-nums; }
+  .specs dl { display: grid; grid-template-columns: 120px 1fr; gap: 4px 12px; margin: 0; font-size: 13px; }
+  .specs dt { color: var(--chrome-muted); }
+  .specs dd { margin: 0; }
+  .specs .src { font-size: 13px; margin: 0; }
+  .inuse { border-radius: 16px; padding: 16px; display: grid; gap: 8px; background: var(--page); color: var(--text); font-family: var(--sys); }
+  .inuse div { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+  .inuse .n { font-weight: 700; font-size: 17px; font-variant-numeric: tabular-nums; min-width: 56px; }
+  .none { width: 300px; }
+  .none h2 { font-size: 20px; font-weight: 600; margin: 0 0 12px; }
+  .none textarea { width: 100%; min-height: 240px; resize: vertical; padding: 12px; border-radius: 12px; border: 1px solid var(--chrome-line); background: var(--chrome-card); }
+  .none p { color: var(--chrome-muted); margin: 8px 0 0; }
+
+  /* the phone */
+  .phone { position: relative; width: 390px; height: 844px; border-radius: 54px; overflow: hidden; background: var(--page); color: var(--text);
+           outline: 1px solid var(--chrome-line); font: 17px/1.3 var(--sys); letter-spacing: -0.2px; }
+  .screen { position: absolute; inset: 0; overflow-y: auto; scrollbar-width: none; padding: 106px var(--m) 132px; }
+  .screen::-webkit-scrollbar { display: none; }
+  .glass { background: color-mix(in srgb, var(--page) 72%, transparent); -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%);
+           box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--ink) 14%, transparent); }
+  .topbar { position: absolute; top: 54px; right: 16px; }
+  .gear { width: 44px; height: 44px; border: 0; border-radius: 50%; display: grid; place-items: center; color: var(--ink); padding: 0; }
+  .tabbar { position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; padding: 6px; border-radius: 999px; }
+  .tab { width: 96px; height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+         color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: 0; border-radius: 999px; }
+  .tab.on { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, transparent); }
+  .homebar { position: absolute; bottom: 8px; left: 50%; width: 134px; height: 5px; margin-left: -67px; border-radius: 3px; background: var(--ink); }
+  .primary { display: block; width: 100%; height: 50px; border: 0; border-radius: 999px; background: var(--ink); color: var(--page);
+             font: 600 17px/1 var(--sys); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--page) 28%, transparent); }
+  .panel { background: var(--surface); border-radius: 20px; }
+  .num { font-variant-numeric: tabular-nums; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 10px; border-radius: 999px; background: var(--surface2);
+          color: var(--text); font-size: 12px; font-weight: 500; letter-spacing: 0; white-space: nowrap; flex: none; }
+  .held { font-size: 13px; color: var(--muted); white-space: nowrap; flex: none; }
+  .earn { color: var(--earn); } .cost { color: var(--cost); } .zero { color: var(--ink); }
+  .soft-earn { background: var(--earnSoft); color: var(--earn); } .soft-cost { background: var(--costSoft); color: var(--cost); }
+  .phone svg { flex: none; }
+  .hero-num { color: var(--ink); line-height: 1; font-variant-numeric: tabular-nums; }
+  .hero-label { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; font-size: 15px; color: var(--muted); }
+  .hero-sub { margin: 4px 0 0; font-size: 15px; color: var(--text); font-variant-numeric: tabular-nums; }
+  .stitle { font-size: 20px; font-weight: 600; color: var(--ink); margin: 0; letter-spacing: -0.3px; }
+  .lfoot { font-size: 13px; color: var(--muted); margin: 0; }
+  .llabel { color: var(--text); }
+  .ltime { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  /* A · Grouped */
+  .dir-a { --m: 16px; }
+  .dir-a .status { margin: 0; padding-left: 16px; }
+  .dir-a .row { display: flex; align-items: center; gap: 16px; }
+  .dir-a .row > svg { color: var(--muted); }
+  .dir-a .rb { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; align-self: stretch; padding-right: 16px; }
+  .dir-a .row + .row .rb { border-top: 1px solid var(--line); }
+  .dir-a .status .rb { min-height: 44px; }
+  .dir-a .primary { margin-top: 24px; }
+  .dir-a .hero { margin-top: 24px; padding: 16px; }
+  .dir-a .hero-num { font-size: 64px; font-weight: 700; letter-spacing: -1.5px; }
+  .dir-a .stitle { margin: 24px 0 8px 4px; }
+  .dir-a .ledger { padding-left: 16px; }
+  .dir-a .ledger .rb { min-height: 60px; padding-top: 8px; padding-bottom: 8px; }
+  .dir-a .ltext { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .dir-a .lfoot { margin: 8px 0 0 16px; }
+
+  /* B · Paper */
+  .dir-b { --m: 16px; }
+  .dir-b .status { padding: 12px 20px; }
+  .dir-b .srow { display: flex; align-items: center; gap: 12px; min-height: 28px; font-size: 15px; }
+  .dir-b .srow svg { color: var(--muted); }
+  .dir-b .primary { margin-top: 24px; }
+  .dir-b .hero { margin-top: 32px; padding: 0 20px; }
+  .dir-b .hero-num { font-size: 72px; font-weight: 300; letter-spacing: -2px; }
+  .dir-b .ledger { margin-top: 32px; padding: 20px; }
+  .dir-b .stitle { margin-bottom: 16px; }
+  .dir-b .tiles { display: grid; gap: 8px; }
+  .dir-b .tile { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 16px; background: var(--page); border-radius: 16px; }
+  .dir-b .tile > svg { color: var(--muted); }
+  .dir-b .ltext { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .dir-b .lfoot { margin-top: 16px; }
+
+  /* C · Instrument */
+  .dir-c { --m: 24px; }
+  .dir-c .srow { display: flex; align-items: center; gap: 12px; min-height: 28px; font-size: 15px; }
+  .dir-c .srow svg { color: var(--muted); }
+  .dir-c .primary { margin-top: 24px; }
+  .dir-c .hero { margin-top: 32px; padding: 24px; }
+  .dir-c .hero-num { font-size: 80px; font-weight: 600; letter-spacing: -2.5px; }
+  .dir-c .stitle { margin: 32px 0 8px; }
+  .dir-c .log { border-bottom: 1px solid var(--line); }
+  .dir-c .lrow { display: grid; grid-template-columns: 44px 18px 1fr auto; align-items: center; gap: 12px; min-height: 52px; padding: 6px 0; border-top: 1px solid var(--line); }
+  .dir-c .lrow .ltime { font-size: 15px; }
+  .dir-c .lrow > svg { color: var(--muted); }
+  .dir-c .lrow.quiet .llabel { color: var(--muted); }
+  .dir-c .out { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 500; color: var(--ink); white-space: nowrap; }
+  .dir-c .lfoot { margin-top: 12px; }
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>Today, three directions</h1>
+  <p>Each phone is the Today screen at 390 × 844 with fixture data captured from the backend in sim mode on 22 September 2026, 16:08. The phones scroll. Palette, type scale and spacing sit under each one. Pick one by letter, mix parts, or fill in the fourth column.</p>
+  <p>The three ui-ux-pro-max runs (variance 2, 4, 6; density 6, 5, 4) returned the same palette and the same fonts, and brian-ios-design rules out their red and blue accents and their Google fonts, so the three looks diverge by hand inside the brian-ios-design rules. Full outputs: <span class="hex">.claude/logs/F.0.log</span>.</p>
+  <p>Type is the system font: SF Pro on iPhone and Mac, Segoe UI on this Windows machine.</p>
+  <div class="seg" role="group" aria-label="Appearance">
+    <button type="button" data-set="light">Light</button>
+    <button type="button" data-set="dark">Dark</button>
+  </div>
+</div>
+
+<main class="cols" id="cols"></main>
+
+<script>
+/* lucide-static 1.47.0, ISC. One icon per meaning. */
+const ICONS = {
+  glasses: '<circle cx="6" cy="15" r="4"/><circle cx="18" cy="15" r="4"/><path d="M14 15a2 2 0 0 0-2-2 2 2 0 0 0-2 2"/><path d="M2.5 13 5 7c.7-1.3 1.4-2 3-2"/><path d="M21.5 13 19 7c-.7-1.3-1.5-2-3-2"/>',
+  server: '<rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/>',
+  circleDot: '<circle cx="12" cy="12" r="1"/><circle cx="12" cy="12" r="10"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+  utensils: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
+  coffee: '<path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/>',
+  wine: '<path d="M8 22h8"/><path d="M7 10h10"/><path d="M12 15v7"/><path d="M12 15a5 5 0 0 0 5-5c0-2-.5-4-2-8H9c-1.5 4-2 6-2 8a5 5 0 0 0 5 5Z"/>',
+  monitor: '<rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/>',
+  audioLines: '<path d="M2 10v3"/><path d="M6 6v11"/><path d="M10 3v18"/><path d="M14 8v7"/><path d="M18 5v13"/><path d="M22 10v3"/>',
+  messageCircleQuestion: '<path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
+  badgeCheck: '<path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m16 9-5.5 5.5L8 12"/>',
+  settings: '<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>',
+  calendarDays: '<path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M8 13h.01"/><path d="M12 13h.01"/><path d="M16 13h.01"/><path d="M8 17h.01"/><path d="M12 17h.01"/><path d="M16 17h.01"/>',
+  listChecks: '<path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/>'
+};
+const icon = (name, size) =>
+  `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
+
+/* Fixture data: ios/Brian/Fixtures/*.json (sim mode, 2026-09-22).
+   status.json session started 16:08; healthspan hours_today -0.02, overall 76, years_delta -0.06,
+   provenance live basis = glasses only; episodes newest 12 joined to decisions on episode_id;
+   held back = decisions with spoke=false (42 of 50). */
+const T = {
+  status: [['glasses', 'Glasses connected'], ['server', 'Backend 10.0.0.5'], ['circleDot', 'Watching since 16:08']],
+  primary: 'Stop',
+  hours: -0.02, overall: 76, years: -0.06, provenance: 'Glasses',
+  rows: [
+    {icon:'sun', time:'16:08', label:'Outdoors', outcome:'held back'},
+    {icon:'sun', time:'16:08', label:'Outdoors', outcome:'held back'},
+    {icon:'utensils', time:'16:07', label:'Meal, rice bowl', outcome:'held back'},
+    {icon:'coffee', time:'16:06', label:'Caffeine in frame', outcome:'said'},
+    {icon:'wine', time:'16:04', label:'Alcohol in frame', outcome:'asked'},
+    {icon:'monitor', time:'16:03', label:'Sustained screen time', outcome:'held back'},
+    {icon:'sun', time:'16:02', label:'Outdoors', outcome:'held back'},
+    {icon:'utensils', time:'16:01', label:'Meal, rice bowl', outcome:'held back'},
+    {icon:'coffee', time:'16:00', label:'Caffeine in frame', outcome:'said'},
+    {icon:'wine', time:'15:58', label:'Alcohol in frame', outcome:'asked'},
+    {icon:'monitor', time:'15:57', label:'Sustained screen time', outcome:'held back'},
+    {icon:'monitor', time:'15:57', label:'Sustained screen time', outcome:'held back'}
+  ],
+  heldBack: 42,
+  samples: [[0.97, 'Cardiorespiratory fitness'], [-1.14, 'Social integration']]  /* healthspan factors[].hours */
+};
+
+/* Signed value rounded to 0.1 first; 0.0 carries no sign and no colour. */
+function signed(v, unit) {
+  const r = Math.round(v * 10) / 10;
+  if (r === 0) return { text: `0.0 ${unit}`, cls: 'zero' };
+  return { text: `${r > 0 ? '+' : '−'}${Math.abs(r).toFixed(1)} ${unit}`, cls: r > 0 ? 'earn' : 'cost' };
+}
+const OUT_ICON = { said: 'audioLines', asked: 'messageCircleQuestion', acted: 'badgeCheck' };
+
+const hero = () => {
+  const h = signed(T.hours, 'h'), y = signed(T.years, 'years');
+  return `<div class="hero-num ${h.cls}">${h.text}</div>
+    <div class="hero-label"><span>healthy‑life hours today</span><span class="chip">${T.provenance}</span></div>
+    <p class="hero-sub">Score ${T.overall} · ${y.text}</p>`;
+};
+const chip = o => o === 'held back' ? '<span class="held">held back</span>' : `<span class="chip">${icon(OUT_ICON[o], 12)}${o}</span>`;
+const button = () => `<button class="primary" type="button">${T.primary}</button>`;
+
+const RENDER = {
+  a: () => `
+    <div class="panel status">${T.status.map(([i, t]) => `<div class="row">${icon(i, 18)}<div class="rb">${t}</div></div>`).join('')}</div>
+    ${button()}
+    <section class="panel hero">${hero()}</section>
+    <h2 class="stitle">Today</h2>
+    <div class="panel ledger">${T.rows.map(r => `<div class="row">${icon(r.icon, 18)}<div class="rb"><div class="ltext"><span class="llabel">${r.label}</span><span class="ltime">${r.time}</span></div>${chip(r.outcome)}</div></div>`).join('')}</div>
+    <p class="lfoot">Held back ${T.heldBack} today</p>`,
+  b: () => `
+    <div class="panel status">${T.status.map(([i, t]) => `<div class="srow">${icon(i, 16)}<span>${t}</span></div>`).join('')}</div>
+    ${button()}
+    <section class="hero">${hero()}</section>
+    <section class="panel ledger"><h2 class="stitle">Today</h2>
+      <div class="tiles">${T.rows.map(r => `<div class="tile">${icon(r.icon, 18)}<div class="ltext"><span class="llabel">${r.label}</span><span class="ltime">${r.time}</span></div>${chip(r.outcome)}</div>`).join('')}</div>
+      <p class="lfoot">Held back ${T.heldBack} today</p></section>`,
+  c: () => `
+    <div class="status">${T.status.map(([i, t]) => `<div class="srow">${icon(i, 16)}<span>${t}</span></div>`).join('')}</div>
+    ${button()}
+    <section class="panel hero">${hero()}</section>
+    <h2 class="stitle">Today</h2>
+    <div class="log">${T.rows.map(r => `<div class="lrow${r.outcome === 'held back' ? ' quiet' : ''}"><span class="ltime">${r.time}</span>${icon(r.icon, 18)}<span class="llabel">${r.label}</span>${r.outcome === 'held back' ? '<span class="held">held back</span>' : `<span class="out">${icon(OUT_ICON[r.outcome], 14)}${r.outcome}</span>`}</div>`).join('')}</div>
+    <p class="lfoot">Held back ${T.heldBack} today</p>`
+};
+
+const TOKENS = ['page', 'surface', 'surface2', 'ink', 'text', 'muted', 'line', 'earn', 'earnSoft', 'cost', 'costSoft'];
+const DIRS = [
+  {
+    key: 'a', name: 'A · Grouped',
+    blurb: 'White panels on system grey, like Settings and Health. Two-line list rows with hairlines inset to the text. Green and red carry the sign.',
+    colors: { page: ['#F2F2F7', '#000000'], surface: ['#FFFFFF', '#1C1C1E'], surface2: ['#E5E5EA', '#2C2C2E'], ink: ['#000000', '#F5F5F7'],
+              text: ['#1C1C1E', '#E5E5EA'], muted: ['#636366', '#98989F'], line: ['#D1D1D6', '#38383A'], earn: ['#047857', '#4ADE80'],
+              earnSoft: ['#E3F2EB', '#0E2A1C'], cost: ['#C81E1E', '#F87171'], costSoft: ['#FBE7E7', '#301313'] },
+    type: [['Hero', '64 bold, tabular figures'], ['Title', '20 semibold'], ['Body', '17 regular'], ['Secondary', '15 regular'], ['Caption', '13 regular'], ['Chip', '12 medium, capsule']],
+    space: [['Screen margin', '16'], ['Section gap', '24'], ['Panel padding', '16'], ['Rows', '44 status, 60 ledger'], ['Radius', '20 panels, capsule chips'], ['Dividers', 'hairline, inset to the text']],
+    src: 'Variance 2 / density 6 gave Minimalism &amp; Swiss Style. Kept: the #F5F5F7 grey family, #E5E5EA hairlines, the #059669 green (darkened to #047857 for 4.9:1 text contrast), the #DC2626 red. Left out: #FF4D4D primary and #4D94FF secondary (brand accents), Figtree and Noto Sans (custom fonts), hover effects.'
+  },
+  {
+    key: 'b', name: 'B · Paper',
+    blurb: 'Warm off-white page, grey panels, ledger rows as page-coloured tiles (the brian-ios-design layout rule as written). Light-weight hero figures on the page. Moss and brick carry the sign.',
+    colors: { page: ['#FAF9F6', '#0E0D0C'], surface: ['#F1EEE8', '#201F1C'], surface2: ['#E5E1D9', '#2E2D29'], ink: ['#1B1A17', '#F2EFE9'],
+              text: ['#2B2925', '#E2DED6'], muted: ['#625D55', '#A29C92'], line: ['#DDD8CF', '#37352F'], earn: ['#3A7348', '#8CC79C'],
+              earnSoft: ['#E3ECE2', '#18261B'], cost: ['#A8432D', '#EB8D76'], costSoft: ['#F4E1DA', '#331A12'] },
+    type: [['Hero', '72 light, tabular figures'], ['Title', '20 semibold'], ['Body', '17 regular'], ['Secondary', '15 regular'], ['Caption', '13 regular'], ['Chip', '12 medium, capsule']],
+    space: [['Screen margin', '16'], ['Section gap', '24 and 32'], ['Panel padding', '20'], ['Tiles', '8 apart, padding 8 / 16'], ['Radius', '20 panels, 16 tiles'], ['Status rows', '28, no dividers']],
+    src: 'Variance 4 / density 5 gave Biomimetic / Organic 2.0. Kept: only the nature-inspired idea, as warm paper neutrals and moss and brick for the sign. Left out: breathing animations, fluid morphing, blur on content, the red / blue / green palette, Figtree and Noto Sans.'
+  },
+  {
+    key: 'c', name: 'C · Instrument',
+    blurb: 'White page, one panel for the number, the ledger as a timed log between hairlines. Held-back rows go quiet so the ones it spoke on stand out. Blue and orange carry the sign, readable without red–green vision.',
+    colors: { page: ['#FFFFFF', '#000000'], surface: ['#F5F5F7', '#1A1A1C'], surface2: ['#E8E8ED', '#29292C'], ink: ['#0A0A0A', '#F5F5F7'],
+              text: ['#1D1D1F', '#E3E3E8'], muted: ['#636368', '#939399'], line: ['#E3E3E8', '#2C2C2E'], earn: ['#0058CC', '#6AAEFF'],
+              earnSoft: ['#E6EFFC', '#0D2037'], cost: ['#AD4508', '#FF9F5A'], costSoft: ['#FBEBDF', '#301B0B'] },
+    type: [['Hero', '80 semibold, tabular figures'], ['Title', '20 semibold'], ['Body', '17 regular'], ['Secondary', '15 regular, times tabular'], ['Caption', '13 regular'], ['Outcome', '13 medium, icon and word, no capsule']],
+    space: [['Screen margin', '24'], ['Section gap', '32'], ['Panel padding', '24'], ['Rows', '28 status, 52 ledger'], ['Radius', '20 panel'], ['Dividers', 'hairline, full width']],
+    src: 'Variance 6 / density 4 gave Biomimetic / Organic 2.0 again, Standard spacing tier. Kept: #F5F5F7 as the panel, #E5E5EA-family hairlines, the airy end of the scale (24 / 32). Left out: motion, Figtree and Noto Sans, the red primary; the sign moved to blue and orange.'
+  }
+];
+
+function phone(d) {
+  return `<div class="phone dir-${d.key}" data-dir="${d.key}" role="img" aria-label="Today screen, direction ${d.key.toUpperCase()}">
+    <div class="screen">${RENDER[d.key]()}</div>
+    <div class="topbar"><button class="gear glass" type="button" aria-label="Settings">${icon('settings', 20)}</button></div>
+    <nav class="tabbar glass"><span class="tab on">${icon('calendarDays', 22)}<span>Today</span></span><span class="tab">${icon('listChecks', 22)}<span>Protocol</span></span></nav>
+    <div class="homebar"></div>
+  </div>`;
+}
+function specs(d) {
+  const rows = TOKENS.map(t => `<tr><td>${t}</td>${d.colors[t].map(h => `<td><span class="sw" style="background:${h}"></span><span class="hex">${h}</span></td>`).join('')}</tr>`).join('');
+  const samples = T.samples.map(([v, label]) => { const s = signed(v, 'h');
+    return `<div><span class="n ${s.cls}">${s.text}</span><span class="chip soft-${s.cls}">${s.text}</span><span>${label}</span></div>`; }).join('');
+  const dl = list => `<dl>${list.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`;
+  return `<div class="specs">
+    <h3>Palette</h3><table><tr><th></th><th>Light</th><th>Dark</th></tr>${rows}</table>
+    <h3>The sign on this palette (healthspan factors from the fixture)</h3><div class="inuse dir-${d.key}" data-dir="${d.key}">${samples}</div>
+    <h3>Type, system font</h3>${dl(d.type)}
+    <h3>Spacing, points</h3>${dl(d.space)}
+    <h3>From ui-ux-pro-max</h3><p class="src">${d.src}</p>
+  </div>`;
+}
+
+const cols = document.getElementById('cols');
+cols.innerHTML = DIRS.map(d => `<section class="col"><header><h2>${d.name}</h2><p>${d.blurb}</p></header>${phone(d)}${specs(d)}</section>`).join('') +
+  `<section class="col none"><h2>None of these, because:</h2><textarea aria-label="None of these, because" placeholder="___"></textarea><p>Say what is off, or which parts to mix.</p></section>`;
+
+function setMode(mode) {
+  document.documentElement.dataset.mode = mode;
+  const i = mode === 'dark' ? 1 : 0;
+  document.querySelectorAll('[data-dir]').forEach(el => {
+    const d = DIRS.find(x => x.key === el.dataset.dir);
+    TOKENS.forEach(t => el.style.setProperty(`--${t}`, d.colors[t][i]));
+  });
+  document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.set === mode)));
+}
+document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.set)));
+const q = new URLSearchParams(location.search).get('mode');
+setMode(q === 'dark' || q === 'light' ? q : (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+</script>
+</body>
+</html>

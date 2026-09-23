@@ -163,3 +163,45 @@ def test_cap_eviction_drops_the_oldest_by_capture_time():
     for i, t in [(3, T0 + 990), (1, T0 + 970), (2, T0 + 980)]:
         ring.put(ref(i), JPEG, t=t, now=now)
     assert sorted(f.ref for f in ring) == [ref(2), ref(3)]
+
+
+# --- US-W11: the cap follows the frame rate ------------------------------------
+
+
+def test_fps_hint_sizes_the_cap_to_hold_a_full_ttl():
+    ring = FrameRing(ttl_s=90, fps_hint=7)
+    assert ring.max_frames >= 630
+    assert ring.max_frames == 646
+    s = ring.stats(now=T0)
+    assert s.max_frames == 646 and s.fps_hint == 7
+
+
+def test_no_hints_keeps_the_old_default_cap():
+    ring = FrameRing()
+    assert ring.max_frames == DEFAULT_MAX_FRAMES == 256
+    s = ring.stats(now=T0)
+    assert s.max_frames == 256 and s.fps_hint is None
+
+
+def test_explicit_max_frames_wins_over_fps_hint():
+    assert FrameRing(ttl_s=90, max_frames=50, fps_hint=7).max_frames == 50
+
+
+def test_max_frames_is_read_only():
+    ring = FrameRing()
+    with pytest.raises(AttributeError):
+        ring.max_frames = 10  # type: ignore[misc]
+
+
+def test_cap_eviction_holds_at_the_fps_derived_cap():
+    ring = FrameRing(ttl_s=90, fps_hint=7)
+    cap = ring.max_frames
+    now = T0
+    for i in range(cap + 5):
+        now = T0 + i / 1000  # well inside the TTL, so only the cap can bind
+        ring.put(ref(i), JPEG, t=now, now=now)
+    s = ring.stats(now=now)
+    assert s.count == cap
+    assert s.evicted_cap == 5 and s.evicted_ttl == 0
+    assert all(ring.get(ref(i), now=now) is None for i in range(5))
+    assert ring.get(ref(5), now=now) is not None

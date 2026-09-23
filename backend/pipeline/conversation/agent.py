@@ -10,8 +10,12 @@ Three rules shape the whole module:
 
 1. **One conversation at a time.** A hand-off arriving against a live
    conversation is dropped with ``conversation_active`` -- the same shape as
-   the clerk's own ``speak_dropped`` -- and a short cooldown after a close
-   drops the next one with ``conversation_cooldown`` (§1).
+   the clerk's own ``speak_dropped`` -- one arriving while the last line is
+   still playing on the glasses is dropped with ``mouth_busy``, a cooldown
+   after a close (zero in the demo) drops the next one with
+   ``conversation_cooldown`` (§1), and a
+   hand-off about something already said within ``REPEAT_WINDOW_S`` is dropped
+   with ``conversation_repeat`` before any model call.
 2. **The reasoner never waits.** :meth:`ConversationAgent.request` is
    synchronous and returns an outcome string; the model call happens on a task.
 3. **The thread is memory, and it is thrown away.** The Responses API message
@@ -26,6 +30,7 @@ import asyncio
 import contextlib
 import logging
 import time
+from collections import deque
 from typing import Any, Callable
 from uuid import uuid4
 
@@ -33,7 +38,8 @@ from ..actions.speech import SpeechLimiter, get_speak_fn, spoken
 from ..config import Settings
 from ..db import Database, day_key
 from ..frames import FrameStore
-from ..models import Escalation, PendingQuestion, TodaySummaryLine
+from ..gate.triggers import same_item, topic_about_cue
+from ..models import Escalation, PendingQuestion, Tick, TodaySummaryLine
 from ..reasoner.envelope import (
     _data_url,
     frame_label,
@@ -49,7 +55,8 @@ from .schema import VoiceReply
 
 log = logging.getLogger(__name__)
 
-__all__ = ["ConversationAgent", "TODAY_LINES", "OPENING_FRAMES", "REPLY_FRAMES"]
+__all__ = ["ConversationAgent", "TODAY_LINES", "OPENING_FRAMES", "REPLY_FRAMES",
+           "SETTLED_LINES", "REPEAT"]
 
 #: Memory lines carried into the opening turn (§3, "last ~15").
 TODAY_LINES = 15
@@ -59,15 +66,98 @@ OPENING_WINDOW_S = 20.0
 OPENING_FRAMES = 1  # the trigger frame only: every extra image is ~200-300 ms of model time
 #: Frames since the question went out (§3).
 REPLY_FRAMES = 1
-#: A statement already spoken this recently is not spoken again ("say it once").
-REPEAT_WINDOW_S = 300.0
-#: Longest a single turn may take before the conversation is abandoned.
-TURN_DEADLINE_S = 15.0
+#: A line already spoken this recently is not spoken again ("say it once").
+#: Short on purpose: it exists to stop the same remark twice inside one moment
+#: (seen live: "Stand up and look away" twice in twelve seconds), not to mute a
+#: rehearsal or a second person trying the glasses a minute later.
+REPEAT_WINDOW_S = 45.0
+#: Longest a single turn may take before the conversation is abandoned. 8 s,
+#: not 15: the slowest good turn seen live was 5.0 s, and the client's own HTTP
+#: timeout is 6 s, so past 8 s the turn is dead and every prop shown meanwhile
+#: is being dropped as ``conversation_active``.
+TURN_DEADLINE_S = 8.0
+#: Closed conversations shown in the "already settled" block. It was unbounded
+#: (36 lines, ~900 tokens by the end of demo day, every rehearsal included) and
+#: only the recent ones can still be re-asked by mistake.
+SETTLED_LINES = 8
+#: How far back the opening turn may reach for a newer frame than the gate's.
+NEWEST_FRAME_MAX_S = 10.0
 
 #: Outcome strings the clerk records on the action (§1, §7).
 ACTIVE = "conversation_active"
 COOLDOWN = "conversation_cooldown"
 NO_TRANSPORT = "no_transport"
+#: The same cue, or the same topic, was already said within REPEAT_WINDOW_S.
+#: Checked before the model call: seven conversations on demo night paid a
+#: whole voice turn (1.2-5.0 s of held slot) only to be closed as a repeat.
+REPEAT = "conversation_repeat"
+#: The last clip is still playing on the glasses. Dropped, never queued, like
+#: ACTIVE: the gate leaves the cue unspent and retries it on the next fresh
+#: tick, so the next line starts only once the mouth is actually free. This is
+#: what makes ``conversation_cooldown_s = 0.0`` safe -- the 2 s cooldown used to
+#: stop overlapping audio only by accident.
+MOUTH_BUSY = "mouth_busy"
+#: Stage kill switch: ``MOUTH_BUSY_GUARD=0`` turns the guard off. Read through
+#: ``Settings.mouth_busy_guard`` so a value in ``.env`` works in every source
+#: mode and shows on the startup switches line.
+MOUTH_GUARD_ENV = "MOUTH_BUSY_GUARD"
+#: The floor on the conversation cooldown while the guard is off. The demo's
+#: ``conversation_cooldown_s = 0.0`` is only safe with the guard (see the
+#: comment on it in ``config.Timings.demo``): without it a line can land ~1.8 s
+#: after a close while the previous ~2.2 s clip still plays, and the phone's
+#: player never stops the earlier clip. Pulling the switch must not bring the
+#: overlap back.
+UNGUARDED_COOLDOWN_S = 2.0
+#: ``deliver: quiet`` (docs/PERCEPTION.md "Gate and actions"): the hand-off
+#: waits for a quiet tick, polled this often, then opens as a ``now`` one would.
+DELIVER_POLL_S = 0.5
+#: Default longest wait for a quiet tick (``DeciderSettings.quiet_max_s``).
+QUIET_MAX_S = 45.0
+#: ``device.accel_rms`` at or above this is "moving fast": not a quiet moment.
+QUIET_ACCEL_RMS = 0.5
+#: Returned by :meth:`ConversationAgent.request` for a quiet hand-off now
+#: waiting; its real outcome (open, ``deliver_expired``, ``deliver_superseded``)
+#: comes later, on the waiting task.
+DELIVER_WAITING = "deliver_waiting"
+#: No quiet tick arrived within ``quiet_max_s`` (or ``expire_s``).
+DELIVER_EXPIRED = "deliver_expired"
+#: A newer quiet hand-off replaced this one while it waited.
+DELIVER_SUPERSEDED = "deliver_superseded"
+
+
+def _speak_fn_busy_for() -> float:
+    """Seconds the installed speak hook says its last clip still has to play.
+
+    Read through ``get_speak_fn()`` at hand-off time rather than captured at
+    construction: wiring installs the glasses' hook after the agent can exist,
+    and a hook without ``busy_for`` (the log-only default, the sim) is never
+    busy.
+    """
+
+    busy_for = getattr(get_speak_fn(), "busy_for", None)
+    if busy_for is None:
+        return 0.0
+    return float(busy_for())
+
+
+def _norm(text: str) -> str:
+    return " ".join("".join(ch.lower() if ch.isalnum() or ch == " " else " "
+                            for ch in text).split())
+
+
+def is_quiet(tick: Tick | None) -> bool:
+    """A quiet moment: nobody being talked with, the wearer not talking, the
+    device not moving fast. A tick without a ``watch`` block is quiet on the
+    first criterion; no tick at all is not quiet."""
+
+    if tick is None:
+        return False
+    if tick.watch_hot("people_interacting"):
+        return False
+    if tick.enum("activity") == "talking":
+        return False
+    accel = tick.device.accel_rms if tick.device is not None else None
+    return accel is None or accel < QUIET_ACCEL_RMS
 
 
 def _cid() -> str:
@@ -90,6 +180,10 @@ class ConversationAgent:
         persona: str | None = None,
         now_fn: Callable[[], float] = time.time,
         deadline_s: float = TURN_DEADLINE_S,
+        mouth_busy_for: Callable[[], float] | None = None,
+        mouth_guard: bool | None = None,
+        latest_tick: Callable[[], Tick | None] | None = None,
+        quiet_max_s: float = QUIET_MAX_S,
     ) -> None:
         self.db = db
         self.frame_store = frame_store
@@ -102,6 +196,15 @@ class ConversationAgent:
         self.persona = persona if persona is not None else DEFAULT_PERSONA
         self.now_fn = now_fn
         self.deadline_s = float(deadline_s)
+        #: Seconds until the glasses finish the clip now playing (0 = free).
+        self.mouth_busy_for = mouth_busy_for or _speak_fn_busy_for
+        self.mouth_guard = (bool(settings.mouth_busy_guard) if mouth_guard is None
+                            else mouth_guard)
+        #: The newest tick, for ``deliver: quiet``. Defaults to the db's.
+        self.latest_tick = latest_tick or self._db_latest_tick
+        self.quiet_max_s = float(quiet_max_s)
+        #: The one quiet hand-off waiting for a quiet tick: ``(task, topic)``.
+        self._quiet_wait: tuple[asyncio.Task[None], str] | None = None
 
         self._active: dict[str, Any] | None = None
         self._thread: list[dict[str, Any]] = []
@@ -111,6 +214,21 @@ class ConversationAgent:
         self._cooldown_until = 0.0
         self._lifetime_task: asyncio.Task[None] | None = None
         self._turn_in_flight = False
+        #: Which conversation's call set ``_turn_in_flight`` (see ``_call``).
+        self._turn_owner: str | None = None
+        #: The live conversation's cue key and item (``Escalation.cue``), kept
+        #: off the row so the stored and served shape does not change.
+        self._active_cue: tuple[str | None, str] = (None, "")
+        #: ``(t, cue, item, normalised topic)`` for every conversation that
+        #: actually said or asked something: what "said already" means.
+        self._said: deque[tuple[float, str | None, str, str]] = deque(maxlen=64)
+        #: ``speak_fn.warm`` (opens the ElevenLabs connection, spends no
+        #: credit), set by wiring on the glasses only. Called when a
+        #: conversation opens so the handshake runs *during* the ~1.5 s voice
+        #: call: the start-up warm alone had expired (120 s keep-alive) by the
+        #: time the first prop came out, so the first word paid a reconnect.
+        self.speech_warm: Callable[[], Any] | None = None
+        self._warm_tasks: set[asyncio.Task[Any]] = set()
 
         stale = getattr(self.db, "close_stale_conversations", None)
         if stale is not None:
@@ -126,6 +244,10 @@ class ConversationAgent:
         self.dropped_active = 0
         self.dropped_cooldown = 0
         self.dropped_no_transport = 0
+        self.dropped_repeat = 0
+        self.dropped_mouth_busy = 0
+        self.dropped_deliver_expired = 0
+        self.dropped_deliver_superseded = 0
 
     # -- hand-off ---------------------------------------------------------
 
@@ -138,15 +260,26 @@ class ConversationAgent:
         episode_id: str | None = None,
         esc: Escalation | None = None,
         reason: str = "",
+        deliver: str = "now",
+        expire_s: int | None = None,
     ) -> str:
         """Take one hand-off from the clerk. Synchronous, non-blocking (§1).
 
         Returns ``handed_off:<id>`` when a conversation opened, else one of
-        ``conversation_active``, ``conversation_cooldown``, ``no_transport``.
+        ``conversation_active``, ``conversation_cooldown``,
+        ``conversation_repeat``, ``mouth_busy``, ``no_transport``.
         The model call happens on a task: the reasoner holds the single T1 slot
         while it calls this, and must not wait on a conversation to finish.
+
+        ``deliver="quiet"`` returns ``deliver_waiting`` at once and waits on a
+        task for a quiet tick (:func:`is_quiet`), up to ``quiet_max_s`` or
+        ``expire_s`` if smaller, then hands off exactly as ``now`` would.
         """
 
+        if deliver == "quiet":
+            return self._wait_for_quiet(
+                topic, mode, expire_s, decision_id=decision_id,
+                episode_id=episode_id, esc=esc, reason=reason)
         try:
             text = (topic or "").strip()
             t = self.now_fn()
@@ -158,6 +291,29 @@ class ConversationAgent:
                 self.dropped_cooldown += 1
                 log.info("conversation: hand-off dropped · conversation_cooldown · \"%s\"", text[:80])
                 return COOLDOWN
+            cue = esc.cue if esc is not None else None
+            item = esc.cue_item if esc is not None else ""
+            if cue and not topic_about_cue(text, cue, item):
+                # The stamp is what was in view, not the topic: a screen nudge
+                # on a crowd tick is not about the crowd, must not be dropped
+                # as a crowd repeat, and must not be remembered as one either.
+                cue, item = None, ""
+            spent = bool(cue) and esc is not None and esc.cue_spent
+            if decision_id != "manual" and self._already_said(text, cue, item, t, spent=spent):
+                # Before the model call, so a repeat costs nothing and never
+                # holds the one slot. An operator's manual open is exempt.
+                self.dropped_repeat += 1
+                log.info("conversation: hand-off dropped · conversation_repeat · %s · \"%s\"",
+                         cue or "-", text[:80])
+                return REPEAT
+            busy = self._mouth_busy()
+            if busy > 0.0:
+                # After the repeat check, so a line that would be a repeat
+                # anyway is spent now rather than retried into the same drop.
+                self.dropped_mouth_busy += 1
+                log.info("conversation: hand-off dropped · mouth_busy · %.1f s left · \"%s\"",
+                         busy, text[:80])
+                return MOUTH_BUSY
             if self.questions is not None and not self.questions.has_transport():
                 self.dropped_no_transport += 1
                 return NO_TRANSPORT
@@ -183,6 +339,7 @@ class ConversationAgent:
                 "close_reason": None,
             }
             self._active = conv
+            self._active_cue = (cue, item)
             self._thread = []
             self._questions_asked = 0
             self._pending = None
@@ -194,6 +351,7 @@ class ConversationAgent:
                 # Never leave the one slot claimed by a conversation that does
                 # not exist: every later hand-off would be "conversation_active".
                 self._active = None
+                self._active_cue = (None, "")
                 self.opened -= 1
                 log.exception("conversation: %s could not be persisted; slot released", conv["id"])
                 return NO_TRANSPORT
@@ -208,6 +366,7 @@ class ConversationAgent:
             self._lifetime_task = loop.create_task(
                 self._lifetime(conv["id"]), name=f"conversation-life-{conv['id']}"
             )
+            self._warm_speech(loop)
             return f"handed_off:{conv['id']}"
         except Exception:  # pragma: no cover - defensive
             log.exception("hand-off failed")
@@ -216,6 +375,83 @@ class ConversationAgent:
                 # Claimed but never started: close it so the slot is free.
                 self._close(active, "open_failed")
             return NO_TRANSPORT
+
+    # -- deliver: quiet ---------------------------------------------------
+
+    def _db_latest_tick(self) -> Tick | None:
+        rows = self.db.recent_ticks(1)
+        return rows[-1] if rows else None
+
+    def _wait_for_quiet(self, topic: str, mode: str, expire_s: int | None,
+                        **kwargs: Any) -> str:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            log.error("quiet hand-off requested with no running event loop")
+            return NO_TRANSPORT
+        waiting, self._quiet_wait = self._quiet_wait, None
+        if waiting is not None and not waiting[0].done():
+            waiting[0].cancel()
+            self.dropped_deliver_superseded += 1
+            log.info("conversation: hand-off dropped · %s · \"%s\"",
+                     DELIVER_SUPERSEDED, waiting[1][:80])
+        max_s = self.quiet_max_s if expire_s is None else min(self.quiet_max_s, expire_s)
+        task = loop.create_task(self._quiet_then_open(topic, mode, max_s, kwargs),
+                                name="conversation-deliver-quiet")
+        self._quiet_wait = (task, (topic or "").strip())
+        return DELIVER_WAITING
+
+    async def _quiet_then_open(self, topic: str, mode: str, max_s: float,
+                               kwargs: dict[str, Any]) -> None:
+        deadline = time.monotonic() + max_s
+        try:
+            while True:
+                try:
+                    quiet = is_quiet(self.latest_tick())
+                except Exception:  # noqa: BLE001 - a bad read is not a quiet moment
+                    log.debug("latest tick read failed", exc_info=True)
+                    quiet = False
+                if quiet:
+                    break
+                if time.monotonic() >= deadline:
+                    self.dropped_deliver_expired += 1
+                    log.info("conversation: hand-off dropped · %s · %.0f s · \"%s\"",
+                             DELIVER_EXPIRED, max_s, (topic or "")[:80])
+                    return
+                await asyncio.sleep(DELIVER_POLL_S)
+        except asyncio.CancelledError:
+            return
+        finally:
+            if self._quiet_wait is not None and self._quiet_wait[0] is asyncio.current_task():
+                self._quiet_wait = None
+        outcome = self.request(topic, mode, deliver="now", **kwargs)
+        log.info("conversation: quiet hand-off delivered · %s", outcome)
+
+    def _mouth_busy(self) -> float:
+        """Seconds of the previous clip still to play; 0.0 = free. Never raises."""
+
+        if not self.mouth_guard:
+            return 0.0
+        try:
+            return max(0.0, float(self.mouth_busy_for()))
+        except Exception:  # noqa: BLE001 - a broken estimate must not mute the glasses
+            log.debug("mouth-busy estimate failed; treating the mouth as free",
+                      exc_info=True)
+            return 0.0
+
+    def _warm_speech(self, loop: asyncio.AbstractEventLoop) -> None:
+        """Open the TTS connection beside the model call. Never raises."""
+
+        warm = self.speech_warm
+        if warm is None:
+            return
+        try:
+            task = loop.create_task(warm(), name="conversation-speech-warm")
+        except Exception:  # pragma: no cover - a warm-up must never cost a line
+            log.debug("speech warm-up could not start", exc_info=True)
+            return
+        self._warm_tasks.add(task)
+        task.add_done_callback(self._warm_tasks.discard)
 
     # -- introspection ----------------------------------------------------
 
@@ -248,11 +484,18 @@ class ConversationAgent:
             "dropped_active": self.dropped_active,
             "dropped_cooldown": self.dropped_cooldown,
             "dropped_no_transport": self.dropped_no_transport,
+            "dropped_repeat": self.dropped_repeat,
+            "dropped_mouth_busy": self.dropped_mouth_busy,
+            "dropped_deliver_expired": self.dropped_deliver_expired,
+            "dropped_deliver_superseded": self.dropped_deliver_superseded,
             "cooldown_until": self._cooldown_until,
             "model": getattr(self.client, "model", ""),
         }
 
     async def stop(self) -> None:
+        waiting, self._quiet_wait = self._quiet_wait, None
+        if waiting is not None:
+            waiting[0].cancel()
         active = self._active
         if active is not None:
             # Persist a terminal state and release the pending question, so a
@@ -306,11 +549,17 @@ class ConversationAgent:
     async def _call(self, conv: dict[str, Any]) -> None:
         """One model call, then act on it. Any failure closes the conversation."""
 
+        # The thread this turn belongs to. If the conversation is closed while
+        # the call is in flight and another opens, ``self._thread`` becomes the
+        # new one; the late reply must neither land in it nor clear the new
+        # conversation's in-flight flag.
+        thread = self._thread
         self._turn_in_flight = True
+        self._turn_owner = conv["id"]
         try:
             try:
                 reply, _meta = await asyncio.wait_for(
-                    self.client.complete(self._thread), timeout=self.deadline_s
+                    self.client.complete(thread), timeout=self.deadline_s
                 )
             except (asyncio.TimeoutError, TimeoutError):
                 log.warning("conversation %s timed out", conv["id"])
@@ -322,7 +571,9 @@ class ConversationAgent:
                 log.exception("voice call failed for %s", conv["id"])
                 self._close(conv, "model_error")
                 return
-            self._thread.append(
+            if self._active is not conv:  # closed underneath us (lifetime, stop)
+                return
+            thread.append(
                 {
                     "role": "assistant",
                     "content": [
@@ -331,7 +582,9 @@ class ConversationAgent:
                 }
             )
         finally:
-            self._turn_in_flight = False
+            if self._turn_owner == conv["id"]:
+                self._turn_in_flight = False
+                self._turn_owner = None
         if self._active is not conv:  # closed underneath us (lifetime, stop)
             return
         log.info("conversation: %s turn %d · %s · \"%s\" · heard=%s · done=%s · settled=%s · %s ms",
@@ -387,10 +640,7 @@ class ConversationAgent:
     def _recently_said(self, text: str, t: float) -> bool:
         """Was (nearly) this line spoken in a conversation within REPEAT_WINDOW_S?"""
 
-        def norm(s: str) -> str:
-            return " ".join("".join(ch.lower() if ch.isalnum() or ch == " " else " " for ch in s).split())
-
-        want = norm(text)
+        want = _norm(text)
         if not want:
             return False
         try:
@@ -403,10 +653,50 @@ class ConversationAgent:
                     continue
                 if t - float(turn.get("t") or 0) > REPEAT_WINDOW_S:
                     continue
-                said = norm(str(turn["text"]))
+                said = _norm(str(turn["text"]))
                 if said == want or (len(want) > 12 and (want in said or said in want)):
                     return True
         return False
+
+    def _already_said(self, topic: str, cue: str | None, item: str, t: float,
+                      *, spent: bool = False) -> bool:
+        """Was this cue (same kind, same item) or this exact topic said lately?
+
+        The cue is the one that matters: the gate's cue, the clerk's change
+        wake-up and a ``caffeine_seen`` a tick later all carry the same key for
+        the same coffee, and only the first may speak. The caller has already
+        dropped a cue the topic does not name. The item comparison is what
+        still lets a bag of chips through straight after a rice krispy treat,
+        though both are ``food:treat``; the kind (not the full key) is compared
+        so one treat relabelled ``food:treat`` -> ``food:healthy`` is still the
+        same treat.
+
+        ``spent``: the gate says this item's moment was already spoken and is
+        still live, so any line naming it is a repeat however long ago that
+        was -- a treat held past REPEAT_WINDOW_S is still the same treat.
+        """
+
+        if spent and cue:
+            kind = cue.split(":", 1)[0]
+            if any(said_cue and said_cue.split(":", 1)[0] == kind
+                   and same_item(item, said_item)
+                   for _, said_cue, said_item, _ in self._said):
+                return True
+        want = _norm(topic)
+        kind = cue.split(":", 1)[0] if cue else None
+        for said_t, said_cue, said_item, said_topic in reversed(self._said):
+            if t - said_t > REPEAT_WINDOW_S:
+                break
+            if kind and said_cue and said_cue.split(":", 1)[0] == kind \
+                    and same_item(item, said_item):
+                return True
+            if want and said_topic == want:
+                return True
+        return False
+
+    def _note_said(self, conv: dict[str, Any], t: float) -> None:
+        cue, item = self._active_cue if self._active is conv else (None, "")
+        self._said.append((t, cue, item, _norm(conv.get("topic") or "")))
 
     def _say(self, conv: dict[str, Any], text: str, t: float) -> None:
         """Speak one statement through the existing seam (§5).
@@ -426,6 +716,7 @@ class ConversationAgent:
         if result is not False:
             spoken.append((t, text, "normal"))
             self.speech.grant(t)
+        self._note_said(conv, t)
         self._turn(conv, "agent", text, kind="statement")
 
     def _ask(self, conv: dict[str, Any], text: str, t: float) -> None:
@@ -450,6 +741,7 @@ class ConversationAgent:
             return
         self._questions_asked += 1
         self._pending = row
+        self._note_said(conv, t)
         log.info("conversation: %s question sent · %s · \"%s\"", conv["id"], row.id, text[:120])
         self._turn(conv, "agent", text, kind="question")
 
@@ -469,11 +761,20 @@ class ConversationAgent:
         if conv is None or not self.is_active(question.conversation_id):
             return
         text = (transcript or "").strip()
+        heard_it = bool(heard) and bool(text)
         self._last_answered = question
         self._pending = None
-        log.info("conversation: %s transcript · heard=%s · \"%s\"", conv["id"], bool(heard) and bool(text), text[:160])
-        self._turn(conv, "wearer", text, heard=bool(heard) and bool(text))
-        self._spawn(self._reply(conv, question, text, bool(heard) and bool(text)))
+        log.info("conversation: %s transcript · heard=%s · \"%s\"", conv["id"], heard_it, text[:160])
+        self._turn(conv, "wearer", text, heard=heard_it)
+        if not heard_it:
+            # Nothing to read, so nothing to call the model about: on demo
+            # night all six heard=false reply turns cost 1.4-2.2 s each and
+            # came back empty every time. Close in silence straight away and
+            # free the slot for the next prop (§2: silence, not a filler line
+            # over a dead microphone).
+            self._close(conv, "silent")
+            return
+        self._spawn(self._reply(conv, question, text, True))
 
     def on_no_answer(
         self, question: PendingQuestion, t: float, reason: str = "expired"
@@ -490,7 +791,8 @@ class ConversationAgent:
         self._last_answered = None
         self._pending = None
         self._turn(conv, "wearer", "", heard=False)
-        self._spawn(self._reply(conv, current, "", False))
+        # Same as a heard=false answer: no model call for nothing (§2).
+        self._close(conv, "silent")
 
     def _spawn(self, coro: Any) -> None:
         try:
@@ -521,7 +823,10 @@ class ConversationAgent:
         conv["closed_t"] = t
         conv["close_reason"] = close_reason
         self._active = None
-        self._cooldown_until = t + self.timings.conversation_cooldown_s
+        cooldown = self.timings.conversation_cooldown_s
+        if not self.mouth_guard:
+            cooldown = max(UNGUARDED_COOLDOWN_S, cooldown)
+        self._cooldown_until = t + cooldown
         self.closed += 1
         try:
             self.db.update_conversation(conv)
@@ -538,8 +843,13 @@ class ConversationAgent:
         self._questions_asked = 0
         self._pending = None
         self._last_answered = None
+        self._active_cue = (None, "")
         task, self._lifetime_task = self._lifetime_task, None
-        if task is not None and task is not asyncio.current_task():
+        try:
+            current = asyncio.current_task()
+        except RuntimeError:  # closed from plain sync code (an answer callback)
+            current = None
+        if task is not None and task is not current:
             task.cancel()
         log.info("conversation: %s closed · %s · %d turns · %.1f s · settled=%s", conv["id"],
                  close_reason, len(conv["turns"]), t - conv["opened_t"],
@@ -685,8 +995,14 @@ class ConversationAgent:
                     "text": (f"Tick table (last {OPENING_WINDOW_S:.0f} s):\n"
                              + tick_table(window, t)),
                 })
-            content.extend(self._frames(window or esc.window, esc.tick, t,
-                                        OPENING_FRAMES))
+            # The table ends on the gate's tick (its caption named the cue);
+            # the picture is the newest frame there is. The gate's tick is
+            # 2-4 s old by the time a clerk hand-off opens, and in a
+            # props-in-a-row demo that is the previous prop.
+            newest = self._newest_tick(esc)
+            trigger = newest if newest is not None else esc.tick
+            frames_window = [*(window or esc.window), *([newest] if newest is not None else [])]
+            content.extend(self._frames(frames_window, trigger, t, OPENING_FRAMES))
         content.append({
             "type": "input_text",
             "text": "Say one line, or nothing. One question at most.",
@@ -719,17 +1035,49 @@ class ConversationAgent:
                 "type": "input_text",
                 "text": "Ticks since you asked:\n" + tick_table(window, t),
             })
-            content.extend(self._frames(window, window[-1], t, REPLY_FRAMES))
+            # Low detail: the reply is about the transcript, and the one sharp
+            # frame of the conversation was the trigger frame at the open.
+            content.extend(self._frames(window, window[-1], t, REPLY_FRAMES,
+                                        sharp=False))
         content.append({
             "type": "input_text",
             "text": "Say one closing line, or nothing.",
         })
         return content
 
+    def _newest_tick(self, esc: Escalation) -> Tick | None:
+        """A tick newer than the gate's, with its frame still in the ring.
+
+        ``None`` (use the gate's tick) when there is none, when it is
+        implausibly far ahead, or when its frame has already expired.
+        """
+
+        try:
+            rows = self.db.recent_ticks(1)
+        except Exception:  # pragma: no cover - defensive
+            return None
+        if not rows:
+            return None
+        newest = rows[-1]
+        if (newest.tick_id == esc.tick.tick_id or newest.t <= esc.tick.t
+                or newest.t - esc.tick.t > NEWEST_FRAME_MAX_S):
+            return None
+        try:
+            if not self.frame_store.get([newest.frame_ref]):
+                return None
+        except Exception:  # pragma: no cover - defensive
+            return None
+        return newest
+
     def _frames(
-        self, window: list[Any], trigger: Any, origin: float, k: int
+        self, window: list[Any], trigger: Any, origin: float, k: int,
+        *, sharp: bool = True,
     ) -> list[dict[str, Any]]:
-        """Frame labels and pixels, oldest first, exactly as the clerk gets them."""
+        """Frame labels and pixels, oldest first, exactly as the clerk gets them.
+
+        Only the trigger frame of the opening turn goes at detail ``high``
+        (``sharp``); every other frame is ``low``.
+        """
 
         if not window or trigger is None:
             return []
@@ -752,7 +1100,7 @@ class ConversationAgent:
             out.append({
                 "type": "input_image",
                 "image_url": _data_url(jpeg),
-                "detail": "high" if is_trigger else "low",
+                "detail": "high" if is_trigger and sharp else "low",
             })
         return out
 
@@ -776,8 +1124,15 @@ class ConversationAgent:
         if not lines:
             return ("Already settled today (closed conversations):\n"
                     "none yet")
+        shown = lines[-SETTLED_LINES:]
+        head = ("Already settled today (closed conversations):" if len(shown) == len(lines)
+                else f"Already settled today (last {len(shown)} of {len(lines)} closed "
+                     "conversations):")
+        # "Do not re-ask", not "do not reopen": the code already stops a line
+        # being said twice (REPEAT_WINDOW_S), and "do not reopen" read as
+        # "stay silent" on every prop that had been seen in rehearsal.
         return (
-            "Already settled today (closed conversations):\n"
-            + "\n".join(f"  {line}" for line in lines)
-            + "\nDo not reopen any of these."
+            head + "\n"
+            + "\n".join(f"  {line}" for line in shown)
+            + "\nDo not re-ask what these already settled."
         )

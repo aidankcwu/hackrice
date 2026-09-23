@@ -1,25 +1,65 @@
 /**
  * Server-side fetch against the pipeline's FastAPI backend
- * (backend/pipeline/api/routes.py) → one `DayInputs` per calendar day.
+ * (backend/pipeline/api/routes.py): one `DayInputs` per calendar day for the
+ * week table, and the backend's own healthspan score.
  *
- * No React and no engine here: HTTP, a pivot of the long-format seeded rows,
- * and the evidence-frame lookup with its cache. Anything that fails as a whole
- * throws `BackendOffline`, and there is no fallback: a page with no backend
- * behind it shows no numbers (R1).
+ * No React and no engine here: HTTP and a pivot of the long-format seeded rows.
+ * Anything that fails as a whole throws `BackendOffline`, and there is no
+ * fallback: a page with no backend behind it shows no numbers (R1).
  */
-import type { Decision, Status, WearableMetricRow, WearablesStatus } from "@/lib/types";
-import type { DataSource, DayInputs, PipelineEpisode } from "./types";
+import type { Status, WearableMetricRow, WearablesStatus } from "@/lib/types";
+import { accessToken, backendHeaders } from "@/lib/runtime";
+import type { DataSource, DayInputs, Goal, HealthspanWeek, PipelineEpisode } from "./types";
 
 export const DEFAULT_API_BASE = "http://localhost:8010";
 /** The seeded window is seven days ending today (fixtures.py `DAY_COUNT`). */
 export const WINDOW_DAYS = 7;
-/** Newest decisions to scan when pairing today's episodes with evidence frames. */
-const DECISION_LIMIT = 200;
-/** Parallel `/api/evidence/{id}` lookups; the backend is one SQLite connection. */
-const EVIDENCE_CONCURRENCY = 8;
+/**
+ * `/api/healthspan?days=7` scores eight engine runs server-side (today in full,
+ * each trailing day lite); ~0.3 s on the seeded demo DB, more on a long run.
+ */
+const HEALTHSPAN_TIMEOUT_MS = 10_000;
 
+/**
+ * The backend as this Next.js server reaches it. Per container: `BACKEND_URL`
+ * (e.g. `http://backend-alice:8010` on the deploy network) — the browser's
+ * base is resolved separately in `lib/runtime.ts` and is usually a different
+ * URL for the same backend. `NEXT_PUBLIC_API_BASE` and localhost stay as the
+ * dev fallbacks.
+ */
 export function apiBase(): string {
-  return process.env.NEXT_PUBLIC_API_BASE ?? DEFAULT_API_BASE;
+  const configured = process.env.BACKEND_URL?.trim() || process.env.NEXT_PUBLIC_API_BASE?.trim();
+  return (configured || DEFAULT_API_BASE).replace(/\/+$/, "");
+}
+
+/**
+ * The token for server→backend calls, sent as `X-Access-Token`: the per-tester
+ * `ACCESS_TOKEN` (deploy/), else the single deploy token `NEXT_PUBLIC_API_TOKEN`
+ * (docs/DEPLOY.md). The backend accepts either header form (api/auth.py).
+ */
+export function serverToken(): string | undefined {
+  return process.env.ACCESS_TOKEN?.trim() || process.env.NEXT_PUBLIC_API_TOKEN?.trim() || undefined;
+}
+
+/**
+ * The token a browser-side call sends: the per-tester one from the page URL
+ * (`lib/runtime.ts`, hosted testers) when there is one, else the single deploy
+ * token `NEXT_PUBLIC_API_TOKEN` (docs/DEPLOY.md), else "" (auth off, nothing sent).
+ */
+export function apiToken(): string {
+  return accessToken() ?? process.env.NEXT_PUBLIC_API_TOKEN?.trim() ?? "";
+}
+
+/** Spread into a fetch init: `Authorization: Bearer` when a token is set, else nothing. */
+export function authInit(): { headers?: Record<string, string> } {
+  const token = apiToken();
+  return token ? { headers: { authorization: `Bearer ${token}` } } : {};
+}
+
+/** For URLs that cannot carry a header (`<img src>`, download links): `?token=`. */
+export function withToken(url: string): string {
+  const token = apiToken();
+  return token ? `${url}${url.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}` : url;
 }
 
 /** Network error, timeout, non-2xx, or a body that is not JSON. */
@@ -35,7 +75,11 @@ const describe = (e: unknown): string => (e instanceof Error ? e.message : Strin
 export async function fetchJson<T>(base: string, path: string, timeoutMs = 2500): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${base}${path}`, { cache: "no-store", signal: AbortSignal.timeout(timeoutMs) });
+    response = await fetch(`${base}${path}`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: backendHeaders(undefined, serverToken() ?? null),
+    });
   } catch (cause) {
     throw new BackendOffline(`${path}: ${describe(cause)}`, { cause });
   }
@@ -77,13 +121,6 @@ interface SeededRow {
   value: number;
 }
 
-interface EvidenceRow {
-  decision_id: string;
-  frame_ref: string;
-  t: number;
-  bytes: number;
-}
-
 /** The routes return bare arrays today; older builds wrapped them (`{rows: []}`). */
 function asList<T>(value: unknown, key: string): T[] {
   if (Array.isArray(value)) return value as T[];
@@ -119,80 +156,30 @@ export function pivotSeeded(rows: SeededRow[]): Record<string, Record<string, nu
 }
 
 // ---------------------------------------------------------------------------
-// Evidence frames
+// The score
 // ---------------------------------------------------------------------------
 
 /**
- * decision id → frame URL, or null when no frame survived. The reasoner copies
- * frames at admission and inserts the decision row only after inference, so by
- * the time an id is listed its evidence is complete and never changes — a
- * settled answer is final. Fetch failures are deliberately not cached so the
- * next poll retries them.
+ * `GET /api/healthspan?day=<day>&days=7&goal=<goal>`: the backend's own score —
+ * the same engine, with its coverage rule and per-factor provenance applied —
+ * for `day` in full plus every day of the window's hours, in one round trip.
+ * `day` is pinned rather than left to the backend's clock so the score and the
+ * rows `loadDayInputs` read are the same day. Pins carry their saved evidence
+ * frame as a server-relative `img` (healthspan.py `_frame_urls`).
  */
-const evidenceCache = new Map<string, string | null>();
-
-export function clearEvidenceCache(): void {
-  evidenceCache.clear();
-}
-
-async function evidenceFrameUrl(base: string, decisionId: string): Promise<string | null> {
-  const cached = evidenceCache.get(decisionId);
-  if (cached !== undefined) return cached;
-  const id = encodeURIComponent(decisionId);
-  let rows: EvidenceRow[];
-  try {
-    rows = asList<EvidenceRow>(await fetchJson<unknown>(base, `/api/evidence/${id}`), "frames");
-  } catch {
-    return null;
+export async function fetchHealthspanWeek(base: string, day: string, goal: Goal): Promise<HealthspanWeek> {
+  const query = new URLSearchParams({ day, days: String(WINDOW_DAYS), goal });
+  const week = await fetchJson<Partial<HealthspanWeek>>(base, `/api/healthspan?${query.toString()}`, HEALTHSPAN_TIMEOUT_MS);
+  if (week.today === undefined || week.today === null || !Array.isArray(week.days)) {
+    throw new BackendOffline("/api/healthspan: no {days, today} in the response");
   }
-  // Rows come back ordered by `t` ascending, so the last one is the newest frame.
-  const last = rows.length > 0 ? rows[rows.length - 1] : undefined;
-  const url =
-    last !== undefined && typeof last.frame_ref === "string"
-      ? `${base}/api/evidence/${id}/${encodeURIComponent(last.frame_ref)}`
-      : null;
-  evidenceCache.set(decisionId, url);
-  return url;
-}
-
-async function mapPool<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let next = 0;
-  const worker = async (): Promise<void> => {
-    while (next < items.length) {
-      const i = next++;
-      results[i] = await fn(items[i]);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
-}
-
-/**
- * Episode id → evidence frame URL for the newest decision on that episode.
- * Dropped decisions (`t1_busy`) are skipped: they carry the episode id but
- * never copy frames, so counting them would blank a pin that has a frame.
- */
-async function frameUrlsFor(
-  base: string,
-  episodes: PipelineEpisode[],
-  decisions: Partial<Decision>[],
-): Promise<Record<string, string>> {
-  const wanted = new Set(episodes.map((e) => e.id));
-  const newestDecision = new Map<string, string>();
-  const ordered = [...decisions].sort((a, b) => (finite(b.t) ?? 0) - (finite(a.t) ?? 0));
-  for (const d of ordered) {
-    if (typeof d.id !== "string" || typeof d.episode_id !== "string" || d.dropped === true) continue;
-    if (wanted.has(d.episode_id) && !newestDecision.has(d.episode_id)) newestDecision.set(d.episode_id, d.id);
+  // The header names the person the score was computed for; a payload that does
+  // not say who that was is not shown with a guessed age or sex instead.
+  const profile: Partial<HealthspanWeek["today"]["profile"]> | undefined = week.today.profile;
+  if (typeof profile?.age !== "number" || !Number.isFinite(profile.age) || typeof profile.sex !== "string") {
+    throw new BackendOffline("/api/healthspan: no profile {age, sex} in the response");
   }
-  const pairs = [...newestDecision.entries()];
-  const urls = await mapPool(pairs, EVIDENCE_CONCURRENCY, ([, decisionId]) => evidenceFrameUrl(base, decisionId));
-  const out: Record<string, string> = {};
-  pairs.forEach(([episodeId], i) => {
-    const url = urls[i];
-    if (url !== null) out[episodeId] = url;
-  });
-  return out;
+  return week as HealthspanWeek;
 }
 
 // ---------------------------------------------------------------------------
@@ -231,8 +218,8 @@ function readWearables(raw: unknown): WearableFacts {
 
 /**
  * Status, seeded rows and episodes are required — any of them failing throws
- * `BackendOffline`. Decisions, evidence and the wearable status only decorate
- * the page (pin frames, the device string), so they are best-effort.
+ * `BackendOffline`. The wearable status only decorates the page (the device
+ * string), so it is best-effort.
  */
 export async function loadDayInputs(base: string = apiBase()): Promise<{ days: DayInputs[]; source: LiveDataSource }> {
   const status = await fetchJson<Partial<Status>>(base, "/api/status");
@@ -241,16 +228,14 @@ export async function loadDayInputs(base: string = apiBase()): Promise<{ days: D
   const dates = daysEnding(today, WINDOW_DAYS);
   const todayIndex = dates.length - 1;
 
-  const [seededRaw, episodesRaw, decisionsRaw, wearablesRaw] = await Promise.all([
+  const [seededRaw, episodesRaw, wearablesRaw] = await Promise.all([
     fetchJson<unknown>(base, `/api/seeded?days=${WINDOW_DAYS}`),
     Promise.all(dates.map((date) => fetchJson<unknown>(base, `/api/episodes?day=${date}`))),
-    fetchJson<unknown>(base, `/api/decisions?limit=${DECISION_LIMIT}`).catch((): unknown => []),
     fetchJson<unknown>(base, "/api/wearables/status").catch((): unknown => null),
   ]);
   const seeded = pivotSeeded(asList<SeededRow>(seededRaw, "rows"));
   const seededSources = pivotSeededSources(asList<SeededRow>(seededRaw, "rows"));
   const episodes = episodesRaw.map((raw) => asList<PipelineEpisode>(raw, "episodes").sort(byStart));
-  const frameUrls = await frameUrlsFor(base, episodes[todayIndex], asList<Partial<Decision>>(decisionsRaw, "decisions"));
 
   const source: LiveDataSource = {
     mode: "live",
@@ -267,7 +252,6 @@ export async function loadDayInputs(base: string = apiBase()): Promise<{ days: D
     date,
     episodes: episodes[i],
     seeded: seeded[date] ?? {},
-    frameUrls: i === todayIndex ? frameUrls : {},
     isToday: i === todayIndex,
     nowT,
   }));

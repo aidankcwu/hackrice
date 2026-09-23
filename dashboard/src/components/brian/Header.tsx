@@ -44,7 +44,7 @@ function useLive(source: DataSource): boolean {
   const [live, setLive] = useState(false);
   const lastTick = source.last_tick_t;
   useEffect(() => {
-    if (source.mode !== "live" || lastTick === undefined) {
+    if (lastTick === undefined) {
       setLive(false);
       return;
     }
@@ -54,7 +54,7 @@ function useLive(source: DataSource): boolean {
     // next payload — a stalled poll would otherwise freeze it on green.
     const timer = window.setInterval(read, 5000);
     return () => window.clearInterval(timer);
-  }, [source.mode, lastTick]);
+  }, [lastTick]);
   return live;
 }
 

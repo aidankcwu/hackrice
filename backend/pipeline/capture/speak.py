@@ -30,11 +30,33 @@ log = logging.getLogger(__name__)
 _LINK_ATTR = "_speech"
 
 #: How long ElevenLabs gets before the phone's own voice takes over (ASK_DESIGN
-#: §8.2, §8.4). `ask_expire_s` (25 s) is budgeted as synthesis <= 8 + playback ~5
-#: + listen 8 + slack, so an HTTP call that hangs past 8 s has already eaten the
-#: window it was rendering audio *for*. The client's own timeouts do not cover a
-#: server that dribbles bytes forever, so the deadline lives here.
-SYNTH_TIMEOUT_S = 8.0
+#: §8.2, §8.4). Demo night measured uncached synthesis at p50 282 ms, p90 388 ms,
+#: max 994 ms, so 2.5 s is ~2.5x the worst call ever seen: past it the call is
+#: hung, not slow, and every further second is dead air on stage before the
+#: fallback voice speaks (it used to be 8 s, sized for the old 25 s ask window).
+#: The client's own timeouts do not cover a server that dribbles bytes forever,
+#: so the deadline lives here.
+SYNTH_TIMEOUT_S = 2.5
+
+#: Playback-length estimate for the mouth-busy guard (the voice agent must not
+#: start a line while the last one is still playing on the glasses).
+#: ``tts.py`` asks ElevenLabs for ``mp3_22050_32``: 32 kbit/s is 4000 bytes per
+#: second of audio, so a clip lasts ``len(mp3) / 4000`` s (the audit's
+#: measure used the same figure).
+MP3_BYTES_PER_S = 4000.0
+#: Text mode has no bytes: the phone's own voice reads the words at roughly
+#: 0.23 s a word (~260 wpm, the iOS default rate).
+TEXT_S_PER_WORD = 0.23
+#: Added to every estimate: Bluetooth A2DP buffers ~0.15-0.3 s before the first
+#: sample is heard, so a clip ends that much later than the bytes say.
+PLAYBACK_PAD_S = 0.3
+
+
+def playback_s(mode: str, text: str, n_bytes: int) -> float:
+    """How long one sent utterance keeps the mouth busy, pad included."""
+    if n_bytes > 0:
+        return n_bytes / MP3_BYTES_PER_S + PLAYBACK_PAD_S
+    return len(text.split()) * TEXT_S_PER_WORD + PLAYBACK_PAD_S
 
 
 @dataclass
@@ -57,6 +79,36 @@ class Speech:
     link: GlassesLink
     tts: ElevenLabsTTS | None
     stats: SpeechStats = field(default_factory=lambda: SpeechStats("text"))
+    #: ``clock()`` value until which the last sent clip is still playing.
+    #: Monotonic, not wall time: an NTP step must not free or hold the mouth.
+    busy_until: float = 0.0
+    clock: Callable[[], float] = time.monotonic
+    #: Utterances accepted but not yet sent (still synthesising). The mouth is
+    #: busy for these too: a line handed to ``speak`` a moment ago has no byte
+    #: count yet, and the next hand-off must not slip into that gap.
+    _inflight: int = 0
+
+    def reserve(self) -> None:
+        """Mark an utterance as on its way before its task has even started."""
+        self._inflight += 1
+
+    def busy_for(self) -> float:
+        """Seconds until the mouth is free; 0.0 when it is free now.
+
+        An utterance still synthesising counts as busy for the rest of the
+        synthesis deadline -- an upper bound, only used to say "not yet".
+        """
+        remaining = max(0.0, self.busy_until - self.clock())
+        if self._inflight > 0:
+            remaining = max(remaining, SYNTH_TIMEOUT_S)
+        return remaining
+
+    def _mark_played(self, text: str, mode: str, n_bytes: int, delivered: bool) -> None:
+        if not delivered:
+            return  # nobody is hearing it, so it holds nothing up
+        self.busy_until = max(
+            self.busy_until, self.clock() + playback_s(mode, text, n_bytes)
+        )
 
     async def _render(self, text: str, urgency: str) -> tuple[str, str, int]:
         """The wire message for one utterance, plus `(mode, n_bytes)` for stats.
@@ -92,18 +144,41 @@ class Speech:
         log.info("speech mode=%s bytes=%d ms=%.0f", mode, n_bytes, elapsed_ms)
         return sent
 
-    async def send(self, text: str, urgency: str = "normal") -> int:
+    async def warm(self) -> bool:
+        """Pre-open the ElevenLabs connection. Never raises; False if nothing to warm.
+
+        Only a handshake, never a synthesis: the key may be dead, and a warm-up
+        that spends credit or throws would be worse than no warm-up at all.
+        """
+        if self.tts is None:
+            return False
+        try:
+            return await self.tts.warm()
+        except Exception:  # noqa: BLE001 -- belt and braces; tts.warm already swallows
+            log.exception("speech warm-up failed")
+            return False
+
+    async def send(
+        self, text: str, urgency: str = "normal", *, reserved: bool = False
+    ) -> int:
         """Synthesise and push one utterance to every phone. Returns how many got it.
 
         Never raises: an ElevenLabs failure falls back to the phone's own
         synthesiser, and a dead socket is already swallowed by
         ``GlassesLink.send_text``. Zero means the words reached nobody.
+        ``reserved``: the caller already counted this utterance with
+        :meth:`reserve`, so it is only released here, not counted twice.
         """
-        started = time.perf_counter()
-        message, mode, n_bytes = await self._render(text, urgency)
-        return self._account(
-            await self.link.send_text(message), mode, n_bytes, started
-        )
+        if not reserved:
+            self._inflight += 1
+        try:
+            started = time.perf_counter()
+            message, mode, n_bytes = await self._render(text, urgency)
+            sent = await self.link.send_text(message)
+            self._mark_played(text, mode, n_bytes, bool(sent))
+            return self._account(sent, mode, n_bytes, started)
+        finally:
+            self._inflight = max(0, self._inflight - 1)
 
     async def send_to(self, ws: object, text: str, urgency: str = "normal") -> bool:
         """Synthesise and push one utterance to **one** socket (ASK_DESIGN §8.2).
@@ -114,11 +189,16 @@ class Speech:
         synthesis, identical accounting: ``/api/status`` counts a spoken question
         exactly as it counts a statement.
         """
-        started = time.perf_counter()
-        message, mode, n_bytes = await self._render(text, urgency)
-        ok = await self.link.send_to(ws, message)
-        self._account(1 if ok else 0, mode, n_bytes, started)
-        return ok
+        self._inflight += 1
+        try:
+            started = time.perf_counter()
+            message, mode, n_bytes = await self._render(text, urgency)
+            ok = await self.link.send_to(ws, message)
+            self._mark_played(text, mode, n_bytes, bool(ok))
+            self._account(1 if ok else 0, mode, n_bytes, started)
+            return ok
+        finally:
+            self._inflight = max(0, self._inflight - 1)
 
 
 def make_speech(link: GlassesLink, settings: Settings | None = None) -> Speech:
@@ -181,10 +261,17 @@ def make_speak_fn(
                 stats.skipped_no_phone += 1
                 log.info("speech skipped: no phone connected")
                 return False
-            task = loop.create_task(
-                speech.send(text, urgency),
-                name="glasses-speak",
-            )
+            # Reserve synchronously: the task below has not started yet, and
+            # the voice agent may be asked for the next line before it does.
+            speech.reserve()
+            try:
+                task = loop.create_task(
+                    speech.send(text, urgency, reserved=True),
+                    name="glasses-speak",
+                )
+            except BaseException:
+                speech._inflight = max(0, speech._inflight - 1)
+                raise
             task.add_done_callback(_consume_failure)
             return True
         except Exception:
@@ -192,6 +279,12 @@ def make_speak_fn(
             return False
     speak.stats = stats  # type: ignore[attr-defined]
     speak.speech = speech  # type: ignore[attr-defined]
+    # The voice agent's mouth-busy guard reads this: seconds until the last
+    # clip on the glasses has finished playing (0.0 when the mouth is free).
+    speak.busy_for = speech.busy_for  # type: ignore[attr-defined]
+    # Startup hook: ``await speak.warm()`` opens the ElevenLabs socket before the
+    # first moment on stage. Safe to call with a dead key or no network.
+    speak.warm = speech.warm  # type: ignore[attr-defined]
     return speak
 
 

@@ -123,6 +123,13 @@ async def test_dashboard_routes(tmp_path):
         bad = await client.get("/api/healthspan?day=nonsense")
         assert bad.status_code == 400
         assert bad.json() == {"detail": "day must be YYYY-MM-DD"}
+        # Every pin picture is a saved evidence frame the evidence route serves.
+        for pin in body["pins"]:
+            if pin["img"] is not None:
+                assert pin["img"].startswith("/api/evidence/")
+                frame = await client.get(pin["img"])
+                assert frame.status_code == 200
+                assert frame.headers["content-type"] == "image/jpeg"
     await pipeline.stop()
 
 
@@ -153,6 +160,24 @@ async def test_healthspan_week_and_registry(tmp_path):
             assert [d["day"] for d in one["days"]] == [week["day"]]
             assert (await client.get("/api/healthspan?days=0")).status_code == 422
             assert (await client.get("/api/healthspan?days=32")).status_code == 422
+
+            # ?goal= overrides PROFILE_GOAL for that request only (the dashboard's picker).
+            assert week["today"]["profile"]["goal"] == pipeline.settings.profile_goal == "average"
+            day = week["day"]
+            athlete = (await client.get(f"/api/healthspan?day={day}&goal=athlete")).json()
+            assert athlete["profile"]["goal"] == "athlete"
+            shift = (await client.get(f"/api/healthspan?day={day}&days=2&goal=shift")).json()
+            assert shift["today"]["profile"]["goal"] == "shift"
+            assert [d["day"] for d in shift["days"]] == days[-2:]
+            after = (await client.get(f"/api/healthspan?day={day}")).json()
+            assert after["profile"]["goal"] == "average"
+            for bad_goal in ("bogus", "Athlete", ""):
+                bad = await client.get("/api/healthspan", params={"goal": bad_goal})
+                assert bad.status_code == 400
+                assert bad.json() == {
+                    "detail": "goal must be one of average, athlete, shift, genetic_risk"}
+            bad_week = await client.get("/api/healthspan?days=7&goal=bogus")
+            assert bad_week.status_code == 400
 
             registry = (await client.get("/api/healthspan/registry")).json()
             assert {"pipeline", "factors", "limitations", "leading_indicators",
@@ -417,7 +442,46 @@ async def test_health_auto_export_and_whoop_adapter_routes(tmp_path):
             "wrist_temp_dev", whoop_t - 2, whoop_t + 2)] == [0.4]
         resting = [r for r in pipeline.db.list_seeded(day_key(whoop_t), day_key(whoop_t))
                    if r.metric == "resting_hr"]
-        assert resting and resting[0].value == 57.0 and resting[0].source == "whoop"
+        # A real WHOOP night is whoop_live, never the demo seed's "whoop".
+        assert resting and resting[0].value == 57.0 and resting[0].source == "whoop_live"
+        from pipeline.scoring.scorer import row_provenance
+        assert row_provenance(resting[0].source) == "live"
+    await pipeline.stop()
+
+
+async def test_healthkit_body_on_the_canonical_route_lands_as_live_daily_rows(tmp_path):
+    """PLAN 3.2's POST: sleep, resting HR, HRV SDNN, steps under ``source: healthkit``."""
+
+    from pipeline.scoring.scorer import Scorer
+
+    pipeline, client = await wearables_client(tmp_path, "healthkit")
+    async with client:
+        now = datetime.now()
+        wake = datetime.combine(now.date(), datetime.min.time()) + timedelta(hours=6, minutes=30)
+        wake = min(wake, now - timedelta(minutes=5)).timestamp()
+        steps_t = (now - timedelta(minutes=1)).timestamp()
+        posted = (await client.post("/api/wearables/ingest", json={
+            "source": "healthkit",
+            "samples": [
+                {"t": wake, "metric": "sleep_hours", "value": 7.25, "unit": "hours"},
+                {"t": wake, "metric": "resting_hr", "value": 54, "unit": "bpm"},
+                {"t": wake, "metric": "hrv_sdnn", "value": 48.5, "unit": "ms"},
+                {"t": steps_t, "metric": "steps", "value": 4210, "unit": "count"},
+            ],
+        })).json()
+        assert posted["accepted"] == 1 and posted["rejected"] == 0  # the HRV reading
+        assert posted["seeded_rows"] == 4
+
+        night = day_key(wake - 12 * 3600)
+        rows = {r.metric: r for r in pipeline.db.list_seeded(night, day_key(steps_t))
+                if r.source == "healthkit"}
+        assert {m: r.value for m, r in rows.items()} == {
+            "sleep_hours": 7.25, "resting_hr": 54.0, "hrv_rmssd_ms": 48.5, "steps": 4210.0}
+        assert rows["sleep_hours"].day == night
+
+        # The §8 scorer labels the phone's night live, not "Seeded".
+        sleep = next(s for s in Scorer(pipeline.db).score_day(night) if s.metric == "sleep_hours")
+        assert sleep.source == "live" and "live from healthkit" in (sleep.note or "")
     await pipeline.stop()
 
 
@@ -470,3 +534,27 @@ async def test_fast_sim_maps_live_wall_samples_into_the_tick_window(tmp_path):
         assert old.json()["accepted"] == 0
         assert old.json()["reasons"] == {"t outside the +/-48h window": 1}
     await pipeline.stop()
+
+
+async def test_status_passes_watcher_and_labeler_through(tmp_path):
+    from test_health import FakeCapture
+
+    pipeline = build_pipeline(
+        Settings(db_path=tmp_path / "watch.db"),
+        source="sim", reasoner_mode="fake", speed=1,
+    )
+    labeler = {"calls_per_hour": {"heartbeat": 1}, "capped": False,
+               "last_heartbeat_age_s": 200.0, "last_wake_latency_ms": None,
+               "frames_sent_per_hour": 1, "mode": "idle"}
+    app = create_app(pipeline)  # before the fake: the app mounts a real capture's ring
+    pipeline.capture = FakeCapture({"loop": "ticks=1", "watcher": {"frames": 4},
+                                    "labeler": labeler, "watcher_error": None})
+    async with client_for(app) as client:
+        status = (await client.get("/api/status")).json()
+    capture = status["capture"]
+    assert capture["watcher"] == {"frames": 4}
+    assert capture["labeler"] == labeler
+    assert capture["watcher_error"] is None
+    assert capture["labeler_stale_after_s"] == 120.0
+    assert "labeler_heartbeat_stale" in status["health"]["problems"]
+    assert "ai_coverage_low" not in status["health"]["problems"]

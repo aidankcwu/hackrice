@@ -1,7 +1,12 @@
 import { mockBiometrics, mockBiometricsMulti, mockConversations, mockDecisions, mockEpisodes, mockHealthspan, mockPending, mockPersona, mockProfileLines, mockQuestions, mockScores, mockSeeded, mockSeededRows, mockStatus, mockSummary, mockTicks, mockWearablesStatus } from "./mock";
-import type { AnswerResult, AskResult, Biometrics, BiometricsMulti, Conversation, Decision, Episode, ForgetResult, Healthspan, Insight, MetricScore, OpenConversationResult, PendingCheck, Persona, ProfileLine, Question, Recap, RecapSummary, Scores, SeededDay, SeededMetricRow, Session, Status, Tick, TodaySummary, WearablesStatus } from "./types";
+import type { AnswerResult, AskResult, Biometrics, BiometricsMulti, Conversation, Decision, Episode, ForgetResult, Healthspan, Insight, MetricScore, OpenConversationResult, PendingCheck, Persona, ProfileLine, ProtocolDayRow, ProtocolToday, Question, Recap, RecapSummary, Scores, SeededDay, SeededMetricRow, Session, Status, Tick, WearablesStatus } from "./types";
+import { parseProtocolCsv } from "./protocol";
+import { backendFetch, backendUrl } from "./runtime";
 
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8010";
+// The backend base is resolved per request in the browser (lib/runtime.ts):
+// NEXT_PUBLIC_API_BASE when the build set it, else the page's own origin under a
+// `/t/NAME` proxy prefix, else `<host>:8010` in local dev. Every call carries the
+// tester's token as `X-Access-Token`.
 export const configuredMock = process.env.NEXT_PUBLIC_MOCK === "1";
 export class ApiOfflineError extends Error { constructor() { super("API offline"); this.name="ApiOfflineError"; } }
 
@@ -11,7 +16,7 @@ export class ApiOfflineError extends Error { constructor() { super("API offline"
  *  fabrication that looks like a measurement (product rule R1). */
 async function request<T>(path: string, mock: T): Promise<{data:T; mock:boolean}> {
   if (configuredMock) return {data:mock,mock:true};
-  const response=await fetch(`${API_BASE}${path}`,{cache:"no-store",signal:AbortSignal.timeout(2500)});
+  const response=await backendFetch(path,{cache:"no-store",signal:AbortSignal.timeout(2500)});
   if (!response.ok) throw new Error(`${path} -> ${response.status}`);
   return {data:await response.json() as T,mock:false};
 }
@@ -21,7 +26,7 @@ const list = <T>(value: T[] | Record<string,T[]>, keys: string[]): T[] => Array.
  *  start is worse than an error on screen. So no mock fallback and no timeout --
  *  `POST /api/recap` runs an LLM call and legitimately takes several seconds. */
 async function mutate<T>(path: string, method: "POST" | "PUT" | "DELETE", body?: unknown): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await backendFetch(path, {
     method, cache: "no-store",
     headers: {"content-type": "application/json"},
     // A DELETE with no body stays bodyless; `{}` on one is the kind of thing a
@@ -59,7 +64,7 @@ export const api = {
   /** Demo tool: say `text` through the glasses verbatim (ElevenLabs), no agent involved. */
   speak: (text: string) => mutate<{ok: boolean}>("/api/speak", "POST", {text}),
   openConversation: async (topic: string, mode?: "question" | "statement"): Promise<OpenConversationResult> => {
-    const response = await fetch(`${API_BASE}/api/conversation/open`, {
+    const response = await backendFetch("/api/conversation/open", {
       method:"POST", cache:"no-store", headers:{"content-type":"application/json"},
       body:JSON.stringify(mode ? {topic, mode} : {topic}),
     });
@@ -168,7 +173,7 @@ export const api = {
   // -- judge session + recap. `sessionCurrent` polls; the rest are actions. --
   sessionCurrent: async (): Promise<Session|null> => {
     try {
-      const response = await fetch(`${API_BASE}/api/session/current`,{cache:"no-store",signal:AbortSignal.timeout(2500)});
+      const response = await backendFetch(`/api/session/current`,{cache:"no-store",signal:AbortSignal.timeout(2500)});
       if (!response.ok) return null;
       return await response.json() as Session|null;
     } catch { return null; }
@@ -182,7 +187,7 @@ export const api = {
   /** Logs index, newest first. Empty list rather than null: no recaps yet is not an error. */
   recaps: async (limit = 50): Promise<RecapSummary[]> => {
     try {
-      const response = await fetch(`${API_BASE}/api/recaps?limit=${limit}`,{cache:"no-store",signal:AbortSignal.timeout(2500)});
+      const response = await backendFetch(`/api/recaps?limit=${limit}`,{cache:"no-store",signal:AbortSignal.timeout(2500)});
       if (!response.ok) return [];
       const body = await response.json() as {recaps?: RecapSummary[]};
       return body.recaps ?? [];
@@ -190,14 +195,14 @@ export const api = {
   },
   recapById: async (id: string): Promise<Recap|null> => {
     try {
-      const response = await fetch(`${API_BASE}/api/recaps/${encodeURIComponent(id)}`,{cache:"no-store",signal:AbortSignal.timeout(4000)});
+      const response = await backendFetch(`/api/recaps/${encodeURIComponent(id)}`,{cache:"no-store",signal:AbortSignal.timeout(4000)});
       if (!response.ok) return null;
       return await response.json() as Recap;
     } catch { return null; }
   },
   latestRecap: async (): Promise<Recap|null> => {
     try {
-      const response = await fetch(`${API_BASE}/api/recap/latest`,{cache:"no-store",signal:AbortSignal.timeout(2500)});
+      const response = await backendFetch(`/api/recap/latest`,{cache:"no-store",signal:AbortSignal.timeout(2500)});
       if (!response.ok) return null;   // 404 just means nobody has asked for one yet
       return await response.json() as Recap;
     } catch { return null; }
@@ -208,5 +213,22 @@ export const api = {
     const r = await request<Healthspan>(`/api/healthspan${day ? `?day=${encodeURIComponent(day)}` : ""}`, mockHealthspan);
     return {...r, data: {...r.data, layers: r.data?.layers ?? {}, factors: r.data?.factors ?? [], ledger: r.data?.ledger ?? [], levers: r.data?.levers ?? [], levers_free: r.data?.levers_free ?? [], insights: r.data?.insights ?? [], pins: r.data?.pins ?? [], effects: r.data?.effects ?? [], provenance: r.data?.provenance ?? {}, conventions: r.data?.conventions ?? []} as Healthspan};
   },
+  // -- the protocol (docs/API.md "The protocol"). No mock, not even with
+  // NEXT_PUBLIC_MOCK=1: a grid of statuses nobody recorded is the fabrication
+  // R1 forbids, so a backend that does not answer throws and the panel says so.
+  protocolToday: async (): Promise<ProtocolToday> => {
+    const response = await backendFetch("/api/protocol/today",{cache:"no-store",signal:AbortSignal.timeout(2500)});
+    if (!response.ok) throw new Error(`/api/protocol/today -> ${response.status}`);
+    const body = await response.json() as Partial<ProtocolToday>;
+    if (typeof body.day !== "string") throw new Error("/api/protocol/today -> no day");
+    return {day: body.day, items: body.items ?? []};
+  },
+  /** The last `days` local days, from the same CSV the Export button downloads. */
+  protocolHistory: async (days = 14): Promise<ProtocolDayRow[]> => {
+    const response = await backendFetch(`/api/protocol/export.csv?days=${days}`,{cache:"no-store",signal:AbortSignal.timeout(2500)});
+    if (!response.ok) throw new Error(`/api/protocol/export.csv -> ${response.status}`);
+    return parseProtocolCsv(await response.text());
+  },
+  protocolExportUrl: (days = 14) => backendUrl(`/api/protocol/export.csv?days=${days}`),
 };
 export type ApiResult<T>={data:T;mock:boolean};
