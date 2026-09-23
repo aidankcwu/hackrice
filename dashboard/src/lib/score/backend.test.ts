@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { authInit, BackendOffline, clearEvidenceCache, daysEnding, fetchJson, loadDayInputs, pivotSeeded, WINDOW_DAYS, withToken } from "./backend";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { authInit, BackendOffline, daysEnding, fetchHealthspanWeek, fetchJson, loadDayInputs, pivotSeeded, WINDOW_DAYS, withToken } from "./backend";
 
 const BASE = "http://localhost:8016";
 const TICK_T = new Date(2026, 8, 12, 18, 0, 0).getTime() / 1000;
@@ -23,11 +23,9 @@ const OK: Routes = {
   "/api/status": { last_tick_t: TICK_T, tick_count: 1200, source: "glasses", demo_mode: false },
   "/api/seeded": [{ day: TODAY, metric: "steps", value: 5500 }],
   "/api/episodes": [],
-  "/api/decisions": [],
   "/api/wearables/status": { metrics: [], live_connected: false, live_devices: [], catalogue: {} },
 };
 
-beforeEach(() => clearEvidenceCache());
 afterEach(() => vi.unstubAllGlobals());
 
 describe("pivotSeeded", () => {
@@ -89,6 +87,28 @@ describe("loadDayInputs", () => {
     await expect(loadDayInputs(BASE)).rejects.toBeInstanceOf(BackendOffline);
     stubFetch({ ...OK, "/api/seeded": null });
     await expect(loadDayInputs(BASE)).rejects.toBeInstanceOf(BackendOffline);
+  });
+});
+
+describe("fetchHealthspanWeek", () => {
+  const WEEK = { day: TODAY, days: [{ day: TODAY, hours_today: 0.95 }], today: { day: TODAY, hours_today: 0.95 } };
+
+  it("pins the day, asks for the seven-day window and passes the goal", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", (url: string) => {
+      seen.push(url);
+      return Promise.resolve(new Response(JSON.stringify(WEEK), { status: 200 }));
+    });
+    const week = await fetchHealthspanWeek(BASE, TODAY, "athlete");
+    expect(seen).toEqual([`${BASE}/api/healthspan?day=${TODAY}&days=${WINDOW_DAYS}&goal=athlete`]);
+    expect(week.today.hours_today).toBe(0.95);
+  });
+
+  it("is BackendOffline on a failed route or a body without today, never a partial score", async () => {
+    stubFetch({ "/api/healthspan": null });
+    await expect(fetchHealthspanWeek(BASE, TODAY, "average")).rejects.toBeInstanceOf(BackendOffline);
+    stubFetch({ "/api/healthspan": { day: TODAY, days: [] } });
+    await expect(fetchHealthspanWeek(BASE, TODAY, "average")).rejects.toBeInstanceOf(BackendOffline);
   });
 });
 

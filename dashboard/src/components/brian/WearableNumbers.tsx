@@ -3,7 +3,7 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { T } from "@/lib/tokens";
 import type { DashboardData, WearableStat } from "@/lib/score/types";
-import { provenanceOf, contextFor } from "@/lib/score/provenance";
+import { chipFor, provenanceOf, contextFor } from "@/lib/score/provenance";
 import { fmtInt } from "./format";
 import { ProvenanceChip } from "./Panel";
 
@@ -59,13 +59,19 @@ export function wearableStats(d: DashboardData): WearableStat[] {
   const wearable = d.source.mode === "live" && d.source.demo_mode !== true ? "whoop" : "seeded";
   return STATS.map((stat) => {
     const value = stat.read(d);
+    // The backend's own provenance row names the stream the score used; the
+    // re-derivation only covers stats the payload has no row for.
+    const row = d.source.provenance?.[stat.key];
     return {
       key: stat.key,
       label: stat.label,
       value,
       unit: stat.unit,
       digits: stat.digits,
-      provenance: provenanceOf(stat.key, value !== null, contextFor(stat.key, d.source.wearable_sources, wearable)),
+      provenance:
+        row !== undefined && value !== null
+          ? chipFor(row)
+          : provenanceOf(stat.key, value !== null, contextFor(stat.key, d.source.wearable_sources, wearable)),
     };
   });
 }

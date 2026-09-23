@@ -50,15 +50,13 @@ export function BrianDashboard({ data, updating = false }: BrianDashboardProps) 
             payload -- Today is the day it happens to sit inside. */}
         <Logs />
         {/* §1.1 beside §1.2: the ledger, then the five layers only the glasses
-            measure. `provenance` is derived per factor exactly as the By-layer
-            panel derives it (the factor's stream and the day's row sources): a
+            measure. `provenance` is the backend's own row per key (what the
+            score was computed from), exactly as the By-layer panel reads it: a
             factor the glasses measured is Glasses, a device row is that device,
             a seed row is Seeded, and one the engine did not measure is
             `missing`, so its tile says so rather than showing a number nothing
-            produced. The clock reads a leading indicator, not a factor, so its
-            chip comes from whether `observations` carries the number. On a day
-            with no glasses episode, every glasses value (the engine's default
-            zeros included) is unmeasured, "no glasses episodes today". */}
+            produced. On a day with no glasses episode the backend leaves every
+            glasses value missing, with its reason. */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
           <Today d={data} updating={updating} />
           <Instruments

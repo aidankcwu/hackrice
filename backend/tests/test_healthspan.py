@@ -586,6 +586,35 @@ def test_profile_from_settings_and_env(seeded, monkeypatch):
     assert healthspan_for_day(seeded, from_env, END_DAY)["profile"]["height_m"] == 1.78
 
 
+def test_goal_overrides_the_setting_for_one_call_only(seeded, settings):
+    # The four goals are the setting's own Literal, so route and env agree.
+    assert set(hs.GOALS) == {"average", "athlete", "shift", "genetic_risk"}
+    assert settings.profile_goal == "average"
+    default = healthspan_for_day(seeded, settings, END_DAY)
+    athlete = healthspan_for_day(seeded, settings, END_DAY, goal="athlete")
+    assert default["profile"]["goal"] == "average"
+    assert athlete["profile"]["goal"] == "athlete"
+    # The goal moves the targets the ledger is judged against (athlete sleep 8.5 h).
+    assert profile_from_settings(settings, 23.0, "athlete").targets()["sleep_hours"] == 8.5
+    assert ledger(athlete) != ledger(default)
+    # Nothing leaks into the next call: the setting is still the default.
+    assert settings.profile_goal == "average"
+    assert healthspan_for_day(seeded, settings, END_DAY) == default
+    # goal=None is the setting, never a guess.
+    assert healthspan_for_day(seeded, settings, END_DAY, goal=None) == default
+    with pytest.raises(ValueError, match="goal must be one of"):
+        healthspan_for_day(seeded, settings, END_DAY, goal="bogus")
+
+
+def test_week_scores_every_day_under_the_requested_goal(seeded, settings):
+    week = hs.healthspan_week(seeded, settings, END_DAY, 3, goal="shift")
+    assert week["today"]["profile"]["goal"] == "shift"
+    for lite in week["days"]:
+        alone = healthspan_for_day(seeded, settings, lite["day"], goal="shift")
+        assert lite["hours_today"] == alone["hours_today"]
+        assert lite["overall"] == alone["overall"]
+
+
 # -- levers and pins -------------------------------------------------------
 
 
@@ -640,6 +669,49 @@ def test_pins_reconciled_with_profile_cutoff(seeded, settings):
     pin = {p["time"]: p for p in pins}["14:30"]
     assert pin["kind"] == "credit"
     assert "outside your 9 h cutoff" in pin["effect"]
+
+
+def test_pins_show_the_frame_the_reasoner_saved_for_their_episode(seeded, settings):
+    """``img`` is the newest saved frame of the newest non-dropped decision (STATE.md §7)."""
+
+    from pipeline.frames import InMemoryFrameStore
+    from pipeline.models import Decision
+    from pipeline.reasoner.evidence import EvidenceStore
+
+    add(seeded, "e_conv", "conversation", END_DAY, 10.0, 20.0, {"scene": "office"})
+    add(seeded, "e_park", "outdoor_block", END_DAY, 12.0, 10.0, {"scene": "park"})
+    add(seeded, "e_coffee", "caffeine_sighting", END_DAY, 15.0, 1.5, {"scene": "cafe"})
+    evidence = EvidenceStore(seeded)
+    ring = InMemoryFrameStore(ttl_s=10**9)
+
+    def decide(did: str, episode_id: str, hour: float, refs: list[str], *, dropped=False):
+        t = ts(END_DAY, hour)
+        for i, ref in enumerate(refs):
+            ring.put(ref, b"\xff\xd8jpeg", t + i)
+        seeded.insert_decision(Decision(id=did, t=t, trigger="t", trigger_tick_id="x",
+                                        episode_id=episode_id, dropped=dropped))
+        evidence.copy(did, [(ref, t + i) for i, ref in enumerate(refs)], ring)
+
+    decide("d_old", "e_conv", 10.1, ["f_old"])
+    decide("d_new", "e_conv", 10.2, ["f_a", "f_b"])
+    # A dropped escalation names the episode but never copies a frame; it must
+    # not blank the picture the earlier decision saved.
+    decide("d_park", "e_park", 12.1, ["f_park"])
+    decide("d_busy", "e_park", 12.2, [], dropped=True)
+    # A decision on an episode from another day never lends it a picture.
+    add(seeded, "e_yday", "conversation", DAYS[-2], 10.0, 20.0, {"scene": "office"})
+    decide("d_yday", "e_yday", 10.1, ["f_yday"])
+
+    pins = {p["time"]: p for p in
+            healthspan_for_day(seeded, settings, END_DAY, evidence=evidence)["pins"]}
+    assert pins["10:00"]["img"] == "/api/evidence/d_new/f_b"
+    assert pins["12:00"]["img"] == "/api/evidence/d_park/f_park"
+    # No decision saved a frame for the coffee: no picture, never a borrowed one.
+    assert pins["15:00"]["img"] is None
+    assert evidence.get("d_new", "f_b") is not None
+    # Without the store (every caller before this one) nothing changes.
+    plain = healthspan_for_day(seeded, settings, END_DAY)["pins"]
+    assert all(p["img"] is None for p in plain)
 
 
 def test_live_episode_moves_the_numbers_today(seeded, settings):

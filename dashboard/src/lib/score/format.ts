@@ -43,17 +43,7 @@ export function median(values: number[]): number | undefined {
   return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-export function mean(values: number[]): number | undefined {
-  if (values.length === 0) return undefined;
-  return values.reduce((a, b) => a + b, 0) / values.length;
-}
-
 /** A finite number from a loosely typed record, or undefined (absent, null, NaN). */
 export function finiteNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-/** Drop `undefined` values so the engine request carries only what was measured. */
-export function compact<T extends object>(obj: T): T {
-  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as T;
 }

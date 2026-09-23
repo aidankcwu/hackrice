@@ -1,24 +1,32 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BackendOffline } from "./backend";
 import type { LiveDataSource } from "./backend";
-import type { DayInputs, EnginePayload } from "./types";
+import type { DayInputs, HealthspanPayload, HealthspanWeek } from "./types";
 
-// The loader is server-only orchestration, so both I/O edges are stubbed: the
-// backend fetch and the python subprocess. Everything in between is real.
+// The loader is server-only orchestration, so its I/O edges are stubbed: the
+// day inputs and the backend's healthspan score. Everything in between is real.
+// There is no engine edge any more — `./engine` is never imported by the loader,
+// and a stub that throws proves no number can come from a local engine run.
 const loadDayInputs = vi.hoisted(() => vi.fn());
-const runEngineBatch = vi.hoisted(() => vi.fn());
+const fetchHealthspanWeek = vi.hoisted(() => vi.fn());
+const runEngine = vi.hoisted(() => vi.fn(() => Promise.reject(new Error("the dashboard must not score locally"))));
 
 vi.mock("./backend", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./backend")>()),
   loadDayInputs,
+  fetchHealthspanWeek,
 }));
-vi.mock("./engine", () => ({ runEngineBatch }));
+vi.mock("./engine", () => ({ runEngine }));
 
 const { clearLoaderCache, loadDashboardData, resolveGoal } = await import("./loader");
 
 const at = (h: number): number => new Date(2026, 8, 12, h, 0, 0).getTime() / 1000;
 
-const payload = (): EnginePayload => ({
+const payload = (): HealthspanPayload => ({
+  day: "2026-09-12",
+  profile: { goal: "average", bedtime_hh: 23, bedtime_source: "seeded" },
+  provenance: {},
+  window: { factor_days: ["2026-09-12"], uncovered_days: ["2026-09-12"] },
   overall: 60,
   layers: { Movement: 50, Sleep: 50, "Light & clock": 50, Social: 50, Environment: 50, "Diet & substances": 50, Recovery: 50, Cognition: 50 },
   years_delta: 0,
@@ -39,7 +47,6 @@ const day = (): DayInputs => ({
   date: "2026-09-12",
   episodes: [],
   seeded: { bed_time: 23, sleep_hours: 7.4 },
-  frameUrls: {},
   isToday: true,
   nowT: at(18),
 });
@@ -60,11 +67,14 @@ const ENV_KEYS = [
   "BRIAN_PERSON_NAME", "BRIAN_PERSON_AGE", "BRIAN_PERSON_SEX", "BRIAN_DEVICE",
 ] as const;
 
+const week = (): HealthspanWeek => ({ day: "2026-09-12", days: [{ day: "2026-09-12", hours_today: 0.1 }], today: payload() });
+
 beforeEach(() => {
   clearLoaderCache();
   loadDayInputs.mockReset();
-  runEngineBatch.mockReset();
-  runEngineBatch.mockImplementation((requests: unknown[]) => Promise.resolve(requests.map(payload)));
+  fetchHealthspanWeek.mockReset();
+  fetchHealthspanWeek.mockImplementation(() => Promise.resolve(week()));
+  runEngine.mockClear();
   for (const key of ENV_KEYS) delete process.env[key];
 });
 
@@ -85,8 +95,16 @@ describe("loadDashboardData when the backend is down", () => {
   it("rejects instead of substituting a fabricated day", async () => {
     loadDayInputs.mockRejectedValue(new BackendOffline("/api/status: fetch failed"));
     await expect(loadDashboardData()).rejects.toBeInstanceOf(BackendOffline);
-    // No fixture path exists any more, so the engine is never reached.
-    expect(runEngineBatch).not.toHaveBeenCalled();
+    // No fixture path exists, so nothing is scored at all.
+    expect(fetchHealthspanWeek).not.toHaveBeenCalled();
+    expect(runEngine).not.toHaveBeenCalled();
+  });
+
+  it("rejects when the score route fails, rather than showing rows without a score", async () => {
+    loadDayInputs.mockResolvedValue({ days: [day()], source: source() });
+    fetchHealthspanWeek.mockRejectedValue(new BackendOffline("/api/healthspan: HTTP 500"));
+    await expect(loadDashboardData()).rejects.toBeInstanceOf(BackendOffline);
+    expect(runEngine).not.toHaveBeenCalled();
   });
 
   it("does not cache the failure, so the next poll retries", async () => {
@@ -154,12 +172,29 @@ describe("device string", () => {
   });
 });
 
+describe("the score is the backend's", () => {
+  it("asks /api/healthspan for the day the rows were read for, under the chosen goal", async () => {
+    loadDayInputs.mockResolvedValue({ days: [day()], source: source() });
+    const data = await loadDashboardData({ goal: "shift", apiBase: "http://localhost:8016" });
+    expect(fetchHealthspanWeek).toHaveBeenCalledWith("http://localhost:8016", "2026-09-12", "shift");
+    expect(data.hours_today).toBe(0.1);
+    expect(data.person.goal).toBe("shift");
+    expect(runEngine).not.toHaveBeenCalled();
+  });
+
+  it("never sends an unknown goal: it scores as average", async () => {
+    loadDayInputs.mockResolvedValue({ days: [day()], source: source() });
+    await loadDashboardData({ goal: "nonsense" as never });
+    expect(fetchHealthspanWeek).toHaveBeenCalledWith("http://localhost:8010", "2026-09-12", "average");
+  });
+});
+
 describe("cache", () => {
-  it("shares one engine run between concurrent callers on the same key", async () => {
+  it("shares one backend load between concurrent callers on the same key", async () => {
     loadDayInputs.mockResolvedValue({ days: [day()], source: source() });
     const [a, b] = await Promise.all([loadDashboardData({ goal: "average" }), loadDashboardData({ goal: "average" })]);
     expect(a).toBe(b);
-    expect(runEngineBatch).toHaveBeenCalledTimes(1);
+    expect(fetchHealthspanWeek).toHaveBeenCalledTimes(1);
   });
 
   it("keys on the goal and the api base", async () => {
@@ -169,7 +204,8 @@ describe("cache", () => {
       loadDashboardData({ goal: "athlete" }),
       loadDashboardData({ goal: "average", apiBase: "http://localhost:8016" }),
     ]);
-    expect(runEngineBatch).toHaveBeenCalledTimes(3);
+    expect(fetchHealthspanWeek).toHaveBeenCalledTimes(3);
     expect(loadDayInputs).toHaveBeenCalledWith("http://localhost:8016");
+    expect(fetchHealthspanWeek).toHaveBeenCalledWith("http://localhost:8010", "2026-09-12", "athlete");
   });
 });

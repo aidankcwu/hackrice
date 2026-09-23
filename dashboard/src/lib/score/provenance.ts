@@ -108,6 +108,40 @@ export interface EngineProvenance {
   basis?: string;
 }
 
+/** `provenance[key]` in the healthspan payload (backend/pipeline/scoring/healthspan.py). */
+export interface ObsProvenance {
+  /** `live` = summed over the glasses' episodes, `seeded` = an integration row as-is, `derived` = a proxy of either, `missing` = no measurement at all. */
+  source: "live" | "seeded" | "derived" | "missing";
+  /** Which stream filed it: `glasses`, `glasses + wearer report`, `phone`, `whoop`, `apple_watch`, `pvt`, `openaq`, `user`. */
+  basis: string;
+  /** One sentence on how the number was arrived at, or why there isn't one. */
+  detail: string;
+}
+
+/** A `basis` that names a wearable device; `phone`, `openaq` and the rest do not. */
+const DEVICE_BASIS = /whoop|fitbit|healthkit|apple_watch/;
+
+/** The glasses filed it — alone, or with the wearer's own answer on top (`glasses + wearer report`). */
+const isGlassesBasis = (basis: string): boolean => basis.toLowerCase().startsWith("glasses");
+
+/**
+ * The payload's provenance → one chip, with the same labels the By-layer panel
+ * uses. A wearable row earns its device's chip (Fitbit, Apple Health, WHOOP)
+ * only when a connected device wrote it: `live`, or a `derived` conversion of a
+ * live-device row. The demo seed is "Seeded" whatever device it imitates, and
+ * `phone` / `openaq` rows read "Seeded" rather than claiming a live sensor. A
+ * missing observation is "Imputed" whatever filed the attempt, matching how the
+ * engine scores it at the population reference.
+ */
+export function chipFor(p: ObsProvenance | undefined): Provenance {
+  if (!p || p.source === "missing") return "imputed";
+  const basis = p.basis.toLowerCase();
+  if (isGlassesBasis(basis)) return "glasses";
+  if (basis === "pvt" || basis === "user") return "entered";
+  const live = p.source === "live" || (p.source === "derived" && LIVE_SOURCES.has(basis));
+  return live && DEVICE_BASIS.test(basis) ? wearableFor({ source: "live", basis }) : "seeded";
+}
+
 /**
  * Which wearable chip a factor earns, from its own provenance row rather than
  * a page-wide flag: the backend marks a row `live` with the device as `basis`
@@ -154,6 +188,12 @@ export interface PageSource {
   wearable_sources?: Record<string, string>;
   /** Absent means unknown, and nothing is gated on it. */
   glasses_coverage?: GlassesCoverage;
+  /**
+   * The backend's own per-key provenance for the scored day (`/api/healthspan`).
+   * Where a key has a row, it decides the chip and the gate: it is what the
+   * score was actually computed from, so nothing here re-derives it.
+   */
+  provenance?: Readonly<Record<string, ObsProvenance>>;
 }
 
 /** The page-wide wearable fallback when the loader supplied no row sources: live backend and not demo mode -> WHOOP. */
@@ -168,8 +208,16 @@ const WEEKLY_GLASSES_KEYS: ReadonlySet<string> = new Set(["resistance_min_wk", "
  * it can. The engine's `observations_from_app` sums episodes, so it reports 0
  * bright minutes, 0 drinks and 0 screen minutes whether or not the glasses
  * were worn; without an episode behind it that 0 is a default, not a sighting.
+ *
+ * With the backend's provenance for the key, its verdict is the gate: the
+ * backend applies the same coverage rule (`_DayData.covered`) before scoring, so
+ * a glasses key it left `missing` is the gap (with its own reason) and a key it
+ * filled from another stream — the phone's bright-light row, the WHOOP drinks
+ * journal — is a measurement whatever the glasses did.
  */
 export function glassesGap(key: string, source: PageSource): string | null {
+  const p = source.provenance?.[key];
+  if (p !== undefined) return p.source === "missing" && isGlassesBasis(p.basis) ? p.detail : null;
   const coverage = source.glasses_coverage;
   if (coverage === undefined || FACTOR_ORIGIN[key] !== "glasses") return null;
   if (WEEKLY_GLASSES_KEYS.has(key)) return coverage.week ? null : "no glasses episodes this week";
@@ -181,9 +229,15 @@ export const measuredOnPage = (key: string, measured: boolean, source: PageSourc
   measured && glassesGap(key, source) === null;
 
 /**
- * One factor's chip from the day's own row sources and glasses coverage — the
- * same derivation the By-layer panel and the tiles both use, so a tile and a
- * layer row can never name different streams for one factor.
+ * One factor's chip — the same derivation the By-layer panel and the tiles both
+ * use, so a tile and a layer row can never name different streams for one
+ * factor. The backend's provenance row for the key when the payload carries one
+ * (the stream the score was computed from); otherwise re-derived from the day's
+ * row sources and glasses coverage.
  */
-export const factorProvenance = (key: string, measured: boolean, source: PageSource): Provenance =>
-  provenanceOf(key, measuredOnPage(key, measured, source), contextFor(key, source.wearable_sources, wearableFallback(source)));
+export function factorProvenance(key: string, measured: boolean, source: PageSource): Provenance {
+  const onPage = measuredOnPage(key, measured, source);
+  const p = source.provenance?.[key];
+  if (p !== undefined) return onPage ? chipFor(p) : "imputed";
+  return provenanceOf(key, onPage, contextFor(key, source.wearable_sources, wearableFallback(source)));
+}

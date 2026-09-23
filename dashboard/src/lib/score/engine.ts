@@ -5,15 +5,16 @@ import path from "node:path";
 import type { EnginePayload, EngineRequest } from "./types";
 
 /**
- * Runs the Python scoring engine as a subprocess.
+ * Runs the Python scoring engine as a subprocess, for what still needs a local
+ * run: `POST /api/score` (the brief's request-in, payload-out contract) and,
+ * through `spawn.ts`, the Tonight sliders' `--forecast` and the How-it's-scored
+ * page's `--registry`. The dashboard's own numbers come from the backend's
+ * `/api/healthspan` (loader.ts), never from here.
  *
- * `brian_score.py` is used unchanged (`--json` reads one request on stdin);
- * `brian_batch.py` imports it and scores a list of requests in one process so
- * the seven-day chart does not pay the numpy import seven times.
+ * `brian_score.py` is used unchanged (`--json` reads one request on stdin).
  */
 
 const SCORE_SCRIPT = path.join(process.cwd(), "lib", "score", "brian_score.py");
-const BATCH_SCRIPT = path.join(process.cwd(), "lib", "score", "brian_batch.py");
 
 /** `BRIAN_PYTHON` overrides; otherwise `python` on Windows (the `python3` alias there is a Store stub) and `python3` elsewhere. */
 export function pythonCommand(): string {
@@ -82,11 +83,4 @@ function runPython(script: string, args: string[], stdin: string, timeoutMs: num
 export async function runEngine(request: EngineRequest, timeoutMs = 10_000): Promise<EnginePayload> {
   const out = await runPython(SCORE_SCRIPT, ["--json"], JSON.stringify(request), timeoutMs);
   return parseEngineJson<EnginePayload>(out);
-}
-
-/** Score several requests in one interpreter; results are in request order. */
-export async function runEngineBatch(requests: EngineRequest[], timeoutMs = 15_000): Promise<EnginePayload[]> {
-  if (requests.length === 0) return [];
-  const out = await runPython(BATCH_SCRIPT, [], JSON.stringify(requests), timeoutMs);
-  return parseEngineJson<EnginePayload[]>(out);
 }

@@ -1,11 +1,13 @@
 /**
- * Engine payloads (+ the day inputs they came from) → DashboardData.
- * Pure functions only: every string here is derived from the payload, never
- * hardcoded copy about the day.
+ * The backend's healthspan payload (+ the day inputs for the week table) →
+ * DashboardData. Pure functions only: every string here is derived from the
+ * payload, never hardcoded copy about the day.
  */
 import { fmtH } from "@/lib/tokens";
 import { CAFFEINE_CUTOFF_H, mapEpisodes } from "./adapter";
+import { withToken } from "./backend";
 import { finiteNumber, hhmm, normaliseBedtime, round1, round2, shortWeekday, trimFixed } from "./format";
+import type { GlassesCoverage } from "./provenance";
 import type {
   DashboardData,
   DataSource,
@@ -14,6 +16,8 @@ import type {
   EngineFactor,
   EnginePayload,
   ForecastView,
+  HealthspanPayload,
+  HealthspanWeek,
   IconName,
   LayerName,
   LayerRow,
@@ -27,11 +31,14 @@ import { LAYER_ORDER } from "./types";
 import { LAYER_DISCOUNT, LEDGER_UNITS } from "./units";
 
 export interface ShapeArgs {
-  /** Same order as `days`; the last one is today. */
-  payloads: EnginePayload[];
+  /** `GET /api/healthspan?day=<today>&days=N`: today's full payload and each day's hours. */
+  healthspan: HealthspanWeek;
+  /** The same window oldest first, today last: seeded rows and episodes for the week table. */
   days: DayInputs[];
-  person: Person;
+  /** Bedtime is not the wearer's to declare: it is whatever the engine ran with (`profile.bedtime_hh`). */
+  person: Omit<Person, "bedtime_hh">;
   source: DataSource;
+  /** Wall time of the healthspan round trip. */
   engineMs: number;
 }
 
@@ -162,9 +169,10 @@ const SLEEP_H_PER_SCREEN_HOUR = 0.25;
  * driver strings are the engine's (`forecast_tonight`): "caffeine at …",
  * "… min of screens after 22:00", "… drink(s) — …", "bedtime … min vs habit".
  *
- * `bedtimeMeasured` is false when no `bed_time` row exists anywhere in the week:
- * the engine still runs on its 23:00 default, but a default is not Bryan's habit,
- * so neither the `bedtime` field nor any sentence may quote it as one (R1).
+ * `bedtimeMeasured` is false when the backend had no `bed_time` row and assumed
+ * its 23:00 default (`profile.bedtime_source: missing`): the engine still runs on
+ * it, but a default is not Bryan's habit, so neither the `bedtime` field nor any
+ * sentence may quote it as one (R1).
  */
 export function forecastView(payload: EnginePayload, bedtime_hh: number, bedtimeMeasured: boolean): ForecastView {
   const forecast = payload.forecast;
@@ -172,8 +180,8 @@ export function forecastView(payload: EnginePayload, bedtime_hh: number, bedtime
   const bedtime = bedtimeMeasured ? hhmm(bedtime_hh) : "—";
   const caffeine = drivers.some((d) => d.startsWith("caffeine"));
   const alcohol = drivers.some((d) => d.includes("drink"));
-  // Only emitted when the engine saw `planned_bed_shift_min`, which the adapter
-  // sets only from a measured `bed_time` — so a shift driver implies a real habit.
+  // Only emitted for a non-zero `planned_bed_shift_min`, which the backend
+  // derives only from measured `bed_time` rows — so a shift driver implies a real habit.
   const shift = drivers.some((d) => d.startsWith("bedtime"));
   const screens = payload.observations.night_screen_min ?? 0;
 
@@ -255,8 +263,16 @@ export function effectRows(payload: EnginePayload): EffectRow[] {
 
 const orNull = (value: unknown): number | null => finiteNumber(value) ?? null;
 
-/** `habitualBed` is decimal hours (may exceed 24); caffeine later than the engine's default 9 h before it is "late". */
-export function weekDays(payloads: EnginePayload[], days: DayInputs[], habitualBed: number): WeekDay[] {
+/**
+ * `payloads[i]` is day i's score (or undefined when the backend scored no such
+ * day); `habitualBed` is decimal hours (may exceed 24); caffeine later than the
+ * engine's default 9 h before it is "late".
+ */
+export function weekDays(
+  payloads: ReadonlyArray<Pick<EnginePayload, "hours_today"> | undefined>,
+  days: DayInputs[],
+  habitualBed: number,
+): WeekDay[] {
   const cutoffHh = habitualBed - CAFFEINE_CUTOFF_H;
   return days.map((day, i) => {
     const s = day.seeded;
@@ -341,35 +357,55 @@ export function weekSummary(week: WeekDay[]): string {
 // Assembly
 // ---------------------------------------------------------------------------
 
-export function shapeDashboard({ payloads, days, person, source, engineMs }: ShapeArgs): DashboardData {
-  const today = payloads[payloads.length - 1];
+/**
+ * The backend's coverage verdict, from the payload's own `window`: today is
+ * covered unless the backend listed it uncovered, the week when any day of the
+ * trailing window was covered. This is the rule the backend applied before it
+ * scored (`_DayData.covered`: "a zero from the glasses is a measurement only on
+ * a day that has episodes"), so the page's gate and the score cannot disagree.
+ */
+export function glassesCoverage(payload: Pick<HealthspanPayload, "day" | "window">): GlassesCoverage {
+  const uncovered = new Set(payload.window.uncovered_days);
+  return {
+    today: !uncovered.has(payload.day),
+    week: payload.window.factor_days.some((d) => !uncovered.has(d)),
+  };
+}
+
+/**
+ * A pin's `img` as the backend writes it — server-relative
+ * `/api/evidence/<decision>/<frame>` — made absolute against the API base, with
+ * the `?token=` an `<img src>` needs. Anything else passes through; null stays null.
+ */
+export const evidenceSrc = (img: string | null, apiBase: string): string | null =>
+  img !== null && img.startsWith("/") ? withToken(`${apiBase}${img}`) : img;
+
+export function shapeDashboard({ healthspan, days, person, source, engineMs }: ShapeArgs): DashboardData {
+  const today = healthspan.today;
   const todayInputs = days[days.length - 1];
   if (today === undefined || todayInputs === undefined) {
-    throw new Error("shapeDashboard: at least one payload and one day are required");
+    throw new Error("shapeDashboard: a healthspan payload and at least one day are required");
   }
-  // The profile the engine actually ran with is the bedtime the UI reasons about.
-  const week = weekDays(payloads, days, person.bedtime_hh);
-  // `person.bedtime_hh` is the engine's 23:00 default when no night was recorded.
-  const bedtimeMeasured = days.some((d) => finiteNumber(d.seeded.bed_time) !== undefined);
-  // The engine reports 0 bright minutes, 0 drinks and 0 screen minutes on a day
-  // the glasses never ran. Any episode at all (of any kind) is what makes such a
-  // zero a sighting — the backend adapter's `covered` rule (healthspan.py).
-  const glasses_coverage = {
-    today: todayInputs.episodes.length > 0,
-    week: days.some((d) => d.episodes.length > 0),
-  };
+  // The profile the engine actually ran with is the bedtime the UI reasons about;
+  // `bedtime_source: missing` means the backend assumed its 23:00 default.
+  const bedtime_hh = finiteNumber(today.profile.bedtime_hh) ?? 23;
+  const bedtimeMeasured = today.profile.bedtime_source !== "missing";
+  // Each day's hours are the backend's own score for that date, matched by date
+  // rather than by position so a day the backend did not score stays blank.
+  const hoursByDay = new Map(healthspan.days.map((d) => [d.day, d]));
+  const week = weekDays(days.map((d) => hoursByDay.get(d.date)), days, bedtime_hh);
   return {
     generated_at: todayInputs.nowT,
-    source: { ...source, glasses_coverage },
-    person,
+    source: { ...source, glasses_coverage: glassesCoverage(today), provenance: today.provenance },
+    person: { ...person, bedtime_hh },
     overall: today.overall,
     hours_today: today.hours_today,
     hours_ci: today.hours_ci,
     years_delta: today.years_delta,
     years_ci: today.years_ci,
     layers: layerRows(today),
-    pins: pinRows(today),
-    forecast: forecastView(today, person.bedtime_hh, bedtimeMeasured),
+    pins: pinRows(today).map((pin) => ({ ...pin, img: evidenceSrc(pin.img, source.api_base) })),
+    forecast: forecastView(today, bedtime_hh, bedtimeMeasured),
     levers: leverRows(today),
     ledger: ledgerRows(today),
     effects: effectRows(today),
