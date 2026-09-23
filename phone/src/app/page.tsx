@@ -1,4 +1,5 @@
 import { Shell } from "@/components/Shell";
+import { Calendar } from "@/components/calendar/Calendar";
 import { AddItem } from "@/components/protocol/AddItem";
 import { AddItemLink, Protocol } from "@/components/protocol/Protocol";
 import { Settings } from "@/components/settings/Settings";
@@ -25,6 +26,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       action={screen === "protocol" ? <AddItemLink query={query} /> : undefined}
     >
       {screen === "today" ? <Today query={query} /> : null}
+      {screen === "calendar" ? <Calendar /> : null}
       {screen === "protocol" ? <Protocol query={query} /> : null}
       {screen === "settings" ? <Settings version={APP_VERSION} /> : null}
     </Shell>

@@ -24,6 +24,9 @@
   --earn-soft: light-dark(#e3f2eb, #0e2a1c); /* fill behind a signed gain chip */
   --cost: light-dark(#c81e1e, #f87171); /* negative hours only */
   --cost-soft: light-dark(#fbe7e7, #301313); /* fill behind a signed cost chip */
+  --watch: light-dark(#a15c07, #fbbf24); /* amber: "watch this", never a cost or a gain */
+  --watch-soft: light-dark(#fbf0dc, #2b2110);
+  --band: light-dark(#ececf1, #242427); /* protocol bands on the calendar */
   /* Not a Brian token: iOS system red, what SwiftUI draws for `Button(role:
      .destructive)`. Destructive actions in sheets only, the single exception to
      "colour is for data". */
@@ -76,6 +79,9 @@
   --color-earn-soft: var(--earn-soft);
   --color-cost: var(--cost);
   --color-cost-soft: var(--cost-soft);
+  --color-watch: var(--watch);
+  --color-watch-soft: var(--watch-soft);
+  --color-band: var(--band);
   --color-destructive: var(--destructive);
   --radius-panel: var(--radius-panel);
   --spacing-gutter: var(--space-gutter);

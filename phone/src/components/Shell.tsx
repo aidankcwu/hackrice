@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
-import { CalendarDays, ChevronLeft, ListChecks, Settings, type LucideIcon } from "lucide-react";
+import { CalendarDays, ChevronLeft, ListChecks, Settings, Sun, type LucideIcon } from "lucide-react";
 import { SCREENS, TABS, type ScreenId } from "@/lib/screens";
 
 /** One icon per meaning; Settings is the gear in the top bar. */
 const ICONS: Record<ScreenId, LucideIcon> = {
-  today: CalendarDays,
+  today: Sun,
+  calendar: CalendarDays,
   protocol: ListChecks,
   settings: Settings,
 };
