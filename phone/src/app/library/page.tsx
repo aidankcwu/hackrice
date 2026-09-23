@@ -1,14 +1,15 @@
 import { Shell } from "@/components/Shell";
-import { EmptyState } from "@/components/ui";
+import { Library } from "@/components/library/Library";
 import { FIXTURES } from "@/lib/api";
-import { readFixtureView, type SearchParams } from "@/lib/screens";
+import { fixtureQuery, readFixtureView, type SearchParams } from "@/lib/screens";
 
-/** Stub: the screen exists so the menu link resolves; its content comes in a later build. */
+/** The protocol library, pushed from the menu. */
 export default async function LibraryPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  const view = FIXTURES ? readFixtureView(await searchParams) : undefined;
+  const params = FIXTURES ? await searchParams : {};
+  const view = FIXTURES ? readFixtureView(params) : undefined;
   return (
     <Shell screen="library" theme={view?.theme} scale={view?.scale}>
-      <EmptyState text="Coming in this build." />
+      <Library query={FIXTURES ? fixtureQuery(params) : ""} />
     </Shell>
   );
 }
