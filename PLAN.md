@@ -44,23 +44,29 @@ You are the ORCHESTRATOR. You run on Opus with effort high. Rules:
 
 ## Windows session status (2026-09-22, read before Job 1)
 
-Run on Windows (no Mac), back to back in one session, one commit per task.
+Run on Windows (no Mac), one commit per task. Snapshot before the fix round: branch
+`brian-ios-backup`.
 - Done: Job 0 (0.1, 0.2, tag `job0-done`); backend/dashboard tasks 2.1, 2.2, 2.4, 4.1, 3.3;
-  Task C (not in this plan: Dockerfile, fly.toml, `API_TOKEN` gate, `docs/DEPLOY.md`);
-  a provenance fix for the dashboard instrument tiles.
+  Task C (not in this plan: Dockerfile, fly.toml, `API_TOKEN` gate incl. `/frames`,
+  `docs/DEPLOY.md`); then a fix round (below).
 - Skipped, need the Mac: STOP gate 0 on the Mac (confirm the no-key run command), all of
   Job 1, and every (ios-builder) / (design-critic) task in Jobs 2-4 (2.3, 2.5, 3.1, 3.2,
   4.2, 4.3, 4.4, 4.5), plus the per-job verifier runs 2.6, 3.4, 1.10.
-- Verifier (Windows): root 132 passed; backend 1702 passed + 5 Windows-only failures
-  (docs/STATE.md §2); dashboard 126 passed, tsc/eslint clean, build clean. iOS not run.
-- Known: `tests/test_reasoner_answer.py::test_answer_timeout_finalises_and_releases_slot`
-  is a pre-existing timing flake (~1 in 15, with or without these changes).
-- The Dockerfile has never been built (no Docker on the Windows machine).
-- Open for the human: persona veto for `act` is an empty hook (4.1); missed-dose line
-  goes through the speech limiter and can be held back (2.2); backend and dashboard
-  live-source lists differ on `whoop_live` (3.3); the clock tile reads
-  `night_screen_min`, which is not an engine factor, so it always shows unmeasured;
-  the glasses-mic rule in ios/README.md contradicts ios/QuestionListener.swift.
+- Verifier (Windows, final): root 133 passed; backend 1722 passed, 0 failed; dashboard 137
+  passed, tsc/eslint clean, build clean. iOS not run.
+- Fix round, decided on Windows (reverse any you disagree with):
+  - The dashboard's score now comes from the backend's `/api/healthspan` (one engine, one
+    adapter, coverage-aware); the Next server no longer runs the engine for the headline.
+  - Missed-dose line always speaks once (bypasses the gap/cap). `act` veto is config, not
+    persona: `AUTOPILOT_ACTS`, `AUTOPILOT_QUIET_DAYS`. A failed-act line still obeys the limiter.
+  - Real WHOOP rows are `whoop_live` (live); the demo seed stays `whoop` (Seeded).
+  - Glasses mic: scoped rule (only QuestionListener's answer window) in ios/README.md and
+    CLAUDE.md. STILL UNMEASURED on device: does the camera stream survive while the mic
+    is open (`XCODE_ASK.md:86-95`)? Measure it at STOP gate 1.
+  - `tzdata` is a backend dependency (Fitbit zoneinfo crashed on Windows); tests never
+    read a developer's local `backend/.env`.
+- Still open: the Dockerfile has never been built (no Docker on the Windows machine) —
+  run `docker build .` or `fly deploy` once before relying on it.
 
 ## Effort and time (what this costs)
 
