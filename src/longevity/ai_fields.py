@@ -353,11 +353,37 @@ PROMPT = (
     "medication_visible covers pills, blister packs, prescription bottles and inhalers."
 )
 
+#: Longest `answer` a targeted look may return (docs/PERCEPTION.md "Labeler" 4). The
+#: schema states it and `vlm._land` enforces it, so a runaway caption cannot ride a look.
+LOOK_ANSWER_MAX_CHARS = 200
+
+
+def look_suffix(question: str) -> str:
+    """The PROMPT suffix for a targeted look: one extra question, one short `answer`.
+
+    Appended to `PROMPT` (never replacing it) so a look call still fills every §9
+    field; only the `answer` string is new, and `response_schema(extra_answer=True)`
+    is what names it. The question is whitespace-collapsed and bounded so a clerk
+    action can never blow up the prompt.
+    """
+    q = " ".join(str(question).split())[:300]
+    return (
+        "\n\nanswer replies to this one question about the same frame, in at most "
+        f"{LOOK_ANSWER_MAX_CHARS} characters, from what is plainly visible only; if the "
+        f"frame cannot answer it, say so briefly. The question: {q}"
+    )
+
 # --- Structured-output schema -------------------------------------------------
 
 
-def response_schema() -> dict[str, Any]:
-    """OpenAPI-subset schema for Gemini structured output (`response_schema`)."""
+def response_schema(*, extra_answer: bool = False) -> dict[str, Any]:
+    """OpenAPI-subset schema for Gemini structured output (`response_schema`).
+
+    `extra_answer=True` is the targeted-look variant: one more required STRING
+    property, `answer` (at most `LOOK_ANSWER_MAX_CHARS`), ordered last so the §9
+    fields are generated first and the answer conditions on them. The default
+    schema is unchanged, so every non-look call is byte-identical to today.
+    """
     props: dict[str, Any] = {
         "scene": {"type": "STRING", "enum": SCENE},
         "activity": {"type": "STRING", "enum": ACTIVITY},
@@ -377,11 +403,15 @@ def response_schema() -> dict[str, Any]:
         props.setdefault(f, {"type": "BOOLEAN", "nullable": True})
     for f in BOOL_FIELDS:
         props.setdefault(f, {"type": "BOOLEAN"})
+    order = list(FIELD_ORDER)
+    if extra_answer:
+        props["answer"] = {"type": "STRING", "maxLength": LOOK_ANSWER_MAX_CHARS}
+        order.append("answer")
     return {
         "type": "OBJECT",
         "properties": props,
-        "required": FIELD_ORDER,
-        "propertyOrdering": FIELD_ORDER,
+        "required": order,
+        "propertyOrdering": order,
     }
 
 
