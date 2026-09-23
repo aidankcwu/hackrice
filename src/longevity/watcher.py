@@ -326,6 +326,16 @@ class Watcher:
             self._expire_cooling()
             return frozenset(self._hot_sorted())
 
+    def cooling_concepts(self) -> frozenset[str]:
+        """Concepts cooling right now: a subset of `hot_concepts()`.
+
+        The loop reads this *before* `hot_concepts()`, so a concept that goes cold
+        between the two reads shows up as cooling one tick longer rather than as hot.
+        """
+        with self._lock:
+            self._expire_cooling()
+            return frozenset(c for c, s in self._concepts.items() if s.state == "cooling")
+
     def is_point(self, concept: str) -> bool:
         """A moment (a sip, a pill), not a state: the labeler gives it no steady cadence."""
         return concept in self._point

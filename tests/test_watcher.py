@@ -161,6 +161,20 @@ def test_cooling_to_cold_after_cooldown_then_fresh_hot_wakes_again():
     assert w.stats()["wakeups"] == 2
 
 
+def test_cooling_concepts_is_the_cooling_subset_of_hot_concepts():
+    w, clock, _ = make({VEG: (ENTER, EXIT), PEOPLE: (ENTER, EXIT)}, k=1, n=1, cooldown_s=30.0)
+    feed = Feeder(w)
+    assert w.cooling_concepts() == frozenset()
+    feed(b"veg")                              # VEG hot
+    assert w.hot_concepts() == frozenset({VEG}) and w.cooling_concepts() == frozenset()
+    feed(b"people")                           # VEG cooling, PEOPLE hot
+    assert w.hot_concepts() == frozenset({VEG, PEOPLE})
+    assert w.cooling_concepts() == frozenset({VEG})
+    clock.t += 30.0                           # VEG cold on the clock, no frame needed
+    assert w.cooling_concepts() == frozenset()
+    assert w.hot_concepts() == frozenset({PEOPLE})
+
+
 def test_windows_restart_at_a_transition_so_one_of_n_cannot_flap():
     w, _, _ = make(k=1, n=3)
     feed = Feeder(w)
