@@ -49,6 +49,10 @@ CUE_COVERS: dict[str, tuple[str, ...]] = {
     "phone": (),
     "crowd": (),
 }
+#: Trigger name of an armed watch coming back (docs/PERCEPTION.md "Gate and
+#: actions"): the watcher, not a tick predicate, fired it.
+WATCH_ARMED = "watch_armed"
+
 CUE_EPISODES: dict[str, tuple[str, ...]] = {
     "caffeine": ("caffeine_sighting",),
     "food": ("food_sighting", "meal"),
@@ -249,6 +253,43 @@ class TriggerGate:
                 self._accepted(trigger, escalation, episode, tick.t)
             return escalation
         return None
+
+    def escalate_armed(self, watch_id: str, concept: str, t: float,
+                       decision_id: str) -> Escalation | None:
+        """An armed ``watch`` came back: escalate it as ``watch_armed``.
+
+        Called from the action handler on the asyncio loop when the watcher
+        wakes with ``watch_armed:<id>``. The escalation names the concept and
+        the decision that armed it, in ``reason`` and in ``extra_text``, so
+        the clerk or decider sees what it asked for. No per-trigger cooldown
+        applies -- the arming was one-shot and the decider chose its own
+        ``within_s`` -- but the global escalation gap does, and the same
+        ``_submit`` path as any trigger, so the T1 slot, the counters and the
+        drop reasons all apply. Returns the escalation once it was submitted
+        (accepted or dropped on contention, as ``on_tick`` does), ``None``
+        when the gap held it back or there is no tick to escalate on yet.
+        """
+
+        if not self.window:
+            log.info("armed watch %s fired before any tick; nothing to escalate", watch_id)
+            return None
+        if (self.last_escalation_t is not None
+                and t - self.last_escalation_t < self.timings.global_escalation_min_gap):
+            self.suppressed[WATCH_ARMED] += 1
+            log.info("armed watch %s inside the global gap; dropped", watch_id)
+            return None
+        tick = self.window[-1]
+        escalation = Escalation(
+            trigger=WATCH_ARMED, t=t, tick=tick, window=list(self.window),
+            reason=f"armed watch {watch_id}: {concept} came back",
+            extra_text=[f"armed by decision {decision_id} on {concept}",
+                        *self._wearable_lines(t)],
+        )
+        self._stamp_cue(escalation)
+        if self._submit(escalation):
+            self.fired[WATCH_ARMED] += 1
+            self.last_escalation_t = t
+        return escalation
 
     def _accepted(self, trigger: Trigger, escalation: Escalation,
                   episode, t: float) -> None:

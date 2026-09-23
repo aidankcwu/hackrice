@@ -22,6 +22,7 @@ from pipeline.models import (
     AiBlock,
     SensorBlock,
     Tick,
+    WatchBlock,
     phash_distance,
 )
 
@@ -324,3 +325,75 @@ def test_widened_menus_validate_and_read_back() -> None:
     assert tick.enum("activity") == "computer_use"
     assert tick.enum("food_type") == "rice_bowl"
     assert tick.ai is not None and tick.ai.drink == "boba"
+
+
+# -- watch block (docs/PERCEPTION.md "Tick") ---------------------------------
+
+WATCH = {
+    "v": 1,
+    "model": "mobileclip2-s0",
+    "frames": 10,
+    "usable": 9,
+    "scores": {"food_present": 0.71, "caffeine_visible": 0.12},
+    "novelty": 0.34,
+    "hot": ["food_present"],
+    "woke": "food_present",
+}
+
+
+def _spec_with_watch() -> dict:
+    data = json.loads(SPEC_TICK_JSON)
+    return {**{k: v for k, v in data.items() if k not in ("ai", "frame_ref")},
+            "watch": dict(WATCH), "ai": data["ai"], "frame_ref": data["frame_ref"]}
+
+
+def test_watch_block_defaults() -> None:
+    block = WatchBlock()
+    assert (block.v, block.model, block.frames, block.usable) == (1, "", 0, 0)
+    assert block.scores == {} and block.hot == [] and block.novelty == 0.0
+    assert block.woke is None
+    assert WatchBlock().scores is not block.scores
+
+
+def test_tick_without_watch_validates_and_dumps_without_it() -> None:
+    tick = Tick.model_validate(json.loads(SPEC_TICK_JSON))
+    assert tick.watch is None
+    assert "watch" not in json.loads(tick.model_dump_json())
+    assert "watch" not in tick.model_dump()
+
+
+def test_tick_with_watch_round_trips() -> None:
+    original = _spec_with_watch()
+    tick = Tick.model_validate(original)
+    assert tick.watch is not None and tick.watch.model == "mobileclip2-s0"
+    assert json.loads(tick.model_dump_json()) == original
+    assert tick.model_dump()["watch"] == WATCH
+    assert list(tick.model_dump()) == list(original)
+
+
+def test_watch_null_woke_round_trips() -> None:
+    original = _spec_with_watch()
+    original["watch"]["woke"] = None
+    assert json.loads(Tick.model_validate(original).model_dump_json()) == original
+
+
+def test_watch_unknown_keys_ignored() -> None:
+    data = _spec_with_watch()
+    data["watch"]["future_stat"] = 3
+    tick = Tick.model_validate(data)
+    assert tick.watch is not None
+    assert "future_stat" not in tick.watch.model_dump()
+
+
+def test_watch_score_and_hot() -> None:
+    tick = Tick.model_validate(_spec_with_watch())
+    assert tick.watch_score("food_present") == 0.71
+    assert tick.watch_score("screen_present") is None
+    assert tick.watch_hot("food_present") is True
+    assert tick.watch_hot("caffeine_visible") is False
+
+
+def test_watch_helpers_without_block() -> None:
+    tick = _bare_tick(None)
+    assert tick.watch_score("food_present") is None
+    assert tick.watch_hot("food_present") is False

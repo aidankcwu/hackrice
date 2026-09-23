@@ -85,7 +85,12 @@ CREATE TABLE IF NOT EXISTS decisions (
     dropped        INTEGER NOT NULL DEFAULT 0,
     drop_reason    TEXT,
     latency_ms     INTEGER,
-    model          TEXT NOT NULL DEFAULT ''
+    model          TEXT NOT NULL DEFAULT '',
+    -- Who decided ("decider", "clerk", "clerk_fallback:<reason>") and which
+    -- writers ran (JSON list). Added after the table shipped: init_schema also
+    -- applies them to existing files via ALTER TABLE.
+    path           TEXT,
+    writers        TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_decisions_t ON decisions(t);
 
@@ -385,6 +390,12 @@ class Database:
                 "ALTER TABLE pending_questions ADD COLUMN conversation_id TEXT"
             )
 
+        columns = {row["name"] for row in self.conn.execute("PRAGMA table_info(decisions)")}
+        if "path" not in columns:
+            self.conn.execute("ALTER TABLE decisions ADD COLUMN path TEXT")
+        if "writers" not in columns:
+            self.conn.execute("ALTER TABLE decisions ADD COLUMN writers TEXT")
+
     def close(self) -> None:
         with self._lock:
             if self._conn is not None:
@@ -619,8 +630,9 @@ class Database:
             self.conn.execute(
                 "INSERT OR REPLACE INTO decisions"
                 " (id, t, \"trigger\", trigger_tick_id, episode_id, interpretation,"
-                "  confidence, actions, spoke, dropped, drop_reason, latency_ms, model)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "  confidence, actions, spoke, dropped, drop_reason, latency_ms, model,"
+                "  path, writers)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     decision.id,
                     decision.t,
@@ -635,9 +647,37 @@ class Database:
                     decision.drop_reason,
                     decision.latency_ms,
                     decision.model,
+                    decision.path,
+                    _json(decision.writers),
                 ),
             )
             self.conn.commit()
+
+    @staticmethod
+    def _decision_from_row(r: sqlite3.Row) -> Decision:
+        try:
+            writers = json.loads(r["writers"]) if r["writers"] else []
+        except (TypeError, ValueError):
+            writers = []
+        if not isinstance(writers, list) or not all(isinstance(w, str) for w in writers):
+            writers = []
+        return Decision(
+            id=r["id"],
+            t=r["t"],
+            trigger=r["trigger"],
+            trigger_tick_id=r["trigger_tick_id"],
+            episode_id=r["episode_id"],
+            interpretation=r["interpretation"],
+            confidence=r["confidence"],
+            actions=json.loads(r["actions"]),
+            spoke=bool(r["spoke"]),
+            dropped=bool(r["dropped"]),
+            drop_reason=r["drop_reason"],
+            latency_ms=r["latency_ms"],
+            model=r["model"],
+            path=r["path"],
+            writers=writers,
+        )
 
     def list_decisions(self, limit: int = 50) -> list[Decision]:
         """Most recent decisions first -- this is the dashboard's silent feed."""
@@ -646,24 +686,7 @@ class Database:
             rows = self.conn.execute(
                 "SELECT * FROM decisions ORDER BY t DESC LIMIT ?", (limit,)
             ).fetchall()
-        return [
-            Decision(
-                id=r["id"],
-                t=r["t"],
-                trigger=r["trigger"],
-                trigger_tick_id=r["trigger_tick_id"],
-                episode_id=r["episode_id"],
-                interpretation=r["interpretation"],
-                confidence=r["confidence"],
-                actions=json.loads(r["actions"]),
-                spoke=bool(r["spoke"]),
-                dropped=bool(r["dropped"]),
-                drop_reason=r["drop_reason"],
-                latency_ms=r["latency_ms"],
-                model=r["model"],
-            )
-            for r in rows
-        ]
+        return [self._decision_from_row(r) for r in rows]
 
     def decisions_between(self, t0: float, t1: float) -> list[Decision]:
         """Every decision in ``[t0, t1]``, oldest first.
@@ -678,24 +701,7 @@ class Database:
                 "SELECT * FROM decisions WHERE t >= ? AND t <= ? ORDER BY t ASC",
                 (t0, t1),
             ).fetchall()
-        return [
-            Decision(
-                id=r["id"],
-                t=r["t"],
-                trigger=r["trigger"],
-                trigger_tick_id=r["trigger_tick_id"],
-                episode_id=r["episode_id"],
-                interpretation=r["interpretation"],
-                confidence=r["confidence"],
-                actions=json.loads(r["actions"]),
-                spoke=bool(r["spoke"]),
-                dropped=bool(r["dropped"]),
-                drop_reason=r["drop_reason"],
-                latency_ms=r["latency_ms"],
-                model=r["model"],
-            )
-            for r in rows
-        ]
+        return [self._decision_from_row(r) for r in rows]
 
     # -- insights --------------------------------------------------------
 

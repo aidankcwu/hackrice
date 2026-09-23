@@ -260,6 +260,25 @@ class AiBlock(BaseModel):
     people_count: PeopleCount | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
+class WatchBlock(BaseModel):
+    """Per-tick aggregate from the always-on watcher (docs/PERCEPTION.md "Tick").
+
+    Absent when the watcher is off. ``scores`` is keyed by §9 boolean names but is a
+    similarity score, never a §9 boolean.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    v: int = 1
+    model: str = ""
+    frames: int = 0
+    usable: int = 0
+    scores: dict[str, float] = Field(default_factory=dict)
+    novelty: float = 0.0
+    hot: list[str] = Field(default_factory=list)
+    woke: str | None = None
+
+
 class Tick(BaseModel):
     """One second of ground truth (SPEC §12)."""
 
@@ -271,6 +290,8 @@ class Tick(BaseModel):
     seq: int
     sensor: SensorBlock
     device: DeviceBlock | None = None
+    #: Omitted from dumps when absent, so a watcher-less tick round-trips unchanged.
+    watch: WatchBlock | None = Field(default=None, exclude_if=lambda value: value is None)
     ai: AiBlock | None = None
     #: Opaque handle into the frame ring buffer, valid 90 s (SPEC §12.3).
     frame_ref: str
@@ -312,6 +333,18 @@ class Tick(BaseModel):
         if value in (None, "unknown"):
             return None
         return value
+
+    def watch_score(self, name: str) -> float | None:
+        """The watcher's score for ``name``, or ``None`` with no block or no such score."""
+
+        if self.watch is None:
+            return None
+        return self.watch.scores.get(name)
+
+    def watch_hot(self, name: str) -> bool:
+        """True when ``name`` is hot or cooling in this tick's ``watch`` block."""
+
+        return self.watch is not None and name in self.watch.hot
 
     def held(self, max_age_ms: int = 3000) -> str | None:
         """Tri-state read of ``in_hand``: the held item, or ``None`` (unknown).
@@ -422,6 +455,10 @@ class Decision(BaseModel):
     drop_reason: str | None = None
     latency_ms: int | None = None
     model: str = ""
+    #: Who decided: "decider", "clerk", or "clerk_fallback:<reason>".
+    path: str | None = None
+    #: Names of the writers that ran for this decision.
+    writers: list[str] = Field(default_factory=list)
 
 
 class Insight(BaseModel):

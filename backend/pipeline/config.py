@@ -19,10 +19,14 @@ import logging
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from pydantic import AliasChoices, BeforeValidator, Field
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+if TYPE_CHECKING:  # imported lazily below: both modules import this one
+    from .capture.settings import CaptureSettings
+    from .reasoner.decider_settings import DeciderSettings
 
 __all__ = ["DEFAULT_AUTOPILOT_ACTS", "DEFAULT_KEYWORD_TRIGGERS", "Timings", "Settings",
            "get_settings"]
@@ -507,6 +511,31 @@ class Settings(BaseSettings):
                 f"PUBLISH_ON_LANDING={int(self.publish_on_landing)} "
                 f"MOUTH_BUSY_GUARD={int(self.mouth_busy_guard)} "
                 f"VOICE_OPEN_SCHEMA={int(self.voice_open_schema)}")
+
+    def perception_line(self) -> str:
+        """The watcher/labeler/decider switches, logged right after
+        :meth:`switches_line` (kept separate so that line stays as pinned)."""
+
+        return (f"WATCHER={int(self.capture.watcher)} "
+                f"WATCHER_MODEL={self.capture.watcher_model} "
+                f"DECIDER={self.decider.decider} "
+                f"GATE_READS_WATCH={int(self.capture.gate_reads_watch)} "
+                f"LABELER_MAX_PER_HOUR={self.capture.labeler_max_per_hour}")
+
+    # The perception and decider knobs keep their own settings objects (and env
+    # names), which read the process environment themselves; these accessors
+    # only make them reachable from the one Settings the pipeline is built with.
+    @cached_property
+    def capture(self) -> "CaptureSettings":
+        from .capture.settings import CaptureSettings
+
+        return CaptureSettings()
+
+    @cached_property
+    def decider(self) -> "DeciderSettings":
+        from .reasoner.decider_settings import DeciderSettings
+
+        return DeciderSettings()
 
     @cached_property
     def timings(self) -> Timings:

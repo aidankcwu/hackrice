@@ -191,3 +191,42 @@ def test_people_count_is_a_closed_menu_with_an_unknown_default():
 
 def test_coerce_output_keys_follow_field_order():
     assert list(coerce({})) == FIELD_ORDER
+
+
+# -- watcher prompt bank ---------------------------------------------------
+
+
+def test_every_boolean_field_has_two_to_five_watch_prompts():
+    from longevity.ai_fields import BOOL_FIELDS, TRISTATE_BOOL_FIELDS, WATCH_PROMPTS
+
+    assert set(WATCH_PROMPTS) == set(BOOL_FIELDS) | set(TRISTATE_BOOL_FIELDS)
+    for name, prompts in WATCH_PROMPTS.items():
+        assert isinstance(prompts, tuple), name
+        assert 2 <= len(prompts) <= 5, name
+
+
+def test_watch_prompts_are_short_and_unique():
+    from longevity.ai_fields import WATCH_NULL_PROMPTS, watch_prompt_bank
+
+    assert len(WATCH_NULL_PROMPTS) >= 5
+    prompts = [p for _, p in watch_prompt_bank()]
+    for p in prompts:
+        assert p.strip() and 8 <= len(p) <= 60, p
+    assert len(prompts) == len(set(prompts))
+
+
+def test_watch_prompt_bank_order_is_stable_and_ends_with_null():
+    from longevity.ai_fields import (
+        BOOL_FIELDS, TRISTATE_BOOL_FIELDS, WATCH_NULL_PROMPTS, WATCH_PROMPTS,
+        watch_prompt_bank,
+    )
+
+    bank = watch_prompt_bank()
+    assert bank == watch_prompt_bank()
+    expected = [(c, p) for c in BOOL_FIELDS + TRISTATE_BOOL_FIELDS
+                for p in WATCH_PROMPTS[c]]
+    expected += [("_null", p) for p in WATCH_NULL_PROMPTS]
+    assert bank == expected
+    concepts = list(dict.fromkeys(c for c, _ in bank))
+    assert concepts == BOOL_FIELDS + TRISTATE_BOOL_FIELDS + ["_null"]
+    assert bank[-len(WATCH_NULL_PROMPTS):] == [("_null", p) for p in WATCH_NULL_PROMPTS]

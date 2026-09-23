@@ -16,7 +16,12 @@ dependencies = [
     "pillow>=10.3",
     "python-dotenv>=1.0",
     "tzdata>=2026.4",
+    "typesafe-sdk==0.7.1",
 ]
+
+[project.optional-dependencies]
+#: The phase-3 watcher (torch + open_clip): `uv sync --extra watcher`.
+watcher = ["longevity[watcher]"]
 
 [tool.uv.sources]
 longevity = { path = "..", editable = true }

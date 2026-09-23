@@ -12,14 +12,19 @@ The schema is written for the Responses API in ``strict`` mode, which demands
 
 from __future__ import annotations
 
+import logging
 import time
 from datetime import datetime
 import math
 from typing import Annotated, Any, Literal, Union
 
+from longevity.ai_fields import BOOL_FIELDS, TRISTATE_BOOL_FIELDS
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from ..actions.sound import SOUND_NAMES, drop_sound_if_speaking
 from ..models import FOOD_TYPES
+
+log = logging.getLogger(__name__)
 
 __all__ = [
     "SpeakAction",
@@ -28,6 +33,8 @@ __all__ = [
     "WatchAction",
     "AskAction",
     "RememberAction",
+    "LookAction",
+    "ActAction",
     "NothingAction",
     "Action",
     "T1Response",
@@ -37,10 +44,18 @@ __all__ = [
     "ANSWER_JSON_SCHEMA",
     "ANSWER_TEXT_FORMAT",
     "SPEAK_DROPPED_FOR_ASK",
+    "LOOK_MIN_CHARS",
+    "LOOK_MAX_CHARS",
+    "WATCH_CONCEPTS",
+    "WATCH_WITHIN_DEFAULT_S",
+    "WATCH_WITHIN_MIN_S",
+    "WATCH_WITHIN_MAX_S",
+    "WATCH_CONCEPT_UNKNOWN",
     "normalize",
 ]
 
 Urgency = Literal["low", "normal", "high"]
+Deliver = Literal["now", "quiet"]
 
 ANNOTATE_MAX_CHARS = 80
 
@@ -64,6 +79,25 @@ COUNT_MAX = 20.0
 #: handler, which is the only layer that knows the decision id.
 SPEAK_DROPPED_FOR_ASK = "speak_dropped_for_ask"
 
+#: A ``look`` question is one short question of the current frame
+#: (docs/PERCEPTION.md "Labeler" 4). Mirrors ``writers.LOOK_MAX_CHARS``.
+LOOK_MIN_CHARS = 2
+LOOK_MAX_CHARS = 120
+
+#: What a ``watch`` may arm the watcher on (docs/PERCEPTION.md "Gate and
+#: actions"): the §9 booleans, which are exactly the concepts the watcher
+#: scores. Read from ``ai_fields`` so the field set still lives in one place.
+WATCH_CONCEPTS: frozenset[str] = frozenset(BOOL_FIELDS) | frozenset(TRISTATE_BOOL_FIELDS)
+#: ``within_s`` bounds for an armed watch, and the default when a concept is
+#: given without one. Ten seconds is the shortest arming that outlives the
+#: labeler round trip; two hours is the longest the day's context stays valid.
+WATCH_WITHIN_MIN_S = 10
+WATCH_WITHIN_MAX_S = 7200
+WATCH_WITHIN_DEFAULT_S = 600
+#: Log reason for a ``watch`` whose concept is not a §9 boolean: the action is
+#: dropped by :func:`normalize`, since the watcher could never score it.
+WATCH_CONCEPT_UNKNOWN = "watch_concept_unknown"
+
 
 class _ActionBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -82,6 +116,10 @@ class SpeakAction(_ActionBase):
     type: Literal["speak"] = "speak"
     text: str
     urgency: Urgency = "low"
+    #: ``now`` hands off at once; ``quiet`` waits for a quiet tick, up to
+    #: ``quiet_max_s`` (docs/PERCEPTION.md "Gate and actions").
+    deliver: Deliver = "now"
+    expire_s: int | None = Field(default=None, ge=1, le=600)
 
 
 class LogInsightAction(_ActionBase):
@@ -100,12 +138,21 @@ class AnnotateAction(_ActionBase):
 
 
 class WatchAction(_ActionBase):
-    """A pending-checks row the trigger gate polls (SPEC §4.4)."""
+    """A pending-checks row the trigger gate polls (SPEC §4.4) -- or, with a
+    ``concept``, an armed condition on the watcher (docs/PERCEPTION.md "Gate
+    and actions"): "wake me if ``screen_present`` goes hot within
+    ``within_s``". On a match the gate escalates as ``watch_armed`` carrying
+    the original decision id. ``concept`` must be a §9 boolean
+    (:data:`WATCH_CONCEPTS`); :func:`normalize` drops any other and fills
+    ``within_s`` in 10..7200 s, 600 by default.
+    """
 
     type: Literal["watch"] = "watch"
     after_s: int | None = None
     condition: str | None = None
     reason: str = ""
+    concept: str | None = None
+    within_s: int | None = None
 
 
 class AskAction(_ActionBase):
@@ -122,6 +169,8 @@ class AskAction(_ActionBase):
     answer_kind: Literal["yes_no", "count", "free"] = "yes_no"
     fills: Literal["confirmed", "count", "food_type", "note"] = "confirmed"
     reason: str = ""
+    deliver: Deliver = "now"
+    expire_s: int | None = Field(default=None, ge=1, le=600)
 
 
 class RememberAction(_ActionBase):
@@ -137,6 +186,31 @@ class RememberAction(_ActionBase):
     line: str
 
 
+class LookAction(_ActionBase):
+    """One targeted labeler call on the current frame (docs/PERCEPTION.md).
+
+    The question goes through the labeler's mailbox; the answer re-wakes the
+    decider with the question and answer appended, or goes to the voice agent
+    when a conversation is open. One look per decision, never chained --
+    :func:`normalize` keeps the first and defers the decision's ``speak`` and
+    ``ask`` until the answer is back.
+    """
+
+    type: Literal["look"] = "look"
+    question: str = Field(min_length=LOOK_MIN_CHARS, max_length=LOOK_MAX_CHARS)
+    reason: str = ""
+
+
+class ActAction(_ActionBase):
+    """One thing the phone does. The clerk and decider may only originate a
+    sound cue (``kind: sound``, ``args: {name: chime | tick | soft}``); the
+    autopilot's calendar and shield acts never go through this schema."""
+
+    type: Literal["act"] = "act"
+    kind: Literal["sound"] = "sound"
+    args: dict[str, Any] = Field(default_factory=dict)
+
+
 class NothingAction(_ActionBase):
     type: Literal["nothing"] = "nothing"
 
@@ -149,6 +223,8 @@ Action = Annotated[
         WatchAction,
         AskAction,
         RememberAction,
+        LookAction,
+        ActAction,
         NothingAction,
     ],
     Field(discriminator="type"),
@@ -163,6 +239,9 @@ class T1Response(BaseModel):
     interpretation: str = ""
     confidence: float = 0.0
     actions: list[Action] = Field(default_factory=list)
+    #: Set by :func:`normalize` when a ``look`` displaced this response's
+    #: ``speak``/``ask``: the re-run after the answer decides them afresh.
+    deferred_for_look: bool = False
 
     def of_type(self, kind: str) -> list[Action]:
         return [a for a in self.actions if a.type == kind]
@@ -230,6 +309,17 @@ _WATCH = _obj(
             "description": "Plain-language condition to re-check on, or null.",
         },
         "reason": {"type": "string"},
+        "concept": {
+            "type": ["string", "null"],
+            "description": "Arm the watcher on one of these and wake when it "
+            "comes back: " + ", ".join(BOOL_FIELDS + TRISTATE_BOOL_FIELDS)
+            + ". Null for a plain timed re-check.",
+        },
+        "within_s": {
+            "type": ["integer", "null"],
+            "description": "How long the armed concept is watched for, "
+            "10 to 7200 seconds; null means 600. Ignored without a concept.",
+        },
     }
 )
 
@@ -270,6 +360,36 @@ _REMEMBER = _obj(
     }
 )
 
+_LOOK = _obj(
+    {
+        "type": {"type": "string", "enum": ["look"]},
+        "question": {
+            "type": "string",
+            "description": "One short question about the current camera frame "
+            "that would settle the decision, 120 characters or less. Its "
+            "answer wakes you again; any speak or ask waits for it.",
+        },
+        "reason": {"type": "string"},
+    }
+)
+
+_ACT = _obj(
+    {
+        "type": {"type": "string", "enum": ["act"]},
+        "kind": {"type": "string", "enum": ["sound"]},
+        "args": _obj(
+            {
+                "name": {
+                    "type": "string",
+                    "enum": list(SOUND_NAMES),
+                    "description": "A short non-verbal cue in the wearer's ear, "
+                    "cheaper than a sentence. Dropped next to a speak.",
+                },
+            }
+        ),
+    }
+)
+
 _NOTHING = _obj({"type": {"type": "string", "enum": ["nothing"]}})
 
 T1_JSON_SCHEMA: dict[str, Any] = _obj(
@@ -293,6 +413,8 @@ T1_JSON_SCHEMA: dict[str, Any] = _obj(
                     _WATCH,
                     _ASK,
                     _REMEMBER,
+                    _LOOK,
+                    _ACT,
                     _NOTHING,
                 ],
             },
@@ -450,6 +572,27 @@ def _hhmm(t: float) -> str:
     return datetime.fromtimestamp(t).astimezone().strftime("%H:%M")
 
 
+def _armed_watch(action: Any) -> Any:
+    """A ``watch`` with a concept: None (dropped) when the concept is not a §9
+    boolean, else the same watch with ``within_s`` settled into its bounds."""
+
+    if getattr(action, "type", None) != "watch":
+        return action
+    concept = getattr(action, "concept", None)
+    if concept is None:
+        return action
+    concept = str(concept).strip()
+    if concept not in WATCH_CONCEPTS:
+        log.info("%s: watch on %r dropped (not a §9 boolean)", WATCH_CONCEPT_UNKNOWN, concept)
+        return None
+    within = getattr(action, "within_s", None)
+    if within is None:
+        within = WATCH_WITHIN_DEFAULT_S
+    within = int(min(WATCH_WITHIN_MAX_S, max(WATCH_WITHIN_MIN_S, int(within))))
+    return WatchAction(after_s=action.after_s, condition=action.condition,
+                       reason=action.reason, concept=concept, within_s=within)
+
+
 def normalize(resp: T1Response, t: float | None = None) -> T1Response:
     """Enforce the invariants code owns rather than the model.
 
@@ -464,6 +607,13 @@ def normalize(resp: T1Response, t: float | None = None) -> T1Response:
       the question wins and the statement is dropped (ASK_DESIGN §8.6), so
       nothing talks over the answer window. The handler logs the drop as
       ``SPEAK_DROPPED_FOR_ASK``; this function only removes it.
+    * at most one ``look`` (the first); with one, ``speak`` and ``ask`` are
+      removed and ``deferred_for_look`` is set -- the re-run after the answer
+      decides them afresh (docs/PERCEPTION.md "Normalisation additions").
+    * a sound ``act`` next to a ``speak`` is dropped: the speak wins.
+    * a ``watch`` with a concept the watcher cannot score (not a §9 boolean)
+      is dropped, logged as ``WATCH_CONCEPT_UNKNOWN``; one with a known
+      concept gets ``within_s`` clamped to 10..7200 s, 600 when unset.
     """
 
     stamp = time.time() if t is None else t
@@ -503,6 +653,27 @@ def normalize(resp: T1Response, t: float | None = None) -> T1Response:
     if any(a.type == "ask" for a in actions):
         actions = [a for a in actions if a.type != "speak"]
 
+    actions = [_armed_watch(a) for a in actions]
+    actions = [a for a in actions if a is not None]
+
+    deferred = False
+    looks = [a for a in actions if a.type == "look"]
+    if looks:
+        first = looks[0]
+        kept: list[Any] = []
+        for a in actions:
+            if a.type == "look":
+                if a is first:
+                    kept.append(a)
+                continue
+            if a.type in ("speak", "ask"):
+                deferred = True
+                continue
+            kept.append(a)
+        actions = kept
+
+    actions = drop_sound_if_speaking(actions)
+
     if any(a.type != "nothing" for a in actions):
         actions = [a for a in actions if a.type != "nothing"]
 
@@ -517,4 +688,5 @@ def normalize(resp: T1Response, t: float | None = None) -> T1Response:
         interpretation=resp.interpretation,
         confidence=confidence,
         actions=actions,
+        deferred_for_look=deferred,
     )

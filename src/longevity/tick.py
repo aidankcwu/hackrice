@@ -2,9 +2,10 @@
 
 "A may add fields freely; B must tolerate any field being absent." (§12)
 
-Three guarantees this module enforces (§12.1):
+Four guarantees this module enforces (§12.1, docs/PERCEPTION.md "Tick"):
   sensor  always present
   device  absent under the `webcam` and `replay` adapters
+  watch   present only when the watcher is enabled; absent under replay/webcam without it
   ai      may be absent entirely — when the T0 VLM call overran its 1 s budget
 
 On that last one, §2.4 and §11.7 disagree: §2.4 allows carrying the last known AI
@@ -56,12 +57,13 @@ def build_tick(
     t: float,
     sensor: dict[str, Any],
     device: dict[str, Any] | None = None,
+    watch: dict[str, Any] | None = None,
     ai: dict[str, Any] | None = None,
     has_frame: bool = True,
 ) -> dict[str, Any]:
     """Assemble one §12 tick.
 
-    `device` and `ai` are omitted entirely when None — not set to null. B checks for
+    `device`, `watch` and `ai` are omitted entirely when None — not set to null. B checks for
     absence, and a present-but-null block would read as "we looked and there was
     nothing there" rather than "this adapter does not produce this".
     """
@@ -74,6 +76,8 @@ def build_tick(
     }
     if device is not None:
         tick["device"] = device
+    if watch is not None:
+        tick["watch"] = watch
     if ai is not None:
         tick["ai"] = ai
     if has_frame:

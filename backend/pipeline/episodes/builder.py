@@ -32,9 +32,15 @@ class EpisodeParams:
     sighting_max_s: float = 60.0
     #: Freshness budget for an `ai` block, from ``Timings.ai_max_age_ms``.
     ai_max_age_ms: int = 3000
+    #: GATE_READS_WATCH=1 (docs/PERCEPTION.md "Gate and actions", phase 3): a
+    #: sustained episode also closes once its concept has been out of
+    #: ``watch.hot`` for ``exit_window_s``, whichever exit comes first. Off,
+    #: the builder never looks at the ``watch`` block.
+    reads_watch: bool = False
 
     @classmethod
-    def from_timings(cls, timings: Timings, demo_mode: bool) -> "EpisodeParams":
+    def from_timings(cls, timings: Timings, demo_mode: bool, *,
+                     reads_watch: bool = False) -> "EpisodeParams":
         """Debounce parameters for one cadence.
 
         SPEC §10 requires an episode and its escalation to agree on
@@ -69,6 +75,7 @@ class EpisodeParams:
             entry=entry,
             sighting_min_hits=max(1, hits(2)),
             ai_max_age_ms=timings.ai_max_age_ms,
+            reads_watch=reads_watch,
         )
         if demo_mode:
             return cls(hits(3), 6.0, hits(4), 15.0, 8.0, **common)
@@ -87,6 +94,12 @@ class _State:
     episode: Episode | None = None
     last_hit_t: float | None = None
     last_fresh_ai_t: float | None = None
+    #: ``reads_watch``: the first and the newest watch-bearing tick since the
+    #: concept was last in ``watch.hot`` while this episode has been open;
+    #: ``None`` while hot. The cold span is measured between the two, so a
+    #: tick without ``watch`` neither extends nor resets it.
+    watch_cold_since: float | None = None
+    watch_cold_until: float | None = None
     modes: dict[str, Counter[str]] = field(
         default_factory=lambda: {name: Counter() for name in ("scene", "activity", "food_type")}
     )
@@ -168,19 +181,32 @@ def _predicates(max_age_ms: int) -> dict[EpisodeKind, Predicate]:
     }
 
 
+#: The sustained kinds whose exit is debounced over ``exit_window_s``, and the
+#: watcher concepts that keep each one alive under ``reads_watch`` (the same
+#: concepts the gate's sustained triggers read).
+_SUSTAINED_CONCEPTS: dict[EpisodeKind, tuple[str, ...]] = {
+    "screen_block": ("screen_present",),
+    "conversation": ("people_present", "people_interacting"),
+    "outdoor_block": ("outdoor_visible", "vegetation_visible"),
+    "meal": ("food_present",),
+}
+
+
 class EpisodeBuilder:
     """Collapse noisy tick tags into persisted episodes."""
 
     _SIGHTINGS = {"food_sighting", "caffeine_sighting", "alcohol_sighting",
                   "medication_sighting"}
 
-    def __init__(self, db: Database, timings: Timings) -> None:
+    def __init__(self, db: Database, timings: Timings, *,
+                 reads_watch: bool = False) -> None:
         self.db = db
         self.timings = timings
         # Compare against the demo preset *at this cadence* -- a 1.5 s demo is
         # still a demo, and must keep the shorter debounce windows.
         self.demo_mode = timings == Timings.demo(timings.tick_interval_s)
-        self.params = EpisodeParams.from_timings(timings, self.demo_mode)
+        self.params = EpisodeParams.from_timings(timings, self.demo_mode,
+                                                 reads_watch=reads_watch)
         self._kind_predicates = _predicates(self.params.ai_max_age_ms)
         lock = getattr(db, "_lock", None)
         if lock is None:
@@ -225,6 +251,8 @@ class EpisodeBuilder:
             state.episode = None
             state.last_hit_t = None
             state.last_fresh_ai_t = None
+            state.watch_cold_since = None
+            state.watch_cold_until = None
             state.modes = {
                 name: Counter() for name in ("scene", "activity", "food_type")
             }
@@ -239,6 +267,8 @@ class EpisodeBuilder:
             duration_s=max(0.0, tick.t - start_t), tick_count=max(1, state.candidate_ticks),
         )
         state.episode = episode
+        state.watch_cold_since = None
+        state.watch_cold_until = None
         state.modes = {name: Counter() for name in ("scene", "activity", "food_type")}
         return episode
 
@@ -274,6 +304,8 @@ class EpisodeBuilder:
         state.candidate_t = None
         state.candidate_ticks = 0
         state.last_hit_t = None
+        state.watch_cold_since = None
+        state.watch_cold_until = None
         state.modes = {name: Counter() for name in ("scene", "activity", "food_type")}
         return episode
 
@@ -358,8 +390,25 @@ class EpisodeBuilder:
                     tick.t - state.negatives[0] if state.negatives else 0.0
                 )
                 close = len(state.negatives) >= p.exit_min_misses
-                if kind in {"screen_block", "conversation", "outdoor_block", "meal"}:
+                if kind in _SUSTAINED_CONCEPTS:
                     close = close and miss_span >= p.exit_window_s
+                    if p.reads_watch and tick.watch is not None:
+                        # The watcher's exit: the concept has been out of
+                        # `hot` on every watch-bearing tick for the exit
+                        # window. A tick without `watch` neither extends nor
+                        # resets the cold span; labeler misses stay their own
+                        # rule, and whichever comes first closes.
+                        if any(tick.watch_hot(c) for c in _SUSTAINED_CONCEPTS[kind]):
+                            state.watch_cold_since = None
+                            state.watch_cold_until = None
+                        else:
+                            if state.watch_cold_since is None:
+                                state.watch_cold_since = tick.t
+                            state.watch_cold_until = tick.t
+                    if (p.reads_watch and state.watch_cold_since is not None
+                            and state.watch_cold_until is not None
+                            and state.watch_cold_until - state.watch_cold_since >= p.exit_window_s):
+                        close = True
                 close = close or silence >= p.unknown_grace_s * 4
             if close:
                 episode = self._close(state, tick)

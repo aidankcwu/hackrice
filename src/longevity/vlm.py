@@ -6,7 +6,7 @@ the VLM is.** Gemini Flash-Lite typically returns in 300-600 ms, but SPEC §2.4 
 
 The rules, all of them load-bearing (CLAUDE.md invariant 3, SPEC §2.4, §5, §11.7):
 
-1. **The tick never waits.** `offer()` and `take()` are synchronous and never touch
+1. **The tick never waits.** `request()` and `take()` are synchronous and never touch
    the network, so tick cadence is independent of Gemini however slow it gets.
 2. **Up to two calls in flight, none cancelled at the tick budget.** The original
    rule -- one call, abandoned at the budget -- threw away 38% of calls on the
@@ -31,6 +31,27 @@ The rules, all of them load-bearing (CLAUDE.md invariant 3, SPEC §2.4, §5, §1
 Consumers must tolerate gaps: coverage is no longer capped by the budget, but a
 call past the ceiling or an API error still leaves a tick without an `ai` block.
 
+## Request kinds (docs/PERCEPTION.md "Labeler")
+
+The labeler no longer runs on every tick. Four reasons start a call, and they carry a
+priority through the one-slot mailbox: ``wake`` (3, the watcher flagged something),
+``look`` (2, the clerk asked one question of the current frame), ``hot`` (1, a concept
+is in transition, steady or cooling -- today's cadence, or one call per `steady_s`)
+and ``heartbeat`` (0, one call per minute when idle). A pending request is replaced
+only by an equal-or-higher priority one; a lower-priority arrival is dropped and
+counted. `offer()` is kept as the ``hot`` alias so the loop and every test still work.
+
+`LabelerScheduler` decides *when* the loop should make a ``hot`` or ``heartbeat``
+request; it is pure logic on a caller-supplied clock. The tagger owns one, feeds it
+every started call, error and success, and enforces the hourly cap on ``hot``
+requests. Wake-ups and heartbeats go through the cap; the cap is a cost ceiling on
+the mode that can run away, not a switch that blinds the system.
+
+A ``look`` result carries its ``answer`` alongside the §9 fields under
+`look_answer_key` (``_look_answer``). `coerce()` never sees it, and the loop must
+strip it with `split_look_answer()` before writing the tick's `ai` block, which
+therefore stays byte-identical to today for every kind.
+
 ## A deliberate deviation from §12's wording, because Person B reads this field
 
 §12 describes `as_of` as when the VLM *result* was produced. We instead set it to the
@@ -46,13 +67,14 @@ from __future__ import annotations
 
 import asyncio
 from collections import deque
+from dataclasses import dataclass
 import json
 import logging
 import os
 import time
-from typing import Any, Callable, Protocol
+from typing import Any, Callable, Literal, Protocol
 
-from .ai_fields import PROMPT, coerce, response_schema
+from .ai_fields import LOOK_ANSWER_MAX_CHARS, PROMPT, coerce, look_suffix, response_schema
 from .tick import VLM_BUDGET_S
 
 log = logging.getLogger(__name__)
@@ -95,41 +117,96 @@ DEFAULT_CEILING_S = 3.0
 # `Timings.ai_max_age_ms` (3 s at 1 Hz). The bridge passes the real value.
 DEFAULT_MAX_AGE_S = 3.0
 
+# --- Request kinds ------------------------------------------------------------
+
+Kind = Literal["wake", "look", "hot", "heartbeat"]
+
+#: Every request kind, highest priority first.
+KINDS: tuple[str, ...] = ("wake", "look", "hot", "heartbeat")
+
+#: Mailbox priority. A pending request yields only to an equal-or-higher one.
+PRIORITY: dict[str, int] = {"wake": 3, "look": 2, "hot": 1, "heartbeat": 0}
+
+#: Where a look's `answer` rides alongside the §9 fields until the loop strips it.
+LOOK_ANSWER_KEY = "_look_answer"
+
+#: Per-kind counter names, in the order `stats()["by_kind"]` reports them.
+KIND_COUNTERS: tuple[str, ...] = ("requested", "started", "returned", "landed", "dropped")
+
+
+def split_look_answer(
+    fields: dict[str, Any], key: str = LOOK_ANSWER_KEY,
+) -> tuple[dict[str, Any], str | None]:
+    """``(fields without the look key, answer or None)``. Never mutates its input.
+
+    The loop calls this on every claimed result before writing the tick's `ai`
+    block, so the block carries exactly the §9 fields whatever kind of call made
+    it. For a non-look result the answer is None and the fields come back as-is.
+    """
+    if key not in fields:
+        return fields, None
+    rest = dict(fields)
+    answer = rest.pop(key)
+    return rest, None if answer is None else str(answer)
+
 
 class VLMClient(Protocol):
-    """Anything that can turn a JPEG into a raw §9 field dict."""
+    """Anything that can turn a JPEG into a raw §9 field dict.
 
-    async def tag(self, jpeg: bytes) -> dict[str, Any]: ...
+    `question` is the targeted-look extra (docs/PERCEPTION.md "Labeler" 4): when
+    given, the response also carries a short string ``answer``. The tagger only
+    passes it for ``look`` requests, so a client without the keyword still serves
+    every other kind.
+    """
+
+    async def tag(self, jpeg: bytes, *, question: str | None = None) -> dict[str, Any]: ...
 
     async def aclose(self) -> None: ...
 
 
-# --- Newest-wins mailbox ------------------------------------------------------
+# --- Priority mailbox ---------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class _Request:
+    kind: str
+    frame_t: float
+    jpeg: bytes
+    question: str | None = None
 
 
 class _Slot:
-    """A one-item mailbox where a new frame overwrites an unread one.
+    """A one-item mailbox where a new request overwrites an unread one of equal or
+    lower priority, and is itself dropped when a higher one is waiting.
 
     This is invariant 2 in miniature — "drop, never queue". If the tagger is busy
     when three frames arrive, the two older ones are discarded unread rather than
     forming a backlog, because by the time the tagger is free they describe a world
-    that no longer exists.
+    that no longer exists. Priority only decides *which* single request survives:
+    a wake-up must not be overwritten by the hot-mode frame that follows it.
     """
 
     __slots__ = ("_item", "_event", "_dropped")
 
     def __init__(self) -> None:
-        self._item: tuple[float, bytes] | None = None
+        self._item: _Request | None = None
         self._event = asyncio.Event()
         self._dropped = 0
 
-    def put(self, item: tuple[float, bytes]) -> None:
-        if self._item is not None:
+    def put(self, req: _Request) -> _Request | None:
+        """Offer `req`. Returns the request that was dropped, if any: the one it
+        displaced, or `req` itself when a higher-priority request is pending."""
+        held = self._item
+        if held is not None and PRIORITY[req.kind] < PRIORITY[held.kind]:
             self._dropped += 1
-        self._item = item
+            return req
+        self._item = req
         self._event.set()
+        if held is not None:
+            self._dropped += 1
+        return held
 
-    async def get(self) -> tuple[float, bytes]:
+    async def get(self) -> _Request:
         await self._event.wait()
         self._event.clear()
         item, self._item = self._item, None
@@ -137,8 +214,198 @@ class _Slot:
         return item
 
     @property
+    def pending_kind(self) -> str | None:
+        return None if self._item is None else self._item.kind
+
+    @property
     def dropped(self) -> int:
         return self._dropped
+
+
+# --- The scheduler ------------------------------------------------------------
+
+
+class LabelerScheduler:
+    """When the loop should ask for a ``hot`` or ``heartbeat`` call. Pure logic.
+
+    Every method takes its time from the caller, so a test drives it with a fake
+    clock and a replay source can run frame time faster than wall time. The cadence
+    follows the concept state (docs/PERCEPTION.md "Gate and actions"):
+
+    - transition: the first `transition_s` after any concept goes hot -> every tick;
+    - cooling: `cooling_s` after a concept leaves hot -> every tick;
+    - steady: a non-point concept hot past its transition -> every `steady_s`;
+    - spent: only point concepts hot, past their transition -> heartbeat cadence
+      (a coffee cup on the desk all afternoon costs one transition, then nothing);
+    - cold: nothing hot or cooling -> every `heartbeat_s`;
+    - dormant: cold with flat novelty for `dormant_after_s` -> every
+      `dormant_heartbeat_s`; any novelty ends it.
+
+    The hourly cap (`max_per_hour`, counted over every started call) turns hot mode
+    off: while capped a hot-mode tick falls back to the heartbeat cadence, so the
+    system keeps proving health at the idle rate. After `error_backoff_n`
+    consecutive errors the heartbeat backs off to `dormant_heartbeat_s` until a
+    call succeeds. Wake-ups are the loop's business and never gated here.
+    """
+
+    #: Novelty under this counts as flat for dormancy.
+    NOVELTY_EPS = 0.01
+    WINDOW_S = 3600.0
+
+    def __init__(
+        self,
+        *,
+        tick_interval_s: float,
+        heartbeat_s: float = 60.0,
+        transition_s: float = 60.0,
+        steady_s: float = 10.0,
+        cooling_s: float = 30.0,
+        dormant_after_s: float = 300.0,
+        dormant_heartbeat_s: float = 300.0,
+        max_per_hour: int = 600,
+        error_backoff_n: int = 5,
+        point_concepts: frozenset[str] = frozenset(),
+    ) -> None:
+        self.tick_interval_s = tick_interval_s
+        self.heartbeat_s = heartbeat_s
+        self.transition_s = transition_s
+        self.steady_s = steady_s
+        self.cooling_s = cooling_s
+        self.dormant_after_s = dormant_after_s
+        self.dormant_heartbeat_s = dormant_heartbeat_s
+        self.max_per_hour = max(0, int(max_per_hour))
+        self.error_backoff_n = max(1, int(error_backoff_n))
+        self._point = frozenset(point_concepts)
+
+        self._hot_since: dict[str, float] = {}      # concept -> when it went hot
+        self._cooling_since: dict[str, float] = {}  # concept -> when it started cooling
+        self._flat_since: float | None = None       # cold with flat novelty since
+        self._last_request: float | None = None     # last tick that asked for a call
+        self._started: deque[float] = deque()       # rolling window of started calls
+        self._errors_in_a_row = 0
+        self._mode = "cold"
+        self._now: float | None = None
+
+    # -- the per-tick decision --
+
+    def on_tick(
+        self,
+        now: float,
+        hot: frozenset[str],
+        cooling: frozenset[str],
+        novelty: float,
+        clock: float | None = None,
+    ) -> str | None:
+        """The kind to request this tick: ``"hot"``, ``"heartbeat"`` or None.
+
+        `now` is the tick clock every cadence is measured in. `clock` is the wall
+        time for the hourly cap when it differs (a replay runs frame time faster
+        than real time and the cap is a cost per real hour); None means `now`.
+        """
+        self._now = now
+        wall = now if clock is None else clock
+        hot = frozenset(hot) - frozenset(cooling)
+        self._track(now, hot, frozenset(cooling), novelty)
+        mode = self._mode = self._mode_at(now)
+        capped = self.capped(wall)
+
+        if mode in ("transition", "cooling") and not capped:
+            kind: str | None = "hot"
+        elif mode == "steady" and not capped:
+            kind = "hot" if self._due(now, self.steady_s) else None
+        else:
+            interval = self.dormant_heartbeat_s if mode == "dormant" else self.heartbeat_interval()
+            kind = "heartbeat" if self._due(now, interval) else None
+        if kind is not None:
+            self._last_request = now
+        return kind
+
+    def _due(self, now: float, interval: float) -> bool:
+        return self._last_request is None or now - self._last_request >= interval
+
+    def _track(self, now: float, hot: frozenset[str], cooling: frozenset[str], novelty: float) -> None:
+        for c in hot:
+            self._hot_since.setdefault(c, now)
+        for c in [c for c in self._hot_since if c not in hot]:
+            del self._hot_since[c]
+        for c in cooling:
+            self._cooling_since.setdefault(c, now)
+        for c in [c for c in self._cooling_since if c not in cooling]:
+            del self._cooling_since[c]
+        if not hot and not cooling and novelty < self.NOVELTY_EPS:
+            if self._flat_since is None:
+                self._flat_since = now
+        else:
+            self._flat_since = None
+
+    def _mode_at(self, now: float) -> str:
+        if any(now - t0 < self.transition_s for t0 in self._hot_since.values()):
+            return "transition"
+        if any(now - t0 < self.cooling_s for t0 in self._cooling_since.values()):
+            return "cooling"
+        if any(c not in self._point for c in self._hot_since):
+            return "steady"
+        if self._hot_since:
+            return "spent"
+        if self._flat_since is not None and now - self._flat_since >= self.dormant_after_s:
+            return "dormant"
+        return "cold"
+
+    # -- what the tagger reports back --
+
+    def note_started(self, kind: str, now: float) -> None:
+        """A call of `kind` started at `now`; every kind counts toward the cap."""
+        self._now = now if self._now is None else max(self._now, now)
+        self._prune(now)
+        self._started.append(now)
+
+    def note_error(self) -> None:
+        self._errors_in_a_row += 1
+
+    def note_success(self) -> None:
+        self._errors_in_a_row = 0
+
+    # -- queries --
+
+    def capped(self, now: float) -> bool:
+        """True once `max_per_hour` calls have started in the trailing hour."""
+        self._prune(now)
+        return len(self._started) >= self.max_per_hour
+
+    def heartbeat_interval(self) -> float:
+        """`heartbeat_s`, or `dormant_heartbeat_s` while backed off on errors."""
+        if self._errors_in_a_row >= self.error_backoff_n:
+            return self.dormant_heartbeat_s
+        return self.heartbeat_s
+
+    def calls_last_hour(self, now: float | None = None) -> int:
+        if now is not None:
+            self._prune(now)
+        return len(self._started)
+
+    def _prune(self, now: float) -> None:
+        cutoff = now - self.WINDOW_S
+        while self._started and self._started[0] <= cutoff:
+            self._started.popleft()
+
+    @property
+    def mode(self) -> str:
+        return self._mode
+
+    @property
+    def errors_in_a_row(self) -> int:
+        return self._errors_in_a_row
+
+    def stats(self) -> dict[str, Any]:
+        now = self._now
+        return {
+            "mode": self._mode,
+            "capped": self.capped(now) if now is not None else False,
+            "errors_in_a_row": self._errors_in_a_row,
+            "calls_last_hour": self.calls_last_hour(now),
+            "max_per_hour": self.max_per_hour,
+            "heartbeat_s": self.heartbeat_interval(),
+        }
 
 
 # --- The tagger ---------------------------------------------------------------
@@ -147,8 +414,9 @@ class _Slot:
 class T0Tagger:
     """Overlapping, self-scheduling VLM tagger. Both public entry points are non-blocking.
 
-    The T0 loop calls `offer()` with each captured frame and `take()` when assembling
-    the tick. Neither ever awaits the network, so a slow API cannot stall capture.
+    The T0 loop calls `request()` (or its ``hot`` alias `offer()`) with a frame and
+    `take()` when assembling the tick. Neither ever awaits the network, so a slow
+    API cannot stall capture.
 
     Results are **consume-once**: `take()` returns a result to exactly one tick and
     then forgets it. That is what keeps "absent, never stale" true by construction
@@ -157,6 +425,12 @@ class T0Tagger:
     `budget_s` is the on-time line: calls slower than it are counted as overruns in
     the stats, but no longer cancelled. `ceiling_s` is the hard cancel. `max_age_s`
     is how old a frame may be when its result is attached to a tick.
+
+    The tagger owns a `LabelerScheduler` (`tagger.scheduler`), built from the
+    ``labeler_*`` values the bridge passes, or handed in ready-made. It reports every
+    started call, error and success to it and enforces the hourly cap on ``hot``
+    requests; the loop asks `scheduler.on_tick()` what to request. `clock` is the
+    wall clock the cap is measured on (tests pass a fake).
     """
 
     def __init__(
@@ -168,6 +442,19 @@ class T0Tagger:
         max_age_s: float = DEFAULT_MAX_AGE_S,
         max_in_flight: int = DEFAULT_MAX_IN_FLIGHT,
         log_every: int = 60,
+        scheduler: LabelerScheduler | None = None,
+        look_answer_key: str = LOOK_ANSWER_KEY,
+        clock: Callable[[], float] = time.time,
+        tick_interval_s: float | None = None,
+        heartbeat_s: float = 60.0,
+        transition_s: float = 60.0,
+        steady_s: float = 10.0,
+        cooling_s: float = 30.0,
+        dormant_after_s: float = 300.0,
+        dormant_heartbeat_s: float = 300.0,
+        max_per_hour: int = 600,
+        error_backoff_n: int = 5,
+        point_concepts: frozenset[str] = frozenset(),
     ) -> None:
         self._client = client
         self._budget = budget_s
@@ -177,6 +464,15 @@ class T0Tagger:
         self._max_age = max_age_s
         self._max_in_flight = max(1, max_in_flight)
         self._log_every = log_every
+        self._look_answer_key = look_answer_key
+        self._clock = clock
+        self.scheduler = scheduler if scheduler is not None else LabelerScheduler(
+            tick_interval_s=budget_s if tick_interval_s is None else tick_interval_s,
+            heartbeat_s=heartbeat_s, transition_s=transition_s, steady_s=steady_s,
+            cooling_s=cooling_s, dormant_after_s=dormant_after_s,
+            dormant_heartbeat_s=dormant_heartbeat_s, max_per_hour=max_per_hour,
+            error_backoff_n=error_backoff_n, point_concepts=point_concepts,
+        )
         self._slot = _Slot()
         self._task: asyncio.Task[None] | None = None
         self._calls_in_flight: set[asyncio.Task[None]] = set()
@@ -205,11 +501,18 @@ class T0Tagger:
         self.ticks_served = 0
         self.in_flight = 0
         self.max_in_flight_seen = 0
+        #: Per request kind: requested, started, returned, landed, dropped.
+        self.by_kind: dict[str, dict[str, int]] = {
+            k: {c: 0 for c in KIND_COUNTERS} for k in KINDS
+        }
+        #: ``hot`` requests refused because the scheduler was at its hourly cap.
+        self.dropped_capped = 0
         # Every finished call's latency, overruns included at their real latency and
         # ceiling timeouts at the ceiling (a lower bound). Survivor-only percentiles
         # hid a median sitting on the budget line; these do not.
         self._latencies: deque[float] = deque(maxlen=200)
-        self._outcomes: deque[str] = deque(maxlen=50)
+        # (outcome, kind) per finished call, newest last.
+        self._outcomes: deque[tuple[str, str]] = deque(maxlen=50)
 
     # -- lifecycle --
 
@@ -238,15 +541,42 @@ class T0Tagger:
 
     # -- the T0 loop's entry points, all non-blocking --
 
-    def offer(self, frame_t: float, jpeg: bytes) -> None:
-        """Hand the tagger the newest frame. Returns immediately.
+    def request(
+        self,
+        kind: Kind,
+        frame_t: float,
+        jpeg: bytes,
+        *,
+        question: str | None = None,
+    ) -> None:
+        """Ask for one call of `kind` on this frame. Returns immediately.
 
-        If both call slots are busy this frame waits in the single slot, replacing
-        whatever was there. It is never queued: "New frames never queue behind an
-        in-flight call — a stale frame has negative value" (§2.4).
+        If both call slots are busy the request waits in the single mailbox slot,
+        replacing a pending request of equal or lower priority and being dropped
+        under a higher one. It is never queued: "New frames never queue behind an
+        in-flight call — a stale frame has negative value" (§2.4). A ``hot``
+        request is refused outright while the scheduler is at its hourly cap;
+        ``wake``, ``look`` and ``heartbeat`` always go through.
         """
-        if self._client is not None:
-            self._slot.put((frame_t, jpeg))
+        if kind not in PRIORITY:
+            raise ValueError(f"unknown labeler request kind {kind!r}")
+        if question is not None and kind != "look":
+            raise ValueError("a question belongs to a 'look' request")
+        if self._client is None:
+            return
+        counters = self.by_kind[kind]
+        counters["requested"] += 1
+        if kind == "hot" and self.scheduler.capped(self._clock()):
+            self.dropped_capped += 1
+            counters["dropped"] += 1
+            return
+        dropped = self._slot.put(_Request(kind, frame_t, jpeg, question))
+        if dropped is not None:
+            self.by_kind[dropped.kind]["dropped"] += 1
+
+    def offer(self, frame_t: float, jpeg: bytes) -> None:
+        """Hand the tagger the newest frame as a ``hot`` request (today's cadence)."""
+        self.request("hot", frame_t, jpeg)
 
     def take(self, now: float | None = None) -> tuple[dict[str, Any], float] | None:
         """Claim a landed result for the tick being assembled at `now`, or None.
@@ -267,13 +597,16 @@ class T0Tagger:
         `take()` is this plus the per-tick bookkeeping. The loop calls `claim`
         directly when it attaches a just-landed result to a tick it has already
         emitted, so that tick is not asked for twice.
+
+        A look's answer rides in the fields under `look_answer_key`; the caller
+        strips it with `split_look_answer()` before the fields become an `ai` block.
         """
         result, self._pending = self._pending, None
         if result is None:
             return None
         if now is not None and now - result[1] > self._max_age:
             self.discarded += 1
-            self._outcomes.append("expired")
+            self._outcomes.append(("expired", "?"))
             return None
         self.ticks_served += 1
         return result
@@ -281,7 +614,7 @@ class T0Tagger:
     # -- internals --
 
     async def _loop(self) -> None:
-        """Dispatch the newest frame whenever a call slot is free. Never on a timer.
+        """Dispatch the pending request whenever a call slot is free. Never on a timer.
 
         The slot is acquired *before* reading the mailbox, so a frame that arrives
         while both calls are busy keeps being overwritten by newer ones and the call
@@ -294,22 +627,30 @@ class T0Tagger:
             except asyncio.CancelledError:
                 return
             try:
-                frame_t, jpeg = await self._slot.get()
+                req = await self._slot.get()
             except asyncio.CancelledError:
                 self._capacity.release()
                 return
-            task = asyncio.create_task(self._call(frame_t, jpeg), name="t0-vlm-call")
+            self.by_kind[req.kind]["started"] += 1
+            self.scheduler.note_started(req.kind, self._clock())
+            task = asyncio.create_task(self._call(req), name="t0-vlm-call")
             self._calls_in_flight.add(task)
             task.add_done_callback(self._calls_in_flight.discard)
 
-    async def _call(self, frame_t: float, jpeg: bytes) -> None:
+    async def _call(self, req: _Request) -> None:
         assert self._client is not None and self._capacity is not None
         started = time.perf_counter()
         self.calls += 1
         self.in_flight += 1
         self.max_in_flight_seen = max(self.max_in_flight_seen, self.in_flight)
+        # Only a look passes the keyword, so a client without it serves every
+        # other kind unchanged (the overlap tests' gated client has none).
+        if req.question is not None:
+            call = self._client.tag(req.jpeg, question=req.question)
+        else:
+            call = self._client.tag(req.jpeg)
         try:
-            raw = await asyncio.wait_for(self._client.tag(jpeg), self._ceiling)
+            raw = await asyncio.wait_for(call, self._ceiling)
         except (asyncio.TimeoutError, TimeoutError):
             # Past the ceiling nothing it could say would still be fresh by the time
             # a tick could carry it. The latency is recorded at the ceiling -- a lower
@@ -317,12 +658,14 @@ class T0Tagger:
             self.timeouts += 1
             self.overruns += 1
             self._latencies.append(self._ceiling)
-            self._outcomes.append("timeout")
+            self._outcomes.append(("timeout", req.kind))
+            self.scheduler.note_error()
             return
         except Exception as exc:  # noqa: BLE001 - a bad call must not stop the clock
             self.errors += 1
-            self._outcomes.append("error")
-            log.warning("T0 VLM call failed: %s", exc)
+            self._outcomes.append(("error", req.kind))
+            self.scheduler.note_error()
+            log.warning("T0 VLM %s call failed: %s", req.kind, exc)
             return
         finally:
             self.in_flight -= 1
@@ -331,25 +674,43 @@ class T0Tagger:
         latency = time.perf_counter() - started
         self._latencies.append(latency)
         self.returned += 1
+        self.by_kind[req.kind]["returned"] += 1
+        self.scheduler.note_success()
         if latency > self._budget:
             self.overruns += 1
             self.late += 1
-            self._outcomes.append("late")
+            self._outcomes.append(("late", req.kind))
         else:
-            self._outcomes.append("returned")
-        self._land(coerce(raw), frame_t)
+            self._outcomes.append(("returned", req.kind))
+        self._land(raw, req.frame_t, req.kind)
 
-    def _land(self, fields: dict[str, Any], frame_t: float) -> None:
-        if frame_t <= self._newest_frame_t:
+    def _land(self, raw: dict[str, Any] | None, frame_t: float, kind: str = "hot") -> None:
+        """Coerce a raw response and make it the pending result, newest frame wins.
+
+        A look's ``answer`` is popped *before* `coerce()` -- which never sees it --
+        and rides alongside the §9 fields under `look_answer_key`, bounded to
+        `LOOK_ANSWER_MAX_CHARS`. Every other key goes through `coerce()` exactly
+        as before, so the fields are byte-identical to today for every kind.
+        """
+        raw = dict(raw) if isinstance(raw, dict) else {}
+        answer = raw.pop("answer", None)
+        fields = coerce(raw)
+        if answer is not None:
+            fields[self._look_answer_key] = str(answer)[:LOOK_ANSWER_MAX_CHARS]
+        if frame_t <= self._newest_frame_t and answer is None:
             # A newer frame's answer already landed; this one would step the tick
-            # stream back in time.
+            # stream back in time. A look is exempt: its frame is usually the one
+            # a wake or hot call just labelled, and its value is the answer, which
+            # the loop strips before any tick is written. It never moves the
+            # newest-frame mark backwards.
             self.discarded += 1
             return
         if self._pending is not None:
             # Two results inside one tick: the newer observation wins.
             self.discarded += 1
-        self._newest_frame_t = frame_t
+        self._newest_frame_t = max(self._newest_frame_t, frame_t)
         self._pending = (fields, frame_t)
+        self.by_kind.setdefault(kind, {c: 0 for c in KIND_COUNTERS})["landed"] += 1
         if self.on_result is not None:
             try:
                 self.on_result()
@@ -386,6 +747,8 @@ class T0Tagger:
             f" tok_in_p50={tokens['prompt_tokens_p50']} tok_out_p50={tokens['output_tokens_p50']}"
             if tokens["token_calls"] else ""
         )
+        kinds = " ".join(f"{k}={self.by_kind[k]['started']}" for k in KINDS)
+        sched = self.scheduler.stats()
         return (
             f"coverage={self.coverage:6.1%} "
             f"ticks={self.ticks_served}/{self.ticks_asked} "
@@ -393,10 +756,11 @@ class T0Tagger:
             f"overrun={self.overruns} late={self.late} timeout={self.timeouts} "
             f"discarded={self.discarded} err={self.errors} "
             f"p50={self._percentile(0.50):.0f}ms p90={self._percentile(0.90):.0f}ms "
-            f"frames_dropped={self._slot.dropped}{tok}"
+            f"frames_dropped={self._slot.dropped}{tok} "
+            f"mode={sched['mode']} {kinds} capped={int(sched['capped'])}"
         )
 
-    def stats(self) -> dict[str, int | float]:
+    def stats(self) -> dict[str, Any]:
         """Structured live-demo health for the most recent calls."""
         finished = self.returned + self.timeouts
         return {
@@ -406,7 +770,7 @@ class T0Tagger:
             "late": self.late,
             "timeouts": self.timeouts,
             "discarded": self.discarded,
-            "errors": sum(outcome == "error" for outcome in self._outcomes),
+            "errors": sum(outcome == "error" for outcome, _ in self._outcomes),
             "in_flight": self.in_flight,
             "max_in_flight": self._max_in_flight,
             "latency_p50_ms": round(self._percentile(0.50, 50), 1),
@@ -415,6 +779,10 @@ class T0Tagger:
             "over_budget_rate": round(self.overruns / finished, 3) if finished else 0.0,
             "budget_s": self._budget,
             "ceiling_s": self._ceiling,
+            "frames_dropped": self._slot.dropped,
+            "dropped_capped": self.dropped_capped,
+            "by_kind": {k: dict(v) for k, v in self.by_kind.items()},
+            "scheduler": self.scheduler.stats(),
             **self._token_stats(),
         }
 
@@ -465,7 +833,9 @@ class GeminiClient:
     """Gemini Flash-Lite with structured output over the §9 field set.
 
     The field list and schema come from `ai_fields`; this class must never name a §9
-    field itself (PERSON_A.md A2 — one place, one edit).
+    field itself (PERSON_A.md A2 — one place, one edit). A targeted look (`question`)
+    uses the same prompt plus `ai_fields.look_suffix()` and the schema variant that
+    adds the one ``answer`` string; nothing else about the call changes.
     """
 
     def __init__(self, api_key: str | None = None, model: str = DEFAULT_MODEL) -> None:
@@ -478,31 +848,34 @@ class GeminiClient:
         self._client = genai.Client(api_key=key)
         self._model = model
         self._schema = response_schema()
+        self._look_schema = response_schema(extra_answer=True)
         #: (prompt_tokens, output_tokens) per call, newest last. Output tokens
         #: are the lever on Gemini latency (~8.7 ms each), so schema trims are
         #: measured here rather than guessed.
         self.usage: deque[tuple[int, int]] = deque(maxlen=200)
 
-    async def tag(self, jpeg: bytes) -> dict[str, Any]:
+    async def tag(self, jpeg: bytes, *, question: str | None = None) -> dict[str, Any]:
         from google.genai import types
 
+        look = question is not None
         config = types.GenerateContentConfig(
             response_mime_type="application/json",
-            response_schema=self._schema,
+            response_schema=self._look_schema if look else self._schema,
             # Flash-Lite will happily spend the whole budget thinking. We have 1 second
             # and the task is "report what is plainly visible", so buy latency instead.
             thinking_config=types.ThinkingConfig(thinking_budget=0),
             # A full answer is ~150-200 tokens. The cap only matters when the model
             # runs away on a caption, and then a truncated call that errors fast is
-            # better than one that decodes for seconds and holds a call slot.
-            max_output_tokens=512,
+            # better than one that decodes for seconds and holds a call slot. A look
+            # adds one bounded string, so it gets a little more room.
+            max_output_tokens=640 if look else 512,
             temperature=0.0,
         )
         resp = await self._client.aio.models.generate_content(
             model=self._model,
             contents=[
                 types.Part.from_bytes(data=jpeg, mime_type="image/jpeg"),
-                PROMPT,
+                PROMPT + look_suffix(question) if look else PROMPT,
             ],
             config=config,
         )
@@ -540,23 +913,35 @@ class FakeClient:
 
     The values are passed through `ai_fields.coerce` downstream like any other
     tagger output, so a bogus enum member is dropped there rather than here.
+
+    A look (`question`) is recorded in `questions` and answered with `answer`,
+    so the plumbing from the clerk's question to the tick can be proven offline.
     """
 
-    def __init__(self, latency: float | Any = 0.4, fields: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        latency: float | Any = 0.4,
+        fields: dict[str, Any] | None = None,
+        answer: str = "not visible in this frame",
+    ) -> None:
         self._latency = latency
         self._fields = dict(fields) if fields else dict(DEFAULT_FAKE_FIELDS)
+        self._answer = answer
         self.calls = 0
         self.cancelled = 0
+        self.questions: list[str] = []
         # `max_in_flight` is the direct evidence of self-scheduling (§5.3). A fixed
         # timer firing every second into a slow API stacks up concurrent calls; the
         # tagger holds this at its `max_in_flight` (2) no matter how slow the API is.
         self.in_flight = 0
         self.max_in_flight = 0
 
-    async def tag(self, jpeg: bytes) -> dict[str, Any]:
+    async def tag(self, jpeg: bytes, *, question: str | None = None) -> dict[str, Any]:
         self.calls += 1
         self.in_flight += 1
         self.max_in_flight = max(self.max_in_flight, self.in_flight)
+        if question is not None:
+            self.questions.append(question)
         delay = self._latency() if callable(self._latency) else self._latency
         try:
             await asyncio.sleep(delay)
@@ -565,7 +950,10 @@ class FakeClient:
             raise
         finally:
             self.in_flight -= 1
-        return dict(self._fields)
+        out = dict(self._fields)
+        if question is not None:
+            out["answer"] = self._answer
+        return out
 
     async def aclose(self) -> None:
         return None

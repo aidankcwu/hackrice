@@ -130,6 +130,15 @@ class GlassesLink:
         #: Called synchronously with (act_id, ok, detail, mac_recv_t).
         self.on_act_result: Callable[[str, bool, str, float], None] | None = None
 
+        #: Set by `T0Loop` when a watcher runs (docs/PERCEPTION.md "Watcher"): called
+        #: synchronously from `put()` with every accepted packet, so the watcher sees
+        #: every frame the phone sends while the capture source still takes only one
+        #: per tick. Never called for a malformed packet (those never reach `put`).
+        #: Must be cheap; an exception is logged and swallowed, never raised.
+        self.on_packet: Callable[[Packet], None] | None = None
+        self.n_hook_errors = 0
+        self._hook_logged_at = float("-inf")
+
         # Health counters. `dropped` is the interesting one — it is invariant 2 doing
         # its job, and a nonzero value under a 1 Hz phone means T0 is falling behind.
         self.n_received = 0
@@ -154,6 +163,19 @@ class GlassesLink:
             self.n_dropped += 1
         self._latest = packet
         self._event.set()
+        hook = self.on_packet
+        if hook is not None:
+            try:
+                hook(packet)
+            except Exception:  # noqa: BLE001 - a listener must never break ingest
+                self.n_hook_errors += 1
+                now = time.monotonic()
+                if now - self._hook_logged_at >= 60.0:
+                    self._hook_logged_at = now
+                    log.exception(
+                        "ingest: on_packet hook raised (%d so far); packet kept",
+                        self.n_hook_errors,
+                    )
 
     def next_seq(self) -> int:
         self._seq += 1
@@ -292,6 +314,7 @@ class GlassesLink:
             "malformed": self.n_malformed,
             "clock_fallback": self.n_clock_fallback,
             "dropped": self.n_dropped,
+            "hook_errors": self.n_hook_errors,
             "latest_seq": 0 if latest is None else latest.seq,
             "latest_age_s": None if latest is None else round(time.time() - latest.recv_t, 3),
             "connected_for_s": None if self.last_connect_t is None or not self.clients
