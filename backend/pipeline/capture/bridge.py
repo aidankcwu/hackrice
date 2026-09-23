@@ -17,6 +17,7 @@ from longevity.loop import T0Loop
 from longevity.ring import FrameRing
 from longevity.server.ingest import GlassesLink
 from longevity.sources.base import CaptureSource
+from longevity.tick import frame_ref
 from longevity.vlm import KINDS, T0Tagger, VLMClient, build_client
 from longevity.watcher import Watcher, WatcherConfig
 from longevity.watcher_model import build_watcher_model
@@ -307,6 +308,33 @@ class LongevityCapture:
             q.id, q.question, q.answer_kind, self.ask_listen_s,
         )
         return True
+
+    # --- targeted look (docs/PERCEPTION.md "Labeler" 4) ------------------------
+
+    def look(self, question: str) -> None:
+        """Ask one question of the newest frame through the labeler's mailbox.
+
+        Returns at once; the answer is read back with `take_look_answer()`. The
+        frame is the newest in the ring, or the newest the loop has seen when the
+        ring cannot serve it (a replay corpus whose timestamps the 90 s window
+        has long expired) -- the same pick a wake-up makes.
+        """
+        stored = self.ring.get(frame_ref(self.loop.seq)) if self.loop.seq else None
+        last = getattr(self.loop, "_last_frame", None)
+        if stored is not None and (last is None or stored.t >= last[0]):
+            frame_t, jpeg = stored.t, stored.jpeg
+        elif last is not None:
+            frame_t, jpeg = last
+        else:
+            log.info("look dropped: no frame to label yet (%r)", question)
+            return
+        self.tagger.request("look", frame_t, jpeg, question=question)
+
+    @property
+    def look_wait_s(self) -> float:
+        """How long a look's answer is worth polling for: the tagger's hard
+        ceiling plus one tick for the mailbox to start the call."""
+        return float(self.tagger.stats()["ceiling_s"]) + float(self.settings.tick_interval_s)
 
     def take_look_answer(self) -> tuple[float, str] | None:
         """The newest targeted-look answer as `(frame_t, answer)`, exactly once."""

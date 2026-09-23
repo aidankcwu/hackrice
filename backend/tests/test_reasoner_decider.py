@@ -272,28 +272,35 @@ async def test_without_writers_only_annotate_survives(db, frame_store, settings)
 
     decision = await run_one(reasoner)
 
-    assert kinds(decision) == ["annotate"]
+    # The sound act needs no writer, so it is the one thing besides the
+    # annotate that survives (US-M03).
+    assert kinds(decision) == ["annotate", "act"]
     assert decision.actions[0]["line"] == "food_in_frame: synthetic"
     assert decision.interpretation == "food_in_frame: synthetic"
     assert decision.path == "decider"
     assert decision.writers == [
         "log_insight:no_writer", "remember:no_writer", "watch:no_writer",
-        "speak:no_writer", "ask:no_writer", "act:skipped", "look:skipped",
+        "speak:no_writer", "ask:no_writer", "act:sound", "look:no_writer",
     ]
     assert clerk.calls == 0
 
 
-async def test_act_and_look_are_only_recorded(db, frame_store, settings):
-    decider = FakeDecider({"act": 0.9, "look": 0.9})
+async def test_act_and_look_become_real_actions(db, frame_store, settings):
+    decider = FakeDecider({"act": 0.9, "look": 0.9}, topic="food")
     writers = FakeWriters()
     reasoner = build_reasoner(db, frame_store, settings, FakeReasonerClient(),
                               decider=decider, writers=writers)
 
     decision = await run_one(reasoner)
 
-    assert kinds(decision) == ["annotate"]
-    assert decision.writers == ["summary_line", "act:skipped", "look:skipped"]
-    assert [name for name, _ in writers.calls] == ["summary_line"]
+    assert kinds(decision) == ["annotate", "act", "look"]
+    assert decision.writers == ["summary_line", "act:sound", "look_question"]
+    assert [name for name, _ in writers.calls] == ["summary_line", "look_question"]
+    act = decision.actions[1]
+    assert (act["kind"], act["args"]) == ("sound", {"name": "soft"})
+    look = decision.actions[2]
+    assert (look["question"], look["reason"]) == (FakeWriters.DEFAULTS["look_question"], "food")
+    assert look["outcome"] == "look_unavailable", "no capture on this reasoner"
 
 
 # -- (f) no decider: the clerk path is unchanged --------------------------

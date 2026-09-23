@@ -19,6 +19,7 @@ from typing import Annotated, Any, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from ..actions.sound import SOUND_NAMES, drop_sound_if_speaking
 from ..models import FOOD_TYPES
 
 __all__ = [
@@ -28,6 +29,8 @@ __all__ = [
     "WatchAction",
     "AskAction",
     "RememberAction",
+    "LookAction",
+    "ActAction",
     "NothingAction",
     "Action",
     "T1Response",
@@ -37,6 +40,8 @@ __all__ = [
     "ANSWER_JSON_SCHEMA",
     "ANSWER_TEXT_FORMAT",
     "SPEAK_DROPPED_FOR_ASK",
+    "LOOK_MIN_CHARS",
+    "LOOK_MAX_CHARS",
     "normalize",
 ]
 
@@ -63,6 +68,11 @@ COUNT_MAX = 20.0
 #: code the model cannot argue with; the *logging* of it belongs to the action
 #: handler, which is the only layer that knows the decision id.
 SPEAK_DROPPED_FOR_ASK = "speak_dropped_for_ask"
+
+#: A ``look`` question is one short question of the current frame
+#: (docs/PERCEPTION.md "Labeler" 4). Mirrors ``writers.LOOK_MAX_CHARS``.
+LOOK_MIN_CHARS = 2
+LOOK_MAX_CHARS = 120
 
 
 class _ActionBase(BaseModel):
@@ -137,6 +147,31 @@ class RememberAction(_ActionBase):
     line: str
 
 
+class LookAction(_ActionBase):
+    """One targeted labeler call on the current frame (docs/PERCEPTION.md).
+
+    The question goes through the labeler's mailbox; the answer re-wakes the
+    decider with the question and answer appended, or goes to the voice agent
+    when a conversation is open. One look per decision, never chained --
+    :func:`normalize` keeps the first and defers the decision's ``speak`` and
+    ``ask`` until the answer is back.
+    """
+
+    type: Literal["look"] = "look"
+    question: str = Field(min_length=LOOK_MIN_CHARS, max_length=LOOK_MAX_CHARS)
+    reason: str = ""
+
+
+class ActAction(_ActionBase):
+    """One thing the phone does. The clerk and decider may only originate a
+    sound cue (``kind: sound``, ``args: {name: chime | tick | soft}``); the
+    autopilot's calendar and shield acts never go through this schema."""
+
+    type: Literal["act"] = "act"
+    kind: Literal["sound"] = "sound"
+    args: dict[str, Any] = Field(default_factory=dict)
+
+
 class NothingAction(_ActionBase):
     type: Literal["nothing"] = "nothing"
 
@@ -149,6 +184,8 @@ Action = Annotated[
         WatchAction,
         AskAction,
         RememberAction,
+        LookAction,
+        ActAction,
         NothingAction,
     ],
     Field(discriminator="type"),
@@ -163,6 +200,9 @@ class T1Response(BaseModel):
     interpretation: str = ""
     confidence: float = 0.0
     actions: list[Action] = Field(default_factory=list)
+    #: Set by :func:`normalize` when a ``look`` displaced this response's
+    #: ``speak``/``ask``: the re-run after the answer decides them afresh.
+    deferred_for_look: bool = False
 
     def of_type(self, kind: str) -> list[Action]:
         return [a for a in self.actions if a.type == kind]
@@ -270,6 +310,36 @@ _REMEMBER = _obj(
     }
 )
 
+_LOOK = _obj(
+    {
+        "type": {"type": "string", "enum": ["look"]},
+        "question": {
+            "type": "string",
+            "description": "One short question about the current camera frame "
+            "that would settle the decision, 120 characters or less. Its "
+            "answer wakes you again; any speak or ask waits for it.",
+        },
+        "reason": {"type": "string"},
+    }
+)
+
+_ACT = _obj(
+    {
+        "type": {"type": "string", "enum": ["act"]},
+        "kind": {"type": "string", "enum": ["sound"]},
+        "args": _obj(
+            {
+                "name": {
+                    "type": "string",
+                    "enum": list(SOUND_NAMES),
+                    "description": "A short non-verbal cue in the wearer's ear, "
+                    "cheaper than a sentence. Dropped next to a speak.",
+                },
+            }
+        ),
+    }
+)
+
 _NOTHING = _obj({"type": {"type": "string", "enum": ["nothing"]}})
 
 T1_JSON_SCHEMA: dict[str, Any] = _obj(
@@ -293,6 +363,8 @@ T1_JSON_SCHEMA: dict[str, Any] = _obj(
                     _WATCH,
                     _ASK,
                     _REMEMBER,
+                    _LOOK,
+                    _ACT,
                     _NOTHING,
                 ],
             },
@@ -464,6 +536,10 @@ def normalize(resp: T1Response, t: float | None = None) -> T1Response:
       the question wins and the statement is dropped (ASK_DESIGN §8.6), so
       nothing talks over the answer window. The handler logs the drop as
       ``SPEAK_DROPPED_FOR_ASK``; this function only removes it.
+    * at most one ``look`` (the first); with one, ``speak`` and ``ask`` are
+      removed and ``deferred_for_look`` is set -- the re-run after the answer
+      decides them afresh (docs/PERCEPTION.md "Normalisation additions").
+    * a sound ``act`` next to a ``speak`` is dropped: the speak wins.
     """
 
     stamp = time.time() if t is None else t
@@ -503,6 +579,24 @@ def normalize(resp: T1Response, t: float | None = None) -> T1Response:
     if any(a.type == "ask" for a in actions):
         actions = [a for a in actions if a.type != "speak"]
 
+    deferred = False
+    looks = [a for a in actions if a.type == "look"]
+    if looks:
+        first = looks[0]
+        kept: list[Any] = []
+        for a in actions:
+            if a.type == "look":
+                if a is first:
+                    kept.append(a)
+                continue
+            if a.type in ("speak", "ask"):
+                deferred = True
+                continue
+            kept.append(a)
+        actions = kept
+
+    actions = drop_sound_if_speaking(actions)
+
     if any(a.type != "nothing" for a in actions):
         actions = [a for a in actions if a.type != "nothing"]
 
@@ -517,4 +611,5 @@ def normalize(resp: T1Response, t: float | None = None) -> T1Response:
         interpretation=resp.interpretation,
         confidence=confidence,
         actions=actions,
+        deferred_for_look=deferred,
     )

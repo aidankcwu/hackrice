@@ -601,6 +601,9 @@ def build_pipeline(settings: Settings, *,
         setattr(capture.link, "on_answer", questions.on_answer)
         # `act` goes down the socket speech uses; `act_result` comes back up it.
         reasoner.handler.send_act = make_act_sender(capture.link)
+        # The `look` action asks the labeler one question about the newest frame
+        # (US-M03); without the capture object every look is `look_unavailable`.
+        reasoner.handler.capture = capture
         setattr(capture.link, "on_act_result", reasoner.handler.on_act_result)
     autopilot = Autopilot(db, reasoner.handler,
                           outdoor_target_min=settings.outdoor_target_min,

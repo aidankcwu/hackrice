@@ -7,7 +7,11 @@ Each action in the T1 response maps to exactly one durable effect:
 ``log_insight``  a row in ``insights``, feeding daily and weekly reports
 ``watch``        a row in ``pending_checks`` the trigger gate polls
 ``speak``        the rate limiter, then the TTS seam
-``act``          an ``act`` message down the ingest socket (PLAN 4.1)
+``act``          an ``act`` message down the ingest socket (PLAN 4.1); a
+                 ``sound`` kind first passes its own hourly limiter
+``look``         one targeted labeler call on the newest frame; the answer is
+                 polled (never awaited on a tick) and re-runs the decision, or
+                 goes to the voice agent when a conversation is open
 ``nothing``      no-op
 ===============  ==========================================================
 
@@ -22,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -31,6 +36,7 @@ from longevity import wire
 from ..config import Timings
 from ..db import Database
 from ..models import Insight, PendingCheck, TodaySummaryLine
+from .sound import SOUND_KIND, SoundLimiter, is_sound_act
 from .speech import SpeechLimiter
 
 if TYPE_CHECKING:  # `pipeline.reasoner` imports this module: keep it one-way.
@@ -41,7 +47,9 @@ log = logging.getLogger(__name__)
 
 __all__ = [
     "ActionHandler", "FAST_PATHED", "ACT_SENT", "ACTED", "ACT_FAILED",
-    "ACT_FAILED_LINES", "make_act_sender",
+    "ACT_FAILED_LINES", "SOUND_RATE_LIMITED", "LOOKED", "LOOK_UNAVAILABLE",
+    "LOOK_CHAINED", "LOOK_TIMEOUT", "LOOK_ANSWERED", "LOOK_ANSWER_WAIT_S",
+    "make_act_sender",
 ]
 
 #: Outcome on a clerk ``speak``/``ask`` for a moment the gate already handed
@@ -54,12 +62,33 @@ FAST_PATHED = "fast_pathed"
 ACT_SENT = "sent"
 ACTED = "acted"
 ACT_FAILED = "act_failed"
+#: A sound ``act`` refused by the handler's own hourly limiter.
+SOUND_RATE_LIMITED = "sound_rate_limited"
+
+#: Outcomes a ``look`` action row moves through. ``looked`` until the answer
+#: lands (then ``answered:<where>`` -- ``conversation`` or ``rerun``) or the
+#: wait runs out (``look_timeout``). ``look_unavailable``: no capture to ask
+#: (sim mode). ``look_chained``: a look fired by the re-run itself, dropped.
+LOOKED = "looked"
+LOOK_ANSWERED = "answered"
+LOOK_UNAVAILABLE = "look_unavailable"
+LOOK_CHAINED = "look_chained"
+LOOK_TIMEOUT = "look_timeout"
+
+#: How long an answer is polled for after a ``look`` went out: the tagger's
+#: 3 s ceiling plus room for the mailbox to start the call. The capture bridge
+#: overrides it with ``look_wait_s`` when it knows the tagger's real ceiling.
+LOOK_ANSWER_WAIT_S = 4.0
+#: The polling step. A tick is never blocked: the poll runs as its own task.
+LOOK_POLL_S = 0.1
 
 #: Spoken once when an act fails, per ``kind``: what did not happen, then the
 #: cheapest way back (brian-ui voice.md). Unknown kinds use ``""``.
 ACT_FAILED_LINES: dict[str, str] = {
     "calendar_block": "The walk did not go on your calendar. 20 min outside before sunset still counts.",
     "screen_shield": "The screen shield did not turn on. The phone in another room until 07:00 does the same.",
+    #: A failed chime does not earn a sentence.
+    SOUND_KIND: "",
     "": "That did not work on your phone.",
 }
 
@@ -123,11 +152,29 @@ class ActionHandler:
         self, db: Database, speech: SpeechLimiter, timings: Timings,
         questions: "QuestionManager | None" = None,
         conversation: Any | None = None,
+        *,
+        capture: Any | None = None,
+        sound_max_per_hour: int = 6,
     ) -> None:
         self.db = db
         self.speech = speech
         self.timings = timings
         self.questions = questions
+        #: The capture bridge (``LongevityCapture``): ``look(question)`` and
+        #: ``take_look_answer()``. ``None`` in sim mode, where a ``look`` is
+        #: recorded ``look_unavailable``.
+        self.capture = capture
+        #: The reasoner that owns this handler, for ``rerun_after_look``. Set
+        #: by the reasoner itself; ``None`` means an answer with no open
+        #: conversation has nowhere to go and is only recorded.
+        self.reasoner: Any | None = None
+        #: Hourly cap on sound cues, separate from speech (docs/PERCEPTION.md).
+        self.sound = SoundLimiter(sound_max_per_hour)
+        #: The one look whose answer is awaited: decision id, decision t,
+        #: question, deadline (wall clock). A newer look replaces it -- the
+        #: tagger's mailbox is one slot too, so the older answer never lands.
+        self._look: tuple[str, float, str, float] | None = None
+        self._look_task: "asyncio.Task[None] | None" = None
         #: The voice agent. When one is wired, ``speak`` and ``ask`` stop being
         #: utterances and become hand-offs: the clerk names a topic and a
         #: reason, and the agent writes the words
@@ -295,6 +342,10 @@ class ActionHandler:
                 k: row[k] for k in ("id", "outcome", "detail") if k in row
             }
 
+        elif kind == "look":
+            outcome = self.look(decision_id, t, action.question)
+            result.setdefault("outcomes", {})[index] = {"outcome": outcome}
+
         elif kind == "remember":
             # Applied by `Reasoner._remember`, which owns the persona these
             # lines feed back into. Named here anyway: without the branch it
@@ -324,6 +375,12 @@ class ActionHandler:
         act_id = _rid("a")
         row: dict[str, Any] = {"type": "act", "id": act_id, "kind": kind,
                                "args": dict(args)}
+        if is_sound_act(row) and not self.sound.allow(t):
+            # Its own limiter, before the veto and the send: a cue past the
+            # hourly cap costs nothing and says nothing.
+            row["outcome"] = SOUND_RATE_LIMITED
+            log.info("act %s sound rate limited, decision %s", act_id, decision_id)
+            return row
         try:
             reason = self.act_veto(kind, row["args"], t) if self.act_veto else None
         except Exception:
@@ -365,29 +422,161 @@ class ActionHandler:
             return None
         decision_id, decision_t, kind = pending
         outcome = ACTED if ok else ACT_FAILED
-        try:
-            decision = next((d for d in self.db.decisions_between(decision_t, decision_t)
-                             if d.id == decision_id), None)
-            if decision is not None:
-                for row in decision.actions:
-                    if row.get("type") == "act" and row.get("id") == act_id:
-                        row["outcome"] = outcome
-                        row["detail"] = detail
-                        self.db.insert_decision(decision)
-                        break
-        except Exception:
-            log.exception("could not record act_result %s on decision %s", act_id,
-                          decision_id)
+        self._patch_action_row(
+            decision_id, decision_t,
+            lambda row: row.get("type") == "act" and row.get("id") == act_id,
+            {"outcome": outcome, "detail": detail},
+        )
         log.info("act %s %s: %s (%s)", act_id, kind, outcome, detail)
         if not ok:
             self._say_act_failed(kind, decision_t if t is None else t)
         return outcome
 
+    def _patch_action_row(
+        self, decision_id: str, decision_t: float,
+        match: Callable[[dict[str, Any]], bool], patch: dict[str, Any],
+    ) -> bool:
+        """Merge ``patch`` onto the first matching action row of a written
+        decision. False when the row was not found; never raises."""
+
+        try:
+            decision = next((d for d in self.db.decisions_between(decision_t, decision_t)
+                             if d.id == decision_id), None)
+            if decision is None:
+                return False
+            for row in decision.actions:
+                if match(row):
+                    row.update(patch)
+                    self.db.insert_decision(decision)
+                    return True
+        except Exception:
+            log.exception("could not patch an action row on decision %s", decision_id)
+        return False
+
     def _say_act_failed(self, kind: str, t: float) -> None:
         """One line through the speech limiter (STATE §8), like a missed dose."""
 
         line = ACT_FAILED_LINES.get(kind, ACT_FAILED_LINES[""])
+        if not line:
+            return
         if self.speech.allow(t):
             self.speech.speak(line, "normal", t=t)
         else:
             log.info("act failure line suppressed by the limiter (%s)", kind)
+
+    # -- look (docs/PERCEPTION.md "Gate and actions") ----------------------
+
+    def look(self, decision_id: str, t: float, question: str) -> str:
+        """Ask one question of the newest frame. Returns the row's outcome.
+
+        The question goes to the labeler's mailbox through the capture bridge
+        and this returns at once; the answer is polled by a task
+        (:meth:`poll_look_answer`) for ``LOOK_ANSWER_WAIT_S``, never awaited on
+        a tick. Without a capture (sim mode) the look is ``look_unavailable``.
+        """
+
+        capture = self.capture
+        if capture is None or not callable(getattr(capture, "look", None)):
+            log.info("look unavailable: no capture (decision %s)", decision_id)
+            return LOOK_UNAVAILABLE
+        try:
+            capture.look(question)
+        except Exception:
+            log.exception("look could not be issued (decision %s)", decision_id)
+            return LOOK_UNAVAILABLE
+        wait_s = float(getattr(capture, "look_wait_s", LOOK_ANSWER_WAIT_S) or LOOK_ANSWER_WAIT_S)
+        if self._look is not None:
+            log.info("look for decision %s superseded by decision %s", self._look[0],
+                     decision_id)
+        self._look = (decision_id, t, question, time.monotonic() + wait_s)
+        log.info("look sent for decision %s: %r", decision_id, question)
+        self._start_look_poll()
+        return LOOKED
+
+    def _start_look_poll(self) -> None:
+        if self._look_task is not None and not self._look_task.done():
+            return  # the running poll picks up the newer look from ``self._look``
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            log.info("look answer will not be polled: no running event loop")
+            return
+        self._look_task = loop.create_task(self._await_look_answer(), name="look-answer")
+        self._look_task.add_done_callback(_consume_failure)
+
+    async def _await_look_answer(self) -> None:
+        while self._look is not None:
+            if self.poll_look_answer():
+                return
+            if time.monotonic() >= self._look[3]:
+                decision_id, decision_t, question, _ = self._look
+                self._look = None
+                log.info("look for decision %s timed out: %r", decision_id, question)
+                self._patch_action_row(
+                    decision_id, decision_t, lambda row: row.get("type") == "look",
+                    {"outcome": LOOK_TIMEOUT},
+                )
+                return
+            await asyncio.sleep(LOOK_POLL_S)
+
+    def poll_look_answer(self) -> bool:
+        """One synchronous poll of the capture's look mailbox.
+
+        True when an answer landed and was delivered (or nothing is awaited);
+        False while still waiting. Safe to call from anywhere per tick.
+        """
+
+        pending = self._look
+        if pending is None:
+            return True
+        capture = self.capture
+        take = getattr(capture, "take_look_answer", None)
+        landed = take() if callable(take) else None
+        if landed is None:
+            return False
+        self._look = None
+        decision_id, decision_t, question, _ = pending
+        _frame_t, answer = landed
+        self._deliver_look_answer(decision_id, decision_t, question, str(answer))
+        return True
+
+    def _deliver_look_answer(
+        self, decision_id: str, decision_t: float, question: str, answer: str,
+    ) -> str:
+        """Where the answer goes: an open conversation, else one re-run of the
+        decision. Returns ``answered:<where>``, recorded on the look's row."""
+
+        conversation = self.conversation
+        where = "dropped"
+        if conversation is not None and self._conversation_open(conversation):
+            outcome = conversation.request(
+                f"looked closer at the frame: {question} {answer}", "statement",
+                decision_id=decision_id, reason="look",
+            )
+            where = f"conversation:{outcome}"
+        elif self.reasoner is not None and callable(
+            getattr(self.reasoner, "rerun_after_look", None)
+        ):
+            try:
+                ran = self.reasoner.rerun_after_look(decision_id, question, answer)
+            except Exception:
+                log.exception("look re-run failed for decision %s", decision_id)
+                ran = False
+            where = "rerun" if ran else "rerun_dropped"
+        outcome = f"{LOOK_ANSWERED}:{where}"
+        log.info("look answer for decision %s -> %s: %r", decision_id, where, answer)
+        self._patch_action_row(
+            decision_id, decision_t, lambda row: row.get("type") == "look",
+            {"outcome": outcome, "answer": answer},
+        )
+        return outcome
+
+    @staticmethod
+    def _conversation_open(conversation: Any) -> bool:
+        current = getattr(conversation, "current", None)
+        if callable(current):
+            try:
+                return current() is not None
+            except Exception:
+                return False
+        return bool(getattr(conversation, "active", False))

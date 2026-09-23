@@ -26,7 +26,7 @@ import time
 from collections import Counter
 from typing import Any, Callable
 
-from ..actions.handlers import ActionHandler
+from ..actions.handlers import LOOK_CHAINED, ActionHandler
 from ..actions.speech import SpeechLimiter
 from ..config import Settings
 from ..db import Database, day_key
@@ -39,9 +39,11 @@ from .envelope import CLERK_FRAMES, build_envelope, local_time, select_frames, R
 from .evidence import EvidenceStore
 from .prompts import DEFAULT_PERSONA, LEARNED_MAX, NO_SEVEN_DAY
 from .schema import (
+    ActAction,
     AnnotateAction,
     AskAction,
     LogInsightAction,
+    LookAction,
     RememberAction,
     SpeakAction,
     T1Response,
@@ -52,7 +54,8 @@ from .writers import Writers, _fallback_summary
 
 log = logging.getLogger(__name__)
 
-__all__ = ["Reasoner", "FRAMES_PER_ESCALATION", "FAST_PATH_NOTE", "NO_AGENT", "settled_fact"]
+__all__ = ["Reasoner", "FRAMES_PER_ESCALATION", "FAST_PATH_NOTE", "NO_AGENT",
+           "LOOK_NOTE", "LOOK_SOUND", "settled_fact"]
 
 #: Frames copied as evidence and sent to the clerk per escalation. SPEC §4.3
 #: said four; the envelope now sends one low-detail change frame and the sharp
@@ -77,6 +80,18 @@ FAST_PATH_NOTE = (
     "{topic}. Do not speak or ask about this moment; any speak or ask is dropped. "
     "Annotate it, and log_insight or remember only if it earns one."
 )
+
+
+#: What the clerk reads on a re-run after a ``look``: the question it asked of
+#: the frame and the labeler's answer, after the tick table.
+LOOK_NOTE = "You looked closer at the frame. Question: {question} Answer: {answer}"
+
+#: The sound a decider-fired ``act`` plays. The decider says only that a cue
+#: is worth it; the softest one is the right default for a non-verbal nudge.
+LOOK_SOUND = "soft"
+
+#: Decisions whose state is kept for a possible re-run after a ``look``.
+LOOK_CONTEXT_MAX = 8
 
 
 def _number(value: float) -> str:
@@ -172,8 +187,24 @@ class Reasoner:
         #: (``<decision_id>/<frame_ref>``) -- the protocol's adherence matcher
         #: (PLAN 2.2). Synchronous; an exception is logged, never raised.
         self.on_evidence: Callable[[Escalation, str, dict[str, bytes]], None] | None = None
-        self.handler = ActionHandler(db, speech, settings.timings, questions,
-                                     conversation)
+        self.handler = ActionHandler(
+            db, speech, settings.timings, questions, conversation,
+            sound_max_per_hour=(
+                self.decider_settings.act_sound_max_per_hour
+                if self.decider_settings is not None
+                else DeciderSettings.model_fields["act_sound_max_per_hour"].default
+            ),
+        )
+        # The handler delivers a look's answer back here (``rerun_after_look``).
+        self.handler.reasoner = self
+        #: What a decision was decided on, kept for one re-run after its
+        #: ``look`` answers: decision id -> (escalation, frames, decider state
+        #: or None on the clerk path). Popped by the re-run, so the re-run's
+        #: own decision is never in here: a look is never chained.
+        self._look_context: dict[str, tuple[Escalation, dict[str, bytes], dict | None]] = {}
+        #: Re-runs after a look, and ones dropped on a busy slot.
+        self.look_reruns = 0
+        self.look_reruns_dropped = 0
 
         #: The single T1 slot. A plain flag under a non-blocking lock -- an
         #: awaited semaphore would queue, and queueing is the one thing §5.2
@@ -561,83 +592,8 @@ class Reasoner:
             if decided is None:
                 return
             resp, meta, path, writers_ran = decided
-
-            norm = normalize(resp, t=esc.t)
-            # A watch-triggered decision may not schedule another watch: the
-            # model otherwise re-arms itself every cooldown forever (seen live:
-            # eight chained "track the caffeine pattern" escalations).
-            if esc.trigger.startswith("watch:"):
-                kept = [a for a in norm.actions if getattr(a, "type", None) != "watch"]
-                if len(kept) != len(norm.actions):
-                    log.info("watch chain capped for %s", esc.trigger)
-                    norm.actions = kept
-            if esc.trigger.startswith("answer:"):
-                kept = [a for a in norm.actions if getattr(a, "type", None) != "ask"]
-                if len(kept) != len(norm.actions):
-                    log.info("ask chain capped for %s", esc.trigger)
-                    norm.actions = kept
-            latency_ms = meta.get("latency_ms")
-            if latency_ms is None:
-                latency_ms = int((time.perf_counter() - started) * 1000)
-            self.last_latency_ms = int(latency_ms)
-            self.last_decision_t = esc.t
-
-            decision = Decision(
-                id=decision_id,
-                t=esc.t,
-                trigger=esc.trigger,
-                trigger_tick_id=esc.tick.tick_id,
-                episode_id=esc.episode_id,
-                interpretation=norm.interpretation,
-                confidence=norm.confidence,
-                actions=[a.model_dump() for a in norm.actions],
-                spoke=False,
-                dropped=False,
-                latency_ms=int(latency_ms),
-                model=str(meta.get("model") or ""),
-                path=path,
-                writers=writers_ran,
-            )
-            # Written before the actions apply: a handler that throws must not
-            # cost us the decision row (SPEC §6).
-            self.db.insert_decision(decision)
-
-            if epoch is not None and epoch != self.epoch:
-                self.skipped_stale += 1
-                log.info("%s: session changed while reasoning; actions skipped",
-                         decision_id)
-                self.completed += 1
-                return
-
-            outcome = self.handler.apply(
-                decision_id, esc.t, norm, episode_id=esc.episode_id, esc=esc
-            )
-
-            # `speak` and `ask` both record what became of them on their own
-            # action row (docs/CONVERSATION_DESIGN.md §7): `handed_off:<id>`,
-            # `conversation_active`, `conversation_cooldown`, `no_transport`,
-            # or -- with no voice agent wired -- the older `sent` /
-            # `suppressed:<guard>` shape. `decision.actions` was built from
-            # `norm.actions` in order, so the handler's index is this index.
-            outcomes = outcome.get("outcomes") or {}
-            for index, patch in outcomes.items():
-                if 0 <= index < len(decision.actions):
-                    decision.actions[index].update(patch)
-
-            if outcome.get("spoke") or esc.handed_off:
-                # A fast-pathed moment spoke through the voice agent before the
-                # clerk even started; the decision that records it says so.
-                decision.spoke = True
-                self.spoke_count += 1
-
-            if outcomes or decision.spoke:
-                self.db.insert_decision(decision)
-
-            self._remember(decision_id, esc.t, norm)
-            self._label_episode(esc.episode_id, norm)
-
-            self.completed += 1
-            log.info(self.feed_line(decision))
+            self._finish(esc, decision_id, resp, meta, path, writers_ran, started,
+                         epoch)
         except asyncio.CancelledError:  # pragma: no cover - shutdown path
             raise
         except Exception:  # pragma: no cover - defensive
@@ -650,6 +606,221 @@ class Reasoner:
                 self._slot.release()
             except RuntimeError:  # pragma: no cover - defensive
                 pass
+
+    def _finish(
+        self, esc: Escalation, decision_id: str, resp: T1Response,
+        meta: dict[str, Any], path: str, writers_ran: list[str], started: float,
+        epoch: int | None, *, after_look: bool = False,
+    ) -> Decision:
+        """Normalise, write the decision row, apply the actions. Shared by a
+        fresh run and the re-run after a ``look``; on the re-run any ``look``
+        is dropped as ``look_chained`` before it can defer anything."""
+
+        chained: list[dict[str, Any]] = []
+        if after_look:
+            kept = [a for a in resp.actions if getattr(a, "type", None) != "look"]
+            chained = [dict(a.model_dump(), outcome=LOOK_CHAINED)
+                       for a in resp.actions if getattr(a, "type", None) == "look"]
+            if chained:
+                log.info("look chain capped for %s", decision_id)
+                resp.actions = kept
+
+        norm = normalize(resp, t=esc.t)
+        if norm.deferred_for_look:
+            log.info("%s: speak/ask deferred until the look answers", decision_id)
+        # A watch-triggered decision may not schedule another watch: the
+        # model otherwise re-arms itself every cooldown forever (seen live:
+        # eight chained "track the caffeine pattern" escalations).
+        if esc.trigger.startswith("watch:"):
+            kept = [a for a in norm.actions if getattr(a, "type", None) != "watch"]
+            if len(kept) != len(norm.actions):
+                log.info("watch chain capped for %s", esc.trigger)
+                norm.actions = kept
+        if esc.trigger.startswith("answer:"):
+            kept = [a for a in norm.actions if getattr(a, "type", None) != "ask"]
+            if len(kept) != len(norm.actions):
+                log.info("ask chain capped for %s", esc.trigger)
+                norm.actions = kept
+        latency_ms = meta.get("latency_ms")
+        if latency_ms is None:
+            latency_ms = int((time.perf_counter() - started) * 1000)
+        self.last_latency_ms = int(latency_ms)
+        self.last_decision_t = esc.t
+
+        decision = Decision(
+            id=decision_id,
+            t=esc.t,
+            trigger=esc.trigger,
+            trigger_tick_id=esc.tick.tick_id,
+            episode_id=esc.episode_id,
+            interpretation=norm.interpretation,
+            confidence=norm.confidence,
+            actions=[a.model_dump() for a in norm.actions] + chained,
+            spoke=False,
+            dropped=False,
+            latency_ms=int(latency_ms),
+            model=str(meta.get("model") or ""),
+            path=path,
+            writers=writers_ran,
+        )
+        # Written before the actions apply: a handler that throws must not
+        # cost us the decision row (SPEC §6).
+        self.db.insert_decision(decision)
+
+        if epoch is not None and epoch != self.epoch:
+            self.skipped_stale += 1
+            log.info("%s: session changed while reasoning; actions skipped",
+                     decision_id)
+            self.completed += 1
+            return decision
+
+        outcome = self.handler.apply(
+            decision_id, esc.t, norm, episode_id=esc.episode_id, esc=esc
+        )
+
+        # `speak` and `ask` both record what became of them on their own
+        # action row (docs/CONVERSATION_DESIGN.md §7): `handed_off:<id>`,
+        # `conversation_active`, `conversation_cooldown`, `no_transport`,
+        # or -- with no voice agent wired -- the older `sent` /
+        # `suppressed:<guard>` shape. `decision.actions` was built from
+        # `norm.actions` in order, so the handler's index is this index.
+        outcomes = outcome.get("outcomes") or {}
+        for index, patch in outcomes.items():
+            if 0 <= index < len(decision.actions):
+                decision.actions[index].update(patch)
+
+        if outcome.get("spoke") or esc.handed_off:
+            # A fast-pathed moment spoke through the voice agent before the
+            # clerk even started; the decision that records it says so.
+            decision.spoke = True
+            self.spoke_count += 1
+
+        if outcomes or decision.spoke:
+            self.db.insert_decision(decision)
+
+        self._remember(decision_id, esc.t, norm)
+        self._label_episode(esc.episode_id, norm)
+
+        self.completed += 1
+        log.info(self.feed_line(decision))
+        return decision
+
+    # -- the re-run after a look -------------------------------------------
+
+    def rerun_after_look(self, decision_id: str, question: str, answer: str) -> bool:
+        """Decide ``decision_id``'s moment again with the look's answer in hand.
+
+        Synchronous and non-blocking, like ``try_escalate``: the T1 slot is
+        claimed or the re-run is dropped (a busy slot, or a decision this
+        reasoner did not decide). The re-run reuses the state the decision was
+        made on, with ``state["look"] = {question, answer}`` for the decider or
+        a ``LOOK_NOTE`` line for the clerk, and writes a new decision row with
+        path ``<path>:look``. A ``look`` fired by the re-run is dropped as
+        ``look_chained``: never chained.
+        """
+
+        context = self._look_context.pop(decision_id, None)
+        if context is None:
+            log.info("no context to re-run decision %s after its look", decision_id)
+            self.look_reruns_dropped += 1
+            return False
+        if not self._slot.acquire(blocking=False):
+            log.info("look re-run of %s dropped: T1 busy", decision_id)
+            self.look_reruns_dropped += 1
+            return False
+        claimed = False
+        try:
+            self._busy = True
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                log.error("rerun_after_look called with no running event loop")
+                self.look_reruns_dropped += 1
+                return False
+            esc, frames, state = context
+            loop.create_task(self._rerun_look(esc, frames, state, decision_id,
+                                              question, answer, self.epoch))
+            claimed = True
+            return True
+        finally:
+            if not claimed:
+                self._busy = False
+                self._slot.release()
+
+    async def _rerun_look(
+        self, esc: Escalation, frames: dict[str, bytes], state: dict | None,
+        origin_id: str, question: str, answer: str, epoch: int,
+    ) -> None:
+        started = time.perf_counter()
+        decision_id = self._next_decision_id()
+        self.last_latency_ms = None
+        try:
+            esc = esc.model_copy(update={
+                "extra_text": [*esc.extra_text,
+                               LOOK_NOTE.format(question=question, answer=answer)],
+            })
+            decided = None
+            if state is not None and self.decider is not None:
+                settings = self.decider_settings or DeciderSettings()
+                looked = dict(state, look={"question": question, "answer": answer})
+                try:
+                    verdict = await self.decider.decide(looked)
+                except asyncio.CancelledError:  # pragma: no cover - shutdown path
+                    raise
+                except Exception as exc:
+                    log.warning("decider failed on the look re-run of %s (%s: %s); "
+                                "falling back to the clerk", origin_id,
+                                type(exc).__name__, exc)
+                    self.fell_back["error"] += 1
+                    verdict = None
+                if verdict is not None:
+                    unsure = verdict.uncertain(settings.decide_uncertain_low,
+                                               settings.decide_uncertain_high)
+                    if unsure is not None:
+                        self.fell_back[f"uncertain:{unsure}"] += 1
+                        decided = await self._clerk(
+                            esc, frames, decision_id, started,
+                            path=f"clerk_fallback:uncertain:{unsure}:look")
+                    else:
+                        writing = time.perf_counter()
+                        resp, ran = await self._write(looked, verdict, settings)
+                        self.decided_by_decider += 1
+                        meta = {"model": verdict.model,
+                                "latency_ms": int(verdict.latency_ms
+                                                  + (time.perf_counter() - writing) * 1000)}
+                        decided = (resp, meta, "decider:look", ran)
+                else:
+                    decided = await self._clerk(esc, frames, decision_id, started,
+                                                path="clerk_fallback:error:look")
+            else:
+                decided = await self._clerk(esc, frames, decision_id, started,
+                                            path="clerk:look")
+            if decided is None:
+                return
+            resp, meta, path, writers_ran = decided
+            self.look_reruns += 1
+            self._finish(esc, decision_id, resp, meta, path, writers_ran, started,
+                         epoch, after_look=True)
+        except asyncio.CancelledError:  # pragma: no cover - shutdown path
+            raise
+        except Exception:  # pragma: no cover - defensive
+            log.exception("look re-run failed for %s", origin_id)
+        finally:
+            if self.last_latency_ms is None:
+                self.last_latency_ms = int((time.perf_counter() - started) * 1000)
+            self._busy = False
+            try:
+                self._slot.release()
+            except RuntimeError:  # pragma: no cover - defensive
+                pass
+
+    def _keep_look_context(
+        self, decision_id: str, esc: Escalation, frames: dict[str, bytes],
+        state: dict | None,
+    ) -> None:
+        self._look_context[decision_id] = (esc, frames, state)
+        while len(self._look_context) > LOOK_CONTEXT_MAX:
+            self._look_context.pop(next(iter(self._look_context)))
 
     def _drop_after(
         self, esc: Escalation, decision_id: str, reason: str, started: float
@@ -673,6 +844,7 @@ class Reasoner:
         ran; ``None`` when the escalation was dropped (its row is written)."""
 
         if self.decider is None:
+            self._keep_look_context(decision_id, esc, frames, None)
             return await self._clerk(esc, frames, decision_id, started, path="clerk")
 
         today, seven_day = self._context(esc)
@@ -680,6 +852,7 @@ class Reasoner:
             esc, esc.window, [line.line for line in today], self._open_episodes(esc),
             self.current_persona(), seven_day, esc.t,
         )
+        self._keep_look_context(decision_id, esc, frames, state)
         try:
             verdict = await self.decider.decide(state)
         except asyncio.CancelledError:  # pragma: no cover - shutdown path
@@ -748,10 +921,10 @@ class Reasoner:
     ) -> tuple[T1Response, list[str]]:
         """A clerk-shaped response from a verdict: one writer per fired action.
 
-        ``annotate`` always fires. ``act`` and ``look`` have no action type yet
-        (the act producers are the autopilot's) and are only recorded. Without
-        writers -- the fake reasoner path -- everything but the annotate is
-        dropped and the summary line is the trigger itself.
+        ``annotate`` always fires. A fired ``act`` is a soft sound cue, which
+        needs no writer; a fired ``look`` asks the look-question writer. Without
+        writers -- the fake reasoner path -- everything but the annotate and
+        the sound is dropped and the summary line is the trigger itself.
         """
 
         fired = verdict.fires(settings.thresholds())
@@ -769,8 +942,9 @@ class Reasoner:
         for name in fired:
             if name == "annotate":
                 continue
-            if name in ("act", "look"):
-                ran.append(f"{name}:skipped")
+            if name == "act":
+                actions.append(ActAction(kind="sound", args={"name": LOOK_SOUND}))
+                ran.append("act:sound")
                 continue
             if writers is None:
                 ran.append(f"{name}:no_writer")
@@ -799,6 +973,12 @@ class Reasoner:
                 if got is not None:
                     actions.append(AskAction(text=got[0], answer_kind=got[1],
                                              fills=got[2], reason=verdict.topic))
+            elif name == "look":
+                got = await writers.look_question(state, verdict)
+                if got is not None:
+                    actions.append(LookAction(question=got, reason=verdict.topic))
+                ran.append("look_question" if got is not None else "look:failed")
+                continue
             else:  # pragma: no cover - ACTIONS is closed
                 continue
             ran.append(writer if got is not None else f"{writer}:failed")
@@ -1003,6 +1183,8 @@ class Reasoner:
             "fast_pathed": self.fast_pathed,
             "decided_by_decider": self.decided_by_decider,
             "fell_back": dict(self.fell_back),
+            "look_reruns": self.look_reruns,
+            "look_reruns_dropped": self.look_reruns_dropped,
             "frames_copied": self.evidence.copied,
             "frames_missing": self.evidence.missing,
             "model": getattr(self.client, "model", ""),

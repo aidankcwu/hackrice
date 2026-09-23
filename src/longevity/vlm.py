@@ -697,15 +697,18 @@ class T0Tagger:
         fields = coerce(raw)
         if answer is not None:
             fields[self._look_answer_key] = str(answer)[:LOOK_ANSWER_MAX_CHARS]
-        if frame_t <= self._newest_frame_t:
+        if frame_t <= self._newest_frame_t and answer is None:
             # A newer frame's answer already landed; this one would step the tick
-            # stream back in time.
+            # stream back in time. A look is exempt: its frame is usually the one
+            # a wake or hot call just labelled, and its value is the answer, which
+            # the loop strips before any tick is written. It never moves the
+            # newest-frame mark backwards.
             self.discarded += 1
             return
         if self._pending is not None:
             # Two results inside one tick: the newer observation wins.
             self.discarded += 1
-        self._newest_frame_t = frame_t
+        self._newest_frame_t = max(self._newest_frame_t, frame_t)
         self._pending = (fields, frame_t)
         self.by_kind.setdefault(kind, {c: 0 for c in KIND_COUNTERS})["landed"] += 1
         if self.on_result is not None:

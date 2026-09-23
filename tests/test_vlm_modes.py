@@ -438,3 +438,24 @@ def test_the_tagger_builds_its_scheduler_from_the_same_keywords_or_takes_one() -
     own = make_sched()
     assert vlm.T0Tagger(vlm.FakeClient(), log_every=0, scheduler=own).scheduler is own
     assert "scheduler" in tagger.stats() and "mode=" in tagger.stats_line()
+
+
+def test_a_look_answer_lands_on_an_already_labelled_frame():
+    """Newest-frame-wins must not discard a look: its frame is usually the one a
+    hot call just labelled, and its value is the answer."""
+
+    from longevity.vlm import T0Tagger, split_look_answer
+
+    tagger = T0Tagger(None)
+    tagger._land({"food_present": True}, frame_t=100.0, kind="hot")
+    assert tagger._pending is not None and tagger._pending[1] == 100.0
+    tagger._pending = None
+    tagger._land({"food_present": True, "answer": "a latte"}, frame_t=100.0, kind="look")
+    assert tagger._pending is not None, "the look was discarded"
+    fields, answer = split_look_answer(tagger._pending[0])
+    assert answer == "a latte" and "answer" not in fields
+    assert tagger._newest_frame_t == 100.0
+    # An ordinary older result is still discarded.
+    tagger._pending = None
+    tagger._land({"food_present": True}, frame_t=99.0, kind="hot")
+    assert tagger._pending is None
