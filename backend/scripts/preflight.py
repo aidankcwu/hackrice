@@ -137,6 +137,44 @@ async def provider_checks(settings: Settings, offline: bool) -> list[Check]:
     return checks
 
 
+def perception_checks(settings: Settings) -> list[Check]:
+    """The watcher, labeler and decider switches. Local only: no network, and
+    TYPESAFE_API_KEY is reported as set or not, never its value or length."""
+
+    capture, decider = settings.capture, settings.decider
+    checks: list[Check] = [
+        ("WATCHER", "INFO", f"{'on' if capture.watcher else 'off'}, model {capture.watcher_model}"),
+    ]
+    try:
+        import open_clip  # noqa: F401  (the `watcher` extra)
+        checks.append(("open_clip", "PASS", "watcher extra importable"))
+    except Exception as exc:
+        status = "WARN" if capture.watcher else "INFO"
+        checks.append((
+            "open_clip", status,
+            f"not importable ({type(exc).__name__}); uv sync --extra watcher",
+        ))
+    has_key = bool(decider.typesafe_api_key)
+    checks.append(("DECIDER", "WARN" if decider.decider == "jev" and not has_key else "INFO",
+                   decider.decider))
+    checks.append(("TYPESAFE_API_KEY", "INFO", "set: yes" if has_key else "set: no"))
+    checks.append(("GATE_READS_WATCH", "INFO", "on" if capture.gate_reads_watch else "off"))
+    checks.append(("LABELER_MAX_PER_HOUR", "INFO", str(capture.labeler_max_per_hour)))
+    corpus = os.environ.get("CORPUS_DIR")
+    if corpus:
+        path = Path(corpus)
+        count = len(list(path.glob("*.jpg"))) if path.is_dir() else 0
+        checks.append(("CORPUS_DIR", "INFO" if path.is_dir() else "WARN",
+                       f"{path.resolve()} ({count} jpg)" if path.is_dir() else f"{path} (not a directory)"))
+    return checks
+
+
+def print_checks(checks: list[Check]) -> None:
+    width = max(len(name) for name, _, _ in checks)
+    for name, status, detail in checks:
+        print(f"{name:<{width}}  {status:<4}  {detail}")
+
+
 async def run(args: argparse.Namespace) -> int:
     env_path = Path(".env")
     load_dotenv(env_path, override=False)
@@ -163,9 +201,9 @@ async def run(args: argparse.Namespace) -> int:
     matches = bool(base and f":{args.port}" in base)
     checks.append(result("Dashboard", matches,
                          f"NEXT_PUBLIC_API_BASE port {'matches' if matches else 'does not match'} {args.port}"))
-    width = max(len(name) for name, _, _ in checks)
-    for name, status, detail in checks:
-        print(f"{name:<{width}}  {status:<4}  {detail}")
+    print_checks(checks)
+    print("\nPerception")
+    print_checks(perception_checks(settings))
     return 1 if any(status == "FAIL" for _, status, _ in checks) else 0
 
 

@@ -169,10 +169,14 @@ def test_the_demo_preset_is_frozen() -> None:
 
 BOOL_SWITCHES = ("FAST_PATH", "CUE_TRIGGER", "PUBLISH_ON_LANDING",
                  "MOUTH_BUSY_GUARD", "VOICE_OPEN_SCHEMA")
+PERCEPTION_KNOBS = ("WATCHER", "WATCHER_MODEL", "DECIDER", "GATE_READS_WATCH",
+                    "LABELER_MAX_PER_HOUR")
+PERCEPTION_DEFAULTS = ("WATCHER=1 WATCHER_MODEL=mobileclip2-s0 DECIDER=clerk "
+                       "GATE_READS_WATCH=0 LABELER_MAX_PER_HOUR=600")
 
 
 def test_kill_switches_default_on(monkeypatch) -> None:
-    for name in (*BOOL_SWITCHES, "VLM_MAX_IN_FLIGHT", "T0_MAX_IN_FLIGHT"):
+    for name in (*BOOL_SWITCHES, *PERCEPTION_KNOBS, "VLM_MAX_IN_FLIGHT", "T0_MAX_IN_FLIGHT"):
         monkeypatch.delenv(name, raising=False)
     s = Settings(_env_file=None)  # type: ignore[call-arg]
     assert (s.fast_path, s.cue_trigger, s.vlm_max_in_flight) == (True, True, 2)
@@ -180,11 +184,14 @@ def test_kill_switches_default_on(monkeypatch) -> None:
     assert s.switches_line() == (
         "FAST_PATH=1 CUE_TRIGGER=1 VLM_MAX_IN_FLIGHT=2 "
         "PUBLISH_ON_LANDING=1 MOUTH_BUSY_GUARD=1 VOICE_OPEN_SCHEMA=1")
+    assert s.perception_line() == PERCEPTION_DEFAULTS
 
 
 def test_kill_switches_turn_off_from_the_environment(monkeypatch) -> None:
     for name in BOOL_SWITCHES:
         monkeypatch.setenv(name, "0")
+    for name in PERCEPTION_KNOBS:
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("VLM_MAX_IN_FLIGHT", "1")
     s = Settings(_env_file=None)  # type: ignore[call-arg]
     assert (s.fast_path, s.cue_trigger, s.vlm_max_in_flight) == (False, False, 1)
@@ -192,6 +199,34 @@ def test_kill_switches_turn_off_from_the_environment(monkeypatch) -> None:
     assert s.switches_line() == (
         "FAST_PATH=0 CUE_TRIGGER=0 VLM_MAX_IN_FLIGHT=1 "
         "PUBLISH_ON_LANDING=0 MOUTH_BUSY_GUARD=0 VOICE_OPEN_SCHEMA=0")
+    assert s.perception_line() == PERCEPTION_DEFAULTS
+
+
+def test_settings_exposes_the_capture_and_decider_settings(monkeypatch) -> None:
+    """One Settings reaches every knob; the sub-settings keep their env names."""
+
+    from pipeline.capture.settings import CaptureSettings
+    from pipeline.reasoner.decider_settings import DeciderSettings
+
+    for name in PERCEPTION_KNOBS:
+        monkeypatch.delenv(name, raising=False)
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert isinstance(s.capture, CaptureSettings) and isinstance(s.decider, DeciderSettings)
+    assert (s.capture.watcher, s.decider.decider) == (True, "clerk")
+    assert s.capture is s.capture  # built once per Settings
+
+    monkeypatch.setenv("WATCHER", "0")
+    monkeypatch.setenv("WATCHER_MODEL", "vit-b-32")
+    monkeypatch.setenv("DECIDER", "jev")
+    monkeypatch.setenv("GATE_READS_WATCH", "1")
+    monkeypatch.setenv("LABELER_MAX_PER_HOUR", "120")
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert (s.capture.watcher, s.capture.watcher_model) == (False, "vit-b-32")
+    assert (s.capture.gate_reads_watch, s.capture.labeler_max_per_hour) == (True, 120)
+    assert s.decider.decider == "jev"
+    assert s.perception_line() == (
+        "WATCHER=0 WATCHER_MODEL=vit-b-32 DECIDER=jev "
+        "GATE_READS_WATCH=1 LABELER_MAX_PER_HOUR=120")
 
 
 def test_a_switch_set_in_dotenv_reaches_settings_without_load_dotenv(tmp_path, monkeypatch) -> None:

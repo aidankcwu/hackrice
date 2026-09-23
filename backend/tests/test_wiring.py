@@ -236,3 +236,43 @@ async def test_a_landed_cue_is_handed_off_once_on_its_re_sent_tick(tmp_path):
         assert pipeline.episodes._states["food_sighting"].candidate_ticks == 1
     finally:
         await pipeline.stop()
+
+
+def _clear_decider_env(monkeypatch) -> None:
+    from pipeline.reasoner.decider_settings import DeciderSettings
+
+    for name in list(DeciderSettings.model_fields) + ["T1_MODEL"]:
+        for key in (name.upper(), name):
+            monkeypatch.delenv(key, raising=False)
+
+
+def test_decider_clerk_wires_a_reasoner_without_a_decider(tmp_path, monkeypatch):
+    _clear_decider_env(monkeypatch)
+    monkeypatch.setenv("DECIDER", "clerk")
+    pipeline = build_pipeline(Settings(db_path=tmp_path / "clerk.db"),
+                              source="sim", reasoner_mode="fake", speed=1)
+    try:
+        assert pipeline.reasoner.decider is None
+        assert pipeline.reasoner.writers is None
+        assert pipeline.reasoner.decider_settings.decider == "clerk"
+    finally:
+        pipeline.db.close()
+
+
+def test_decider_jev_wires_jev_with_no_writers_on_the_fake_client(tmp_path, monkeypatch):
+    """DECIDER=jev reaches the Reasoner through build_pipeline alone. The Jev
+    client is only constructed here, never called, so this makes no request."""
+
+    from pipeline.reasoner.decider import JevDecider
+
+    _clear_decider_env(monkeypatch)
+    monkeypatch.setenv("DECIDER", "jev")
+    monkeypatch.setenv("TYPESAFE_API_KEY", "ts-dummy")
+    settings = Settings(db_path=tmp_path / "jev.db")
+    pipeline = build_pipeline(settings, source="sim", reasoner_mode="fake", speed=1)
+    try:
+        assert isinstance(pipeline.reasoner.decider, JevDecider)
+        assert pipeline.reasoner.writers is None
+        assert pipeline.reasoner.decider_settings is settings.decider
+    finally:
+        pipeline.db.close()

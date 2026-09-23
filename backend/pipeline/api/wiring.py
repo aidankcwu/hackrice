@@ -8,6 +8,7 @@ import logging
 import time
 from collections import deque
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 from ..actions.autopilot import Autopilot
@@ -26,6 +27,7 @@ from ..gate.triggers import CallableBiometricFeed, default_triggers
 from ..models import Tick
 from ..protocol.adherence import AdherenceMatcher
 from ..reasoner.client import make_answer_parser, make_client
+from ..reasoner.factory import build_reasoner_extras
 from ..reasoner.reasoner import Reasoner
 from ..scoring.scorer import Scorer
 from ..seed.generate import resting_hr_for, seed_database, seven_day_summary
@@ -517,9 +519,14 @@ def build_pipeline(settings: Settings, *,
         from ..capture.bridge import LongevityCapture
         from ..capture.frames import RingFrameStore
         from ..capture.speak import make_speak_fn
+        from dotenv import load_dotenv
+        # settings.capture is read once, here, and CaptureSettings reads only the
+        # process environment: load backend/.env first (as the bridge itself
+        # does) so WATCHER=... and DECIDER=... in that file still apply.
+        load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
         capture = LongevityCapture(
             settings, source=source, our_bus=bus, dir=dir, speed=speed, loop=loop,
-            camera=camera, vlm=vlm, flow=flow,
+            camera=camera, vlm=vlm, flow=flow, capture_settings=settings.capture,
         )
         missing = []
         if not callable(getattr(capture, "send_question", None)):
@@ -546,6 +553,8 @@ def build_pipeline(settings: Settings, *,
     speech = SpeechLimiter(timings.speech_min_gap, timings.speech_max_per_hour)
     client = make_client(settings, reasoner_mode)
     parser = make_answer_parser(settings, reasoner_mode)
+    # DECIDER=clerk (the default) gives decider=None: the clerk path, unchanged.
+    extras = build_reasoner_extras(settings.decider, client)
 
     async def console_send(question) -> bool:
         log.info("ASK: %s", question.question)
@@ -570,7 +579,7 @@ def build_pipeline(settings: Settings, *,
     )
     reasoner = Reasoner(db, frame_store, client, speech, settings,
                         seven_day_summary=lambda: seven_day_summary(db, end_day),
-                        parser=parser, questions=questions)
+                        parser=parser, questions=questions, **extras.as_kwargs())
     adherence = AdherenceMatcher(db, speech)
     reasoner.on_evidence = adherence.on_evidence
     # The third agent (docs/CONVERSATION_DESIGN.md). Built after the reasoner
@@ -616,6 +625,7 @@ def build_pipeline(settings: Settings, *,
     # is justified only because a cue skips the clerk's queue. One line at
     # startup says which were in effect, so a rehearsal log is never ambiguous.
     log.info("switches: %s", settings.switches_line())
+    log.info("perception: %s", settings.perception_line())
     gate = TriggerGate(default_triggers(timings, settings.demo_mode, feed=feed,
                                        keyword_triggers=settings.keyword_triggers,
                                        cues=settings.cue_trigger,
