@@ -16,11 +16,11 @@ protocol TokenStoring {
     func setToken(_ token: String?, for key: String)
 }
 
-/// Keychain-backed store: `kSecClassGenericPassword`, service "edu.rice.brian.token",
+/// Keychain-backed store: `kSecClassGenericPassword`, service "com.zeroist.app.token",
 /// one item per `key`. Works on the simulator without any extra entitlement — a
 /// generic-password item just needs the app's own (implicit) keychain access group.
 struct KeychainTokenStore: TokenStoring {
-    static let service = "edu.rice.brian.token"
+    static let service = "com.zeroist.app.token"
 
     func token(for key: String) -> String? {
         var query = baseQuery(key)

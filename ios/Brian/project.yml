@@ -4,7 +4,7 @@
 
 name: Brian
 options:
-  bundleIdPrefix: com.refleo              # the app id is set explicitly below: com.refleo.bryan (registered 23 Sept, Refleo team)
+  bundleIdPrefix: com.zeroist             # the app id is set explicitly below: com.zeroist.app (registered 23 Sept)
   deploymentTarget:
     iOS: "26.0"                           # Liquid Glass baseline. Every test phone must run iOS 26+.
   createIntermediateGroups: true
@@ -50,7 +50,7 @@ targets:
           MetaAppID: "0"                  # 0 = Developer Mode; a real app id comes from the Wearables Developer Center
           TeamID: "$(DEVELOPMENT_TEAM)"
         CFBundleURLTypes:
-          - CFBundleURLName: com.refleo.bryan
+          - CFBundleURLName: com.zeroist.app
             CFBundleURLSchemes: [brian]
         # Local network to the Mac. Without these the WebSocket fails silently (ios/README.md).
         NSAppTransportSecurity:
@@ -80,8 +80,8 @@ targets:
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
-        PRODUCT_BUNDLE_IDENTIFIER: com.refleo.bryan   # App ID registered under the Refleo team (Apple + Meta must match)
-        DEVELOPMENT_TEAM: 3386QS4N44      # Refleo team id (not a secret: it is in every provisioning profile)
+        PRODUCT_BUNDLE_IDENTIFIER: com.zeroist.app    # App ID registered 23 Sept (Apple + Meta must match)
+        DEVELOPMENT_TEAM: 3386QS4N44      # the Apple team that owns the App ID (not a secret: it is in every provisioning profile)
         ENABLE_USER_SCRIPT_SANDBOXING: true
         SWIFT_STRICT_CONCURRENCY: minimal # the ported Link/ files predate Swift 6 strictness; raise later
 
