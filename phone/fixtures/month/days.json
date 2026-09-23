@@ -19,18 +19,18 @@
    },
    "events": [
     {
-     "kind": "outdoor",
-     "start": 408,
-     "minutes": 12,
-     "label": "Porch, first light",
-     "sunlight": true,
+     "kind": "caffeine",
+     "start": 433,
+     "drink": "coffee",
      "id": "2026-08-24-00",
      "seeded": true
     },
     {
-     "kind": "caffeine",
-     "start": 424,
-     "drink": "coffee",
+     "kind": "outdoor",
+     "start": 437,
+     "minutes": 12,
+     "label": "Porch, first light",
+     "sunlight": true,
      "id": "2026-08-24-01",
      "seeded": true
     },
@@ -276,7 +276,7 @@
    "events": [
     {
      "kind": "outdoor",
-     "start": 402,
+     "start": 433,
      "minutes": 11,
      "label": "Porch, first light",
      "sunlight": true,
@@ -285,7 +285,7 @@
     },
     {
      "kind": "caffeine",
-     "start": 435,
+     "start": 438,
      "drink": "coffee",
      "id": "2026-08-25-01",
      "seeded": true
@@ -554,18 +554,18 @@
    },
    "events": [
     {
-     "kind": "outdoor",
-     "start": 408,
-     "minutes": 15,
-     "label": "Porch, first light",
-     "sunlight": true,
+     "kind": "caffeine",
+     "start": 436,
+     "drink": "coffee",
      "id": "2026-08-26-00",
      "seeded": true
     },
     {
-     "kind": "caffeine",
-     "start": 431,
-     "drink": "coffee",
+     "kind": "outdoor",
+     "start": 437,
+     "minutes": 15,
+     "label": "Porch, first light",
+     "sunlight": true,
      "id": "2026-08-26-01",
      "seeded": true
     },
@@ -818,7 +818,7 @@
    "events": [
     {
      "kind": "outdoor",
-     "start": 408,
+     "start": 437,
      "minutes": 12,
      "label": "Porch, first light",
      "sunlight": true,
@@ -827,7 +827,7 @@
     },
     {
      "kind": "caffeine",
-     "start": 432,
+     "start": 437,
      "drink": "coffee",
      "id": "2026-08-27-01",
      "seeded": true
@@ -1088,7 +1088,7 @@
    "events": [
     {
      "kind": "outdoor",
-     "start": 400,
+     "start": 432,
      "minutes": 11,
      "label": "Porch, first light",
      "sunlight": true,
@@ -1097,7 +1097,7 @@
     },
     {
      "kind": "caffeine",
-     "start": 423,
+     "start": 433,
      "drink": "coffee",
      "id": "2026-08-28-01",
      "seeded": true
@@ -1367,18 +1367,18 @@
    },
    "events": [
     {
-     "kind": "outdoor",
-     "start": 410,
-     "minutes": 11,
-     "label": "Porch, first light",
-     "sunlight": true,
+     "kind": "caffeine",
+     "start": 433,
+     "drink": "coffee",
      "id": "2026-08-29-00",
      "seeded": true
     },
     {
-     "kind": "caffeine",
-     "start": 423,
-     "drink": "coffee",
+     "kind": "outdoor",
+     "start": 438,
+     "minutes": 11,
+     "label": "Porch, first light",
+     "sunlight": true,
      "id": "2026-08-29-01",
      "seeded": true
     },
@@ -1605,7 +1605,7 @@
    "events": [
     {
      "kind": "outdoor",
-     "start": 401,
+     "start": 432,
      "minutes": 14,
      "label": "Porch, first light",
      "sunlight": true,
@@ -1614,7 +1614,7 @@
     },
     {
      "kind": "caffeine",
-     "start": 424,
+     "start": 433,
      "drink": "coffee",
      "id": "2026-08-30-01",
      "seeded": true
@@ -1813,18 +1813,18 @@
    },
    "events": [
     {
-     "kind": "outdoor",
-     "start": 410,
-     "minutes": 14,
-     "label": "Porch, first light",
-     "sunlight": true,
+     "kind": "caffeine",
+     "start": 436,
+     "drink": "coffee",
      "id": "2026-08-31-00",
      "seeded": true
     },
     {
-     "kind": "caffeine",
-     "start": 429,
-     "drink": "coffee",
+     "kind": "outdoor",
+     "start": 438,
+     "minutes": 14,
+     "label": "Porch, first light",
+     "sunlight": true,
      "id": "2026-08-31-01",
      "seeded": true
     },
@@ -2075,18 +2075,18 @@
    },
    "events": [
     {
-     "kind": "outdoor",
-     "start": 410,
-     "minutes": 14,
-     "label": "Porch, first light",
-     "sunlight": true,
+     "kind": "caffeine",
+     "start": 436,
+     "drink": "coffee",
      "id": "2026-09-01-00",
      "seeded": true
     },
     {
-     "kind": "caffeine",
-     "start": 431,
-     "drink": "coffee",
+     "kind": "outdoor",
+     "start": 438,
+     "minutes": 14,
+     "label": "Porch, first light",
+     "sunlight": true,
      "id": "2026-09-01-01",
      "seeded": true
     },
@@ -2332,7 +2332,7 @@
    "events": [
     {
      "kind": "outdoor",
-     "start": 409,
+     "start": 437,
      "minutes": 12,
      "label": "Porch, first light",
      "sunlight": true,
@@ -2341,7 +2341,7 @@
     },
     {
      "kind": "caffeine",
-     "start": 435,
+     "start": 438,
      "drink": "coffee",
      "id": "2026-09-02-01",
      "seeded": true
@@ -2616,7 +2616,7 @@
    "events": [
     {
      "kind": "outdoor",
-     "start": 402,
+     "start": 433,
      "minutes": 16,
      "label": "Porch, first light",
      "sunlight": true,
@@ -2625,7 +2625,7 @@
     },
     {
      "kind": "caffeine",
-     "start": 433,
+     "start": 437,
      "drink": "coffee",
      "id": "2026-09-03-01",
      "seeded": true
@@ -2893,7 +2893,7 @@
    "events": [
     {
      "kind": "outdoor",
-     "start": 401,
+     "start": 432,
      "minutes": 16,
      "label": "Porch, first light",
      "sunlight": true,
@@ -2902,7 +2902,7 @@
     },
     {
      "kind": "caffeine",
-     "start": 423,
+     "start": 433,
      "drink": "coffee",
      "id": "2026-09-04-01",
      "seeded": true
@@ -3149,7 +3149,7 @@
    "events": [
     {
      "kind": "outdoor",
-     "start": 401,
+     "start": 433,
      "minutes": 16,
      "label": "Porch, first light",
      "sunlight": true,
@@ -3158,7 +3158,7 @@
     },
     {
      "kind": "caffeine",
-     "start": 426,
+     "start": 434,
      "drink": "coffee",
      "id": "2026-09-05-01",
      "seeded": true
@@ -3372,7 +3372,7 @@
    "events": [
     {
      "kind": "outdoor",
-     "start": 402,
+     "start": 433,
      "minutes": 13,
      "label": "Porch, first light",
      "sunlight": true,
@@ -3381,7 +3381,7 @@
     },
     {
      "kind": "caffeine",
-     "start": 424,
+     "start": 434,
      "drink": "coffee",
      "id": "2026-09-06-01",
      "seeded": true
@@ -3611,18 +3611,18 @@
    },
    "events": [
     {
-     "kind": "outdoor",
-     "start": 405,
-     "minutes": 14,
-     "label": "Porch, first light",
-     "sunlight": true,
+     "kind": "caffeine",
+     "start": 434,
+     "drink": "coffee",
      "id": "2026-09-07-00",
      "seeded": true
     },
     {
-     "kind": "caffeine",
-     "start": 424,
-     "drink": "coffee",
+     "kind": "outdoor",
+     "start": 435,
+     "minutes": 14,
+     "label": "Porch, first light",
+     "sunlight": true,
      "id": "2026-09-07-01",
      "seeded": true
     },
@@ -3889,7 +3889,7 @@
    "events": [
     {
      "kind": "outdoor",
-     "start": 404,
+     "start": 434,
      "minutes": 11,
      "label": "Porch, first light",
      "sunlight": true,
@@ -3898,7 +3898,7 @@
     },
     {
      "kind": "caffeine",
-     "start": 434,
+     "start": 438,
      "drink": "coffee",
      "id": "2026-09-08-01",
      "seeded": true
@@ -4158,18 +4158,18 @@
    },
    "events": [
     {
-     "kind": "outdoor",
-     "start": 408,
-     "minutes": 16,
-     "label": "Porch, first light",
-     "sunlight": true,
+     "kind": "caffeine",
+     "start": 434,
+     "drink": "coffee",
      "id": "2026-09-09-00",
      "seeded": true
     },
     {
-     "kind": "caffeine",
-     "start": 425,
-     "drink": "coffee",
+     "kind": "outdoor",
+     "start": 437,
+     "minutes": 16,
+     "label": "Porch, first light",
+     "sunlight": true,
      "id": "2026-09-09-01",
      "seeded": true
     },
@@ -4451,18 +4451,18 @@
    },
    "events": [
     {
-     "kind": "outdoor",
-     "start": 409,
-     "minutes": 11,
-     "label": "Porch, first light",
-     "sunlight": true,
+     "kind": "caffeine",
+     "start": 434,
+     "drink": "coffee",
      "id": "2026-09-10-00",
      "seeded": true
     },
     {
-     "kind": "caffeine",
-     "start": 426,
-     "drink": "coffee",
+     "kind": "outdoor",
+     "start": 438,
+     "minutes": 11,
+     "label": "Porch, first light",
+     "sunlight": true,
      "id": "2026-09-10-01",
      "seeded": true
     },
@@ -4745,7 +4745,7 @@
    "events": [
     {
      "kind": "outdoor",
-     "start": 403,
+     "start": 434,
      "minutes": 11,
      "label": "Porch, first light",
      "sunlight": true,
@@ -4754,7 +4754,7 @@
     },
     {
      "kind": "caffeine",
-     "start": 426,
+     "start": 434,
      "drink": "coffee",
      "id": "2026-09-11-01",
      "seeded": true
@@ -5326,18 +5326,18 @@
    },
    "events": [
     {
-     "kind": "outdoor",
-     "start": 409,
-     "minutes": 12,
-     "label": "Porch, first light",
-     "sunlight": true,
+     "kind": "caffeine",
+     "start": 433,
+     "drink": "coffee",
      "id": "2026-09-14-00",
      "seeded": true
     },
     {
-     "kind": "caffeine",
-     "start": 423,
-     "drink": "coffee",
+     "kind": "outdoor",
+     "start": 437,
+     "minutes": 12,
+     "label": "Porch, first light",
+     "sunlight": true,
      "id": "2026-09-14-01",
      "seeded": true
     },
@@ -5583,7 +5583,7 @@
    "events": [
     {
      "kind": "outdoor",
-     "start": 408,
+     "start": 437,
      "minutes": 16,
      "label": "Porch, first light",
      "sunlight": true,
@@ -5592,7 +5592,7 @@
     },
     {
      "kind": "caffeine",
-     "start": 432,
+     "start": 437,
      "drink": "coffee",
      "id": "2026-09-15-01",
      "seeded": true
@@ -5861,18 +5861,18 @@
    },
    "events": [
     {
-     "kind": "outdoor",
-     "start": 410,
-     "minutes": 14,
-     "label": "Porch, first light",
-     "sunlight": true,
+     "kind": "caffeine",
+     "start": 432,
+     "drink": "coffee",
      "id": "2026-09-16-00",
      "seeded": true
     },
     {
-     "kind": "caffeine",
-     "start": 421,
-     "drink": "coffee",
+     "kind": "outdoor",
+     "start": 438,
+     "minutes": 14,
+     "label": "Porch, first light",
+     "sunlight": true,
      "id": "2026-09-16-01",
      "seeded": true
     },
@@ -6145,18 +6145,18 @@
    },
    "events": [
     {
-     "kind": "outdoor",
-     "start": 404,
-     "minutes": 15,
-     "label": "Porch, first light",
-     "sunlight": true,
+     "kind": "caffeine",
+     "start": 432,
+     "drink": "coffee",
      "id": "2026-09-17-00",
      "seeded": true
     },
     {
-     "kind": "caffeine",
-     "start": 421,
-     "drink": "coffee",
+     "kind": "outdoor",
+     "start": 435,
+     "minutes": 15,
+     "label": "Porch, first light",
+     "sunlight": true,
      "id": "2026-09-17-01",
      "seeded": true
     },
@@ -6431,18 +6431,18 @@
    },
    "events": [
     {
-     "kind": "outdoor",
-     "start": 407,
-     "minutes": 16,
-     "label": "Porch, first light",
-     "sunlight": true,
+     "kind": "caffeine",
+     "start": 433,
+     "drink": "coffee",
      "id": "2026-09-18-00",
      "seeded": true
     },
     {
-     "kind": "caffeine",
-     "start": 423,
-     "drink": "coffee",
+     "kind": "outdoor",
+     "start": 436,
+     "minutes": 16,
+     "label": "Porch, first light",
+     "sunlight": true,
      "id": "2026-09-18-01",
      "seeded": true
     },
@@ -6721,7 +6721,7 @@
   },
   {
    "date": "2026-09-19",
-   "type": "clean",
+   "type": "late_caffeine",
    "sleep": {
     "bed": 39,
     "wake": 435,
@@ -6735,7 +6735,7 @@
    "events": [
     {
      "kind": "outdoor",
-     "start": 406,
+     "start": 436,
      "minutes": 11,
      "label": "Porch, first light",
      "sunlight": true,
@@ -6744,7 +6744,7 @@
     },
     {
      "kind": "caffeine",
-     "start": 432,
+     "start": 437,
      "drink": "coffee",
      "id": "2026-09-19-01",
      "seeded": true
@@ -6878,10 +6878,24 @@
      "seeded": true
     },
     {
+     "kind": "caffeine",
+     "start": 970,
+     "drink": "coffee",
+     "id": "2026-09-19-18",
+     "seeded": true
+    },
+    {
+     "kind": "whispered",
+     "start": 971,
+     "line": "That coffee lands in tonight's sleep.",
+     "id": "2026-09-19-19",
+     "seeded": true
+    },
+    {
      "kind": "water",
      "start": 1051,
      "ml": 322,
-     "id": "2026-09-19-18",
+     "id": "2026-09-19-20",
      "seeded": true
     },
     {
@@ -6890,7 +6904,7 @@
      "label": "Steak salad",
      "food": "whole",
      "thumb": "salad",
-     "id": "2026-09-19-19",
+     "id": "2026-09-19-21",
      "seeded": true
     },
     {
@@ -6898,28 +6912,28 @@
      "start": 1080,
      "minutes": 27,
      "label": "Dinner with family",
-     "id": "2026-09-19-20",
+     "id": "2026-09-19-22",
      "seeded": true
     },
     {
      "kind": "sauna",
      "start": 1122,
      "minutes": 20,
-     "id": "2026-09-19-21",
+     "id": "2026-09-19-23",
      "seeded": true
     },
     {
      "kind": "cold",
      "start": 1155,
      "minutes": 3,
-     "id": "2026-09-19-22",
+     "id": "2026-09-19-24",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1183,
      "ml": 267,
-     "id": "2026-09-19-23",
+     "id": "2026-09-19-25",
      "seeded": true
     },
     {
@@ -6928,7 +6942,7 @@
      "dose": "PM",
      "taken": true,
      "thumb": "pen",
-     "id": "2026-09-19-24",
+     "id": "2026-09-19-26",
      "seeded": true
     },
     {
@@ -6936,27 +6950,27 @@
      "start": 1216,
      "minutes": 23,
      "device": "phone",
-     "id": "2026-09-19-25",
+     "id": "2026-09-19-27",
      "seeded": true
     }
    ],
-   "aqi": 57,
+   "aqi": 33,
    "weather": {
-    "high_f": 90,
-    "summary": "Partly cloudy"
+    "high_f": 95,
+    "summary": "Afternoon storms"
    },
-   "held_back": 6,
+   "held_back": 13,
    "until": 1440,
    "seeded": true
   },
   {
    "date": "2026-09-20",
-   "type": "late_caffeine",
+   "type": "clean",
    "sleep": {
-    "bed": -84,
+    "bed": -65,
     "wake": 401,
-    "minutes": 472,
-    "deep": 107,
+    "minutes": 438,
+    "deep": 65,
     "rem": 95,
     "fragmented": false,
     "wakings": [],
@@ -6965,7 +6979,7 @@
    "events": [
     {
      "kind": "outdoor",
-     "start": 408,
+     "start": 432,
      "minutes": 15,
      "label": "Porch, first light",
      "sunlight": true,
@@ -6974,7 +6988,7 @@
     },
     {
      "kind": "caffeine",
-     "start": 420,
+     "start": 437,
      "drink": "coffee",
      "id": "2026-09-20-01",
      "seeded": true
@@ -6988,7 +7002,7 @@
     },
     {
      "kind": "peptide",
-     "start": 515,
+     "start": 521,
      "dose": "AM",
      "taken": true,
      "thumb": "pen",
@@ -6997,11 +7011,11 @@
     },
     {
      "kind": "mind_check",
-     "start": 564,
-     "ms": 315,
+     "start": 570,
+     "ms": 312,
      "lapses": 2,
      "energy": 5,
-     "mood": 5,
+     "mood": 4,
      "clarity": 5,
      "id": "2026-09-20-04",
      "seeded": true
@@ -7032,7 +7046,7 @@
     },
     {
      "kind": "meal",
-     "start": 616,
+     "start": 611,
      "label": "Oats with nuts",
      "food": "whole",
      "thumb": "bowl",
@@ -7041,7 +7055,7 @@
     },
     {
      "kind": "supplements",
-     "start": 627,
+     "start": 626,
      "label": "Omega-3 and vitamin D",
      "id": "2026-09-20-09",
      "seeded": true
@@ -7054,33 +7068,26 @@
      "seeded": true
     },
     {
-     "kind": "caffeine",
-     "start": 705,
-     "drink": "tea",
-     "id": "2026-09-20-11",
-     "seeded": true
-    },
-    {
      "kind": "meal",
      "start": 767,
      "label": "Chicken and vegetables",
      "food": "whole",
      "thumb": "plate",
-     "id": "2026-09-20-12",
+     "id": "2026-09-20-11",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 772,
      "ml": 278,
-     "id": "2026-09-20-13",
+     "id": "2026-09-20-12",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 860,
      "ml": 317,
-     "id": "2026-09-20-14",
+     "id": "2026-09-20-13",
      "seeded": true
     },
     {
@@ -7088,7 +7095,7 @@
      "start": 911,
      "minutes": 22,
      "label": "Groceries",
-     "id": "2026-09-20-15",
+     "id": "2026-09-20-14",
      "seeded": true
     },
     {
@@ -7097,35 +7104,21 @@
      "minutes": 50,
      "label": "Cycling",
      "vigorous": true,
-     "id": "2026-09-20-16",
+     "id": "2026-09-20-15",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 961,
      "ml": 321,
-     "id": "2026-09-20-17",
-     "seeded": true
-    },
-    {
-     "kind": "caffeine",
-     "start": 970,
-     "drink": "coffee",
-     "id": "2026-09-20-18",
-     "seeded": true
-    },
-    {
-     "kind": "whispered",
-     "start": 971,
-     "line": "That coffee lands in tonight's sleep.",
-     "id": "2026-09-20-19",
+     "id": "2026-09-20-16",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1055,
      "ml": 327,
-     "id": "2026-09-20-20",
+     "id": "2026-09-20-17",
      "seeded": true
     },
     {
@@ -7134,7 +7127,7 @@
      "label": "Chicken, rice and greens",
      "food": "whole",
      "thumb": "plate",
-     "id": "2026-09-20-21",
+     "id": "2026-09-20-18",
      "seeded": true
     },
     {
@@ -7142,14 +7135,14 @@
      "start": 1080,
      "minutes": 22,
      "label": "Dinner with family",
-     "id": "2026-09-20-22",
+     "id": "2026-09-20-19",
      "seeded": true
     },
     {
      "kind": "water",
      "start": 1183,
      "ml": 276,
-     "id": "2026-09-20-23",
+     "id": "2026-09-20-20",
      "seeded": true
     },
     {
@@ -7158,7 +7151,7 @@
      "dose": "PM",
      "taken": true,
      "thumb": "pen",
-     "id": "2026-09-20-24",
+     "id": "2026-09-20-21",
      "seeded": true
     },
     {
@@ -7166,16 +7159,16 @@
      "start": 1209,
      "minutes": 30,
      "device": "phone",
-     "id": "2026-09-20-25",
+     "id": "2026-09-20-22",
      "seeded": true
     }
    ],
-   "aqi": 49,
+   "aqi": 54,
    "weather": {
-    "high_f": 94,
-    "summary": "Clear and hot"
+    "high_f": 93,
+    "summary": "Partly cloudy"
    },
-   "held_back": 11,
+   "held_back": 12,
    "until": 1440,
    "seeded": true
   },
@@ -7183,10 +7176,10 @@
    "date": "2026-09-21",
    "type": "perfect",
    "sleep": {
-    "bed": -69,
+    "bed": -85,
     "wake": 388,
-    "minutes": 428,
-    "deep": 108,
+    "minutes": 459,
+    "deep": 109,
     "rem": 95,
     "fragmented": false,
     "wakings": [],
@@ -7194,18 +7187,18 @@
    },
    "events": [
     {
-     "kind": "outdoor",
-     "start": 403,
-     "minutes": 12,
-     "label": "Porch, first light",
-     "sunlight": true,
+     "kind": "caffeine",
+     "start": 433,
+     "drink": "coffee",
      "id": "2026-09-21-00",
      "seeded": true
     },
     {
-     "kind": "caffeine",
-     "start": 423,
-     "drink": "coffee",
+     "kind": "outdoor",
+     "start": 435,
+     "minutes": 16,
+     "label": "Porch, first light",
+     "sunlight": true,
      "id": "2026-09-21-01",
      "seeded": true
     },
@@ -7217,19 +7210,19 @@
      "seeded": true
     },
     {
-     "kind": "drive",
-     "start": 516,
-     "minutes": 24,
-     "label": "Commute",
+     "kind": "peptide",
+     "start": 508,
+     "dose": "AM",
+     "taken": true,
+     "thumb": "pen",
      "id": "2026-09-21-03",
      "seeded": true
     },
     {
-     "kind": "peptide",
-     "start": 528,
-     "dose": "AM",
-     "taken": true,
-     "thumb": "pen",
+     "kind": "drive",
+     "start": 516,
+     "minutes": 24,
+     "label": "Commute",
      "id": "2026-09-21-04",
      "seeded": true
     },
@@ -7251,12 +7244,12 @@
     },
     {
      "kind": "mind_check",
-     "start": 566,
-     "ms": 317,
+     "start": 553,
+     "ms": 299,
      "lapses": 2,
-     "energy": 3,
-     "mood": 3,
-     "clarity": 5,
+     "energy": 5,
+     "mood": 5,
+     "clarity": 3,
      "id": "2026-09-21-07",
      "seeded": true
     },
@@ -7269,7 +7262,7 @@
     },
     {
      "kind": "meal",
-     "start": 605,
+     "start": 619,
      "label": "Oats with nuts",
      "food": "whole",
      "thumb": "bowl",
@@ -7278,7 +7271,7 @@
     },
     {
      "kind": "supplements",
-     "start": 625,
+     "start": 626,
      "label": "Omega-3 and vitamin D",
      "id": "2026-09-21-10",
      "seeded": true
@@ -7475,7 +7468,7 @@
    "events": [
     {
      "kind": "outdoor",
-     "start": 402,
+     "start": 433,
      "minutes": 13,
      "label": "Porch, first light",
      "sunlight": true,
@@ -7484,7 +7477,7 @@
     },
     {
      "kind": "caffeine",
-     "start": 433,
+     "start": 437,
      "drink": "coffee",
      "id": "2026-09-22-01",
      "seeded": true

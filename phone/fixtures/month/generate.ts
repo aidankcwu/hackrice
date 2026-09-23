@@ -13,19 +13,19 @@
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Day, DayType, MonthEvent, NightWaking, Sleep, Month } from "../../src/lib/month/types.ts";
+import type { Day, DayType, EventDraft, MonthEvent, NightWaking, Sleep, Month } from "../../src/lib/month/types.ts";
 
 const END = "2026-09-22";
 const COUNT = 30;
 /** The last day is today; its record stops here (20:15). */
 const TODAY_UNTIL = 20 * 60 + 15;
 
-/** Index 0 is 2026-08-24, a Monday. */
+/** Index 0 is 2026-08-24, a Monday. A perfect day never follows a red day, so it reads 97 to 100. */
 const TYPES: DayType[] = [
   "clean", "clean", "late_caffeine", "clean", "perfect", "clean", "clean",
   "skipped_lunch", "clean", "late_dinner", "crying_baby", "late_workout", "social_evening", "perfect",
   "late_caffeine", "late_nap", "clean", "crying_baby", "screens_in_bed", "travel", "sick",
-  "clean", "clean", "late_caffeine", "crying_baby", "drinking_night", "clean", "late_caffeine",
+  "clean", "clean", "late_caffeine", "crying_baby", "drinking_night", "late_caffeine", "clean",
   "perfect", "late_caffeine",
 ];
 
@@ -68,7 +68,7 @@ function weekday(date: string): number {
   return (new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7;
 }
 
-type Draft = Omit<MonthEvent, "id" | "seeded"> & { start: number };
+type Draft = EventDraft;
 
 class DayBuilder {
   events: Draft[] = [];
@@ -127,9 +127,10 @@ function buildEvents(date: string, type: DayType, r: () => number): { events: Dr
   const travel = type === "travel";
 
   if (!sick && !travel) {
-    // Morning light, then the first coffee on the porch.
-    b.add({ kind: "outdoor", start: at(6, b.int(40, 50)), minutes: b.int(11, 16), label: "Porch, first light", sunlight: true });
-    b.add({ kind: "caffeine", start: at(7, b.int(0, 15)), drink: "coffee" });
+    // First light on the porch with the first coffee. Houston's sunrise is 6:54 to
+    // 7:09 over the month, so the porch comes after it and still inside the hour.
+    b.add({ kind: "outdoor", start: at(7, b.int(12, 18)), minutes: b.int(11, 16), label: "Porch, first light", sunlight: true });
+    b.add({ kind: "caffeine", start: at(7, b.int(12, 18)), drink: "coffee" });
     b.add({ kind: "mind_check", start: at(9, b.int(10, 30)), ms: b.int(292, 322), lapses: b.int(0, 2), energy: b.int(3, 5), mood: b.int(3, 5), clarity: b.int(3, 5) });
     b.add({ kind: "peptide", start: at(8, b.int(20, 50)), dose: "AM", taken: true, thumb: "pen" });
     const breakfast = b.pick(BREAKFASTS);

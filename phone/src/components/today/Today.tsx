@@ -6,6 +6,7 @@ import { buildLedger, watchedMinutes } from "@/lib/today";
 import { PULL_THRESHOLD, usePullToRefresh } from "@/lib/usePullToRefresh";
 import { useToday } from "@/lib/useToday";
 import { ConnectSheet } from "./ConnectSheet";
+import { HowSheet } from "./HowSheet";
 import { Hero } from "./Hero";
 import { Ledger } from "./Ledger";
 import { StatusStrip } from "./StatusStrip";
@@ -25,6 +26,7 @@ export function Today({ query }: { query: string }) {
   const today = useToday();
   const { pull, busy } = usePullToRefresh(today.refresh);
   const [connecting, setConnecting] = useState(false);
+  const [how, setHow] = useState(false);
 
   // Nothing is drawn before the backend's first answer (at most the 15 s timeout).
   if (!today.loaded) return null;
@@ -73,12 +75,17 @@ export function Today({ query }: { query: string }) {
         </div>
       ) : null}
 
+      <button type="button" onClick={() => setHow(true)} className="type-secondary mt-2 min-h-11 font-semibold text-ink">
+        How it’s computed
+      </button>
+
       {/* Nothing seen yet: the instruction sits where the log will be, the button above it. */}
       {empty || (entries && entries.length > 0) ? (
         <Ledger entries={entries ?? []} query={query} empty={EMPTY} />
       ) : null}
 
       <ConnectSheet open={connecting} onClose={() => setConnecting(false)} />
+      <HowSheet open={how} onClose={() => setHow(false)} />
     </>
   );
 }

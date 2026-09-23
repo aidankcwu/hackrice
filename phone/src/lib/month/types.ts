@@ -70,6 +70,9 @@ export type MonthEvent =
 
 export type EventKind = MonthEvent["kind"];
 
+/** A MonthEvent before it gets its id and seeded flag. Distributive, so each kind keeps its own fields. */
+export type EventDraft = MonthEvent extends infer E ? (E extends MonthEvent ? Omit<E, "id" | "seeded"> : never) : never;
+
 export interface NightWaking {
   /** Minutes after the midnight of the day this sleep ends on. */
   start: number;
