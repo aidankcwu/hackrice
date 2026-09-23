@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass
 import re
-from typing import Callable, Protocol, runtime_checkable
+from typing import Callable, Mapping, Protocol, runtime_checkable
 
 from ..config import DEFAULT_KEYWORD_TRIGGERS, Timings
 from ..models import (
@@ -51,6 +51,16 @@ _BIOMETRIC_REASON = "Heart rate {hr:.0f} vs resting {rest:.0f} while not exercis
 #: ``medication_seen`` cooldown (PLAN 2.2): one dose is one sighting, not one
 #: per 20 s while the bottle sits in view.
 MEDICATION_COOLDOWN_S = 20 * 60.0
+
+#: With ``reads_watch`` a sustained trigger wants the concept hot on this share
+#: of the window's watch-bearing ticks (docs/PERCEPTION.md "Gate and actions",
+#: phase 3: "above enter on most ticks in the window").
+WATCH_HOT_FRACTION = 0.7
+
+#: Enter threshold used when no ``watch_thresholds`` were handed in; mirrors
+#: ``capture.settings.DEFAULT_ENTER`` (not imported: ``pipeline.capture``
+#: pulls the whole bridge in, and the gate must stay free of it).
+DEFAULT_WATCH_ENTER = 0.60
 
 
 @runtime_checkable
@@ -195,6 +205,44 @@ def _condition_hits(
     def predicate(window: list[Tick]) -> bool:
         known = [v for t in _recent(window, seconds) if (v := condition(t)) is not None]
         return bool(known) and known[-1] is True and sum(v is True for v in known) >= minimum
+
+    return predicate
+
+
+def _watch_persisted(
+    concepts: tuple[str, ...],
+    enter: Mapping[str, float],
+    confirm: Callable[[Tick], bool | None],
+    fallback: Callable[[list[Tick]], bool],
+    seconds: float,
+    min_watched: int = 1,
+) -> Callable[[list[Tick]], bool]:
+    """The phase-3 sustained rule: the watcher proves how long, the labeler what.
+
+    Fires when the concept (any of ``concepts``) scores at or above its enter
+    threshold on at least :data:`WATCH_HOT_FRACTION` of the ticks in the last
+    ``seconds`` that carry a ``watch`` block, AND at least one tick in that
+    window has ``confirm`` -- the trigger's own fresh ``ai`` reading -- True.
+    A tick without ``watch`` counts neither for nor against; a window with fewer
+    than ``min_watched`` watch-bearing ticks (the trigger's own hit count, so a
+    "sustained" state cannot be proved by the first tick of a session) is judged
+    by ``fallback``, today's rule.
+    """
+
+    def hot(tick: Tick) -> bool:
+        return any(
+            (score := tick.watch_score(name)) is not None and score >= enter.get(name, DEFAULT_WATCH_ENTER)
+            for name in concepts
+        )
+
+    def predicate(window: list[Tick]) -> bool:
+        ticks = _recent(window, seconds)
+        watched = [tick for tick in ticks if tick.watch is not None]
+        if len(watched) < max(1, min_watched):
+            return fallback(window)
+        if sum(hot(tick) for tick in watched) < WATCH_HOT_FRACTION * len(watched):
+            return False
+        return any(confirm(tick) is True for tick in ticks)
 
     return predicate
 
@@ -856,7 +904,8 @@ def _family(name: str, label: str) -> str:
     return _ACTIVITY_FAMILIES.get(label, label)
 
 
-def change_trigger(timings: Timings, cues: CueMoments | None = None) -> Trigger:
+def change_trigger(timings: Timings, cues: CueMoments | None = None, *,
+                   novelty_enter: float | None = None) -> Trigger:
     """Wake T1 for stable, meaningful changes in fresh visual semantics.
 
     Two agreeing fresh ticks, as before -- for the things where the risk is
@@ -865,6 +914,12 @@ def change_trigger(timings: Timings, cues: CueMoments | None = None) -> Trigger:
     the cue: while a hand-held cue is live this trigger reports no food, drink
     or new-object change, so the clerk is not woken a second time, 1.5 s later,
     about the rice krispy treat the voice agent is already talking about.
+
+    ``novelty_enter`` (phase 3, ``reads_watch``) adds the watcher's embedding
+    novelty as a second input: ``watch.novelty`` at or above it on two
+    consecutive ticks is a change too, under the same cooldown and per-minute
+    cap, and needs no fresh ``ai`` -- the watcher saw the scene turn before
+    the labeler was asked. ``None`` (the default) leaves the trigger as it was.
     """
 
     required = max(2, timings.scaled_hits(2))
@@ -945,16 +1000,31 @@ def change_trigger(timings: Timings, cues: CueMoments | None = None) -> Trigger:
             fired_at.popleft()
         return (not fired_at or now - fired_at[-1] >= timings.change_cooldown_s) and len(fired_at) < timings.change_max_per_min
 
+    def novelty(window: list[Tick]) -> tuple[float, float] | None:
+        """The two newest ticks' novelty when both are at or above enter."""
+
+        if novelty_enter is None or len(window) < 2:
+            return None
+        before, now = window[-2], window[-1]
+        if before.watch is None or now.watch is None:
+            return None
+        if before.watch.novelty >= novelty_enter and now.watch.novelty >= novelty_enter:
+            return before.watch.novelty, now.watch.novelty
+        return None
+
     def predicate(window: list[Tick]) -> bool:
-        return bool(
-            window
-            and window[-1].ai_fresh(timings.ai_max_age_ms)
-            and within_limits(window[-1].t)
-            and changes(window)[0]
-        )
+        if not window or not within_limits(window[-1].t):
+            return False
+        if window[-1].ai_fresh(timings.ai_max_age_ms) and changes(window)[0]:
+            return True
+        return novelty(window) is not None
 
     def enrich(window: list[Tick]) -> tuple[str, list[str]]:
         reasons, transitions = changes(window)
+        spike = novelty(window)
+        if spike is not None:
+            reasons.append(f"novelty {spike[1]:.2f}")
+            transitions.append(f"novelty: {spike[0]:.2f} -> {spike[1]:.2f}")
         return "; ".join(reasons), ["Visual transition: " + "; ".join(transitions)] if transitions else []
 
     return Trigger(
@@ -963,17 +1033,26 @@ def change_trigger(timings: Timings, cues: CueMoments | None = None) -> Trigger:
     )
 
 
+def _outdoor_seen(tick: Tick, max_age_ms: int) -> bool | None:
+    """Tri-state: an outdoor scene or vegetation on this tick's fresh ``ai``."""
+
+    scene = tick.enum("scene", max_age_ms)
+    vegetation = tick.flag("vegetation_visible", max_age_ms)
+    if scene is None and vegetation is None:
+        return None
+    return scene in OUTDOOR_SCENES or vegetation is True
+
+
 def _outdoor_hits(
     seconds: float, minimum: int, max_age_ms: int = 3000
 ) -> Callable[[list[Tick]], bool]:
     def predicate(window: list[Tick]) -> bool:
         observations: list[bool] = []
         for tick in _recent(window, seconds):
-            scene = tick.enum("scene", max_age_ms)
-            vegetation = tick.flag("vegetation_visible", max_age_ms)
-            if scene is None and vegetation is None:
+            seen = _outdoor_seen(tick, max_age_ms)
+            if seen is None:
                 continue
-            observations.append(scene in OUTDOOR_SCENES or vegetation is True)
+            observations.append(seen)
         return bool(observations) and observations[-1] and sum(observations) >= minimum
 
     return predicate
@@ -1211,7 +1290,9 @@ def biometric_anomaly_trigger(timings: Timings, feed: BiometricFeed) -> Trigger:
 def default_triggers(
     timings: Timings, demo_mode: bool, feed: BiometricFeed | None = None,
     keyword_triggers: list[dict] | None = None, *, cues: bool = True,
-    cue_bypass_gap: bool = True,
+    cue_bypass_gap: bool = True, reads_watch: bool = False,
+    watch_thresholds: Mapping[str, tuple[float, float]] | None = None,
+    novelty_enter: float = 0.35,
 ) -> list[Trigger]:
     """Return shipped triggers in deterministic priority order.
 
@@ -1222,6 +1303,15 @@ def default_triggers(
     ``cue_bypass_gap=False`` is what FAST_PATH=0 passes: the cue then goes
     into the clerk's queue, so it must respect the global escalation gap like
     any other trigger rather than take the one T1 slot 0 s after another.
+
+    ``reads_watch=True`` is GATE_READS_WATCH=1 (docs/PERCEPTION.md "Gate and
+    actions", phase 3): the four sustained triggers take persistence from the
+    tick's ``watch`` block (``watch_thresholds`` gives each concept's
+    ``(enter, exit)``; only enter is read here) and keep one fresh confirming
+    ``ai`` reading as the "what", and ``change`` also fires on watcher novelty
+    at or above ``novelty_enter`` on two consecutive ticks. Point sightings,
+    keyword and cue triggers do not change. Off, every trigger is exactly what
+    it was.
     """
 
     # Kept as a named mapping so deployments can trivially override individual
@@ -1259,11 +1349,36 @@ def default_triggers(
     def medication(tick: Tick) -> bool | None:
         return tick.medication_in_view(max_age_ms)
 
+    food_in_frame = _condition_hits(meal, timings.food_window, hits(timings.food_min_hits))
+    screen_sustained = _flag_hits("screen_present", timings.screen_sustained_window, hits(timings.screen_sustained_min_hits), max_age_ms)
+    people_sustained = _condition_hits(conversation, timings.people_sustained_window, hits(timings.people_sustained_min_hits))
+    outdoor_sustained = _outdoor_hits(timings.outdoor_sustained_window, hits(timings.outdoor_min_hits), max_age_ms)
+    if reads_watch:
+        # The watcher proves how long; the labeler's own per-tick reading (the
+        # one the trigger reads today) confirms what, once in the window.
+        enter = {name: pair[0] for name, pair in (watch_thresholds or {}).items()}
+        food_in_frame = _watch_persisted(
+            ("food_present",), enter, meal, food_in_frame, timings.food_window,
+            min_watched=hits(timings.food_min_hits))
+        screen_sustained = _watch_persisted(
+            ("screen_present",), enter, lambda tick: tick.flag("screen_present", max_age_ms),
+            screen_sustained, timings.screen_sustained_window,
+            min_watched=hits(timings.screen_sustained_min_hits))
+        people_sustained = _watch_persisted(
+            ("people_present", "people_interacting"), enter, conversation,
+            people_sustained, timings.people_sustained_window,
+            min_watched=hits(timings.people_sustained_min_hits))
+        outdoor_sustained = _watch_persisted(
+            ("outdoor_visible", "vegetation_visible"), enter,
+            lambda tick: _outdoor_seen(tick, max_age_ms),
+            outdoor_sustained, timings.outdoor_sustained_window,
+            min_watched=hits(timings.outdoor_min_hits))
+
     specs = [
-        ("food_in_frame", _condition_hits(meal, timings.food_window, hits(timings.food_min_hits)), "meal", "Eating persisted in the recent frame window"),
-        ("screen_sustained", _flag_hits("screen_present", timings.screen_sustained_window, hits(timings.screen_sustained_min_hits), max_age_ms), "screen_block", "Screen presence was sustained"),
-        ("people_sustained", _condition_hits(conversation, timings.people_sustained_window, hits(timings.people_sustained_min_hits)), "conversation", "Social interaction was sustained"),
-        ("outdoor_sustained", _outdoor_hits(timings.outdoor_sustained_window, hits(timings.outdoor_min_hits), max_age_ms), "outdoor_block", "Outdoor context was sustained"),
+        ("food_in_frame", food_in_frame, "meal", "Eating persisted in the recent frame window"),
+        ("screen_sustained", screen_sustained, "screen_block", "Screen presence was sustained"),
+        ("people_sustained", people_sustained, "conversation", "Social interaction was sustained"),
+        ("outdoor_sustained", outdoor_sustained, "outdoor_block", "Outdoor context was sustained"),
         ("caffeine_seen", _flag_hits("caffeine_visible", 10.0, sighting_hits, max_age_ms), "caffeine_sighting", "Caffeine was seen repeatedly"),
         ("alcohol_seen", _flag_hits("alcohol_visible", 10.0, sighting_hits, max_age_ms), "alcohol_sighting", "Alcohol was seen repeatedly"),
         ("medication_seen", _condition_hits(medication, 10.0, sighting_hits), "medication_sighting", "Medication was seen repeatedly"),
@@ -1273,13 +1388,14 @@ def default_triggers(
     # coffee in the hand is answered on the tick it appears, whatever else woke
     # the clerk. It shares its moments with `change`, which then keeps out of
     # the hand.
+    novelty = novelty_enter if reads_watch else None
     if cues:
         moments = CueMoments()
         triggers = [cue_trigger(timings, moments,
                                 bypass_gap=demo_mode and cue_bypass_gap),
-                    change_trigger(timings, moments)]
+                    change_trigger(timings, moments, novelty_enter=novelty)]
     else:
-        triggers = [change_trigger(timings)]
+        triggers = [change_trigger(timings, novelty_enter=novelty)]
     triggers.extend(Trigger(name, predicate, cooldown(name), kind, reason) for name, predicate, kind, reason in specs)  # type: ignore[arg-type]
     entries = DEFAULT_KEYWORD_TRIGGERS if keyword_triggers is None else keyword_triggers
     for entry in entries:
