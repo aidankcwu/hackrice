@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time
+from collections import deque
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from dotenv import load_dotenv
 from longevity import wire
@@ -15,14 +17,87 @@ from longevity.loop import T0Loop
 from longevity.ring import FrameRing
 from longevity.server.ingest import GlassesLink
 from longevity.sources.base import CaptureSource
-from longevity.vlm import T0Tagger, build_client
+from longevity.vlm import KINDS, T0Tagger, VLMClient, build_client
+from longevity.watcher import Watcher, WatcherConfig
+from longevity.watcher_model import build_watcher_model
 
 from ..bus import TickBus
 from ..config import Settings
 from ..models import PendingQuestion, Tick
+from .settings import POINT_CONCEPTS, CaptureSettings
 from .speak import current_speech, speech_for
 
 log = logging.getLogger(__name__)
+
+#: The trailing window `stats()["labeler"]` counts calls over.
+_HOUR_S = 3600.0
+
+
+class _LabelerMeter:
+    """Per-kind call starts over the trailing hour and the last wake call's latency.
+
+    The tagger counts calls per kind since start, and its scheduler counts starts
+    over the hour without their kinds; neither keeps per-kind timestamps or
+    latencies. Both come from the public surface instead: `note_started` wraps the
+    scheduler's (the tagger calls it with the kind just before it starts each
+    call), and `_MeteredClient.tag` is then invoked by that call's task before its
+    first await, so starts and `tag` calls pair up in order.
+    """
+
+    def __init__(self) -> None:
+        self.starts: deque[tuple[float, str]] = deque()
+        self._unpaired: deque[str] = deque(maxlen=8)
+        self.last_heartbeat_t: float | None = None
+        self.last_wake_latency_ms: float | None = None
+
+    def wrap(self, scheduler: Any) -> None:
+        inner = scheduler.note_started
+
+        def note_started(kind: str, now: float) -> None:
+            inner(kind, now)
+            self.starts.append((now, kind))
+            self._unpaired.append(kind)
+            if kind == "heartbeat":
+                self.last_heartbeat_t = now
+
+        scheduler.note_started = note_started
+
+    def pair(self) -> str | None:
+        return self._unpaired.popleft() if self._unpaired else None
+
+    def per_hour(self, now: float) -> dict[str, int]:
+        while self.starts and self.starts[0][0] <= now - _HOUR_S:
+            self.starts.popleft()
+        counts = dict.fromkeys(KINDS, 0)
+        for _, kind in self.starts:
+            counts[kind] = counts.get(kind, 0) + 1
+        return counts
+
+
+class _MeteredClient:
+    """A VLM client that times each ``wake`` call for `_LabelerMeter`."""
+
+    def __init__(self, inner: VLMClient, meter: _LabelerMeter) -> None:
+        self._inner = inner
+        self._meter = meter
+
+    def tag(self, jpeg: bytes, **kwargs: Any) -> Any:
+        # Synchronous on purpose: the kind is paired at call time, in start order.
+        kind = self._meter.pair()
+        return self._timed(kind, self._inner.tag(jpeg, **kwargs))
+
+    async def _timed(self, kind: str | None, call: Any) -> Any:
+        started = time.perf_counter()
+        result = await call
+        if kind == "wake":
+            self._meter.last_wake_latency_ms = round((time.perf_counter() - started) * 1000, 1)
+        return result
+
+    async def aclose(self) -> None:
+        await self._inner.aclose()
+
+    def __getattr__(self, name: str) -> Any:  # usage, calls, ... of the real client
+        return getattr(self._inner, name)
 
 
 class LongevityCapture:
@@ -40,6 +115,7 @@ class LongevityCapture:
         camera: int,
         vlm: Literal["gemini", "fake", "off"],
         flow: str | None,
+        capture_settings: CaptureSettings | None = None,
     ) -> None:
         # Settings reads .env into its model but does not export unrelated keys such
         # as GEMINI_API_KEY. T0's client reads os.environ when it is constructed.
@@ -51,7 +127,16 @@ class LongevityCapture:
         #: from, so the window the phone opens and the deadline the manager
         #: computes come from one config object.
         self.ask_listen_s = settings.timings.ask_listen_s
-        self.ring = FrameRing(ttl_s=settings.frame_ttl_s)
+        # Read after load_dotenv, so WATCHER=... in backend/.env applies.
+        cs = self.capture_settings = capture_settings or CaptureSettings()
+        self.watcher_error: str | None = None
+        self.watcher = self._build_watcher(cs) if cs.watcher else None
+        # The watcher scores up to watcher_fps_max frames a second, so the ring must
+        # hold a full TTL of frames at that rate (7 fps -> 646, not 256).
+        self.ring = FrameRing(
+            ttl_s=settings.frame_ttl_s,
+            fps_hint=cs.watcher_fps_max if self.watcher is not None else None,
+        )
         self.link = GlassesLink()
         # The VLM budget is the full tick interval. It used to be interval - 0.1
         # because a call over budget was cancelled and lost, so the budget had to
@@ -65,11 +150,25 @@ class LongevityCapture:
         self.vlm_budget_s = budget_s
         # VLM_MAX_IN_FLIGHT=1 is the kill switch back to the serial tagger
         # (one call at a time); still only the ceiling cancels a call.
+        self._meter = _LabelerMeter()
+        client = build_client(vlm)
         self.tagger = T0Tagger(
-            build_client(vlm), budget_s=budget_s,
+            _MeteredClient(client, self._meter) if client is not None else None,
+            budget_s=budget_s,
             max_age_s=settings.timings.ai_max_age_ms / 1000,
             max_in_flight=settings.vlm_max_in_flight,
+            tick_interval_s=settings.tick_interval_s,
+            heartbeat_s=cs.labeler_heartbeat_s,
+            transition_s=cs.labeler_transition_s,
+            steady_s=cs.labeler_steady_s,
+            cooling_s=cs.labeler_cooling_s,
+            max_per_hour=cs.labeler_max_per_hour,
+            dormant_after_s=cs.labeler_dormant_after_s,
+            dormant_heartbeat_s=cs.labeler_dormant_heartbeat_s,
+            error_backoff_n=cs.labeler_error_backoff_n,
+            point_concepts=POINT_CONCEPTS,
         )
+        self._meter.wrap(self.tagger.scheduler)
         self.his_bus = T0TickBus()
         self.source = self._build_source(
             source, dir=dir, speed=speed, loop=loop, camera=camera,
@@ -101,8 +200,34 @@ class LongevityCapture:
         self.loop = T0Loop(
             self.source, ring=self.ring, tagger=self.tagger, bus=self.his_bus,
             flow=flow, on_ai_update=forward if settings.publish_on_landing else None,
+            watcher=self.watcher,
         )
         self.his_bus.subscribe(forward)
+
+    def _build_watcher(self, cs: CaptureSettings) -> Watcher | None:
+        """The watcher, or None with `watcher_error` set. Never raises: a missing
+        extra or a failed download must not stop the backend from starting."""
+        try:
+            model = build_watcher_model(cs.watcher_model)
+            return Watcher(
+                model,
+                WatcherConfig(
+                    k=cs.watch_k, n=cs.watch_n, cooldown_s=cs.watch_cooldown_s,
+                    novelty_enter=cs.watch_novelty_enter,
+                    novelty_ema_s=cs.watch_novelty_ema_s,
+                    min_sharpness=cs.watch_min_sharpness, min_lux=cs.watch_min_lux,
+                ),
+                thresholds=cs.thresholds(),
+                point_concepts=POINT_CONCEPTS,
+            )
+        except Exception as exc:  # noqa: BLE001 - run without a watcher instead
+            self.watcher_error = f"{type(exc).__name__}: {exc}"
+            log.error(
+                "watcher %r unavailable, running without it (labeler on every tick): %s. "
+                "Fix: `uv sync --extra watcher` for MobileCLIP, WATCHER_MODEL=fake, "
+                "or WATCHER=0.", cs.watcher_model, self.watcher_error,
+            )
+            return None
 
     def _build_source(
         self, source: str, *, dir: str | None, speed: float, loop: bool,
@@ -183,12 +308,36 @@ class LongevityCapture:
         )
         return True
 
+    def take_look_answer(self) -> tuple[float, str] | None:
+        """The newest targeted-look answer as `(frame_t, answer)`, exactly once."""
+        return self.loop.take_look_answer()
+
     def stats(self) -> dict[str, object]:
         return {
             "loop": self.loop.stats.line(),
             "tagger": self.tagger.stats_line(),
             "converted": self.converted,
             "dropped": self.dropped,
+            "watcher": self.watcher.stats() if self.watcher is not None else None,
+            "labeler": self.labeler_stats(),
+            "watcher_error": self.watcher_error,
+        }
+
+    def labeler_stats(self) -> dict[str, object]:
+        """Labeler health (docs/PERCEPTION.md): with the watcher on, heartbeat age
+        and wake latency replace AI coverage, and frames sent per hour is the
+        privacy number. Every started call sends exactly one frame."""
+        now = time.time()  # the tagger's clock, which the scheduler's starts use
+        per_hour = self._meter.per_hour(now)
+        sched = self.tagger.scheduler.stats()
+        last_hb = self._meter.last_heartbeat_t
+        return {
+            "calls_per_hour": per_hour,
+            "capped": sched["capped"],
+            "last_heartbeat_age_s": None if last_hb is None else round(now - last_hb, 1),
+            "last_wake_latency_ms": self._meter.last_wake_latency_ms,
+            "frames_sent_per_hour": sum(per_hour.values()),
+            "mode": sched["mode"],
         }
 
     def speech_stats(self) -> dict[str, object]:
