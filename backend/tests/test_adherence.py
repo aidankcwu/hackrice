@@ -243,6 +243,50 @@ def test_a_second_close_event_does_not_speak_again(db) -> None:
     assert day_key(at(10, 0)) == DAY.isoformat()
 
 
+class ProductionSpeech(CountingSpeech):
+    """The real limiter under production timings: 600 s gap, 6 lines an hour."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        timings = Timings.production()
+        self.min_gap_s = timings.speech_min_gap
+        self.max_per_hour = timings.speech_max_per_hour
+
+
+def test_a_missed_dose_lands_even_when_the_limiter_would_refuse(db) -> None:
+    speech = ProductionSpeech()
+    matcher = AdherenceMatcher(db, speech)
+    # An ordinary line just used the gap: a plain speak now would be refused.
+    assert speech.allow(at(9, 59, 30)) is True
+    assert speech.allow(at(9, 59, 45)) is False
+
+    matcher.on_tick(at(9, 59, 50))
+    matcher.on_tick(at(10, 0))
+    matcher.on_tick(at(10, 0, 1))
+
+    assert speech.said == [MISSED_LINE.format(name="Morning dose")]
+    assert status_of(db, "Morning dose")["status"] == "missed"
+    # Stamped on the limiter: the next ordinary line waits its gap from 10:00.
+    assert speech.last_spoken_t == at(10, 0)
+    assert speech.allow(at(10, 5)) is False
+    assert speech.allow(at(10, 10)) is True
+
+
+def test_a_missed_dose_lands_past_the_hourly_cap(db) -> None:
+    speech = ProductionSpeech()
+    speech.min_gap_s = 0.0
+    matcher = AdherenceMatcher(db, speech)
+    for i in range(speech.max_per_hour):
+        assert speech.allow(at(21, 10) + i) is True
+    assert speech.allow(at(21, 59, 30)) is False  # the hour is still full at 22:00
+
+    matcher.on_tick(at(21, 59))
+    matcher.on_tick(at(22, 0))
+
+    assert speech.said == [MISSED_LINE.format(name="Evening dose")]
+    assert status_of(db, "Evening dose")["status"] == "missed"
+
+
 def test_a_backend_started_after_the_window_does_not_say_it_just_closed(db) -> None:
     speech = CountingSpeech()
     matcher = AdherenceMatcher(db, speech)

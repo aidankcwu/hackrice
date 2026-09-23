@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   doseNote,
   effectRows,
+  evidenceSrc,
   forecastView,
+  glassesCoverage,
   layerHours,
   layerRows,
   ledgerRows,
@@ -12,7 +14,7 @@ import {
   weekDays,
   weekSummary,
 } from "./shape";
-import type { DayInputs, EngineFactor, EnginePayload, LayerName, Person, WeekDay } from "./types";
+import type { DayInputs, EngineFactor, EnginePayload, HealthspanPayload, HealthspanWeek, LayerName, Person, WeekDay } from "./types";
 import { LAYER_ORDER } from "./types";
 import { LAYER_DISCOUNT } from "./units";
 
@@ -97,7 +99,7 @@ function payload(overrides: Partial<EnginePayload> = {}): EnginePayload {
 const PERSON: Person = { name: "Bryan", age: 20, sex: "M", goal: "average", profileLabel: "Average", device: "Ray-Ban Meta + whoop", bedtime_hh: 23 };
 
 function day(overrides: Partial<DayInputs> = {}): DayInputs {
-  return { date: "2026-09-12", episodes: [], seeded: {}, frameUrls: {}, isToday: false, nowT: at(18), ...overrides };
+  return { date: "2026-09-12", episodes: [], seeded: {}, isToday: false, nowT: at(18), ...overrides };
 }
 
 describe("layerHours", () => {
@@ -415,17 +417,39 @@ describe("weekSummary", () => {
 describe("shapeDashboard", () => {
   const SOURCE = { mode: "live" as const, api_base: "http://localhost:8010", day: "2026-09-12" };
 
-  it("assembles today's payload with the week and passes engine fields through", () => {
+  /** The backend's full payload for 2026-09-12: the engine fields plus the adapter's own. */
+  function healthspanPayload(overrides: Partial<HealthspanPayload> = {}): HealthspanPayload {
+    return {
+      ...payload(),
+      day: "2026-09-12",
+      profile: { age: 20, sex: "M", goal: "average", bedtime_hh: 23, bedtime_source: "seeded" },
+      provenance: {
+        steps: { source: "seeded", basis: "phone", detail: "phone steps, row 2026-09-12" },
+        social_index: { source: "missing", basis: "glasses", detail: "no episodes on 2026-09-12 — glasses not worn yet" },
+      },
+      window: { factor_days: ["2026-09-11", "2026-09-12"], uncovered_days: ["2026-09-11", "2026-09-12"] },
+      ...overrides,
+    };
+  }
+
+  const week = (today: HealthspanPayload, hours: Array<[string, number]>): HealthspanWeek => ({
+    day: today.day,
+    days: hours.map(([d, h]) => ({ day: d, hours_today: h })),
+    today,
+  });
+
+  it("assembles the backend's payload with the week and passes engine fields through", () => {
     const days = [
       day({ date: "2026-09-11", seeded: { sleep_hours: 7, bed_time: 23 }, nowT: at(10) }),
       day({ isToday: true, nowT: at(18, 30) }),
     ];
-    const payloads = [payload({ hours_today: 0.3 }), payload()];
-    const data = shapeDashboard({ payloads, days, person: PERSON, source: SOURCE, engineMs: 412 });
+    const today = healthspanPayload();
+    const healthspan = week(today, [["2026-09-11", 0.3], ["2026-09-12", 0.64]]);
+    const data = shapeDashboard({ healthspan, days, person: PERSON, source: SOURCE, engineMs: 412 });
     expect(data.generated_at).toBe(at(18, 30));
     expect(data.engine_ms).toBe(412);
-    expect(data.source).toBe(SOURCE);
-    expect(data.person).toBe(PERSON);
+    expect(data.source).toEqual({ ...SOURCE, glasses_coverage: { today: false, week: false }, provenance: today.provenance });
+    expect(data.person).toEqual(PERSON);
     expect(data).toMatchObject({ overall: 71, hours_today: 0.64, hours_ci: [0.4, 0.88], years_delta: 1.2, years_ci: [0.8, 1.6] });
     expect(data.layers).toHaveLength(8);
     expect(data.pins).toHaveLength(9);
@@ -433,18 +457,67 @@ describe("shapeDashboard", () => {
     expect(data.week.map((d) => d.hours)).toEqual([0.3, 0.64]);
     expect(data.week[1].today).toBe(true);
     expect(data.week_summary).toBe("Fri was the worst day at +0.3 h; Sat the best at +0.6 h.");
-    expect(data.factors).toBe(payloads[1].factors);
+    expect(data.factors).toBe(today.factors);
     expect(data.insights).toEqual(payload().insights);
     expect(data.observations).toEqual(payload().observations);
   });
 
-  it("blanks the bedtime when no night in the window recorded one", () => {
-    const days = [day({ date: "2026-09-11", nowT: at(10) }), day({ isToday: true, nowT: at(18, 30) })];
-    const data = shapeDashboard({ payloads: [payload(), payload()], days, person: PERSON, source: SOURCE, engineMs: 1 });
-    expect(data.forecast.bedtime).toBe("—");
+  it("takes the bedtime the engine ran with, and blanks it when the backend assumed its default", () => {
+    const days = [day({ isToday: true, nowT: at(18, 30) })];
+    const late = healthspanPayload({ profile: { age: 20, sex: "M", goal: "average", bedtime_hh: 24.75, bedtime_source: "seeded" } });
+    const shaped = shapeDashboard({ healthspan: week(late, []), days, person: PERSON, source: SOURCE, engineMs: 1 });
+    expect(shaped.person.bedtime_hh).toBe(24.75);
+    expect(shaped.forecast.bedtime).toBe("00:45");
+    const assumed = healthspanPayload({ profile: { age: 20, sex: "M", goal: "average", bedtime_hh: 23, bedtime_source: "missing" } });
+    const blank = shapeDashboard({ healthspan: week(assumed, []), days, person: PERSON, source: SOURCE, engineMs: 1 });
+    expect(blank.forecast.bedtime).toBe("—");
+  });
+
+  it("takes age and sex from the profile the engine ran with, never from the caller", () => {
+    const scored = healthspanPayload({ profile: { age: 41, sex: "f", goal: "average", bedtime_hh: 23, bedtime_source: "seeded" } });
+    // PERSON says 20 / M; the payload says who was actually scored.
+    const data = shapeDashboard({ healthspan: week(scored, []), days: [day({ isToday: true })], person: PERSON, source: SOURCE, engineMs: 1 });
+    expect(data.person).toEqual({ ...PERSON, age: 41, sex: "F" });
+  });
+
+  it("matches each day's hours by date, and leaves a day the backend did not score blank", () => {
+    const days = [day({ date: "2026-09-10" }), day({ date: "2026-09-11" }), day({ isToday: true })];
+    // Out of order and missing 09-10: position would pair the wrong numbers.
+    const healthspan = week(healthspanPayload(), [["2026-09-12", 0.64], ["2026-09-11", -0.4]]);
+    const data = shapeDashboard({ healthspan, days, person: PERSON, source: SOURCE, engineMs: 1 });
+    expect(data.week.map((d) => d.hours)).toEqual([null, -0.4, 0.64]);
+  });
+
+  it("marks glasses coverage from the backend's own window, today and across the week", () => {
+    const covered = (uncovered: string[]) =>
+      glassesCoverage({ day: "2026-09-12", window: { factor_days: ["2026-09-11", "2026-09-12"], uncovered_days: uncovered } });
+    expect(covered(["2026-09-11", "2026-09-12"])).toEqual({ today: false, week: false });
+    expect(covered(["2026-09-12"])).toEqual({ today: false, week: true });
+    expect(covered([])).toEqual({ today: true, week: true });
+    const data = shapeDashboard({
+      healthspan: week(healthspanPayload({ window: { factor_days: ["2026-09-11", "2026-09-12"], uncovered_days: ["2026-09-12"] } }), []),
+      days: [day({ isToday: true })],
+      person: PERSON,
+      source: SOURCE,
+      engineMs: 1,
+    });
+    expect(data.source.glasses_coverage).toEqual({ today: false, week: true });
+  });
+
+  it("makes a pin's server-relative evidence path absolute against the API base", () => {
+    expect(evidenceSrc("/api/evidence/d_1/f_2", "http://localhost:8010")).toBe("http://localhost:8010/api/evidence/d_1/f_2");
+    expect(evidenceSrc("http://x/f1", "http://localhost:8010")).toBe("http://x/f1");
+    expect(evidenceSrc(null, "http://localhost:8010")).toBeNull();
+    const today = healthspanPayload({
+      pins: [{ time: "10:00", img: "/api/evidence/d_1/f_2", grade: "A", kind: "credit", seen: "Conversation, 20 min", effect: "" }],
+    });
+    const data = shapeDashboard({ healthspan: week(today, []), days: [day({ isToday: true })], person: PERSON, source: SOURCE, engineMs: 1 });
+    expect(data.pins.map((p) => p.img)).toEqual(["http://localhost:8010/api/evidence/d_1/f_2"]);
   });
 
   it("refuses an empty run rather than inventing a day", () => {
-    expect(() => shapeDashboard({ payloads: [], days: [], person: PERSON, source: SOURCE, engineMs: 0 })).toThrow(/at least one payload/);
+    expect(() =>
+      shapeDashboard({ healthspan: week(healthspanPayload(), []), days: [], person: PERSON, source: SOURCE, engineMs: 0 }),
+    ).toThrow(/at least one day/);
   });
 });

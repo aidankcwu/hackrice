@@ -15,7 +15,7 @@ import pytest
 
 from longevity import wire
 from longevity.server.ingest import GlassesLink, _handle
-from pipeline.actions.autopilot import Autopilot, sunset_t
+from pipeline.actions.autopilot import Autopilot, config_act_veto, sunset_t
 from pipeline.actions.handlers import (
     ACT_FAILED, ACT_FAILED_LINES, ACTED, ActionHandler,
 )
@@ -182,7 +182,7 @@ def test_no_phone_fails_at_once_and_speaks_once(db, autopilot, speech, handler) 
     assert speech.said == [ACT_FAILED_LINES["screen_shield"]]
 
 
-def test_a_persona_veto_holds_the_act_back(db, autopilot, sent, speech, handler) -> None:
+def test_a_veto_holds_the_act_back(db, autopilot, sent, speech, handler) -> None:
     handler.act_veto = lambda kind, args, t: "quiet evening" if kind == "screen_shield" else None
 
     run(autopilot, ts(21, 29), ts(21, 31))
@@ -198,3 +198,78 @@ def test_config_defaults_and_a_bad_wind_down_falls_back() -> None:
     assert (settings.outdoor_target_min, settings.wind_down_hhmm) == (30, "21:30")
     assert Settings(_env_file=None, wind_down_hhmm="9:05").wind_down_hhmm == "09:05"
     assert Settings(_env_file=None, wind_down_hhmm="25:00").wind_down_hhmm == "21:30"
+
+
+# -- the config veto: AUTOPILOT_ACTS / AUTOPILOT_QUIET_DAYS -----------------------
+
+
+@pytest.fixture
+def no_autopilot_env(monkeypatch) -> None:
+    monkeypatch.delenv("AUTOPILOT_ACTS", raising=False)
+    monkeypatch.delenv("AUTOPILOT_QUIET_DAYS", raising=False)
+
+
+def veto_from(handler: ActionHandler, **env: str) -> Settings:
+    """Install the veto the wiring builds, from ``Settings`` with ``env`` set."""
+
+    settings = Settings(_env_file=None, **env)
+    handler.act_veto = config_act_veto(settings.autopilot_acts, settings.autopilot_quiet_days)
+    return settings
+
+
+def outcomes(db: Database) -> dict[str, str]:
+    return {d.actions[0]["kind"]: d.actions[0]["outcome"] for d in auto_decisions(db)}
+
+
+def test_default_config_still_fires_both(db, autopilot, sent, speech, handler,
+                                         no_autopilot_env) -> None:
+    settings = veto_from(handler)
+    assert settings.autopilot_acts == ("calendar_block", "screen_shield")
+    assert settings.autopilot_quiet_days == ()
+
+    run(autopilot, ts(15, 59), ts(21, 31))
+
+    assert [m["kind"] for m in sent] == ["calendar_block", "screen_shield"]
+    assert outcomes(db) == {"calendar_block": "sent", "screen_shield": "sent"}
+    assert speech.said == []
+
+
+def test_a_disabled_kind_is_vetoed(db, autopilot, sent, speech, handler,
+                                   no_autopilot_env) -> None:
+    veto_from(handler, autopilot_acts="calendar_block")
+
+    run(autopilot, ts(15, 59), ts(21, 31))
+
+    assert [m["kind"] for m in sent] == ["calendar_block"]
+    assert outcomes(db) == {"calendar_block": "sent", "screen_shield": "vetoed:disabled"}
+    assert speech.said == []
+
+
+def test_an_empty_acts_list_turns_the_autopilot_off(db, autopilot, sent, speech, handler,
+                                                    monkeypatch) -> None:
+    monkeypatch.setenv("AUTOPILOT_ACTS", "")
+    monkeypatch.delenv("AUTOPILOT_QUIET_DAYS", raising=False)
+    veto_from(handler)
+
+    run(autopilot, ts(15, 59), ts(21, 31))
+
+    assert sent == [] and speech.said == []
+    assert outcomes(db) == {"calendar_block": "vetoed:disabled",
+                            "screen_shield": "vetoed:disabled"}
+
+
+def test_a_quiet_day_is_vetoed(db, autopilot, sent, speech, handler, monkeypatch) -> None:
+    monkeypatch.setenv("AUTOPILOT_QUIET_DAYS", f" {DAY.weekday()}, 6, 9, sat")
+    monkeypatch.delenv("AUTOPILOT_ACTS", raising=False)
+    settings = veto_from(handler)
+    assert settings.autopilot_quiet_days == (DAY.weekday(), 6)  # 9 and "sat" dropped
+
+    run(autopilot, ts(15, 59), ts(21, 31))
+
+    assert sent == [] and speech.said == []
+    assert outcomes(db) == {"calendar_block": "vetoed:quiet_day",
+                            "screen_shield": "vetoed:quiet_day"}
+
+    # The next day (a Tuesday) is not quiet: both fire again.
+    run(autopilot, ts(15, 59, days=1), ts(21, 31, days=1))
+    assert [m["kind"] for m in sent] == ["calendar_block", "screen_shield"]

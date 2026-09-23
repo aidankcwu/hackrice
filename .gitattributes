@@ -1,0 +1,19 @@
+# Edited on Windows with core.autocrlf=true; these must stay LF in every working tree
+# (bash setup.sh, Docker, the Mac and Xcode all read them).
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+*.toml      text eol=lf
+*.py        text eol=lf
+*.swift     text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.json      text eol=lf
+*.md        text eol=lf
+*.ts        text eol=lf
+*.tsx       text eol=lf
+*.mjs       text eol=lf
+*.css       text eol=lf
+
+*.png   binary
+*.jpg   binary
+*.jpeg  binary

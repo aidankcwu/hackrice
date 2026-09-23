@@ -44,8 +44,11 @@ __all__ = ["LIVE_DAILY_SOURCES", "Scorer", "row_provenance", "rollup"]
 #: writes into the ``seeded`` table for the demo. Membership there means "a real
 #: device could send this", not "this row did come from one", so the two sets
 #: cannot be the same object. Add a name here when a poller starts writing daily
-#: rows under it.
-LIVE_DAILY_SOURCES: frozenset[str] = frozenset({"fitbit", "apple_watch_live", "healthkit"})
+#: rows under it. A real WHOOP push writes ``whoop_live``
+#: (``wearables.adapters.WHOOP_LIVE_SOURCE``); the demo seed's ``whoop`` stays
+#: ``seeded``.
+LIVE_DAILY_SOURCES: frozenset[str] = frozenset(
+    {"fitbit", "apple_watch_live", "whoop_live", "healthkit"})
 
 
 def row_provenance(source: str) -> str:

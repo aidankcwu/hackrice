@@ -123,6 +123,13 @@ async def test_dashboard_routes(tmp_path):
         bad = await client.get("/api/healthspan?day=nonsense")
         assert bad.status_code == 400
         assert bad.json() == {"detail": "day must be YYYY-MM-DD"}
+        # Every pin picture is a saved evidence frame the evidence route serves.
+        for pin in body["pins"]:
+            if pin["img"] is not None:
+                assert pin["img"].startswith("/api/evidence/")
+                frame = await client.get(pin["img"])
+                assert frame.status_code == 200
+                assert frame.headers["content-type"] == "image/jpeg"
     await pipeline.stop()
 
 
@@ -153,6 +160,24 @@ async def test_healthspan_week_and_registry(tmp_path):
             assert [d["day"] for d in one["days"]] == [week["day"]]
             assert (await client.get("/api/healthspan?days=0")).status_code == 422
             assert (await client.get("/api/healthspan?days=32")).status_code == 422
+
+            # ?goal= overrides PROFILE_GOAL for that request only (the dashboard's picker).
+            assert week["today"]["profile"]["goal"] == pipeline.settings.profile_goal == "average"
+            day = week["day"]
+            athlete = (await client.get(f"/api/healthspan?day={day}&goal=athlete")).json()
+            assert athlete["profile"]["goal"] == "athlete"
+            shift = (await client.get(f"/api/healthspan?day={day}&days=2&goal=shift")).json()
+            assert shift["today"]["profile"]["goal"] == "shift"
+            assert [d["day"] for d in shift["days"]] == days[-2:]
+            after = (await client.get(f"/api/healthspan?day={day}")).json()
+            assert after["profile"]["goal"] == "average"
+            for bad_goal in ("bogus", "Athlete", ""):
+                bad = await client.get("/api/healthspan", params={"goal": bad_goal})
+                assert bad.status_code == 400
+                assert bad.json() == {
+                    "detail": "goal must be one of average, athlete, shift, genetic_risk"}
+            bad_week = await client.get("/api/healthspan?days=7&goal=bogus")
+            assert bad_week.status_code == 400
 
             registry = (await client.get("/api/healthspan/registry")).json()
             assert {"pipeline", "factors", "limitations", "leading_indicators",
@@ -417,7 +442,10 @@ async def test_health_auto_export_and_whoop_adapter_routes(tmp_path):
             "wrist_temp_dev", whoop_t - 2, whoop_t + 2)] == [0.4]
         resting = [r for r in pipeline.db.list_seeded(day_key(whoop_t), day_key(whoop_t))
                    if r.metric == "resting_hr"]
-        assert resting and resting[0].value == 57.0 and resting[0].source == "whoop"
+        # A real WHOOP night is whoop_live, never the demo seed's "whoop".
+        assert resting and resting[0].value == 57.0 and resting[0].source == "whoop_live"
+        from pipeline.scoring.scorer import row_provenance
+        assert row_provenance(resting[0].source) == "live"
     await pipeline.stop()
 
 

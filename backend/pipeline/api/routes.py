@@ -24,6 +24,7 @@ from ..reasoner.prompts import DEFAULT_PERSONA
 from ..reasoner.schema import AskAction
 from ..scoring import brian_score as bs
 from ..scoring.healthspan import (
+    GOALS,
     MAX_WEEK_DAYS,
     healthspan_for_day,
     healthspan_registry,
@@ -215,7 +216,8 @@ async def seeded(request: Request, days: int = Query(7, ge=1)) -> dict:
 
 @router.get("/api/healthspan")
 async def healthspan(request: Request, day: str | None = None,
-                     days: int | None = Query(None, ge=1, le=MAX_WEEK_DAYS)) -> dict:
+                     days: int | None = Query(None, ge=1, le=MAX_WEEK_DAYS),
+                     goal: str | None = None) -> dict:
     """Dose-response hazard view for one day (``scoring/healthspan.py``).
 
     Computed on request, never written. Runs off the event loop like the
@@ -226,6 +228,10 @@ async def healthspan(request: Request, day: str | None = None,
     first], today: <the full payload for ``day``>}`` -- one round trip for the
     week chart instead of N. ``?day=`` keeps its single-day shape either way, so
     an existing client is unaffected.
+
+    ``?goal=`` scores this one request under another ``Profile`` goal (the
+    dashboard's goal picker) and leaves ``PROFILE_GOAL`` alone; anything but
+    the four goals is a 400, never a silent fallback to the default.
     """
 
     pipeline = _pipeline(request)
@@ -234,12 +240,17 @@ async def healthspan(request: Request, day: str | None = None,
         date.fromisoformat(selected)
     except ValueError:
         raise HTTPException(400, "day must be YYYY-MM-DD")
+    if goal is not None and goal not in GOALS:
+        raise HTTPException(400, f"goal must be one of {', '.join(GOALS)}")
+    # Pins show the frames the reasoner saved at escalation (STATE.md §7).
+    evidence = pipeline.reasoner.evidence
     if days is not None:
         return await asyncio.to_thread(
             healthspan_week, pipeline.db, pipeline.settings, selected, days,
-            now_t=_now(pipeline))
+            now_t=_now(pipeline), goal=goal, evidence=evidence)
     return await asyncio.to_thread(
-        healthspan_for_day, pipeline.db, pipeline.settings, selected, now_t=_now(pipeline))
+        healthspan_for_day, pipeline.db, pipeline.settings, selected,
+        now_t=_now(pipeline), goal=goal, evidence=evidence)
 
 
 @router.get("/api/healthspan/registry")

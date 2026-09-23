@@ -28,6 +28,7 @@ from . import LIVE_METRICS, Sample
 from .google_health import NIGHT_LOOKBACK
 
 __all__ = [
+    "WHOOP_LIVE_SOURCE",
     "WHOOP_SKIN_TEMP_BASELINE_C",
     "HEALTH_AUTO_EXPORT_METRICS",
     "HEALTHKIT_DAILY_METRICS",
@@ -240,6 +241,12 @@ def healthkit_seeded_rows(samples: Iterable[Sample]) -> list[SeededRow]:
 
 # -- WHOOP API v2 ---------------------------------------------------------
 
+#: ``seeded``-table source of the daily rows a real WHOOP push writes. Not
+#: ``whoop``: the SPEC §6 demo seed writes that, and the scorer must tell the
+#: two apart (``scoring.scorer.LIVE_DAILY_SOURCES``). Intraday samples keep
+#: device ``whoop``; their ``origin='live'`` already marks them real.
+WHOOP_LIVE_SOURCE = "whoop_live"
+
 
 def _whoop_time(raw: Any) -> float | None:
     if isinstance(raw, (int, float)) and not isinstance(raw, bool):
@@ -363,6 +370,8 @@ def whoop_seeded_rows(payload: Any) -> list[SeededRow]:
 
     Only resting heart rate today: it is a once-a-night number, so it belongs
     with the other per-day rows the scorer reads, not in the intraday series.
+    Written under :data:`WHOOP_LIVE_SOURCE`, never ``whoop``: that is the SPEC
+    §6 demo seed's source, and a real night must not read as seed data.
     """
 
     rows: list[SeededRow] = []
@@ -376,7 +385,7 @@ def whoop_seeded_rows(payload: Any) -> list[SeededRow]:
         if resting is None or at is None:
             continue
         rows.append(SeededRow(day=day_key(at), metric="resting_hr",
-                              value=resting, unit="bpm", source="whoop"))
+                              value=resting, unit="bpm", source=WHOOP_LIVE_SOURCE))
     return rows
 
 

@@ -1,6 +1,6 @@
 import { T, fmtH, tone } from "@/lib/tokens";
 import type { DashboardData, EngineFactor, IconName } from "@/lib/score/types";
-import { provenanceOf, contextFor } from "@/lib/score/provenance";
+import { factorProvenance, measuredOnPage } from "@/lib/score/provenance";
 import type { Provenance } from "@/lib/score/provenance";
 import { Icon } from "./icons";
 import { doseNote } from "@/lib/score/shape";
@@ -80,12 +80,15 @@ export interface LayerViewRow {
  */
 export function layerViewRows(d: DashboardData): LayerViewRow[] {
   const byKey = new Map(d.factors.map((f) => [f.key, f]));
-  const wearable = d.source.mode === "live" && d.source.demo_mode !== true ? "whoop" : "seeded";
   return LAYER_SPECS.map((spec) => {
     const factors = spec.keys.map((k) => byKey.get(k)).filter((f): f is EngineFactor => f !== undefined);
-    const measured = factors.filter((f) => f.measured);
+    // A glasses value on a day the glasses filed no episode is the engine's
+    // default zero, not a sighting: it is unmeasured here, as on the tiles.
+    const measured = factors.filter((f) => measuredOnPage(f.key, f.measured, d.source));
     // The row's chip names the stream behind its most important measured factor;
     // with nothing measured it is Imputed, which is what the score counted.
+    // `factorProvenance` is the tiles' derivation too, so a row and a tile
+    // cannot name different streams for one factor.
     const lead = measured[0];
     return {
       name: spec.name,
@@ -95,7 +98,7 @@ export function layerViewRows(d: DashboardData): LayerViewRow[] {
       note: measured.length > 0 ? doseNote(measured) : "Unmeasured today — scored at the population average, earns nothing.",
       measured: measured.length,
       total: factors.length,
-      provenance: lead === undefined ? "imputed" : provenanceOf(lead.key, true, contextFor(lead.key, d.source.wearable_sources, wearable)),
+      provenance: lead === undefined ? "imputed" : factorProvenance(lead.key, true, d.source),
     };
   });
 }

@@ -12,9 +12,11 @@ Two inputs, both on the tick clock:
   ``screen_sustained``). Outside every window a sighting is an episode only.
 * **Ticks.** :meth:`AdherenceMatcher.on_tick` watches the clock cross each
   ``dose`` window's end. A dose still unsighted then is ``missed``, and the
-  wearer hears one line through the speech limiter (STATE §8). Only a
-  crossing the matcher saw counts: a backend started at 23:00 does not tell
-  the wearer the morning window "just closed".
+  wearer hears one line, exactly once per close. A missed dose is the one
+  line that must land, so it bypasses the speech limiter's gap and hourly cap
+  (``SpeechLimiter.grant``, STATE §8) but still stamps it: the next ordinary
+  line waits its gap. Only a crossing the matcher saw counts: a backend
+  started at 23:00 does not tell the wearer the morning window "just closed".
 
 The matcher only writes over a day with nothing on it (``waiting``). What the
 wearer set by hand -- ``done``, or ``undone`` on a sighting they rejected --
@@ -131,8 +133,10 @@ class AdherenceMatcher:
             return None
         row = self.db.set_protocol_status(item["id"], day, "missed", t=t)
         log.info("protocol: %s missed on %s", item["name"], day)
-        if self.speech.allow(t):
-            self.speech.speak(MISSED_LINE.format(name=item["name"]), "normal", t=t)
+        # The one line that must land: not held to the gap or the hourly cap,
+        # but stamped on the limiter so the next ordinary line waits its gap.
+        self.speech.grant(t)
+        self.speech.speak(MISSED_LINE.format(name=item["name"]), "normal", t=t)
         return row
 
     # -- helpers -------------------------------------------------------------

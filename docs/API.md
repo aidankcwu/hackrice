@@ -61,8 +61,8 @@ The `scene` / `activity` / `food_type` / `drink` menus live in `src/longevity/ai
 | `GET /api/pending_checks` | open `watch` rows |
 | `GET /api/summary/today` | annotate lines accumulated today (part 4 of the T1 envelope) |
 | `GET /api/seeded?days=7` | seeded integration rows (for the "7-day" panel) |
-| `GET /api/healthspan?day=YYYY-MM-DD` | dose-response hazard view for one day (default today; `pipeline/scoring/brian_score.py` + `healthspan.py`): `overall` 0–100, 8 `layers`, `hours_today`/`hours_ci`, `years_delta`/`years_ci`, 20 `factors[{key, dose, hr, hours, grade, measured, provenance: live\|seeded\|derived\|missing, basis, detail, source}]`, `levers` (ranked by hours per minute, timed only) + `levers_free` + `levers_personalized`, `forecast` tonight from leading indicators, `ledger` (ISO week to date), `insights[{kind, text, source}]`, `pins` (≤ 12) + `pins_total`, `experience`, `currencies`, `week_table`, `annotations`, `narrator_prompts`, `driver_rules`, `effects`, `profile`, `window`, `conventions`. Computed on request, never written; `400` on a malformed day |
-| `GET /api/healthspan?days=N` (1–31) | `{day, days: [lite payload per day, oldest first], today: <the full payload>}` — one round trip for the week chart. A lite day is `{day, overall, layers, hours_today, hours_ci, years_delta, experience, currencies, forecast, observations, measured, drivers}`: no `factors`, no `pins`, no `provenance`. `?day=` still selects the anchor day and keeps its single-day shape when `days` is absent; `422` outside 1–31 |
+| `GET /api/healthspan?day=YYYY-MM-DD` | dose-response hazard view for one day (default today; `pipeline/scoring/brian_score.py` + `healthspan.py`): `overall` 0–100, 8 `layers`, `hours_today`/`hours_ci`, `years_delta`/`years_ci`, 20 `factors[{key, dose, hr, hours, grade, measured, provenance: live\|seeded\|derived\|missing, basis, detail, source}]`, `levers` (ranked by hours per minute, timed only) + `levers_free` + `levers_personalized`, `forecast` tonight from leading indicators, `ledger` (ISO week to date), `insights[{kind, text, source}]`, `pins` (≤ 12) + `pins_total` — each pin's `img` is the server-relative `/api/evidence/<decision>/<frame>` of the newest saved frame of the newest non-dropped decision on its episode, `null` when none survived — `experience`, `currencies`, `week_table`, `annotations`, `narrator_prompts`, `driver_rules`, `effects`, `profile`, `window`, `conventions`. `?goal=average\|athlete\|shift\|genetic_risk` scores this request under that `Profile` goal instead of `PROFILE_GOAL` (the dashboard's goal picker); `400` on any other value. Computed on request, never written; `400` on a malformed day |
+| `GET /api/healthspan?days=N` (1–31) | `{day, days: [lite payload per day, oldest first], today: <the full payload>}` — one round trip for the week chart. A lite day is `{day, overall, layers, hours_today, hours_ci, years_delta, experience, currencies, forecast, observations, measured, drivers}`: no `factors`, no `pins`, no `provenance`. `?day=` still selects the anchor day and keeps its single-day shape when `days` is absent; `?goal=` applies to every day; `422` outside 1–31. The dashboard's headline, week bars and chips all come from this one call |
 | `GET /api/healthspan/registry` | everything the "How it's scored" page renders, in one static object: `export_registry()` from the engine (the 9 `pipeline` steps, all 20 `factors` with curve / grade / shrink / reference dose / source, `leading_indicators`, `limitations`) plus `adapter` — `provenance_labels`, `factor_sources[{source, bonus}]` (which app source feeds each factor's dose; a factor the engine gains and the adapter has not wired reads `unmapped`), `driver_rules`, `state_markers`, `conventions`. No database read, no clock read |
 | `POST /api/pvt` | `{rt_z, lapses?, rt_ms_median?, energy?, mood?, clarity?, t?}` → `{day, experience}`. Files a 3-minute PVT and its three-tap check as seeded rows `pvt_rt_z` / `pvt_lapses` / `pvt_rt_ms` / `pvt_check_energy` / `pvt_check_mood` / `pvt_check_clarity` (source `pvt`) for the local day of `t` (default now, on the tick clock), so the next `/api/healthspan` reads Mind the same way it reads a WHOOP row. `experience` is `utility_today` with that day's `recovery_score`. `400` on a missing `rt_z`, a non-number, a boolean, `abs(rt_z) > 5`, `lapses` outside 0–100, or a check outside 1–5 — out of range is never clamped, because a clamped reading is an invented one |
 | `GET /api/air/status` | `{configured, lat, lon, last_value, last_t, source}` for the OpenAQ PM2.5 layer. `configured` is false until `AIR_LAT` and `AIR_LON` are set — the honest default, not an error. When configured the route also polls and stores the day's `pm25` row; `air.fetch_pm25` caches per `AIR_POLL_S` (default 3600 s), so polling this route every second still makes one upstream request an hour. `last_value` is `null` whenever nothing was measured, never a zero, and a dead OpenAQ cannot fail the route |
@@ -319,6 +319,89 @@ first decision on the episode (the last line of an episode, "still at the
 desk", is a far worse name for it than the first), and carried through
 `upsert_episode`, which the episode builder calls on every tick. `null` until
 T1 names it.
+
+
+## The protocol (`/api/protocol`, PLAN 2.1)
+
+What the wearer means to do each day, and when. Tables `protocol_items` and
+`protocol_status` in `backend/pipeline/db.py`.
+
+```json
+{"id": "pi_3f2a91c4", "name": "Morning dose", "kind": "dose",
+ "window_start": "07:00", "window_end": "10:00",
+ "days": [0, 1, 2, 3, 4, 5, 6], "created_t": 1757700842.0}
+```
+
+- `kind` is `dose | meal | winddown | walk`.
+- `window_start` / `window_end` are local `"HH:MM"` on the same day, start
+  before end.
+- `days` are weekdays, **0 = Monday** (Python `date.weekday()`), sorted and
+  de-duplicated. Omitted on create means every day.
+- `name` is trimmed and must not be empty. A wrong type is a `400`, never
+  coerced.
+- `PUT` merges the fields it is given onto the item. `id` and `created_t`
+  never change.
+
+**Seed.** The first time a database gets the `protocol_items` table it is
+seeded with five items, every day: "Morning dose" 07:00–10:00 (dose),
+"Evening dose" 19:00–22:00 (dose), "Lunch window" 11:30–14:00 (meal),
+"Wind‑down" 21:30–23:00 (winddown), "Daylight walk" 07:00–16:00 (walk). The
+seed is written once. A wearer who deletes every item gets an empty list after
+a restart, not the seed again.
+
+**Status.** One row per item per local day, `waiting | seen | done | missed |
+undone`, with `seen_t` and `evidence_ref`. No row reads as `waiting`.
+`evidence_ref` is `<decision_id>/<frame_ref>`, so the thumbnail is
+`GET /api/evidence/<evidence_ref>`. `done` and `undo` set today's status to
+`done` / `undone` and keep any `seen_t` / `evidence_ref` already recorded.
+`seen` and `missed` are written by the adherence matcher (PLAN 2.2). "Today" is
+the local day on the tick clock, like `/api/episodes`. A dose window that closes
+unsighted says "Your <name> window just closed. Take it now, or mark it skipped
+in Brian." exactly once per close. That line skips the speech limiter's gap and
+hourly cap but still stamps it, so the next ordinary line waits its gap.
+
+`GET /api/protocol/today`:
+
+```json
+{"day": "2026-09-22",
+ "items": [{"id": "pi_3f2a91c4", "name": "Morning dose", "kind": "dose",
+            "window_start": "07:00", "window_end": "10:00",
+            "days": [0, 1, 2, 3, 4, 5, 6], "created_t": 1757700842.0,
+            "status": "seen", "seen_t": 1757745300.0,
+            "evidence_ref": "d_0007/f_00001742", "updated_t": 1757745300.0}]}
+```
+
+**CSV.** `GET /api/protocol/export.csv?days=14` covers the last `days` local
+days including today, oldest first. Columns:
+`day,item_id,name,kind,window_start,window_end,status,seen_t,evidence_ref,updated_t`.
+A day gets a row when a status was recorded for it, or when the item was
+scheduled that day and already existed. An item added today has no two weeks
+of `waiting` behind it. Empty cells mean null.
+
+
+## Autopilot acts (`act` / `act_result`, PLAN 4.1)
+
+The backend sends `act {id, kind, args}` down the glasses socket
+(`src/longevity/wire.py`); the phone answers `act_result {id, ok, detail}`. Two
+rules in `backend/pipeline/actions/autopilot.py` fire at most once per local day:
+`calendar_block {minutes: 20, earliest, latest}` at 16:00 when outdoor minutes
+are under `OUTDOOR_TARGET_MIN` (default 30), and `screen_shield {until: "07:00"}`
+at `WIND_DOWN_HHMM` (default 21:30). Each firing is a decision (`trigger`
+`autopilot:outdoor` / `autopilot:wind_down`) with one `act` action whose
+`outcome` is `sent`, then `acted` or `act_failed` (one spoken line) when the
+result arrives, or `vetoed:<reason>`.
+
+What may act is set by two env vars (`backend/.env.example`), checked before
+every send:
+
+| Env var | Default | Effect |
+|---|---|---|
+| `AUTOPILOT_ACTS` | `calendar_block,screen_shield` | Comma-separated kinds allowed to reach the phone. Any other kind is `vetoed:disabled`. **Empty string = autopilot off.** |
+| `AUTOPILOT_QUIET_DAYS` | empty | Comma-separated weekdays, 0 = Monday … 6 = Sunday, on which no act fires (`vetoed:quiet_day`). An entry outside 0–6 is ignored with a warning. |
+
+A vetoed act is recorded on its decision and nothing else happens: no `act`
+message, no speech. **Persona text does not veto acts.** The persona only
+reaches the LLM prompt; these two env vars are the only veto.
 
 
 ## Feed line format (dashboard)
