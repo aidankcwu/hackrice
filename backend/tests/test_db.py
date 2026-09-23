@@ -291,6 +291,64 @@ def test_origin_column_is_added_to_a_database_created_before_it(tmp_path) -> Non
         database.close()
 
 
+def test_decision_path_and_writers_round_trip(db: Database) -> None:
+    db.insert_decision(
+        Decision(
+            id="d_p",
+            t=100.0,
+            trigger="food_in_frame",
+            trigger_tick_id="t_1",
+            path="clerk_fallback:timeout",
+            writers=["meal", "summary"],
+        )
+    )
+    db.insert_decision(Decision(id="d_q", t=101.0, trigger="x", trigger_tick_id="t_2"))
+
+    by_id = {d.id: d for d in db.list_decisions()}
+    assert by_id["d_p"].path == "clerk_fallback:timeout"
+    assert by_id["d_p"].writers == ["meal", "summary"]
+    assert by_id["d_q"].path is None and by_id["d_q"].writers == []
+    (window,) = db.decisions_between(99.0, 100.5)
+    assert window.path == "clerk_fallback:timeout" and window.writers == ["meal", "summary"]
+
+
+def test_decision_columns_are_added_to_a_database_created_before_them(tmp_path) -> None:
+    import sqlite3
+
+    path = tmp_path / "old.db"
+    legacy = sqlite3.connect(path)
+    legacy.execute(
+        "CREATE TABLE decisions (id TEXT PRIMARY KEY, t REAL NOT NULL,"
+        ' "trigger" TEXT NOT NULL, trigger_tick_id TEXT NOT NULL, episode_id TEXT,'
+        " interpretation TEXT NOT NULL DEFAULT '', confidence REAL NOT NULL DEFAULT 0,"
+        " actions TEXT NOT NULL DEFAULT '[]', spoke INTEGER NOT NULL DEFAULT 0,"
+        " dropped INTEGER NOT NULL DEFAULT 0, drop_reason TEXT, latency_ms INTEGER,"
+        " model TEXT NOT NULL DEFAULT '')"
+    )
+    legacy.execute(
+        "INSERT INTO decisions (id, t, \"trigger\", trigger_tick_id)"
+        " VALUES ('d_old', 5.0, 'food_in_frame', 't_1')"
+    )
+    legacy.commit()
+    legacy.close()
+
+    database = Database(path).connect().init_schema()
+    try:
+        (old,) = database.list_decisions()
+        assert old.id == "d_old" and old.path is None and old.writers == []
+        database.init_schema()  # idempotent: a second call must not raise
+    finally:
+        database.close()
+
+
+@pytest.mark.parametrize("raw", ["not json", '{"a": 1}', "[1, 2]", "null"])
+def test_malformed_decision_writers_read_as_empty(db: Database, raw: str) -> None:
+    db.insert_decision(Decision(id="d_m", t=1.0, trigger="x", trigger_tick_id="t_1"))
+    db.conn.execute("UPDATE decisions SET writers = ? WHERE id = 'd_m'", (raw,))
+    (row,) = db.list_decisions()
+    assert row.writers == []
+
+
 def test_stats_counts_ai_ticks(db: Database) -> None:
     for i in range(6):
         db.insert_tick(make_tick(i, with_ai=(i < 4)))

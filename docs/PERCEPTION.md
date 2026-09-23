@@ -381,7 +381,7 @@ per hour becomes a number on `/api/status`.
 ## Status
 
 - Watcher: built on `perception/watcher` (US-W01 to W12): settings, prompt bank, MobileCLIP2 wrapper with a fake (6.9 ms per frame on this Mac's GPU), watcher core, watch block, packet feed, labeler scheduler and request kinds, loop wiring, bridge wiring, labeler health, ring cap, calibration tool. Calibration itself (W12's sweep on the real corpus) is not run: no corpus on this machine yet. Verifier 2026-09-23: root 230, backend 1741, dashboard 133 and build, all green.
-- Decider and writers: not started.
+- Decider and writers: built on `perception/decider` (US-D01 to D08): settings, state builder, Jev client with a fake, writers, decision path columns, reasoner routing with clerk fallback, factory, sound act. Built against the documented API and the SDK's OpenAPI models; the real Jev client is unverified until a key exists (signups closed 22 Sep 2026). Verifier 2026-09-23: root 130, backend 1823, dashboard 126, all green.
 - Phase 3: not started.
 
 Sources: MobileCLIP README (github.com/apple/ml-mobileclip), MobileCLIP2-S0 model card

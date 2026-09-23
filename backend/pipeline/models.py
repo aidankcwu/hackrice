@@ -455,6 +455,10 @@ class Decision(BaseModel):
     drop_reason: str | None = None
     latency_ms: int | None = None
     model: str = ""
+    #: Who decided: "decider", "clerk", or "clerk_fallback:<reason>".
+    path: str | None = None
+    #: Names of the writers that ran for this decision.
+    writers: list[str] = Field(default_factory=list)
 
 
 class Insight(BaseModel):
