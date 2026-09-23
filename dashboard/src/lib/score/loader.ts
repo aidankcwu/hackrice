@@ -28,11 +28,13 @@ export interface LoadOptions {
 // ---------------------------------------------------------------------------
 
 /**
- * The wearer is Bryan (R2). The header shows a declared profile, not a
- * measurement; the backend scores with its own `PROFILE_*` settings and only
- * the goal is passed through (`?goal=`).
+ * The wearer is Bryan (R2). Only what the backend has no field for is read
+ * here: the name and the device string. Age and sex are the backend's
+ * `PROFILE_AGE` / `PROFILE_SEX`, taken from the payload's `profile` by
+ * `shapeDashboard`, so the header describes the person the score was computed
+ * for; the goal is the one passed through (`?goal=`).
  */
-const PERSON_DEFAULTS = { name: "Bryan", age: 20, sex: "M" } as const;
+const DEFAULT_NAME = "Bryan";
 
 /** Shown when the glasses are the only thing actually reporting. */
 const NO_WEARABLE_DEVICE = "Ray-Ban Meta · no wearable connected";
@@ -59,15 +61,10 @@ function deviceLabel(source: LiveDataSource): string {
   return devices.length === 0 ? NO_WEARABLE_DEVICE : `Ray-Ban Meta + ${devices.join(" + ")}`;
 }
 
-function personFromEnv(goal: Goal, source: LiveDataSource): Omit<Person, "bedtime_hh"> {
+function personFromEnv(goal: Goal, source: LiveDataSource): Omit<Person, "age" | "sex" | "bedtime_hh"> {
   const env = process.env;
-  const age = Number.parseInt(envValue(env, "PERSON_AGE") ?? "", 10);
-  // Same rule as the engine's `remaining_life_years`: anything starting with F is female.
-  const sex = (envValue(env, "PERSON_SEX") ?? PERSON_DEFAULTS.sex).trim().toUpperCase();
   return {
-    name: envValue(env, "PERSON_NAME")?.trim() || PERSON_DEFAULTS.name,
-    age: Number.isInteger(age) && age > 0 ? age : PERSON_DEFAULTS.age,
-    sex: sex.startsWith("F") ? "F" : "M",
+    name: envValue(env, "PERSON_NAME")?.trim() || DEFAULT_NAME,
     goal,
     profileLabel: goalLabel(goal),
     device: envValue(env, "DEVICE")?.trim() || deviceLabel(source),

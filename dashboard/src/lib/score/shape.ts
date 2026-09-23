@@ -35,8 +35,8 @@ export interface ShapeArgs {
   healthspan: HealthspanWeek;
   /** The same window oldest first, today last: seeded rows and episodes for the week table. */
   days: DayInputs[];
-  /** Bedtime is not the wearer's to declare: it is whatever the engine ran with (`profile.bedtime_hh`). */
-  person: Omit<Person, "bedtime_hh">;
+  /** Age, sex and bedtime are not declared here: they are what the engine ran with (the payload's `profile`). */
+  person: Omit<Person, "age" | "sex" | "bedtime_hh">;
   source: DataSource;
   /** Wall time of the healthspan round trip. */
   engineMs: number;
@@ -390,6 +390,9 @@ export function shapeDashboard({ healthspan, days, person, source, engineMs }: S
   // `bedtime_source: missing` means the backend assumed its 23:00 default.
   const bedtime_hh = finiteNumber(today.profile.bedtime_hh) ?? 23;
   const bedtimeMeasured = today.profile.bedtime_source !== "missing";
+  // The header describes the person the score was computed for. Same rule as the
+  // engine's `remaining_life_years`: a sex starting with F is female.
+  const scored = { age: today.profile.age, sex: today.profile.sex.trim().toUpperCase().startsWith("F") ? "F" : "M" } as const;
   // Each day's hours are the backend's own score for that date, matched by date
   // rather than by position so a day the backend did not score stays blank.
   const hoursByDay = new Map(healthspan.days.map((d) => [d.day, d]));
@@ -397,7 +400,7 @@ export function shapeDashboard({ healthspan, days, person, source, engineMs }: S
   return {
     generated_at: todayInputs.nowT,
     source: { ...source, glasses_coverage: glassesCoverage(today), provenance: today.provenance },
-    person: { ...person, bedtime_hh },
+    person: { ...person, ...scored, bedtime_hh },
     overall: today.overall,
     hours_today: today.hours_today,
     hours_ci: today.hours_ci,

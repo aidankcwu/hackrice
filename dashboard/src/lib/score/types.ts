@@ -280,8 +280,11 @@ export interface EnginePayload {
 export interface HealthspanPayload extends EnginePayload {
   /** ISO date scored. */
   day: string;
-  /** The profile the engine ran with; `bedtime_source` is `missing` when 23:00 was assumed. */
-  profile: { goal: Goal; bedtime_hh: number; bedtime_source: string };
+  /**
+   * The profile the engine ran with (`PROFILE_AGE` / `PROFILE_SEX`, the request's
+   * goal, the day's bedtime); `bedtime_source` is `missing` when 23:00 was assumed.
+   */
+  profile: { age: number; sex: string; goal: Goal; bedtime_hh: number; bedtime_source: string };
   /** Per observation key: which stream filed it, or `missing` (imputed, earns nothing). */
   provenance: Record<string, ObsProvenance>;
   /** `factor_days` is the trailing week; `uncovered_days` those with no glasses episode. */

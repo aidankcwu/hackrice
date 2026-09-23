@@ -22,9 +22,9 @@ const { clearLoaderCache, loadDashboardData, resolveGoal } = await import("./loa
 
 const at = (h: number): number => new Date(2026, 8, 12, h, 0, 0).getTime() / 1000;
 
-const payload = (): HealthspanPayload => ({
+const payload = (profile: Partial<HealthspanPayload["profile"]> = {}): HealthspanPayload => ({
   day: "2026-09-12",
-  profile: { goal: "average", bedtime_hh: 23, bedtime_source: "seeded" },
+  profile: { age: 20, sex: "M", goal: "average", bedtime_hh: 23, bedtime_source: "seeded", ...profile },
   provenance: {},
   window: { factor_days: ["2026-09-12"], uncovered_days: ["2026-09-12"] },
   overall: 60,
@@ -61,13 +61,21 @@ const source = (over: Partial<LiveDataSource> = {}): LiveDataSource => ({
   ...over,
 });
 
-/** Env keys the loader reads; cleared per test so a developer's shell cannot colour the result. */
+/**
+ * Env keys the loader reads, plus the age/sex ones it no longer does (so a test
+ * can prove they are ignored); cleared per test so a developer's shell cannot
+ * colour the result.
+ */
 const ENV_KEYS = [
   "BRYAN_PERSON_NAME", "BRYAN_PERSON_AGE", "BRYAN_PERSON_SEX", "BRYAN_DEVICE",
   "BRIAN_PERSON_NAME", "BRIAN_PERSON_AGE", "BRIAN_PERSON_SEX", "BRIAN_DEVICE",
 ] as const;
 
-const week = (): HealthspanWeek => ({ day: "2026-09-12", days: [{ day: "2026-09-12", hours_today: 0.1 }], today: payload() });
+const week = (profile: Partial<HealthspanPayload["profile"]> = {}): HealthspanWeek => ({
+  day: "2026-09-12",
+  days: [{ day: "2026-09-12", hours_today: 0.1 }],
+  today: payload(profile),
+});
 
 beforeEach(() => {
   clearLoaderCache();
@@ -122,27 +130,34 @@ describe("person", () => {
     expect(data.person).toMatchObject({ name: "Bryan", age: 20, sex: "M", goal: "athlete", profileLabel: "Athlete" });
   });
 
-  it("takes BRYAN_* from the env and still honours the older BRIAN_* spelling", async () => {
+  it("describes the person the score was computed for: age and sex from the payload's profile, whatever the env says", async () => {
+    loadDayInputs.mockResolvedValue({ days: [day()], source: source() });
+    fetchHealthspanWeek.mockImplementation(() => Promise.resolve(week({ age: 41, sex: "F" })));
+    // The old header-only env keys, set to a different person: they no longer count.
+    process.env.BRYAN_PERSON_AGE = "99";
+    process.env.BRYAN_PERSON_SEX = "M";
+    process.env.BRIAN_PERSON_AGE = "7";
+    process.env.BRIAN_PERSON_SEX = "male";
+    expect((await loadDashboardData()).person).toMatchObject({ name: "Bryan", age: 41, sex: "F" });
+
+    // The engine's rule: any sex string starting with F (any case) is female.
+    clearLoaderCache();
+    fetchHealthspanWeek.mockImplementation(() => Promise.resolve(week({ age: 63, sex: "female" })));
+    expect((await loadDashboardData()).person).toMatchObject({ age: 63, sex: "F" });
+    clearLoaderCache();
+    fetchHealthspanWeek.mockImplementation(() => Promise.resolve(week({ age: 30, sex: " m " })));
+    expect((await loadDashboardData()).person).toMatchObject({ age: 30, sex: "M" });
+  });
+
+  it("takes the name from BRYAN_PERSON_NAME and still honours the older BRIAN_* spelling", async () => {
     loadDayInputs.mockResolvedValue({ days: [day()], source: source() });
     process.env.BRYAN_PERSON_NAME = "Ada";
-    process.env.BRYAN_PERSON_AGE = "41";
-    process.env.BRIAN_PERSON_SEX = "female";
-    const data = await loadDashboardData();
-    expect(data.person).toMatchObject({ name: "Ada", age: 41, sex: "F" });
+    expect((await loadDashboardData()).person.name).toBe("Ada");
 
     clearLoaderCache();
     delete process.env.BRYAN_PERSON_NAME;
     process.env.BRIAN_PERSON_NAME = "Grace";
     expect((await loadDashboardData()).person.name).toBe("Grace");
-  });
-
-  it("ignores an unusable age rather than scoring on it", async () => {
-    loadDayInputs.mockResolvedValue({ days: [day()], source: source() });
-    process.env.BRYAN_PERSON_AGE = "not-a-number";
-    expect((await loadDashboardData()).person.age).toBe(20);
-    clearLoaderCache();
-    process.env.BRYAN_PERSON_AGE = "-3";
-    expect((await loadDashboardData()).person.age).toBe(20);
   });
 });
 

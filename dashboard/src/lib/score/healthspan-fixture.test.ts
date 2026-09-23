@@ -74,6 +74,8 @@ describe("dashboard numbers are the backend's", () => {
     expect(data.years_delta).toBe(SINGLE.years_delta);
     expect(data.years_ci).toEqual(SINGLE.years_ci);
     expect(data.factors).toEqual(SINGLE.factors);
+    // The header names the person the backend scored.
+    expect(data.person).toMatchObject({ age: SINGLE.profile.age, sex: SINGLE.profile.sex, goal: SINGLE.profile.goal });
     expect(data.week.map((d) => [d.date, d.hours])).toEqual(WEEK.days.map((d) => [d.day, d.hours_today]));
     // One score request, for the day the rows were read for, and nothing scored locally.
     expect(requested.filter((p) => p.startsWith("/api/healthspan"))).toContain(`/api/healthspan?day=${DAY}&days=7&goal=average`);

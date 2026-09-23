@@ -91,7 +91,8 @@ describe("loadDayInputs", () => {
 });
 
 describe("fetchHealthspanWeek", () => {
-  const WEEK = { day: TODAY, days: [{ day: TODAY, hours_today: 0.95 }], today: { day: TODAY, hours_today: 0.95 } };
+  const PROFILE = { age: 20, sex: "M", goal: "athlete", bedtime_hh: 23, bedtime_source: "seeded" };
+  const WEEK = { day: TODAY, days: [{ day: TODAY, hours_today: 0.95 }], today: { day: TODAY, hours_today: 0.95, profile: PROFILE } };
 
   it("pins the day, asks for the seven-day window and passes the goal", async () => {
     const seen: string[] = [];
@@ -109,6 +110,13 @@ describe("fetchHealthspanWeek", () => {
     await expect(fetchHealthspanWeek(BASE, TODAY, "average")).rejects.toBeInstanceOf(BackendOffline);
     stubFetch({ "/api/healthspan": { day: TODAY, days: [] } });
     await expect(fetchHealthspanWeek(BASE, TODAY, "average")).rejects.toBeInstanceOf(BackendOffline);
+  });
+
+  it("refuses a score that does not say whose it is, rather than guessing an age or sex for the header", async () => {
+    for (const profile of [undefined, { ...PROFILE, age: undefined }, { ...PROFILE, age: "41" }, { ...PROFILE, age: null }, { ...PROFILE, sex: null }]) {
+      stubFetch({ "/api/healthspan": { ...WEEK, today: { ...WEEK.today, profile } } });
+      await expect(fetchHealthspanWeek(BASE, TODAY, "average"), JSON.stringify(profile ?? null)).rejects.toThrow(/no profile \{age, sex\}/);
+    }
   });
 });
 

@@ -147,6 +147,12 @@ export async function fetchHealthspanWeek(base: string, day: string, goal: Goal)
   if (week.today === undefined || week.today === null || !Array.isArray(week.days)) {
     throw new BackendOffline("/api/healthspan: no {days, today} in the response");
   }
+  // The header names the person the score was computed for; a payload that does
+  // not say who that was is not shown with a guessed age or sex instead.
+  const profile: Partial<HealthspanWeek["today"]["profile"]> | undefined = week.today.profile;
+  if (typeof profile?.age !== "number" || !Number.isFinite(profile.age) || typeof profile.sex !== "string") {
+    throw new BackendOffline("/api/healthspan: no profile {age, sex} in the response");
+  }
   return week as HealthspanWeek;
 }
 

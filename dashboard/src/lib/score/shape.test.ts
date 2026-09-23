@@ -422,7 +422,7 @@ describe("shapeDashboard", () => {
     return {
       ...payload(),
       day: "2026-09-12",
-      profile: { goal: "average", bedtime_hh: 23, bedtime_source: "seeded" },
+      profile: { age: 20, sex: "M", goal: "average", bedtime_hh: 23, bedtime_source: "seeded" },
       provenance: {
         steps: { source: "seeded", basis: "phone", detail: "phone steps, row 2026-09-12" },
         social_index: { source: "missing", basis: "glasses", detail: "no episodes on 2026-09-12 — glasses not worn yet" },
@@ -464,13 +464,20 @@ describe("shapeDashboard", () => {
 
   it("takes the bedtime the engine ran with, and blanks it when the backend assumed its default", () => {
     const days = [day({ isToday: true, nowT: at(18, 30) })];
-    const late = healthspanPayload({ profile: { goal: "average", bedtime_hh: 24.75, bedtime_source: "seeded" } });
+    const late = healthspanPayload({ profile: { age: 20, sex: "M", goal: "average", bedtime_hh: 24.75, bedtime_source: "seeded" } });
     const shaped = shapeDashboard({ healthspan: week(late, []), days, person: PERSON, source: SOURCE, engineMs: 1 });
     expect(shaped.person.bedtime_hh).toBe(24.75);
     expect(shaped.forecast.bedtime).toBe("00:45");
-    const assumed = healthspanPayload({ profile: { goal: "average", bedtime_hh: 23, bedtime_source: "missing" } });
+    const assumed = healthspanPayload({ profile: { age: 20, sex: "M", goal: "average", bedtime_hh: 23, bedtime_source: "missing" } });
     const blank = shapeDashboard({ healthspan: week(assumed, []), days, person: PERSON, source: SOURCE, engineMs: 1 });
     expect(blank.forecast.bedtime).toBe("—");
+  });
+
+  it("takes age and sex from the profile the engine ran with, never from the caller", () => {
+    const scored = healthspanPayload({ profile: { age: 41, sex: "f", goal: "average", bedtime_hh: 23, bedtime_source: "seeded" } });
+    // PERSON says 20 / M; the payload says who was actually scored.
+    const data = shapeDashboard({ healthspan: week(scored, []), days: [day({ isToday: true })], person: PERSON, source: SOURCE, engineMs: 1 });
+    expect(data.person).toEqual({ ...PERSON, age: 41, sex: "F" });
   });
 
   it("matches each day's hours by date, and leaves a day the backend did not score blank", () => {
