@@ -22,10 +22,13 @@ from typing import Any, Callable
 
 from .emit import JSONLWriter, SQLiteMirror, TickBus
 from .ring import FrameRing
-from .sensors import SensorComputer
+from .sensors import SensorComputer, quick_quality
+from .server.ingest import Packet
 from .sources.base import CaptureSource
+from .sources.glasses import GlassesSource
 from .tick import ai_block, build_tick, frame_ref
 from .vlm import T0Tagger
+from .watcher import Watcher
 
 log = logging.getLogger(__name__)
 
@@ -37,6 +40,8 @@ class LoopStats:
     sensor_ms: list[float] = field(default_factory=list)
     with_ai: int = 0
     with_device: int = 0
+    watch_ticks: int = 0
+    """Ticks that carried a `watch` block."""
     slow_ticks: int = 0
     """Ticks whose synchronous work exceeded 5 ms — invariant 1 getting tight."""
 
@@ -55,6 +60,7 @@ class LoopStats:
             f"ticks={self.ticks} rate={rate:.3f}Hz "
             f"ai={self.with_ai / self.ticks:.0%} "
             f"device={self.with_device}/{self.ticks} "
+            f"watch={self.watch_ticks}/{self.ticks} "
             f"sync_mean={mean:.2f}ms sync_p99={p99:.2f}ms slow={self.slow_ticks}"
         )
 
@@ -74,6 +80,7 @@ class T0Loop:
         flow: str | None = None,
         log_every: int = 30,
         on_ai_update: Callable[[dict[str, Any]], None] | None = None,
+        watcher: Watcher | None = None,
     ) -> None:
         self._source = source
         self._ring = ring
@@ -99,6 +106,19 @@ class T0Loop:
         if on_ai_update is not None:
             tagger.on_result = self._attach_landed
 
+        # The watcher scores every frame the phone sends, not one per tick
+        # (docs/PERCEPTION.md "Watcher"). Under `glasses` that means a hook on the
+        # link, fed a cheap 128 px quality pair because those frames never get a full
+        # sensor block; any other source hands the watcher its tick frame in
+        # `_on_frame`, with the sensor block it already paid for. Its `on_wakeup` is
+        # deliberately left unwired here: US-W08 connects it to the labeler.
+        self._watcher = watcher
+        self._link = source.link if watcher is not None and isinstance(source, GlassesSource) else None
+        if self._link is not None:
+            if self._link.on_packet is not None:
+                log.warning("T0: replacing an existing on_packet hook on the glasses link")
+            self._link.on_packet = self._on_packet
+
     def _warm_up(self) -> None:
         """Touch every numpy/Pillow path once before the clock starts.
 
@@ -122,11 +142,21 @@ class T0Loop:
     async def run(self) -> None:
         self._warm_up()
         await self._tagger.start()
+        if self._watcher is not None:
+            await self._watcher.start()
         try:
             async for frame in self._source.frames():
                 self._on_frame(frame)
         finally:
+            if self._link is not None and self._link.on_packet == self._on_packet:
+                self._link.on_packet = None
             await self._tagger.aclose()
+            if self._watcher is not None:
+                await self._watcher.aclose()
+
+    def _on_packet(self, packet: Packet) -> None:
+        """Every accepted glasses packet, synchronously from ingest. ~0.5 ms."""
+        self._watcher.offer(packet.t, packet.jpeg, sensor=quick_quality(packet.jpeg))  # type: ignore[union-attr]
 
     def _on_frame(self, frame: Any) -> None:
         """Everything here is synchronous and bounded. Invariant 1."""
@@ -147,6 +177,15 @@ class T0Loop:
         # 2. Park the frame in the 90 s RAM ring. Never to disk (invariant 4).
         self._ring.put(ref, frame.jpeg, frame.t)
 
+        # 2b. The watcher. Glasses frames already reached it through the packet hook;
+        #     every other source feeds it here, once per frame. `take_tick` returns
+        #     the aggregate since the last tick and never waits on inference.
+        watch = None
+        if self._watcher is not None:
+            if self._link is None:
+                self._watcher.offer(frame.t, frame.jpeg, sensor=sensor)
+            watch = self._watcher.take_tick(frame.t)
+
         # 3. Offer the frame to the VLM and claim anything that has landed. Both of
         #    these return immediately; the network is never on this code path.
         #    `take(now=...)` drops a result whose frame is past the freshness window,
@@ -158,7 +197,7 @@ class T0Loop:
         # 4. Assemble. `device` is already derived by the glasses adapter and is None
         #    for webcam/replay, which is exactly what §12.1 promises B.
         tick = build_tick(
-            seq=seq, t=frame.t, sensor=sensor, device=frame.device, ai=ai
+            seq=seq, t=frame.t, sensor=sensor, device=frame.device, watch=watch, ai=ai
         )
 
         # 5. Hand it off. None of these may block or throw upward.
@@ -175,10 +214,21 @@ class T0Loop:
         st.sensor_ms.append(elapsed_ms)
         st.with_ai += ai is not None
         st.with_device += frame.device is not None
+        st.watch_ticks += watch is not None
         if elapsed_ms > 5.0:
             st.slow_ticks += 1
         if self._log_every and st.ticks % self._log_every == 0:
-            log.info("T0 %s | %s", st.line(), self._tagger.stats_line())
+            if self._watcher is not None:
+                w = self._watcher.stats()
+                log.info(
+                    "T0 %s | %s | watcher %s frames=%d usable=%d dropped=%d wakeups=%d "
+                    "errors=%d p50=%.1fms p99=%.1fms hot=%s",
+                    st.line(), self._tagger.stats_line(), w["model"], w["frames"],
+                    w["usable"], w["dropped"], w["wakeups"], w["errors"],
+                    w["inference_ms_p50"], w["inference_ms_p99"], ",".join(w["hot"]) or "-",
+                )
+            else:
+                log.info("T0 %s | %s", st.line(), self._tagger.stats_line())
 
     def _attach_landed(self) -> None:
         """A result just landed: attach it to the newest tick if that tick has none.

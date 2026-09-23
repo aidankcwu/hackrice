@@ -196,6 +196,11 @@ class GlassesSource(CaptureSource):
         self.n_idle = 0   # seconds that passed with no packet to emit
         self.n_stale = 0  # packets skipped for arriving too late to be worth emitting
 
+    @property
+    def link(self) -> GlassesLink:
+        """The mailbox this source reads; T0 hangs the watcher's packet hook on it."""
+        return self._link
+
     async def frames(self) -> AsyncIterator[Frame]:
         """Emit one `Frame` per interval, skipping intervals with nothing fresh in them."""
         loop = asyncio.get_running_loop()

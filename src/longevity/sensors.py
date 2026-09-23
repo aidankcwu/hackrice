@@ -133,6 +133,34 @@ def hamming(a: str, b: str) -> int:
         return HASH_BITS
 
 
+def quick_quality(jpeg: bytes, work_px: int = 128) -> dict[str, float]:
+    """`sharpness` and `lux_proxy` only, from a `work_px` decode. Never raises.
+
+    The watcher's quality gate on frames that never become a tick (the glasses packet
+    hook sees every frame the phone sends; only one per interval gets the full block).
+    Same formulas as `SensorComputer.compute`, but at 128 px: `lux_proxy` is a mean
+    and barely moves with resolution; `sharpness` (Laplacian variance) is scale-dependent,
+    so a 128 px figure is not the same number as the tick's 256 px one (the downscale
+    averages away pixel noise and compresses real edges). Good enough for "is this
+    frame usable at all"; not for comparing against a tick. An undecodable frame
+    scores 0/0, which the gate rejects.
+
+    Measured 2026-09-23 on this Mac with a 512x288 q70 JPEG (~42 KB): 0.45 ms per
+    call, against 1.5 ms for the full seven-field block on the same frame.
+    """
+    try:
+        rgb, gray = SensorComputer(flow="off", work_px=work_px)._decode(jpeg)
+    except Exception:
+        return {"sharpness": 0.0, "lux_proxy": 0.0}
+    n = rgb.shape[0] * rgb.shape[1]
+    flat = rgb.reshape(-1, 3)
+    lin = [float(np.dot(np.bincount(flat[:, c], minlength=256), _LINEAR_LUT)) / n for c in range(3)]
+    lux_proxy = min(1.0, 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]) * LUX_SCALE
+    g = gray.astype(np.float32)
+    lap = 4.0 * g[1:-1, 1:-1] - g[:-2, 1:-1] - g[2:, 1:-1] - g[1:-1, :-2] - g[1:-1, 2:]
+    return {"sharpness": float(round(float(lap.var()))), "lux_proxy": float(round(lux_proxy))}
+
+
 class SensorComputer:
     """Turns a JPEG into the §12 `sensor` block, carrying the inter-frame state.
 
