@@ -1,9 +1,11 @@
 import { Shell } from "@/components/Shell";
 import { AddItem } from "@/components/protocol/AddItem";
 import { AddItemLink, Protocol } from "@/components/protocol/Protocol";
+import { Settings } from "@/components/settings/Settings";
 import { Today } from "@/components/today/Today";
 import { FIXTURES } from "@/lib/api";
 import { fixtureQuery, readFixtureView, type SearchParams } from "@/lib/screens";
+import { APP_VERSION } from "@/lib/version";
 
 /**
  * Today. In fixtures mode this route also renders any other screen named by
@@ -24,6 +26,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     >
       {screen === "today" ? <Today query={query} /> : null}
       {screen === "protocol" ? <Protocol query={query} /> : null}
+      {screen === "settings" ? <Settings version={APP_VERSION} /> : null}
     </Shell>
   );
 }
