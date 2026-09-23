@@ -1,14 +1,15 @@
 import { Shell } from "@/components/Shell";
-import { EmptyState } from "@/components/ui";
+import { DeviceList } from "@/components/devices/DeviceList";
 import { FIXTURES } from "@/lib/api";
-import { readFixtureView, type SearchParams } from "@/lib/screens";
+import { fixtureQuery, readFixtureView, type SearchParams } from "@/lib/screens";
 
-/** Stub: the screen exists so the menu link resolves; its content comes in a later build. */
+/** Devices, pushed from the menu: every device the app can read, with its connect state and what it feeds. */
 export default async function DevicesPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  const view = FIXTURES ? readFixtureView(await searchParams) : undefined;
+  const params = FIXTURES ? await searchParams : {};
+  const view = FIXTURES ? readFixtureView(params) : undefined;
   return (
     <Shell screen="devices" theme={view?.theme} scale={view?.scale}>
-      <EmptyState text="Coming in this build." />
+      <DeviceList query={FIXTURES ? fixtureQuery(params) : ""} />
     </Shell>
   );
 }
