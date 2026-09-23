@@ -5,6 +5,33 @@ export interface CaptureView {
   loop: { ticks?: number; rateHz?: number; sensorP50Ms?: number; dropped?: number; converted?: number };
   vlm: { model?: string; coverage?: number; latencyP50Ms?: number; latencyP95Ms?: number; calls?: number; overBudget?: number; lastError?: string };
   frames: { size?: number; bytes?: number };
+  /** True when the backend reports a watcher (event-driven labeling); absent on older backends. */
+  watcher?: boolean;
+  labeler?: LabelerView;
+  watcherError?: string;
+}
+
+export interface LabelerView {
+  capped?: boolean;
+  lastHeartbeatAgeS?: number;
+  lastWakeLatencyMs?: number;
+  framesSentPerHour?: number;
+  mode?: string;
+  /** Heartbeat age past which the backend's health rule calls the labeler stale. */
+  staleAfterS?: number;
+}
+
+export type LabelerStatus = "healthy" | "stale" | "capped";
+
+/** Fallback stale threshold: two missed beats at the 60 s default heartbeat. */
+export const DEFAULT_LABELER_STALE_S = 120;
+
+/** Capped wins over stale: past the cost ceiling a slow heartbeat is expected. */
+export function labelerStatus(labeler: LabelerView): LabelerStatus {
+  if (labeler.capped) return "capped";
+  const staleAfter = labeler.staleAfterS ?? DEFAULT_LABELER_STALE_S;
+  if (labeler.lastHeartbeatAgeS !== undefined && labeler.lastHeartbeatAgeS > staleAfter) return "stale";
+  return "healthy";
 }
 
 const object = (value: unknown): Record<string, unknown> =>
@@ -40,6 +67,8 @@ export function parseCapture(status: Status): CaptureView {
   const connectedCount = number(phone.connected, phone.clients);
   const connectedFlag = typeof phone.connected === "boolean" ? phone.connected : connectedCount === undefined ? undefined : connectedCount > 0;
   const interval = number(status.tick_interval_s);
+  const watcher = capture.watcher !== null && capture.watcher !== undefined;
+  const labelerRaw = object(capture.labeler);
 
   return {
     phone: {
@@ -68,5 +97,17 @@ export function parseCapture(status: Status): CaptureView {
       size: number(frames.count, frames.size, capture.ring_size),
       bytes: number(frames.bytes, frames.nbytes, capture.ring_bytes),
     },
+    ...(watcher ? { watcher } : {}),
+    ...(Object.keys(labelerRaw).length ? {
+      labeler: {
+        capped: typeof labelerRaw.capped === "boolean" ? labelerRaw.capped : undefined,
+        lastHeartbeatAgeS: number(labelerRaw.last_heartbeat_age_s),
+        lastWakeLatencyMs: number(labelerRaw.last_wake_latency_ms),
+        framesSentPerHour: number(labelerRaw.frames_sent_per_hour),
+        mode: string(labelerRaw.mode),
+        staleAfterS: number(capture.labeler_stale_after_s),
+      },
+    } : {}),
+    ...(string(capture.watcher_error) ? { watcherError: string(capture.watcher_error) } : {}),
   };
 }

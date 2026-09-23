@@ -506,3 +506,27 @@ async def test_fast_sim_maps_live_wall_samples_into_the_tick_window(tmp_path):
         assert old.json()["accepted"] == 0
         assert old.json()["reasons"] == {"t outside the +/-48h window": 1}
     await pipeline.stop()
+
+
+async def test_status_passes_watcher_and_labeler_through(tmp_path):
+    from test_health import FakeCapture
+
+    pipeline = build_pipeline(
+        Settings(db_path=tmp_path / "watch.db"),
+        source="sim", reasoner_mode="fake", speed=1,
+    )
+    labeler = {"calls_per_hour": {"heartbeat": 1}, "capped": False,
+               "last_heartbeat_age_s": 200.0, "last_wake_latency_ms": None,
+               "frames_sent_per_hour": 1, "mode": "idle"}
+    app = create_app(pipeline)  # before the fake: the app mounts a real capture's ring
+    pipeline.capture = FakeCapture({"loop": "ticks=1", "watcher": {"frames": 4},
+                                    "labeler": labeler, "watcher_error": None})
+    async with client_for(app) as client:
+        status = (await client.get("/api/status")).json()
+    capture = status["capture"]
+    assert capture["watcher"] == {"frames": 4}
+    assert capture["labeler"] == labeler
+    assert capture["watcher_error"] is None
+    assert capture["labeler_stale_after_s"] == 120.0
+    assert "labeler_heartbeat_stale" in status["health"]["problems"]
+    assert "ai_coverage_low" not in status["health"]["problems"]

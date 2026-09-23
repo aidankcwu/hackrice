@@ -315,6 +315,7 @@ class Pipeline:
 
     def status(self) -> dict[str, object]:
         stats = self.db.stats()
+        capture_stats = self.capture.stats() if self.capture is not None else None
         tick_count = stats["tick_count"]
         session = self.sessions.current()
         session_status = None
@@ -344,14 +345,29 @@ class Pipeline:
             "conversation": (None if self.conversation is None
                              else self.conversation.stats()),
             "speech_spoken": len(spoken),
-            "health": self._health(),
+            "health": self._health(capture_stats),
             "session": session_status,
         }
-        if self.capture is not None:
-            result["capture"] = self.capture.stats()
+        if capture_stats is not None:
+            # watcher / labeler / watcher_error pass through from the bridge
+            # unchanged; the stale threshold rides alongside so the dashboard
+            # judges heartbeat age by the same number the health rule uses.
+            hb, dormant_hb = self._heartbeat_settings()
+            result["capture"] = {
+                **capture_stats,
+                "labeler_stale_after_s": labeler_stale_after_s(
+                    capture_stats.get("labeler"), hb, dormant_hb),
+            }
         return result
 
-    def _health(self) -> dict[str, object]:
+    def _heartbeat_settings(self) -> tuple[float, float]:
+        cs = getattr(self.capture, "capture_settings", None)
+        return (float(getattr(cs, "labeler_heartbeat_s", DEFAULT_HEARTBEAT_S)),
+                float(getattr(cs, "labeler_dormant_heartbeat_s", DEFAULT_DORMANT_HEARTBEAT_S)))
+
+    def _health(self, capture_stats: dict | None = None) -> dict[str, object]:
+        if capture_stats is None and self.capture is not None:
+            capture_stats = self.capture.stats()
         phone = self.capture.link.stats() if self.capture is not None else None
         # Ticks stopped -> the window is history, not "now". Wall clock on purpose:
         # this is about whether the process is alive, not about the tick clock.
@@ -370,29 +386,86 @@ class Pipeline:
             speech: dict[str, object] = {"mode": "console"}
         else:
             speech = self.capture.speech_stats()
+        hb, dormant_hb = self._heartbeat_settings()
         problems = health_problems(
             source=self.source_name, phone=phone, ai_coverage=coverage,
             ai_ticks=len(window), tagger=tagger, t1=t1,
             t1_error_snapshot=self._t1_error_snapshot, speech=speech,
-            ticks_stale=ticks_stale,
+            ticks_stale=ticks_stale, capture=capture_stats,
+            heartbeat_s=hb, dormant_heartbeat_s=dormant_hb,
         )
         now = time.monotonic()
         if now - self._t1_snapshot_at >= 300:
             self._t1_error_snapshot = (int(t1["dropped_error"]), int(t1["dropped_timeout"]))
             self._t1_snapshot_at = now
+        # Problem names stay bare so they match one remedy each; any text a
+        # problem carries goes here, keyed by its name.
+        details: dict[str, str] = {}
+        if "watcher_unavailable" in problems and capture_stats:
+            details["watcher_unavailable"] = str(capture_stats["watcher_error"])
         return {"phone": phone, "t0": t0, "t1": t1, "speech": speech,
-                "ok": not problems, "problems": problems}
+                "ok": not problems, "problems": problems, "details": details}
+
+
+#: CaptureSettings defaults, for a capture object that does not expose its settings.
+DEFAULT_HEARTBEAT_S = 60.0
+DEFAULT_DORMANT_HEARTBEAT_S = 300.0
+#: The tagger's hard ceiling when its stats do not report one (vlm.DEFAULT_CEILING_S).
+DEFAULT_WAKE_CEILING_MS = 3000.0
+
+
+def labeler_stale_after_s(labeler, heartbeat_s: float = DEFAULT_HEARTBEAT_S,
+                          dormant_heartbeat_s: float = DEFAULT_DORMANT_HEARTBEAT_S) -> float:
+    """Heartbeat age past which the labeler counts as stale: two missed beats
+    at the cadence its current mode runs (dormant beats slower)."""
+    mode = labeler.get("mode") if isinstance(labeler, dict) else None
+    return 2 * (dormant_heartbeat_s if mode == "dormant" else heartbeat_s)
+
+
+def _num(value) -> float | None:
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def _labeler_problems(capture: dict, tagger, heartbeat_s: float,
+                      dormant_heartbeat_s: float) -> list[str]:
+    """With the watcher on an absent `ai` means nothing was worth a call, so
+    coverage is meaningless; heartbeat age and wake latency say whether the
+    labeler is alive (docs/PERCEPTION.md "Tick")."""
+    labeler = capture.get("labeler")
+    labeler = labeler if isinstance(labeler, dict) else {}
+    tagger = tagger if isinstance(tagger, dict) else {}
+    problems: list[str] = []
+    by_kind = tagger.get("by_kind")
+    started = (sum(int(v.get("started", 0)) for v in by_kind.values() if isinstance(v, dict))
+               if isinstance(by_kind, dict) else 0)
+    started = started or int(_num(labeler.get("frames_sent_per_hour")) or 0)
+    age = _num(labeler.get("last_heartbeat_age_s"))
+    if (started > 0 and age is not None
+            and age > labeler_stale_after_s(labeler, heartbeat_s, dormant_heartbeat_s)):
+        problems.append("labeler_heartbeat_stale")
+    wake_ms = _num(labeler.get("last_wake_latency_ms"))
+    ceiling_s = _num(tagger.get("ceiling_s"))
+    ceiling_ms = ceiling_s * 1000 if ceiling_s is not None else DEFAULT_WAKE_CEILING_MS
+    if wake_ms is not None and wake_ms > ceiling_ms:
+        problems.append("labeler_wake_slow")
+    return problems
 
 
 def health_problems(*, source: str, phone, ai_coverage: float, ai_ticks: int,
                     tagger, t1, t1_error_snapshot, speech,
-                    ticks_stale: bool = False) -> list[str]:
+                    ticks_stale: bool = False, capture: dict | None = None,
+                    heartbeat_s: float = DEFAULT_HEARTBEAT_S,
+                    dormant_heartbeat_s: float = DEFAULT_DORMANT_HEARTBEAT_S) -> list[str]:
     """Apply the documented demo rules; each problem name maps to one visible remedy.
 
     phone_disconnected  glasses source and no phone socket        -> tap Connect / check IP
     no_packets_10s      phone socket up but no frame in 10 s      -> glasses not streaming
     no_ticks_60s        T0 has not produced a tick in 60 s        -> capture source is dead
     ai_coverage_low     <50% of the last 60 s of ticks carry `ai` -> Gemini slow / key
+                        (watcher off only; with it on, the two rules below)
+    labeler_heartbeat_stale  no heartbeat call in 2 beats (after a first call) -> Gemini / cap
+    labeler_wake_slow   last wake-up call slower than the tagger ceiling -> Gemini slow
+    watcher_unavailable WATCHER=1 but the model failed to load -> health.details has the error
     vlm_errors          >5 VLM errors in the last 50 calls        -> Gemini key / quota
     t1_errors           reasoner errors or timeouts since snapshot -> OpenAI key / network
     tts_failing         last ElevenLabs call failed               -> key / voice / quota
@@ -409,8 +482,13 @@ def health_problems(*, source: str, phone, ai_coverage: float, ai_ticks: int,
             problems.append("no_packets_10s")
     if ticks_stale:
         problems.append("no_ticks_60s")
-    if ai_ticks >= 20 and ai_coverage < 0.5:
+    capture = capture if isinstance(capture, dict) else {}
+    if capture.get("watcher") is not None:
+        problems.extend(_labeler_problems(capture, tagger, heartbeat_s, dormant_heartbeat_s))
+    elif ai_ticks >= 20 and ai_coverage < 0.5:
         problems.append("ai_coverage_low")
+    if capture.get("watcher_error"):
+        problems.append("watcher_unavailable")
     if tagger is not None and tagger["errors"] > 5:
         problems.append("vlm_errors")
     if (t1["dropped_error"], t1["dropped_timeout"]) > tuple(t1_error_snapshot):
