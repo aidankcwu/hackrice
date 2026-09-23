@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   doseNote,
   effectRows,
-  evidenceSrc,
   forecastView,
   glassesCoverage,
   layerHours,
@@ -504,15 +503,12 @@ describe("shapeDashboard", () => {
     expect(data.source.glasses_coverage).toEqual({ today: false, week: true });
   });
 
-  it("makes a pin's server-relative evidence path absolute against the API base", () => {
-    expect(evidenceSrc("/api/evidence/d_1/f_2", "http://localhost:8010")).toBe("http://localhost:8010/api/evidence/d_1/f_2");
-    expect(evidenceSrc("http://x/f1", "http://localhost:8010")).toBe("http://x/f1");
-    expect(evidenceSrc(null, "http://localhost:8010")).toBeNull();
+  it("leaves a pin's evidence path server-relative for the browser to resolve", () => {
     const today = healthspanPayload({
       pins: [{ time: "10:00", img: "/api/evidence/d_1/f_2", grade: "A", kind: "credit", seen: "Conversation, 20 min", effect: "" }],
     });
     const data = shapeDashboard({ healthspan: week(today, []), days: [day({ isToday: true })], person: PERSON, source: SOURCE, engineMs: 1 });
-    expect(data.pins.map((p) => p.img)).toEqual(["http://localhost:8010/api/evidence/d_1/f_2"]);
+    expect(data.pins.map((p) => p.img)).toEqual(["/api/evidence/d_1/f_2"]);
   });
 
   it("refuses an empty run rather than inventing a day", () => {

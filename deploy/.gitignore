@@ -1,0 +1,9 @@
+# Secrets and per-tester state never go into git: tokens live in testers/,
+# databases in data/, API keys in .env.
+.env
+data/
+testers/*
+!testers/README
+routes/*
+!routes/README
+docker-compose.override.yml

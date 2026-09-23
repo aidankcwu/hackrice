@@ -21,7 +21,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
-from pydantic import AliasChoices, BeforeValidator, Field
+from pydantic import AliasChoices, BeforeValidator, Field, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 if TYPE_CHECKING:  # imported lazily below: both modules import this one
@@ -144,6 +144,33 @@ def _parse_quiet_days(value: Any) -> tuple[int, ...]:
         else:
             log.warning("Invalid AUTOPILOT_QUIET_DAYS entry %r; ignoring it", item)
     return tuple(sorted(days))
+
+
+def _parse_opt_in(value: Any) -> bool:
+    """An opt-in flag: OFF unless clearly on. The mirror of ``_parse_switch``
+    for behaviour that destroys something (DEMO_RESET_ON_START clears memory):
+    a blank or mistyped value must never be read as yes."""
+
+    if isinstance(value, bool):
+        return value
+    raw = "" if value is None else str(value).strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw not in _SWITCH_OFF and raw != "":
+        log.warning("Invalid opt-in flag value %r; treating it as off", value)
+    return False
+
+
+#: A bool field that is off unless set to a clear yes (see ``_parse_opt_in``).
+OptIn = Annotated[bool, BeforeValidator(_parse_opt_in)]
+
+
+def _blank_is_none(value: Any) -> Any:
+    """``PERSONA_FILE=`` in an env file means "no file", not the current directory."""
+
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    return value
 
 
 @dataclass(frozen=True, slots=True)
@@ -415,13 +442,8 @@ class Settings(BaseSettings):
     google_health_poll_s: int = 300
     wearable_ingest_token: str | None = None
 
-    # -- deployment (docs/DEPLOY.md). ------------------------------------------
-    #: Bearer token for every /api/* route and /ws/glasses; unset or blank = auth
-    #: off. Read per request from os.environ by ``api.app.BearerAuth`` (like
-    #: WEARABLE_INGEST_TOKEN); declared so .env.example stays in sync.
-    api_token: str | None = None
-    #: Comma-separated browser origins allowed to call the API (the dashboard's).
-    cors_origins: str = "http://localhost:3000"
+    # -- deployment (docs/DEPLOY.md). API_TOKEN and CORS_ORIGINS live in the hosted
+    # section below (API_TOKEN is a legacy alias of ACCESS_TOKEN). --------------
     #: The CLI's --source/--reasoner/--vlm/--port defaults, so a container runs
     #: ``python -m pipeline.main`` with no flags. A flag still wins.
     source: Literal["sim", "glasses", "webcam", "replay"] = "sim"
@@ -463,6 +485,54 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("vlm_max_in_flight", "t0_max_in_flight"),
     )
 
+    # -- hosted deployment (deploy/README.md): one container per tester, behind
+    # one reverse proxy. Every field defaults to the local-Mac behaviour, so a
+    # laptop run with no .env changes nothing. ----------------------------------
+    #: ACCESS_TOKEN: the one secret a tester's phone and dashboard present
+    #: (X-Access-Token header or ?token=). Empty = open, as on localhost.
+    access_token: str = ""
+    #: API_TOKEN: legacy alias of ACCESS_TOKEN, the name the teammate web app's
+    #: branch uses (it sends it as Authorization: Bearer). Read only to fill
+    #: ACCESS_TOKEN; both set to different values refuses to start.
+    api_token: str = ""
+    #: HOSTED=1 applies hosted safety checks even without a public prefix.
+    hosted: OptIn = False
+    #: PERSONA_FILE: a text file loaded into the persona override at startup,
+    #: but only when the database has none -- so an edit a tester makes in the
+    #: dashboard survives a container restart instead of being stamped over.
+    persona_file: Annotated[Path | None, BeforeValidator(_blank_is_none)] = None
+    #: DEMO_RESET_ON_START=1: clear the short-term memory (scripts/demo_reset.py)
+    #: at every start, so each restart of a tester's container is a fresh demo.
+    demo_reset_on_start: OptIn = False
+    #: DEMO_RESET_ALL=1 also clears the measured demo day and live biometrics.
+    demo_reset_all: OptIn = False
+    #: CORS_ORIGINS: comma-separated browser origins allowed to call the API
+    #: ("*" for any). The token rides in a header, not a cookie, so "*" does not
+    #: open a cross-site request hole; it only lets a hosted dashboard read.
+    cors_origins: str = "http://localhost:3000"
+    #: ROOT_PATH: the public prefix the proxy strips (e.g. /t/alice), handed to
+    #: uvicorn. Routing is unaffected; it only makes URLs the server builds
+    #: itself -- redirects, the OpenAPI page -- point back through the prefix.
+    root_path: str = ""
+
+    @model_validator(mode="after")
+    def hosted_requires_access_token(self) -> "Settings":
+        # API_TOKEN folds into ACCESS_TOKEN first, so every reader (the HTTP
+        # middleware, the glasses socket, the startup log) sees one value.
+        legacy, current = self.api_token.strip(), self.access_token.strip()
+        if legacy and current and legacy != current:
+            raise ValueError(
+                "ACCESS_TOKEN and API_TOKEN are both set and differ; API_TOKEN is a "
+                "legacy alias of ACCESS_TOKEN -- set only ACCESS_TOKEN"
+            )
+        if legacy and not current:
+            self.access_token = legacy
+        if (self.root_path.strip() or self.hosted) and not self.access_token.strip():
+            raise ValueError(
+                "ACCESS_TOKEN must be non-empty when ROOT_PATH is set or HOSTED=1"
+            )
+        return self
+
     # -- air quality (pipeline/wearables/air.py). Unset lat/lon is the honest
     # default: no coordinates means no air layer, never an invented number. ----
     air_lat: float | None = None
@@ -502,6 +572,10 @@ class Settings(BaseSettings):
     autopilot_quiet_days: Annotated[
         tuple[int, ...], NoDecode, BeforeValidator(_parse_quiet_days)
     ] = ()
+    def cors_origin_list(self) -> list[str]:
+        """``cors_origins`` split on commas, blanks dropped."""
+
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
     def switches_line(self) -> str:
         """The effective kill-switch values, for one startup log line."""

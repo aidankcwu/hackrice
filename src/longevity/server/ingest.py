@@ -22,6 +22,7 @@ places that have to agree on which connection is current.
 from __future__ import annotations
 
 import asyncio
+import hmac
 import logging
 import os
 import time
@@ -46,6 +47,9 @@ INGEST_PATH = "/ws/glasses"
 # Person B evaluates — for a value that only ever matters to ~100 ms.
 MAX_CLOCK_SKEW_S = 60.0
 INGEST_IDLE_TIMEOUT_S = float(os.environ.get("INGEST_IDLE_TIMEOUT_S", "30.0"))
+# A send to the phone that never completes (a stalled cellular link) must not hold
+# the next utterance hostage: bound it, then drop the socket and let it reconnect.
+PHONE_SEND_TIMEOUT_S = float(os.environ.get("PHONE_SEND_TIMEOUT_S", "5.0"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -273,7 +277,7 @@ class GlassesLink:
         rather than left to be picked again for the next half of the exchange.
         """
         try:
-            await websocket.send_text(message)
+            await asyncio.wait_for(websocket.send_text(message), timeout=PHONE_SEND_TIMEOUT_S)
         except Exception as exc:  # noqa: BLE001
             log.warning("ingest: send to phone failed: %s: %s", type(exc).__name__, exc)
             self.drop_client(websocket)
@@ -294,7 +298,7 @@ class GlassesLink:
         sent = 0
         for ws in list(self.clients):
             try:
-                await ws.send_text(message)
+                await asyncio.wait_for(ws.send_text(message), timeout=PHONE_SEND_TIMEOUT_S)
                 sent += 1
             except Exception as exc:  # noqa: BLE001
                 log.warning("ingest: send to phone failed: %s: %s", type(exc).__name__, exc)
@@ -412,11 +416,60 @@ def link_of(app: Any) -> GlassesLink:
     return link
 
 
+#: Close code for a socket that presented no token or the wrong one. 4000-4999 is
+#: the range RFC 6455 leaves to applications; 4401 reads as "HTTP 401, on a socket".
+CLOSE_UNAUTHORIZED = 4401
+
+
+def _bearer(authorization: str | None) -> str:
+    """The token out of ``Authorization: Bearer <token>``; "" for any other scheme."""
+    scheme, _, value = (authorization or "").strip().partition(" ")
+    return value.strip() if scheme.lower() == "bearer" else ""
+
+
+def socket_presented_token(websocket: WebSocket) -> str:
+    """The one token this socket carries, by the same fixed precedence as the HTTP
+    middleware (``pipeline.api.auth.presented_token``): the ``X-Access-Token`` header,
+    then ``Authorization: Bearer``, then ``?token=``. The first one present is the only
+    one compared; blank counts as absent. Written out here rather than imported, because
+    this package does not depend on the pipeline.
+    """
+    return ((websocket.headers.get("x-access-token") or "").strip()
+            or _bearer(websocket.headers.get("authorization"))
+            or (websocket.query_params.get("token") or "").strip())
+
+
+def socket_token_ok(websocket: WebSocket) -> bool:
+    """Whether this socket may stream. The auth hook for a hosted backend.
+
+    The expected token is whatever the hosting app put on ``app.state.access_token``
+    (the pipeline sets it from ACCESS_TOKEN, or its legacy alias API_TOKEN); absent or
+    empty means open, which is how the Mac on the venue Wi-Fi has always run. The phone
+    may present it as the ``X-Access-Token`` header (URLSessionWebSocketTask can set
+    one), as ``Authorization: Bearer <token>``, or as ``?token=`` in the URL (the
+    simplest thing to paste into a text field); see `socket_presented_token` for the
+    order. Constant-time comparison.
+    """
+    expected = str(getattr(websocket.app.state, "access_token", "") or "").strip()
+    if not expected:
+        return True
+    got = socket_presented_token(websocket)
+    return hmac.compare_digest(expected.encode("utf-8"), got.encode("utf-8"))
+
+
 @router.websocket(INGEST_PATH)
 async def glasses_ws(websocket: WebSocket) -> None:
     """Receive capture packets from the iOS bridge (A14) until the phone goes away."""
     link = link_of(websocket.app)
     await websocket.accept()
+    # Accept, then close, on purpose: refusing before accept fails the handshake with a
+    # bare HTTP 403 the phone cannot tell from a proxy error. Accepted first, the phone
+    # reads close code 4401 and can say "wrong token" instead of "cannot connect".
+    if not socket_token_ok(websocket):
+        peer = websocket.client.host if websocket.client else "?"
+        log.warning("ingest: refused a phone socket from %s: missing or wrong token", peer)
+        await websocket.close(code=CLOSE_UNAUTHORIZED, reason="unauthorized")
+        return
     link.add_client(websocket)
     link.n_connects += 1
     link.last_connect_t = time.time()
@@ -590,10 +643,18 @@ def _handle_answer(link: GlassesLink, msg: dict[str, Any], websocket: Any = None
 
     link.n_answers += 1
     recv_t = time.time()
-    log.info(
-        "ingest: answer to %s: heard=%s %r (phone t=%s)",
-        question_id, heard, text[:80], msg.get("t"),
-    )
+    if os.environ.get("HOSTED", "").strip().lower() in {"1", "true", "yes", "on"}:
+        # Hosted testers are strangers: their words go in the database they
+        # consented to, not in a log line that outlives the tester.
+        log.info(
+            "ingest: answer to %s: heard=%s text_len=%d (phone t=%s)",
+            question_id, heard, len(text), msg.get("t"),
+        )
+    else:
+        log.info(
+            "ingest: answer to %s: heard=%s %r (phone t=%s)",
+            question_id, heard, text[:80], msg.get("t"),
+        )
     log.debug("ingest: answer %s phone clock %s vs mac %.3f", question_id, msg.get("t"), recv_t)
 
     callback = link.on_answer

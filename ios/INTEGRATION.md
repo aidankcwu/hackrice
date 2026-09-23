@@ -67,8 +67,15 @@ Keep `isConnected` current or capture stops at the first drop and never resumes:
 
 `statusLine` reads `sent N · failed N · dropped N · 53 KB · 0.4s ago`, where **`sent` is
 confirmed deliveries only**: `failed` climbing with `sent` stuck = dead socket, `dropped`
-climbing alone = `isConnected` is false. Capture `link` strongly — a weak one that went
+climbing alone = `isConnected` is false. Two segments appear only when non-zero: `busy N`
+(frames dropped because the previous capture send had not completed; at most one is ever
+outstanding) and `stalled N` (sends that missed the 3 s deadline). Capture `link` strongly — a weak one that went
 nil would drop `done` on the floor, and MacLink holds no reference back.
+
+The sender also stamps queued work with a capture generation that changes on every
+start/stop lifecycle transition. An encode or send completion from an older generation
+is counted as dropped and cannot touch the transport or delivery counters, so tapping
+Stop cannot leak one final camera frame after consent has been withdrawn.
 
 ## 4 · Verify from the Mac
 
@@ -227,3 +234,140 @@ The checked-in Xcode patch is stale until the working target is re-snapshotted u
 route, note how long the profile switch takes, and check whether DAT video frames pause
 while that microphone route is active; the existing hardware validation did not cover
 simultaneous DAT camera input and a custom Bluetooth microphone pipeline.
+
+## 9 Hosted backend, token, consent (TestFlight)
+
+Testers are not on our Wi-Fi, so the phone dials a hosted backend over TLS. The whole
+tester onboarding is one pasted URL:
+
+```
+wss://DOMAIN/t/NAME/ws/glasses?token=TOKEN
+```
+
+**Files.** Replace `MacLink.swift` and `CapturePacketSender.swift`, and add
+`ConsentView.swift` to the `CameraAccess` target. `ConsentView.swift` is required, not
+optional: `MacLink.connect()` and `CapturePacketSender.start()` both read
+`StreamingConsent.isGranted`, so a build without it does not compile, and a build that
+never shows the sheet never connects (`status` reads `not connected · consent needed`).
+
+**What MacLink does now.** The public API from §7 is unchanged, and so is every message
+on the wire (`hello`, `capture`, `answer`, `ping`, `echo`).
+
+- `configure(serverURL:)` stores the URL, token included, under the UserDefaults key
+  `serverURL`. A parseable stored URL **wins over** `macHost`/`macPort`. `https://` and
+  `http://` are accepted and mapped to `wss://`/`ws://`, and an empty or `/` path gets
+  `/ws/glasses`. An empty string clears the URL and falls back to host/port.
+  `configure(host:port:)` still works and now also clears `serverURL`, because choosing a
+  LAN address means choosing LAN mode.
+- The token is sent twice: in the query (it is part of the URL) and as the
+  `X-Access-Token` header on the upgrade request.
+- `sendRaw(_:deadline:completion:)` has a send deadline, `MacLink.sendDeadline` (3 s)
+  by default. A send that has not completed by then gets `URLError(.timedOut)`, and the
+  socket is torn down and reconnected with the §7 backoff. The existing call
+  `link.sendRaw(json, completion: done)` is unchanged. `CapturePacketSender` keeps at
+  most one capture send outstanding and drops frames (`busy`) while it waits.
+- **Token rejected** means the server closed with **4401**, or answered the handshake
+  with HTTP **401/403**. MacLink then withdraws `wantConnected` and cancels any pending
+  reconnect, so it stops dialling. It sets `accessDenied = true` and `status` to
+  `not connected · invalid access token — re-paste the server URL`. The next attempt
+  only happens when someone applies a new URL or taps Connect. Any other drop reconnects
+  with the §7 backoff, as before.
+- New observables: `serverURL` (seed the text field from it), `endpointLabel`
+  (token-free, such as `wss://DOMAIN/t/NAME/ws/glasses`; show this, never the URL), and
+  `accessDenied`. `host`/`port` still exist; in URL mode they hold the URL's host and
+  443.
+- Status strings keep the `not connected` / `closed` / `send failed` prefixes, so
+  `apply(macLinkStatus:)` still reads every new failure as down. `connected …` now shows
+  `endpointLabel`.
+
+| UserDefaults key | Holds | Written by |
+|---|---|---|
+| `serverURL` | the pasted `wss://…?token=…` (a secret; fine for a demo token) | `configure(serverURL:)` |
+| `macHost`, `macPort` | LAN dev fallback (unchanged) | `configure(host:port:)` |
+| `streamingConsent.v2` | `true` once the user tapped I agree (v2: accurate retention and transcription text; v1 agreements are asked again) | `ConsentView` |
+
+**Settings UI.** In `CameraView.swift`, replace the `Mac IP` / `Port` `HStack` inside
+`if showSetup { … }` with the field below. Delete `hostField` and `portField`, and reuse
+the existing `addressFieldFocused` so the keyboard toolbar keeps working.
+
+```swift
+@State private var serverField = ""     // seeded from link.serverURL in .onAppear
+@State private var askConsent = false
+
+HStack(spacing: 6) {
+  TextField("Server URL", text: $serverField)
+    .textInputAutocapitalization(.never)
+    .autocorrectionDisabled()
+    .keyboardType(.URL)
+    .textContentType(.URL)
+    .submitLabel(.done)
+    .focused($addressFieldFocused)
+    .onSubmit { link.configure(serverURL: serverField) }
+  Button("Apply") {
+    link.configure(serverURL: serverField)
+    addressFieldFocused = false
+  }
+  .font(.system(size: 14, weight: .semibold))
+}
+// ...keep the existing .font/.padding/.background/.toolbar modifiers on the HStack.
+
+if link.accessDenied {
+  Text("Invalid access token. Paste the URL you were sent again.")
+    .font(.system(size: 12, weight: .semibold))
+    .foregroundStyle(.orange)
+}
+// The existing `if let error = link.configError { … }` stays as it is.
+```
+
+Also make these changes in the same file:
+
+- In the Setup disclosure label, replace `Text("\(link.host):\(link.port)")` with
+  `Text(link.endpointLabel)`, which shows no token.
+- In `.onAppear`, replace the host/port seeding with the lines below. They open Setup on
+  a fresh install, so a tester sees the field without hunting for it:
+  ```swift
+  if serverField.isEmpty { serverField = link.serverURL }
+  if link.serverURL.isEmpty { showSetup = true }
+  ```
+- In the Connect button action, ask for consent the first time:
+  ```swift
+  if link.connected {
+    link.send("ping \(Int(Date().timeIntervalSince1970))")
+  } else if !StreamingConsent.isGranted {
+    askConsent = true
+  } else {
+    link.connect()
+  }
+  ```
+  Relabel it `Connect` / `Connected`. There is no Mac any more.
+- Attach the sheet once, on the bottom bar or the body root:
+  ```swift
+  .streamingConsentSheet(isPresented: $askConsent) { link.connect() }
+  ```
+- Recommended: keep the screen awake while connected, because a tester's phone
+  auto-locking mid-demo is the likeliest way to lose the stream. Put this in the existing
+  `.onChange(of: link.connected)`:
+  `UIApplication.shared.isIdleTimerDisabled = isUp`.
+
+The sheet shows once, the first time someone taps Connect. After I agree it connects
+straight away and never shows again unless the app is deleted or
+`StreamingConsent.revoke()` is called. With Not now, nothing is stored and Connect keeps
+asking.
+
+**Info.plist.**
+
+- Keep `NSAllowsLocalNetworking`, which LAN dev still needs.
+- Do **not** add `NSAllowsArbitraryLoads`. `wss://` to a host with a publicly trusted
+  certificate needs no ATS exception. A self-signed certificate, or `ws://` to a public
+  host, fails in the same silent way as §1, and that is the correct outcome.
+- Add `ITSAppUsesNonExemptEncryption` = `NO`. The app only uses Apple's TLS, and without
+  this key every upload stops at an export-compliance question.
+- The privacy manifest and usage strings are in [TESTFLIGHT.md](../TESTFLIGHT.md) R4.
+
+**Verify.**
+
+- Local dev still works. Clear the field and Apply to get back to `macHost`/`macPort`,
+  or paste `ws://<mac-ip>:8010/ws/glasses`.
+- Against the hosted backend, `status` should read `connected wss://DOMAIN/t/NAME/ws/glasses`.
+- With a wrong token it should read `invalid access token`, and the backend log should
+  show one attempt per tap, not a retry every few seconds.

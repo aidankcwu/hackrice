@@ -5,7 +5,6 @@
  */
 import { fmtH } from "@/lib/tokens";
 import { CAFFEINE_CUTOFF_H, mapEpisodes } from "./adapter";
-import { withToken } from "./backend";
 import { finiteNumber, hhmm, normaliseBedtime, round1, round2, shortWeekday, trimFixed } from "./format";
 import type { GlassesCoverage } from "./provenance";
 import type {
@@ -372,14 +371,6 @@ export function glassesCoverage(payload: Pick<HealthspanPayload, "day" | "window
   };
 }
 
-/**
- * A pin's `img` as the backend writes it — server-relative
- * `/api/evidence/<decision>/<frame>` — made absolute against the API base, with
- * the `?token=` an `<img src>` needs. Anything else passes through; null stays null.
- */
-export const evidenceSrc = (img: string | null, apiBase: string): string | null =>
-  img !== null && img.startsWith("/") ? withToken(`${apiBase}${img}`) : img;
-
 export function shapeDashboard({ healthspan, days, person, source, engineMs }: ShapeArgs): DashboardData {
   const today = healthspan.today;
   const todayInputs = days[days.length - 1];
@@ -407,7 +398,11 @@ export function shapeDashboard({ healthspan, days, person, source, engineMs }: S
     years_delta: today.years_delta,
     years_ci: today.years_ci,
     layers: layerRows(today),
-    pins: pinRows(today).map((pin) => ({ ...pin, img: evidenceSrc(pin.img, source.api_base) })),
+    // A pin's `img` stays as the backend writes it, server-relative
+    // `/api/evidence/<decision>/<frame>`: the browser resolves it against its own
+    // backend base with its own token (`useBackendUrl` in Evidence.tsx), which is
+    // not this server's base on a hosted tester.
+    pins: pinRows(today),
     forecast: forecastView(today, bedtime_hh, bedtimeMeasured),
     levers: leverRows(today),
     ledger: ledgerRows(today),

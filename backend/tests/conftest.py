@@ -11,6 +11,12 @@ os.environ.setdefault("FIXED_LINES_ONLY", "0")
 # absent) so a later load_dotenv(override=False) cannot turn it back on.
 # test_auth.py turns it on per test.
 os.environ["API_TOKEN"] = ""
+# Hosted-deployment presets (deploy/): a .env copied from a tester's container
+# must not lock the suite behind a token, reset its databases or swap its
+# persona. Assigned, not setdefault: these change what a test observes.
+for _hosted in ("ACCESS_TOKEN", "PERSONA_FILE", "ROOT_PATH"):
+    os.environ[_hosted] = ""
+os.environ["DEMO_RESET_ON_START"] = "0"
 
 import functools
 import sys

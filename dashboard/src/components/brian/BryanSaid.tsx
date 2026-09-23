@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useBackendUrl } from "@/lib/useBackendUrl";
 import { T } from "@/lib/tokens";
 import { usePoll } from "@/lib/usePoll";
 import type { PinRow } from "@/lib/score/types";
@@ -53,6 +54,7 @@ function OutcomeChip({ outcome }: { outcome: Outcome }) {
  * layer's own icon instead of a fabricated picture.
  */
 function Frame({ nudge }: { nudge: Nudge }) {
+  const src = useBackendUrl(nudge.frame);
   return (
     <span
       className="flex shrink-0 items-center justify-center overflow-hidden"
@@ -61,7 +63,7 @@ function Frame({ nudge }: { nudge: Nudge }) {
       {nudge.frame ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={nudge.frame}
+          src={src}
           alt={nudge.seen ?? nudge.trigger}
           width={THUMB_W}
           height={THUMB_H}

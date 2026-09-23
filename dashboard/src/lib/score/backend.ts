@@ -8,6 +8,7 @@
  * fallback: a page with no backend behind it shows no numbers (R1).
  */
 import type { Status, WearableMetricRow, WearablesStatus } from "@/lib/types";
+import { accessToken, backendHeaders } from "@/lib/runtime";
 import type { DataSource, DayInputs, Goal, HealthspanWeek, PipelineEpisode } from "./types";
 
 export const DEFAULT_API_BASE = "http://localhost:8010";
@@ -19,13 +20,34 @@ export const WINDOW_DAYS = 7;
  */
 const HEALTHSPAN_TIMEOUT_MS = 10_000;
 
+/**
+ * The backend as this Next.js server reaches it. Per container: `BACKEND_URL`
+ * (e.g. `http://backend-alice:8010` on the deploy network) — the browser's
+ * base is resolved separately in `lib/runtime.ts` and is usually a different
+ * URL for the same backend. `NEXT_PUBLIC_API_BASE` and localhost stay as the
+ * dev fallbacks.
+ */
 export function apiBase(): string {
-  return process.env.NEXT_PUBLIC_API_BASE ?? DEFAULT_API_BASE;
+  const configured = process.env.BACKEND_URL?.trim() || process.env.NEXT_PUBLIC_API_BASE?.trim();
+  return (configured || DEFAULT_API_BASE).replace(/\/+$/, "");
 }
 
-/** The backend's API_TOKEN (docs/DEPLOY.md), or "" when unset: auth off, nothing sent. */
+/**
+ * The token for server→backend calls, sent as `X-Access-Token`: the per-tester
+ * `ACCESS_TOKEN` (deploy/), else the single deploy token `NEXT_PUBLIC_API_TOKEN`
+ * (docs/DEPLOY.md). The backend accepts either header form (api/auth.py).
+ */
+export function serverToken(): string | undefined {
+  return process.env.ACCESS_TOKEN?.trim() || process.env.NEXT_PUBLIC_API_TOKEN?.trim() || undefined;
+}
+
+/**
+ * The token a browser-side call sends: the per-tester one from the page URL
+ * (`lib/runtime.ts`, hosted testers) when there is one, else the single deploy
+ * token `NEXT_PUBLIC_API_TOKEN` (docs/DEPLOY.md), else "" (auth off, nothing sent).
+ */
 export function apiToken(): string {
-  return process.env.NEXT_PUBLIC_API_TOKEN ?? "";
+  return accessToken() ?? process.env.NEXT_PUBLIC_API_TOKEN?.trim() ?? "";
 }
 
 /** Spread into a fetch init: `Authorization: Bearer` when a token is set, else nothing. */
@@ -53,7 +75,11 @@ const describe = (e: unknown): string => (e instanceof Error ? e.message : Strin
 export async function fetchJson<T>(base: string, path: string, timeoutMs = 2500): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${base}${path}`, { cache: "no-store", signal: AbortSignal.timeout(timeoutMs), ...authInit() });
+    response = await fetch(`${base}${path}`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: backendHeaders(undefined, serverToken() ?? null),
+    });
   } catch (cause) {
     throw new BackendOffline(`${path}: ${describe(cause)}`, { cause });
   }
