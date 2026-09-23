@@ -212,7 +212,7 @@ async def test_watcher_on_with_the_fake_model(tmp_path, monkeypatch):
     labeler = stats["labeler"]
     assert set(labeler) == {
         "calls_per_hour", "capped", "last_heartbeat_age_s", "last_wake_latency_ms",
-        "frames_sent_per_hour", "mode",
+        "frames_sent_per_hour", "mode", "steady_s",
     }
     # With a watcher the first tick is a heartbeat, not a hot call.
     assert labeler["calls_per_hour"]["heartbeat"] >= 1
@@ -241,6 +241,19 @@ def test_scheduler_values_come_from_capture_settings(tmp_path, monkeypatch):
     sched = _bridge(tmp_path).tagger.scheduler
     assert (sched.heartbeat_s, sched.max_per_hour, sched.steady_s) == (42.0, 7, 11.0)
     assert sched.stats()["max_per_hour"] == 7
+
+
+@pytest.mark.parametrize("gate_reads_watch, steady_s", [("1", 30.0), ("0", 10.0)])
+def test_steady_cadence_follows_the_gate_reading_watch(
+    tmp_path, monkeypatch, gate_reads_watch, steady_s
+):
+    monkeypatch.setenv("WATCHER", "1")
+    monkeypatch.delenv("LABELER_STEADY_S", raising=False)
+    monkeypatch.setenv("GATE_READS_WATCH", gate_reads_watch)
+    _corpus(tmp_path, count=1)
+    capture = _bridge(tmp_path)
+    assert capture.tagger.scheduler.steady_s == steady_s
+    assert capture.stats()["labeler"]["steady_s"] == steady_s
 
 
 @pytest.mark.parametrize("env", [{"PUBLISH_ON_LANDING": "0"}, {"VLM_MAX_IN_FLIGHT": "1"}])

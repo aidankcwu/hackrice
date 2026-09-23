@@ -123,6 +123,20 @@ class CaptureSettings(BaseSettings):
     #: Off by default so the gate behaves exactly as today until it is trusted.
     gate_reads_watch: OffSwitch = False
 
+    def effective_labeler_steady_s(self) -> float:
+        """The steady cadence the tagger should run: LABELER_STEADY_S when set
+        explicitly, else 30 s once the gate reads watch, else the 10 s default.
+
+        With GATE_READS_WATCH=1 the gate proves a concept's persistence from the
+        watcher, so steady labeling no longer carries the trigger; it only keeps
+        the enums (scene, activity) fresh, and one call per 30 s does that
+        (docs/PERCEPTION.md, phase 3).
+        """
+
+        if "labeler_steady_s" in self.model_fields_set:
+            return self.labeler_steady_s
+        return 30.0 if self.gate_reads_watch else self.labeler_steady_s
+
     def thresholds(self) -> dict[str, tuple[float, float]]:
         """(enter, exit) for every §9 boolean, with WATCH_THRESHOLDS_JSON applied.
 

@@ -11,7 +11,7 @@ from pipeline.capture.settings import POINT_CONCEPTS, CaptureSettings
 
 _ENV = (
     "WATCHER", "WATCHER_FPS_MAX", "WATCH_K", "WATCH_THRESHOLDS_JSON",
-    "GATE_READS_WATCH", "LABELER_MAX_PER_HOUR",
+    "GATE_READS_WATCH", "LABELER_MAX_PER_HOUR", "LABELER_STEADY_S",
 )
 
 
@@ -116,3 +116,20 @@ def test_underscore_keys_are_metadata_not_concepts(monkeypatch, caplog):
         th = CaptureSettings().thresholds()
     assert th["food_present"] == (0.7, 0.5)
     assert "_meta" not in caplog.text
+
+
+def test_steady_cadence_defaults_to_10() -> None:
+    assert CaptureSettings().effective_labeler_steady_s() == 10.0
+
+
+def test_steady_cadence_is_30_when_the_gate_reads_watch(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GATE_READS_WATCH", "1")
+    assert CaptureSettings().effective_labeler_steady_s() == 30.0
+
+
+def test_explicit_steady_cadence_wins_over_the_gate_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GATE_READS_WATCH", "1")
+    monkeypatch.setenv("LABELER_STEADY_S", "7")
+    assert CaptureSettings().effective_labeler_steady_s() == 7.0

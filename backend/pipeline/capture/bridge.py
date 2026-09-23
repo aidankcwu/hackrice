@@ -162,7 +162,7 @@ class LongevityCapture:
             tick_interval_s=settings.tick_interval_s,
             heartbeat_s=cs.labeler_heartbeat_s,
             transition_s=cs.labeler_transition_s,
-            steady_s=cs.labeler_steady_s,
+            steady_s=cs.effective_labeler_steady_s(),
             cooling_s=cs.labeler_cooling_s,
             max_per_hour=cs.labeler_max_per_hour,
             dormant_after_s=cs.labeler_dormant_after_s,
@@ -398,6 +398,7 @@ class LongevityCapture:
             "last_wake_latency_ms": self._meter.last_wake_latency_ms,
             "frames_sent_per_hour": sum(per_hour.values()),
             "mode": sched["mode"],
+            "steady_s": self.tagger.scheduler.steady_s,
         }
 
     def speech_stats(self) -> dict[str, object]:
