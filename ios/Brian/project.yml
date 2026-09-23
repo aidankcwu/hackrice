@@ -43,7 +43,9 @@ targets:
         # Meta Wearables Device Access Toolkit. Matches the hardware-validated CameraAccess
         # sample (ios/xcode-project.patch, CLAUDE.md "Hardware").
         UISupportedExternalAccessoryProtocols: [com.meta.ar.wearable]
-        UIBackgroundModes: [processing, bluetooth-central, audio, bluetooth-peripheral, external-accessory]
+        # No `processing`: App Store validation demands BGTaskSchedulerPermittedIdentifiers with
+        # it, and nothing here schedules background tasks.
+        UIBackgroundModes: [bluetooth-central, audio, bluetooth-peripheral, external-accessory]
         LSApplicationQueriesSchemes: [fb-viewapp]
         MWDAT:
           AppLinkURLScheme: "brian://"
@@ -79,6 +81,7 @@ targets:
         # Swift 6 mode the unchanged ports (QuestionListener's nonisolated deinit) do not compile.
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_STYLE: Automatic
         PRODUCT_BUNDLE_IDENTIFIER: com.zeroist.app    # App ID registered 23 Sept (Apple + Meta must match)
         DEVELOPMENT_TEAM: 3386QS4N44      # the Apple team that owns the App ID (not a secret: it is in every provisioning profile)

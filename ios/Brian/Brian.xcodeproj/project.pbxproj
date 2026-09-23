@@ -21,6 +21,7 @@
 		55002D8CB3BED15869A73EB1 /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D7113769C45F5A93F12D25E /* SetupView.swift */; };
 		5B14D33B0DF25A807CE4D9F7 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7A112AAC56185A28D26D0BB /* RootView.swift */; };
 		5E13D9D0F983CF0BE6F312C6 /* LinkGlue.swift in Sources */ = {isa = PBXBuildFile; fileRef = F68ECE541029CD2BDAEF7463 /* LinkGlue.swift */; };
+		6BB4A78712D24F3098BD96DC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2BCADBBF40322D38574CB21D /* Assets.xcassets */; };
 		7137BE96541D1A3832168EFF /* StatusStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2449BCBB425E24C74347C17C /* StatusStrip.swift */; };
 		826F3A446F99A62C3A230B4D /* ServerURLTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7BDB86B2CE2D6C1359E16DD /* ServerURLTests.swift */; };
 		854D738D40C85C225ED0CD56 /* CapturePacketSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2442304857987547F779481 /* CapturePacketSender.swift */; };
@@ -64,6 +65,7 @@
 		1B5BF52D62551B1B8DB81894 /* GlassesSessioning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassesSessioning.swift; sourceTree = "<group>"; };
 		243CABADA8D747304B9AF1F0 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		2449BCBB425E24C74347C17C /* StatusStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusStrip.swift; sourceTree = "<group>"; };
+		2BCADBBF40322D38574CB21D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		31B7301E972AC63897D50606 /* ServerURL.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerURL.swift; sourceTree = "<group>"; };
 		31F9CCC2710A68583F0AB20E /* MacLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacLink.swift; sourceTree = "<group>"; };
 		34CA65A06BE3C5F30E52D1B6 /* ModelsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsTests.swift; sourceTree = "<group>"; };
@@ -112,6 +114,7 @@
 		15537D4F80D44CF24BEEACCE /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				2BCADBBF40322D38574CB21D /* Assets.xcassets */,
 				C18D6B88F7067B38D54FF2C1 /* API */,
 				3C331280BCB144BA9A7DBB5E /* App */,
 				D6210759D9B5FF1A4EB60D80 /* Glasses */,
@@ -317,6 +320,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6BB4A78712D24F3098BD96DC /* Assets.xcassets in Resources */,
 				AEF10D75634A96EF05ED6CE7 /* protocol_today.json in Resources */,
 				BBF7C290FAC04DDA8E295235 /* status.json in Resources */,
 				99A81D1181CAEA3A04417C44 /* today_decisions.json in Resources */,

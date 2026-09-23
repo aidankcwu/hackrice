@@ -79,7 +79,6 @@
 	<string>Turns your spoken answer into text.</string>
 	<key>UIBackgroundModes</key>
 	<array>
-		<string>processing</string>
 		<string>bluetooth-central</string>
 		<string>audio</string>
 		<string>bluetooth-peripheral</string>
