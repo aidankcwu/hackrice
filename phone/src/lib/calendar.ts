@@ -38,7 +38,7 @@ export interface Band {
   ticks?: number[];
 }
 
-/** Lanes, left to right: rest, food, caffeine and heat, doses, movement, daylight, people, water. */
+/** Lanes, left to right: rest, food and light, caffeine and heat, doses and supplements, movement, daylight, people, water. */
 export const LANE_COUNT = 8;
 
 export function sunFor(date: string): { sunrise: number; sunset: number } {
@@ -54,15 +54,17 @@ export function bandsFor(day: Day): Band[] {
   const heat = day.events.some((e) => e.kind === "sauna" || e.kind === "cold");
   const bands: Band[] = [
     { id: "sleep-am", lane: 0, start: 0, end: WINDOWS.wake, label: "Sleep" },
+    { id: "wake", lane: 0, start: WINDOWS.wake, end: WINDOWS.wake + 30, label: "Up by 6:30" },
     { id: "nap", lane: 0, start: WINDOWS.napStart, end: WINDOWS.napEnd, label: "Nap ok" },
     { id: "wind", lane: 0, start: WINDOWS.windDown, end: WINDOWS.sleepStart, label: "Wind-down", dim: true },
     { id: "sleep-pm", lane: 0, start: WINDOWS.sleepStart, end: 1440, label: "Sleep" },
-    { id: "light", lane: 1, start: WINDOWS.wake, end: WINDOWS.wake + 60, label: "Light" },
+    { id: "light", lane: 1, start: WINDOWS.wake, end: WINDOWS.wake + 60, label: "Morning light" },
     { id: "eating", lane: 1, start: WINDOWS.eatingStart, end: WINDOWS.eatingEnd, label: "Eating window, last meal 18:30" },
     { id: "screens", lane: 1, start: WINDOWS.screensOff, end: 1440, label: "Screens off 21:30" },
     { id: "caffeine", lane: 2, start: WINDOWS.wake, end: WINDOWS.caffeineEnd, label: "Caffeine ok until 12:30" },
     ...(heat ? [{ id: "heat", lane: 2, start: WINDOWS.saunaStart, end: WINDOWS.saunaEnd, label: "Sauna or cold" }] : []),
     { id: "pep-am", lane: 3, start: WINDOWS.peptideAm[0], end: WINDOWS.peptideAm[1], label: "Peptide AM" },
+    { id: "supps", lane: 3, start: WINDOWS.eatingStart + 10, end: WINDOWS.eatingStart + 120, label: "Supplements with the first meal" },
     { id: "pep-pm", lane: 3, start: WINDOWS.peptidePm[0], end: WINDOWS.peptidePm[1], label: "Peptide PM" },
     { id: "move", lane: 4, start: WINDOWS.wake, end: WINDOWS.moveBy, label: "Move by 16:30" },
     {
