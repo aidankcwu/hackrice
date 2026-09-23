@@ -380,7 +380,7 @@ per hour becomes a number on `/api/status`.
 
 ## Status
 
-- Watcher: not started.
+- Watcher: built on `perception/watcher` (US-W01 to W12): settings, prompt bank, MobileCLIP2 wrapper with a fake (6.9 ms per frame on this Mac's GPU), watcher core, watch block, packet feed, labeler scheduler and request kinds, loop wiring, bridge wiring, labeler health, ring cap, calibration tool. Calibration itself (W12's sweep on the real corpus) is not run: no corpus on this machine yet. Verifier 2026-09-23: root 230, backend 1741, dashboard 133 and build, all green.
 - Decider and writers: not started.
 - Phase 3: not started.
 
