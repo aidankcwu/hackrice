@@ -1,82 +1,88 @@
 "use client";
 
 import { useId, type ReactNode } from "react";
+import { SwitchRow } from "@/components/concierge/SwitchRow";
+import { Field, InsetList, ListRow } from "@/components/ui";
 import { API_BASE } from "@/lib/api";
 import { VOICE_KEY, WIND_DOWN_DEFAULT, WIND_DOWN_KEY, useSetting } from "@/lib/settings";
 
-const ROW = "flex min-h-[52px] items-center gap-4 border-t-[0.5px] border-line py-2";
-const FOCUS = "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ink";
+/** Whether a bearer token rides on every request (`NEXT_PUBLIC_API_TOKEN`). The token itself never shows. */
+const TOKEN_SET = Boolean(process.env.NEXT_PUBLIC_API_TOKEN);
 
 /**
- * SettingsView, pushed from the gear: a grouped list. Voice and Wind‑down are
- * kept on this phone; About names the build and the backend it talks to.
+ * Settings ("Account" in the menu), pushed from the gear: inset grouped lists.
+ * Voice and Wind‑down are kept on this phone; Appearance follows the device;
+ * Backend names the address the app talks to and whether a token is set;
+ * About names the build.
  */
 export function Settings({ version }: { version: string }) {
   const [voice, setVoice] = useSetting(VOICE_KEY, "on");
   const [windDown, setWindDown] = useSetting(WIND_DOWN_KEY, WIND_DOWN_DEFAULT);
+  const windDownId = useId();
 
   return (
-    <div className="mt-4">
-      <Section title="Voice">
-        <label className={`${ROW} cursor-pointer ${FOCUS}`}>
-          <span className="type-body min-w-0 flex-1 text-text">Whisper through the glasses</span>
-          <input
-            type="checkbox"
-            role="switch"
-            checked={voice === "on"}
-            onChange={(event) => setVoice(event.target.checked ? "on" : "off")}
-            className="sr-only"
-          />
-          <Switch on={voice === "on"} />
-        </label>
-      </Section>
+    <div className="mt-4 flex flex-col gap-section">
+      <InsetList label="Voice">
+        <SwitchRow
+          id="voice"
+          label="Whisper through the glasses"
+          checked={voice === "on"}
+          onChange={(on) => setVoice(on ? "on" : "off")}
+        />
+      </InsetList>
 
-      <Section title="Wind‑down" footer="Not connected yet">
-        <label className={`${ROW} ${FOCUS}`}>
-          <span className="type-body min-w-0 flex-1 text-text">Time</span>
-          <input
-            type="time"
-            value={windDown}
-            onChange={(event) => {
-              if (event.target.value) setWindDown(event.target.value);
-            }}
-            className="type-body bg-transparent text-right text-text tabular-nums focus:outline-none"
-          />
-        </label>
-      </Section>
+      <div>
+        <InsetList label="Wind‑down">
+          <FieldRow>
+            <Field
+              id={windDownId}
+              label="Time"
+              type="time"
+              value={windDown}
+              onChange={(value) => {
+                if (value) setWindDown(value);
+              }}
+            />
+          </FieldRow>
+        </InsetList>
+        <p className="type-caption m-0 mt-2 px-4 text-muted">Not connected yet</p>
+      </div>
 
-      <Section title="About">
-        <dl className="m-0">
-          <InfoRow label="Version" value={<span className="tabular-nums">{version}</span>} />
-          <InfoRow label="Backend" value={<BreakableUrl url={API_BASE} />} />
-        </dl>
-      </Section>
+      <InsetList label="Appearance">
+        <ListRow title="Appearance" trailing={<Value>Follows the device</Value>} />
+      </InsetList>
+
+      <InsetList label="Backend">
+        <ListRow
+          title="Address"
+          trailing={
+            <Value>
+              <BreakableUrl url={API_BASE} />
+            </Value>
+          }
+        />
+        <ListRow title="Token" trailing={<Value>{TOKEN_SET ? "Set" : "Not set"}</Value>} />
+      </InsetList>
+
+      <InsetList label="About">
+        <ListRow title="Version" trailing={<Value>{version}</Value>} />
+      </InsetList>
     </div>
   );
 }
 
-/** A group: a muted heading, rows between full-width hairlines, an optional muted footer. */
-function Section({ title, footer, children }: { title: string; footer?: string; children: ReactNode }) {
-  const id = useId();
-  return (
-    <section aria-labelledby={id} className="mt-section first:mt-0">
-      <h2 id={id} className="type-secondary m-0 mb-2 text-muted">
-        {title}
-      </h2>
-      <div className="border-b-[0.5px] border-line">{children}</div>
-      {footer ? <p className="type-caption m-0 mt-2 text-muted">{footer}</p> : null}
-    </section>
-  );
+/**
+ * A Field as one row of an InsetList: the list's surface bounds the row, so
+ * the field's own bottom hairline is dropped, and its focus ring is drawn
+ * inside the clipped corners.
+ */
+function FieldRow({ children }: { children: ReactNode }) {
+  return <li className="px-4 [&>label]:after:hidden [&>label]:has-focus-visible:-outline-offset-2">{children}</li>;
 }
 
-/** Label and read-only value on one line; at large text the value drops under the label, right-aligned. */
-function InfoRow({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className={`${ROW} flex-wrap gap-y-0`}>
-      <dt className="type-body text-text">{label}</dt>
-      <dd className="type-body m-0 ml-auto max-w-full text-right text-muted [overflow-wrap:anywhere]">{value}</dd>
-    </div>
-  );
+/** A read-only value at the right of a row; a long one wraps inside its 60% rather than squeezing the title. */
+function Value({ children }: { children: ReactNode }) {
+  return <span className="type-body max-w-[60%] shrink-0 text-right text-muted tabular-nums [overflow-wrap:anywhere]">{children}</span>;
 }
 
 /** "http://10.0.0.5:8010", allowed to wrap after the scheme and before the port rather than mid-host. */
@@ -90,27 +96,5 @@ function BreakableUrl({ url }: { url: string }) {
       <wbr />
       {port}
     </>
-  );
-}
-
-/**
- * The iOS switch, 51 × 31, drawn only: the checkbox beside it is what VoiceOver
- * and the keyboard reach. On is the ink fill, the same as the primary button; the
- * data colours stay reserved for data.
- */
-function Switch({ on }: { on: boolean }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={`relative h-[31px] w-[51px] shrink-0 rounded-full transition-colors duration-200 ${
-        on ? "bg-ink" : "bg-surface-2"
-      }`}
-    >
-      <span
-        className={`absolute top-[2px] left-[2px] size-[27px] rounded-full border-[0.5px] border-[var(--glass-edge)] transition-transform duration-200 ${
-          on ? "translate-x-[20px] bg-page" : "bg-[light-dark(#ffffff,#f5f5f7)]"
-        }`}
-      />
-    </span>
   );
 }
