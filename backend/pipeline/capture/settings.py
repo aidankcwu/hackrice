@@ -140,6 +140,9 @@ class CaptureSettings(BaseSettings):
             log.warning("WATCH_THRESHOLDS_JSON is not a JSON object; using defaults")
             return out
         for name, value in overrides.items():
+            if name.startswith("_"):
+                # Metadata from tools/probe_watcher.py --out (model, date, ms), not a concept.
+                continue
             if name not in out:
                 log.warning("WATCH_THRESHOLDS_JSON: unknown concept %r ignored", name)
                 continue

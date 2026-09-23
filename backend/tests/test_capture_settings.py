@@ -106,3 +106,13 @@ def test_gate_reads_watch_fails_closed_on_a_typo(monkeypatch):
     assert CaptureSettings().gate_reads_watch is True
     monkeypatch.setenv("GATE_READS_WATCH", "off")
     assert CaptureSettings().gate_reads_watch is False
+
+
+def test_underscore_keys_are_metadata_not_concepts(monkeypatch, caplog):
+    """probe_watcher --out carries a _meta key; it must not warn or change anything."""
+
+    monkeypatch.setenv("WATCH_THRESHOLDS_JSON", '{"_meta": {"model": "fake"}, "food_present": {"enter": 0.7, "exit": 0.5}}')
+    with caplog.at_level("WARNING"):
+        th = CaptureSettings().thresholds()
+    assert th["food_present"] == (0.7, 0.5)
+    assert "_meta" not in caplog.text
