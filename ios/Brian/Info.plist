@@ -25,7 +25,7 @@
 			<string>com.zeroist.app</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>brian</string>
+				<string>bryanglasses</string>
 			</array>
 		</dict>
 	</array>
@@ -40,9 +40,11 @@
 	<key>MWDAT</key>
 	<dict>
 		<key>AppLinkURLScheme</key>
-		<string>brian://</string>
+		<string>bryanglasses://</string>
+		<key>ClientToken</key>
+		<string>$(CLIENT_TOKEN)</string>
 		<key>MetaAppID</key>
-		<string>0</string>
+		<string>2802824706754749</string>
 		<key>TeamID</key>
 		<string>$(DEVELOPMENT_TEAM)</string>
 	</dict>
@@ -66,13 +68,13 @@
 	<key>NSHealthShareUsageDescription</key>
 	<string>Reads last night's sleep, heart rate and steps to score your day.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>Brian does not write to Health.</string>
+	<string>Bryan does not write to Health.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Sends what the glasses see to the Mac running Brian on your Wi‑Fi.</string>
+	<string>Sends what the glasses see to the Mac running Bryan on your Wi‑Fi.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Uses your speed to tell walking from sitting.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Hears your answer when Brian asks a question.</string>
+	<string>Hears your answer when Bryan asks a question.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>Tells stillness from activity.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

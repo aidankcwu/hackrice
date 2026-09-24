@@ -8,7 +8,7 @@ Two real integration paths are supported today (see ``docs/WEARABLES.md``):
 * **WHOOP API v2** -- OAuth REST objects (``recovery``, ``cycle``, ``sleep``,
   ``workout``). WHOOP exposes no raw intraday HR stream, so what lands here is
   per-record summary values stamped at the record's own boundary.
-* **Brian's HealthKit sync** -- the phone app posts the canonical body with
+* **Bryan's HealthKit sync** -- the phone app posts the canonical body with
   ``source: "healthkit"``; its once-a-day numbers become daily rows.
 
 Everything returns :class:`~pipeline.wearables.Sample` objects in canonical
@@ -148,7 +148,7 @@ def health_auto_export_to_samples(payload: dict[str, Any]) -> list[Sample]:
     return samples
 
 
-# -- Brian's own HealthKit sync (ios Sources/Health) ----------------------
+# -- Bryan's own HealthKit sync (ios Sources/Health) ----------------------
 
 #: ``source``/``device`` the phone's HealthKit sync posts under, and the
 #: ``seeded``-table source its daily rows are written with.

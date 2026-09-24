@@ -19,7 +19,7 @@ import { ConversationsPanel } from "@/components/ConversationsPanel";
 import { PersonaPanel } from "@/components/PersonaPanel";
 
 /**
- * The old dark dashboard, folded into a collapsible drawer under the Brian page.
+ * The old dark dashboard, folded into a collapsible drawer under the Bryan page.
  * Collapsed by default; the heavy polling (ticks at 1 Hz, decisions at 2 Hz)
  * only runs while the drawer is open because the panels are only mounted then.
  */

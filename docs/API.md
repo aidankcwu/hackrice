@@ -357,7 +357,7 @@ undone`, with `seen_t` and `evidence_ref`. No row reads as `waiting`.
 `seen` and `missed` are written by the adherence matcher (PLAN 2.2). "Today" is
 the local day on the tick clock, like `/api/episodes`. A dose window that closes
 unsighted says "Your <name> window just closed. Take it now, or mark it skipped
-in Brian." exactly once per close. That line skips the speech limiter's gap and
+in Bryan." exactly once per close. That line skips the speech limiter's gap and
 hourly cap but still stamps it, so the next ordinary line waits its gap.
 
 `GET /api/protocol/today`:

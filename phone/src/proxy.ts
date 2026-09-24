@@ -38,9 +38,9 @@ function denied(req: NextRequest): NextResponse {
     return NextResponse.json({ error: "missing or wrong access token" }, { status: 401, headers });
   }
   const body =
-    '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Brian</title>' +
+    '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bryan</title>' +
     '<body style="font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:15vh auto;padding:0 16px">' +
-    "<h1>Access link needed</h1><p>Open Brian with the link you were given; it ends in " +
+    "<h1>Access link needed</h1><p>Open Bryan with the link you were given; it ends in " +
     "<code>?token=…</code>.</p></body>";
   return new NextResponse(body, { status: 401, headers: { ...headers, "Content-Type": "text/html; charset=utf-8" } });
 }

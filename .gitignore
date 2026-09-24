@@ -13,3 +13,6 @@ data/
 .claude/worktrees/
 runs/
 .claude/logs/
+
+# Meta client token: this repo is public (ios/Brian/Local.xcconfig.example)
+ios/Brian/Local.xcconfig

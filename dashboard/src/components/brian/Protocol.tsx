@@ -109,7 +109,7 @@ export function ProtocolView({ state, exportHref }: { state: ProtocolViewState; 
       </div>
       {state.kind === "loading" && muted("Loading the protocol…")}
       {state.kind === "offline" && muted("The backend is unreachable, so no statuses are shown.")}
-      {state.kind === "ready" && state.grid.rows.length === 0 && muted("No protocol items yet. Add one in Brian on your phone.")}
+      {state.kind === "ready" && state.grid.rows.length === 0 && muted("No protocol items yet. Add one in Bryan on your phone.")}
       {state.kind === "ready" && state.grid.rows.length > 0 && (
         <>
           <GridTable grid={state.grid} />

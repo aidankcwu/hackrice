@@ -1,4 +1,4 @@
-# README_FIRST — Brian iOS build kit for Claude Code
+# README_FIRST — Bryan iOS build kit for Claude Code
 
 Unzip this at the root of the `hackrice` repo. It adds a plan, five subagents, the design
 skills, settings, and an XcodeGen starter. Claude Code then builds the app job by job.

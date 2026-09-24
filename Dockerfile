@@ -1,4 +1,4 @@
-# Brian backend (backend/pipeline + the `longevity` package at the repo root).
+# Bryan backend (backend/pipeline + the `longevity` package at the repo root).
 # Build context is the repo root: backend/pyproject.toml pulls `longevity` from "..".
 #   docker build -t brian-backend .        (fly deploy runs this; docs/DEPLOY.md)
 # All config is env (docs/DEPLOY.md); no .env file is copied or needed.

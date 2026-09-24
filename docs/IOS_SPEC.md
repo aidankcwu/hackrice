@@ -1,4 +1,4 @@
-# IOS_SPEC.md — the Brian iPhone app
+# IOS_SPEC.md — the Bryan iPhone app
 
 What the app is: the thing the wearer opens. It pairs the glasses, streams to the backend,
 plays whispers, and shows what the system handled today. The Mac (backend) still makes

@@ -28,7 +28,7 @@
   --muted: light-dark(#636368, rgba(255, 255, 255, 0.6)); /* secondary text, times; dark is 60% white, >= 4.5:1 on page and surface */
   --line: light-dark(#e3e3e8, rgba(255, 255, 255, 0.12)); /* hairlines; dark is 12% white */
   --band: light-dark(#ececf1, #242427); /* protocol bands on the calendar, progress tracks */
-  /* Not a Brian token: iOS system red, what SwiftUI draws for `Button(role:
+  /* Not a Bryan token: iOS system red, what SwiftUI draws for `Button(role:
      .destructive)`. Destructive actions in sheets only, the single exception to
      "colour is for data". */
   --destructive: light-dark(#ff3b30, #ff453a);
