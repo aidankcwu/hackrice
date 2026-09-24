@@ -1,2 +1,4 @@
 # Progress log (append-only; one line per event)
 03:27 plan written: PLAN.md, EVAL_PROTOCOL.md, prd.json
+03:31 US-002 done: RULEBOOK.md (49 rules over 10 questions + generator notes), SCHEMA.md, scripts/validate.py (real_states --state-only OK n=141; broken file fails)
+03:32 US-002 verified by orchestrator (validator OK on real states); data/pools.json written (6 personas, 5 trends)

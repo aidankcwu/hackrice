@@ -1,0 +1,68 @@
+{
+ "laya": {
+  "checkpoint": "convaiinnovations/laya subfolder typed-decisions",
+  "questions_per_call": 10,
+  "note": "Laya tokenizes the state once, builds one (state + question) sequence per question, and runs the 10 rows as one batch per system_one call; timings are per call (all 10 questions). p50/p90 over the last n real states after 3 warm-up calls. Docker backend running.",
+  "state_tokens": {
+   "n_states": 141,
+   "full": {
+    "median": 1174,
+    "max": 1272,
+    "min": 854
+   },
+   "trimmed": {
+    "median": 434,
+    "max": 553,
+    "min": 288
+   }
+  },
+  "mps": {
+   "load_s": 2.86,
+   "torch": "2.14.0",
+   "runs": {
+    "trimmed@512": {
+     "n": 15,
+     "p50_ms": 1497.8,
+     "p90_ms": 1514.9,
+     "min_ms": 1480.2,
+     "max_ms": 1529.5
+    },
+    "trimmed@1024": {
+     "n": 15,
+     "p50_ms": 1499.7,
+     "p90_ms": 1525.8,
+     "min_ms": 1476.5,
+     "max_ms": 1527.8
+    },
+    "trimmed@2048": {
+     "n": 15,
+     "p50_ms": 1502.9,
+     "p90_ms": 1534.0,
+     "min_ms": 1484.8,
+     "max_ms": 1547.4
+    },
+    "full@512": {
+     "n": 15,
+     "p50_ms": 1537.9,
+     "p90_ms": 1552.3,
+     "min_ms": 1534.1,
+     "max_ms": 1553.7
+    },
+    "full@1024": {
+     "n": 15,
+     "p50_ms": 3248.4,
+     "p90_ms": 3281.3,
+     "min_ms": 3228.3,
+     "max_ms": 3286.2
+    },
+    "full@2048": {
+     "n": 15,
+     "p50_ms": 4216.4,
+     "p90_ms": 4248.5,
+     "min_ms": 4149.6,
+     "max_ms": 4254.5
+    }
+   }
+  }
+ }
+}
