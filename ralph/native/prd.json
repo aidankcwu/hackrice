@@ -18,7 +18,7 @@
     {"id": "N-004", "title": "Calendar and Analysis web tabs",
      "description": "WebScreen (WKWebView) loads <web base>/calendar and /analysis with ?token=T&embed=1 on first load, where web base is derived from the invite link (https://DOMAIN/t/NAME/app; a LAN ws:// link has no web app). Tabs in order: Today, Calendar, Analysis, Protocol. States: loading, unreachable with Retry, no invite link (points to Connect), LAN link (not available). Demo mode: web base from a `-webBase <url>` launch argument or BRIAN_WEB_BASE env, else a Seeded placeholder.",
      "acceptanceCriteria": ["ServerURL derives the web base; unit tests for hosted and LAN forms", "WebScreen handles the four states", "Tab order Today, Calendar, Analysis, Protocol with SF Symbols per the design skill", "Screenshots N-004-calendar.png and N-004-analysis.png taken with the phone fixtures server running at http://127.0.0.1:3100 and -webBase http://127.0.0.1:3100, showing Lukas's screens without their own tab bar", "Build and tests pass"],
-     "priority": 4, "passes": false, "notes": ""},
+     "priority": 4, "passes": true, "notes": "WebSource.derive (page/noLink/lan/seeded, 12 tests) + ServerURL.webBase; WebScreen WKWebView with ?token&embed=1 + zeroist_embed cookie; 4 tabs; -webBase"},
     {"id": "N-005", "title": "Settings cleanup",
      "description": "Settings shows: invite link (endpoint label + Change), Connect button, Voice through the glasses toggle, Permissions, Record corpus (off by default), version/build. No duplicate server field elsewhere.",
      "acceptanceCriteria": ["SettingsView matches the list above", "Screenshot N-005-settings.png", "Build and tests pass"],

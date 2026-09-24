@@ -74,3 +74,36 @@ Started: Thu Sep 24 14:52:26 CDT 2026
   "Paste the link from your invite in Connect."
 - Screenshots N-003-connect-{empty,ready,red}.png.
 - Push: refused by the tool permission layer again; commits are local only.
+
+## 2026-09-24 · N-004 passed (Calendar and Analysis web tabs)
+- ServerURL.webBase: https://DOMAIN[:port]/t/NAME/app from a wss:// link; nil for ws:// (LAN).
+- Sources/App/WebSource.swift: pure WebSource.derive(demo:, override:, server:) -> .page(base,
+  token) / .noLink / .lan / .seeded; WebSource.url(base:path:token:) -> <base><path>?token=T&embed=1
+  (embed=1 on every load, token only when present); WebSource.override reads `-webBase <url>`
+  (wins) or BRIAN_WEB_BASE, http(s) only, trailing slash trimmed; ignored outside demo mode.
+  Tests/WebSourceTests.swift (68 tests pass in total).
+- AppState.webSource (computed). `server` is no longer @ObservationIgnored, so the web tabs follow
+  a changed invite link; webBaseOverride is read in the demo branch of init.
+- Sources/Screens/WebScreen.swift: WebScreen(title:path:) + WebLoad (@Observable view state:
+  loading/loaded/failed/rejected, attempt counter) + WebPageView (UIViewRepresentable WKWebView,
+  default data store shared by both tabs). Sets a non-HttpOnly cookie zeroist_embed=1 for the host
+  before the load. 401/403 main-frame -> rejected (APIError.tokenRejected.sentence + Open Connect);
+  5xx or a failed load -> "<Title> did not load. Check that the phone is online, then try again."
+  + Try again. Links to another host open in Safari. Spinner overlay only until the first didFinish.
+  Page state has no native title (the web app shows its own); message states use a large title.
+  `.onChange(of: appState.webSource)` retries, so a new link clears a failed/rejected state.
+- RootView: AppTab is CaseIterable, order today, calendar, analysis, protocol; symbols calendar
+  and chart.bar. AppScreen.tab maps calendar/analysis to their tabs. Each web tab has the pill +
+  gear toolbar like the others.
+- Screenshots: N-004-calendar.png, N-004-analysis.png (-demo -screen <tab> -webBase
+  http://127.0.0.1:3100, wait 12 s), N-004-calendar-seeded.png (no -webBase).
+- Fixtures server: this branch's phone/ has NO embed support; export app/web's instead:
+  from repo root `git archive --format=tar -o $SCRATCH/webphone.tar origin/app/web phone`
+  (git archive from ios/Brian yields an empty tar: it scopes to the cwd), extract, symlink
+  node_modules to /Users/ljawhomebot/hackrice/phone/node_modules, then
+  `TURBOPACK_ROOT=/ NEXT_PUBLIC_FIXTURES=1 npx next dev -p 3100`. Next 16 dev blocks its own
+  scripts to the 127.0.0.1 origin (page sticks on "Loading the month…"): add "127.0.0.1" to
+  allowedDevOrigins in the SCRATCH copy of next.config.ts (never in phone/). Worth telling the
+  web loop to add it upstream.
+- Web-side gap seen in N-004-analysis.png (known, in APP_WEB_NOTES): week chart clipped left.
+- Push: refused by the tool permission layer again; commits are local only.
