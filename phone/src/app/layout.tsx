@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { EmbedCapture } from "@/components/EmbedCapture";
 import { TokenCapture } from "@/components/TokenCapture";
+import { EMBED_SCRIPT } from "@/lib/embed";
 import "./globals.css";
 
 // Add to Home Screen: `manifest.ts` (basePath-aware), `icon.png` and `apple-icon.png`
@@ -29,8 +31,13 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    // The head script sets `data-embed` on <html> before first paint (src/lib/embed.ts); the DOM wins over React there.
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: EMBED_SCRIPT }} />
+      </head>
       <body>
+        <EmbedCapture />
         <TokenCapture />
         {children}
       </body>

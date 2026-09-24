@@ -11,7 +11,8 @@
 // fixtures dev server (default http://localhost:3100); a full URL is used as is.
 // Optional third and fourth arguments: width and height (default 390 844).
 // `--scroll-end` scrolls the page to its end before the shot (the last row
-// against the tab bar). `CHROME` overrides the browser path.
+// against the tab bar). `--click=<selector>` clicks that element after load (e.g.
+// `--click='button[aria-label=Menu]'` to open the menu). `CHROME` overrides the browser path.
 import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -19,9 +20,10 @@ import { dirname, join, resolve } from "node:path";
 
 const args = process.argv.slice(2);
 const scrollEnd = args.includes("--scroll-end");
-const [target, out, width = "390", height = "844"] = args.filter((arg) => arg !== "--scroll-end");
+const click = args.find((arg) => arg.startsWith("--click="))?.slice("--click=".length);
+const [target, out, width = "390", height = "844"] = args.filter((arg) => !arg.startsWith("--"));
 if (!target || !out) {
-  console.error('usage: node scripts/shot.mjs [--scroll-end] "</path?query | url>" <out.png> [width] [height]');
+  console.error('usage: node scripts/shot.mjs [--scroll-end] [--click=<selector>] "</path?query | url>" <out.png> [width] [height]');
   process.exit(2);
 }
 const PHONE_URL = process.env.PHONE_URL || "http://localhost:3100";
@@ -104,6 +106,14 @@ try {
       expression: "window.scrollTo(0, document.scrollingElement.scrollHeight)",
     });
     await sleep(500); // the inline title fades in under the bar
+  }
+  if (click) {
+    const { result } = await send("Runtime.evaluate", {
+      expression: `(() => { const el = [...document.querySelectorAll(${JSON.stringify(click)})].find((e) => e.offsetParent !== null); el?.click(); return !!el; })()`,
+      returnByValue: true,
+    });
+    if (!result.value) throw new Error(`nothing visible matches ${click}`);
+    await sleep(600); // the menu's 200 ms fade, or a route change
   }
   const { data } = await send("Page.captureScreenshot", { format: "png" });
   mkdirSync(dirname(resolve(out)), { recursive: true });

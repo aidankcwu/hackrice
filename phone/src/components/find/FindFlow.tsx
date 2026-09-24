@@ -10,6 +10,8 @@ import { protocolById } from "@/content/protocols";
 import { TREATMENTS } from "@/content/treatments";
 import type { FindStep } from "@/content/types";
 import { readConcierge, writeConcierge } from "@/lib/conciergeStore";
+import { isEmbedded } from "@/lib/embed";
+import { backFallback } from "@/lib/screens";
 import { FindFrame } from "./FindFrame";
 import { StepScreen, type StepOption } from "./StepScreen";
 
@@ -88,7 +90,7 @@ export function FindFlow({ start, theme, scale }: FindFlowProps) {
       return;
     }
     if (window.history.length > 1) router.back();
-    else router.push("/");
+    else router.push(backFallback("find", isEmbedded()));
   };
   const next = () => setIndex(Math.min(TOTAL, index + 1));
   const restart = () => {

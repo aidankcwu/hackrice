@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Embed mode (src/lib/embed.ts): `embed:hidden` and friends apply when the
+   native app shows this page in its web view and `<html data-embed>` is set. */
+@custom-variant embed (&:where([data-embed] *));
+
 /* ---------------------------------------------------------------------------
    Tokens: direction C · Instrument, picked in task F.0, with A's green/red
    pair for the sign; extended by the design-system contract (grid, radii,

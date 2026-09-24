@@ -1,0 +1,61 @@
+{
+  "project": "Zeroist web screens (phone/)",
+  "branchName": "app/web",
+  "description": "Make Lukas's phone web app embeddable inside the native Zeroist app per docs/APP_PRD.md contract.",
+  "userStories": [
+    {
+      "id": "W-001",
+      "title": "Embed mode hides the web app's own chrome",
+      "description": "As the native app, I open /calendar?embed=1 and see only the page: no web tab bar, no top bar except the hamburger button and the screen title, content using full height. embed persists across in-app navigation (sessionStorage) and is also honored via cookie zeroist_embed=1.",
+      "acceptanceCriteria": [
+        "A small helper in phone/src/lib (e.g. embed.ts) reads embed from the query, sessionStorage or the cookie, with unit tests",
+        "Shell hides TabBar and the TopBar chrome in embed mode; hamburger and title remain",
+        "Navigating between screens keeps embed mode",
+        "Screenshots phone/screenshots/W-001-calendar.png and W-001-analysis.png at 390x844 show no tab bar",
+        "lint, typecheck, tests, build pass"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "src/lib/embed.ts applyEmbed (head script + EmbedCapture) sets html[data-embed]; Tailwind embed: variant hides TopBar/TabBar in Shell, hamburger sits beside the title"
+    },
+    {
+      "id": "W-002",
+      "title": "Token handoff works on any route",
+      "description": "As the native app, I open /calendar?token=T&embed=1 and the token becomes the auth cookie and is removed from the URL, exactly as it already works at /.",
+      "acceptanceCriteria": [
+        "Opening /calendar?token=T and /analysis?token=T sets the cookie and strips token from the URL (verify TokenCapture/proxy.ts cover non-root routes; add a test)",
+        "embed=1 survives the strip",
+        "lint, typecheck, tests, build pass"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Already worked: proxy matcher gates every route, TokenCapture is in the root layout; src/proxy.test.ts proves it, live CDP probe confirmed"
+    },
+    {
+      "id": "W-003",
+      "title": "Menu and pushed screens work embedded",
+      "description": "As a tester on the Analysis tab, I open the hamburger and reach treatments, tests, biomarkers, devices, library, find my protocol, concierge, sources; each has a back button; Today and Protocol are not offered in the menu while embedded (they are native tabs).",
+      "acceptanceCriteria": [
+        "Menu in embed mode lists everything except Today and Protocol",
+        "Each pushed screen renders in embed mode with a working back button",
+        "Screenshots W-003-menu.png, W-003-treatments.png, W-003-biomarkers.png, W-003-devices.png",
+        "lint, typecheck, tests, build pass"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "menuItems(embedded) drops NATIVE_TABS and adds a Find card; backFallback sends history-less back to /analysis when embedded; CDP probe round-trips every menu screen"
+    },
+    {
+      "id": "W-004",
+      "title": "Notes for the native side",
+      "description": "As the native loop, I read docs/APP_WEB_NOTES.md and know the exact URLs and query params to load, what embed hides, and how the token cookie behaves.",
+      "acceptanceCriteria": [
+        "docs/APP_WEB_NOTES.md exists with URL forms, embed behaviour, token behaviour, and the list of screenshots",
+        "Committed and pushed"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "docs/APP_WEB_NOTES.md: URL table, embed order (query/sessionStorage/non-HttpOnly cookie), token cookie+scrub, known gaps, screenshot list"
+    }
+  ]
+}

@@ -35,6 +35,23 @@ export const SCREENS: Record<ScreenId, { title: string; href: string }> = {
 /** The tab bar, in order. Everything else is pushed from the menu, never a tab. */
 export const TABS: readonly ScreenId[] = ["today", "calendar", "analysis", "protocol"];
 
+/**
+ * The tabs the native Zeroist app draws itself. Embedded (src/lib/embed.ts) the
+ * web app never offers them: the menu drops them and no back button falls back to them.
+ */
+export const NATIVE_TABS: readonly ScreenId[] = ["today", "protocol"];
+
+/**
+ * Where a back button goes when there is no history to go back to: a tab's own
+ * page, else Today. Embedded, a native tab is not the web app's to show, so the
+ * fallback is Analysis, the web tab that owns the menu.
+ */
+export function backFallback(screen: ScreenId, embedded: boolean): string {
+  const home: ScreenId = embedded ? "analysis" : "today";
+  if (!TABS.includes(screen) || (embedded && NATIVE_TABS.includes(screen))) return SCREENS[home].href;
+  return SCREENS[screen].href;
+}
+
 export type SearchParams = Record<string, string | string[] | undefined>;
 
 export interface FixtureView {
