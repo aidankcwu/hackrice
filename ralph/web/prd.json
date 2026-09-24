@@ -42,8 +42,8 @@
         "lint, typecheck, tests, build pass"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "menuItems(embedded) drops NATIVE_TABS and adds a Find card; backFallback sends history-less back to /analysis when embedded; CDP probe round-trips every menu screen"
     },
     {
       "id": "W-004",

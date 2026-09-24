@@ -35,3 +35,26 @@ Started: Thu Sep 24 14:48:15 CDT 2026
   /analysis?token=T&embed=1 ends at ?embed=1 with data-embed set, no tab bar, HttpOnly
   brian_app_token=T cookie, and a reload still gets in. Cookie path is basePath ("/" in dev).
 - Next: W-003 (menu in embed mode: drop Today/Protocol, add a Find card; see W-001 notes).
+
+## 2026-09-24 — W-003 Menu and pushed screens embedded (passes)
+- src/lib/screens.ts: NATIVE_TABS = ["today", "protocol"] and backFallback(screen, embedded):
+  the history-less back target is the tab's own page, else Today; embedded it is /analysis
+  whenever that would be a native tab or a menu screen. Shell's BackButton and FindFlow's
+  back both use it (they used to push "/", the web Today, which has no business in a web view).
+- Menu: menuItems(embedded) (exported, tested in src/lib/screens.test.ts). Embedded: no
+  My protocol, and a "Find my protocol" card (Compass, sage, "Six questions, one template",
+  chip "6 questions") first, standing in for the top pill's button. Not embedded: unchanged.
+  Menu reads isEmbedded() at render; it only mounts on click, so no hydration concern.
+- scripts/shot.mjs gained --click=<selector> (clicks the first visible match, waits 600 ms):
+  `node scripts/shot.mjs --click='button[aria-label=Menu]' "/analysis?embed=1" out.png`.
+- Verified with a CDP probe from /analysis?embed=1: menu -> each of treatments, biomarkers,
+  devices, library, tests, concierge, sources, find -> Back lands on /analysis?embed=1 with
+  data-embed set and no tab bar; Find from /calendar returns to /calendar. Find's back is a
+  text "Back" button (FindFrame), not aria-label=Back.
+- Left alone, for W-004's notes: adopting a protocol (Find "done", library ReviewScreen)
+  still router.push("/protocol"), so embedded the web view shows the web Protocol screen
+  (hamburger + title, no back button). The pick is saved in web localStorage; the native
+  Protocol tab does not see it. Orchestrator's call whether that matters.
+- PUSH: `git push` was refused by the loop's permission layer this iteration (not a git
+  error). Commits are local on app/web; the next iteration should push first.
+- Next: W-004 (docs/APP_WEB_NOTES.md).
