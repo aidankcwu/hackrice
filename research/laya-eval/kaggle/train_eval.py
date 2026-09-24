@@ -122,27 +122,35 @@ def probs_from_answers(ans):
     return out
 
 
-def set_metrics(probs, rows):
-    """probs: list of {qid: option probs}; rows: labeled examples, same order."""
+def set_metrics(probs, rows, min_pos=1):
+    """probs: list of {qid: option probs}; rows: labeled examples, same order.
+
+    EVAL_PROTOCOL Amendment 1: F1 and AUROC are null when a question's labels are all one class;
+    macro-F1 averages only questions with n_pos >= min_pos (5 on real_test, 1 elsewhere) and records
+    which; false_alarm_rate = FP / (FP + TN) is reported for every question."""
     m = {"n": len(rows), "questions": {}}
-    f1s, confs, corrects = [], [], []
+    f1s, incl, confs, corrects = [], [], [], []
     for q in NOUL:
         p = np.array([pr[q][1] for pr in probs], dtype=float)
         y = np.array([int(bool(r["labels"][q])) for r in rows])
         yh = (p >= 0.5).astype(int)
         tp, fp, fn = int(((yh == 1) & (y == 1)).sum()), int(((yh == 1) & (y == 0)).sum()), int(((yh == 0) & (y == 1)).sum())
-        f1 = None if tp + fp + fn == 0 else 2 * tp / (2 * tp + fp + fn)
-        auc = float(roc_auc_score(y, p)) if 0 < y.sum() < len(y) else None
+        tn, n_pos = len(y) - tp - fp - fn, int(y.sum())
+        two_class = 0 < n_pos < len(y)
+        f1 = 2 * tp / (2 * tp + fp + fn) if two_class else None
+        auc = float(roc_auc_score(y, p)) if two_class else None
         m["questions"][q] = {"acc": float((yh == y).mean()), "f1_yes": f1, "auroc": auc,
-                             "pred_yes_rate": float(yh.mean()), "true_yes_rate": float(y.mean()),
-                             "n_pos": int(y.sum())}
-        if f1 is not None:
-            f1s.append(f1)
+                             "false_alarm_rate": fp / (fp + tn) if fp + tn else None,
+                             "pred_yes_rate": float(yh.mean()), "true_yes_rate": float(y.mean()), "n_pos": n_pos}
+        if f1 is not None and n_pos >= min_pos:
+            f1s.append(f1); incl.append(q)
         confs += list(np.maximum(p, 1 - p)); corrects += list((yh == y).astype(float))
     m["macro_f1"] = float(np.mean(f1s)) if f1s else None
-    m["macro_f1_n_questions"] = len(f1s)
-    m["speak_f1"] = m["questions"]["speak"]["f1_yes"]
-    m["ask_f1"] = m["questions"]["ask"]["f1_yes"]
+    m["macro_f1_questions"] = incl
+    m["macro_f1_min_pos"] = min_pos
+    for q in ("speak", "ask"):
+        m[q + "_f1"] = m["questions"][q]["f1_yes"]
+        m[q + "_false_alarm_rate"] = m["questions"][q]["false_alarm_rate"]
     m["ece"] = ece_score(np.array(confs), np.array(corrects), bins=10)
     tp_ = np.array([int(np.argmax(pr["topic"])) for pr in probs])
     tg = np.array([gold_index(r["labels"], "topic") for r in rows])
@@ -165,10 +173,11 @@ def eval_agent(agent, rows, variant=None, tag=""):
         for r, p in zip(rows, probs):
             f.write(json.dumps({"id": r["id"], "labels": r["labels"],
                                 "p": {q: [round(float(v), 4) for v in p[q]] for q in QIDS}}) + "\n")
-    m = set_metrics(probs, rows)
+    m = set_metrics(probs, rows, min_pos=5 if tag.split("__")[1] == "real_test" else 1)
     m["eval_s"] = round(time.time() - t, 1)
-    log("eval", tag, "macroF1=%s speakF1=%s askF1=%s topic=%.3f urg=%.3f ece=%.3f (%.0fs)" % (
-        m["macro_f1"], m["speak_f1"], m["ask_f1"], m["topic_acc"], m["urgency_acc"], m["ece"], m["eval_s"]))
+    log("eval", tag, "macroF1=%s over %s speakF1=%s speakFAR=%s askF1=%s askFAR=%s topic=%.3f urg=%.3f ece=%.3f (%.0fs)" % (
+        fmt(m["macro_f1"]), m["macro_f1_questions"], fmt(m["speak_f1"]), fmt(m["speak_false_alarm_rate"]),
+        fmt(m["ask_f1"]), fmt(m["ask_false_alarm_rate"]), m["topic_acc"], m["urgency_acc"], m["ece"], m["eval_s"]))
     return m
 
 
@@ -193,12 +202,13 @@ def fmt(x):
 
 def write_md():
     L = ["# Laya eval metrics (%s run, status %s)" % (C["mode"], M["status"]), "",
-         "| model | set | n | macro-F1 (8 y/n) | speak F1 | ask F1 | topic acc | urgency acc | ECE |",
-         "|---|---|---|---|---|---|---|---|---|"]
+         "| model | set | n | macro-F1 | #q in macro-F1 | speak F1 | speak false-alarm | ask F1 | ask false-alarm | topic acc | urgency acc | ECE |",
+         "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for mod, sets in M["models"].items():
         for s, m in sets.items():
-            L.append("| %s | %s | %d | %s | %s | %s | %s | %s | %s |" % (
-                mod, s, m["n"], fmt(m["macro_f1"]), fmt(m["speak_f1"]), fmt(m["ask_f1"]),
+            L.append("| %s | %s | %d | %s | %d | %s | %s | %s | %s | %s | %s | %s |" % (
+                mod, s, m["n"], fmt(m["macro_f1"]), len(m["macro_f1_questions"]), fmt(m["speak_f1"]),
+                fmt(m["speak_false_alarm_rate"]), fmt(m["ask_f1"]), fmt(m["ask_false_alarm_rate"]),
                 fmt(m["topic_acc"]), fmt(m["urgency_acc"]), fmt(m["ece"])))
     if M.get("robustness"):
         L += ["", "Robustness (trained, real_test): macro-F1 drop vs unaltered = " +
@@ -209,7 +219,8 @@ def write_md():
             fmt(tr.get("epochs_done")), tr.get("best_epoch"), fmt(tr.get("states_per_s")),
             fmt(tr.get("rows_per_s")), tr.get("stop_reason"))]
     L += ["", "Wall (s): " + ", ".join("%s %s" % (k, v) for k, v in M["wall"].items()),
-          "", "F1(yes) is undefined (excluded from macro-F1) when a question has no true and no predicted yes."]
+          "", "F1/AUROC are null when a question's labels are one class. Macro-F1 covers only questions with "
+          ">= 5 positives on real_test (>= 1 elsewhere); metrics.json lists them per set (Amendment 1)."]
     open(os.path.join(WORK, "metrics.md"), "w").write("\n".join(L) + "\n")
 
 
@@ -330,6 +341,11 @@ if train_rows:
         model.head_checkpointing = True
     fwd = model
     if C["data_parallel"] and torch.cuda.device_count() > 1:
+        # HF's `dtype`/`device` properties iterate parameters(), which DataParallel replicas do not
+        # expose (StopIteration). Read them off the embedding weight instead: same answer, works in a replica.
+        ecls = type(model.encoder)
+        ecls.dtype = property(lambda self: self.embeddings.tok_embeddings.weight.dtype)
+        ecls.device = property(lambda self: self.embeddings.tok_embeddings.weight.device)
         fwd = torch.nn.DataParallel(model)
     enc = [p for n_, p in model.named_parameters() if n_.startswith("encoder.")]
     head = [p for n_, p in model.named_parameters() if not n_.startswith("encoder.")]
@@ -356,9 +372,19 @@ if train_rows:
             ts = time.time()
             chunk = [train_items[i] for i in order[bi * MB:(bi + 1) * MB]]
             b = collate_items([chunk], agent.tok.pad_token_id)
-            with torch.autocast("cuda", dtype=torch.float16):
-                logits, act = fwd(b["input_ids"].to(device), b["attention_mask"].to(device), b["marker_pos"].to(device),
-                                  b["marker_mask"].to(device), b["qtype"].to(device))
+            args = (b["input_ids"].to(device), b["attention_mask"].to(device), b["marker_pos"].to(device),
+                    b["marker_mask"].to(device), b["qtype"].to(device))
+            try:
+                with torch.autocast("cuda", dtype=torch.float16):
+                    logits, act = fwd(*args)
+            except Exception as e:  # DataParallel failed on the first step: fall back to one GPU
+                if fwd is model or tr["rows_seen"]:
+                    raise
+                log("DataParallel failed (%r); falling back to a single GPU" % (e,))
+                fwd, tr["data_parallel"] = model, False
+                opt.zero_grad(set_to_none=True); torch.cuda.empty_cache()
+                with torch.autocast("cuda", dtype=torch.float16):
+                    logits, act = fwd(*args)
             logits = logits.float()
             mask = b["marker_mask"].to(device)
             k = mask.sum(-1, keepdim=True).float()

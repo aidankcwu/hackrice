@@ -56,3 +56,19 @@ Run the trained model on `real_test` in three altered forms and report the drop 
 3. Latency: trimmed-state p50 <= 500 ms on `mps`, or a clear path to it (smaller checkpoint, fewer questions).
 
 If a rule cannot be evaluated because a stage failed, the report says so and does not guess.
+
+## Amendment 1 (2026-09-24 03:37 CDT, before any training or evaluation result exists)
+
+The labeled real_test (141 states from a 3-minute phone-at-laptop session at 02:08)
+has **0 speak-yes and 1 ask-yes** under RULEBOOK.md. F1 is undefined or meaningless
+for those questions there. Therefore:
+
+- On real_test, any yes/no question with fewer than 5 positives is scored by its
+  **false-alarm rate** (share of true-no states the model answers yes) and accuracy,
+  not F1. For speak this measures exactly the failure seen live: talking when it
+  should stay quiet.
+- Friday rule 2 becomes: on real_test, speak false-alarm rate <= 5% and ask
+  false-alarm rate <= 5%; on synth_test, speak F1 >= 0.80, ask F1 >= 0.70,
+  macro-F1 >= 0.75 (synth_test flagged as optimistic in the report).
+- Long-term rule 1 is judged on macro-F1 over the questions with >= 5 positives
+  in real_test, plus on synth_test.

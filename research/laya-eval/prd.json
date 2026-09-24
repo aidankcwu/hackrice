@@ -14,8 +14,8 @@
         "REPORT.md has a Latency section"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "mps trimmed p50 1.50s (10 q), full@1024 3.25s; clerk 1.97s median; Friday rule 1 missed; 2-question call 325ms. Checkpoint was already cached (sha256 verified), no download."
     },
     {
       "id": "US-002",

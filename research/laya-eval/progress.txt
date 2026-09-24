@@ -2,3 +2,7 @@
 03:27 plan written: PLAN.md, EVAL_PROTOCOL.md, prd.json
 03:31 US-002 done: RULEBOOK.md (49 rules over 10 questions + generator notes), SCHEMA.md, scripts/validate.py (real_states --state-only OK n=141; broken file fails)
 03:32 US-002 verified by orchestrator (validator OK on real states); data/pools.json written (6 personas, 5 trends)
+03:37 US-003 done: n=141, yes-rates speak=0.0 ask=0.007 annotate=0.149 (others in data/real_test.stats.json)
+03:37 US-003 done (agent): n=141 labeled, speak yes 0.0, ask 0.007, annotate 0.149, look 0.043; only 10 real escalations exist (not 12). EVAL_PROTOCOL amendment 1 added: real_test uses false-alarm rate for rare questions.
+03:40 US-001 done: mps trimmed p50 1498ms@512/1500ms@1024, full@1024 3248ms (cpu 2-3x slower); clerk decision median 1972ms; Friday rule 1 (<=250ms) MISSED; long-term rule 3 missed as measured, path via 2 questions (325ms)
+03:41 orchestrator: swap at 8.3 GB is what ate disk (3.5 GB free); US-007 local baseline DROPPED to protect disk/memory, notebook zero-shot baseline is the baseline. Wave 2 generators 08-11 launched.

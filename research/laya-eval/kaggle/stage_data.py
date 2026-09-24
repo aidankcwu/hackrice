@@ -5,12 +5,12 @@ Usage:
   python kaggle/stage_data.py OUT_DIR --mode full --max-train N --epochs E --budget-min M
 
 smoke: 60 real states with PLACEHOLDER labels from a fixed rule (mechanics only, not quality):
-       50 synth_train / 5 synth_val / 5 synth_test, and 20 of the same states as a fake real_test.
+       50 synth_train / 5 synth_val / 5 synth_test; real_test = data/real_test.jsonl if it exists, else 20 of them.
 full:  copies data/synth_{train,val,test}.jsonl and data/real_test.jsonl (whatever exists).
 Both copy scripts/questions.py (the one source of the 10 questions and the trim transform)
 and write config.json + dataset-metadata.json. Then:
-  kaggle datasets create -p OUT_DIR --dir-mode zip      (first time)
-  kaggle datasets version -p OUT_DIR -m MSG --dir-mode zip   (after)
+  kaggle datasets create -p OUT_DIR   (first time)
+  kaggle datasets version -p OUT_DIR -m MSG   (after)
 """
 import argparse, json, os, shutil, sys
 
@@ -59,6 +59,9 @@ def main():
                for i, r in enumerate(rows)]
         splits = {"synth_train": lab[:50], "synth_val": lab[50:55], "synth_test": lab[55:60],
                   "real_test": [dict(x, source="real") for x in lab[40:60]]}
+        real = os.path.join(ROOT, "data", "real_test.jsonl")
+        if os.path.exists(real):  # the real labeled test set, once it exists
+            splits["real_test"] = [json.loads(l) for l in open(real)]
         for name, xs in splits.items():
             with open(os.path.join(a.out, name + ".jsonl"), "w") as f:
                 f.writelines(json.dumps(x, ensure_ascii=False) + "\n" for x in xs)
