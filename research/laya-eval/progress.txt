@@ -20,3 +20,6 @@
 04:03 gen batch_13 (student-founder and remote-engineer whole days and nights) done: n=246, speak=22.0% ask=8.5%
 04:05 gen batch_12 (whole-day snapshots, athlete + PM parent) done: n=250, speak=18.8% ask=7.6%
 04:05 US-004 data done: 13 batches, 2426 states, split train 1961 / val 239 / test 226, 0 dups, 0 group overlap. Deviation: remember/ask/act/look train yes-rate 7.6-9.9% (< 10% target) but >=149 positives each; accepted, noted in REPORT.
+11:28 US-005 done: throughput=0.97 states/s (9.7 question-rows/s; 1.19 in v2) smoke wall=8.2 min (kernel v3, 141 real_test + 50/5/5 placeholder synth), method=official RLCD (noisy-logit PG on proper scoring reward + soft CE, enc LR 2.5e-5/head 1e-4, fp16, grad ckpt, 2xT4 DataParallel, per-type temps fitted on synth_val), notes: trimmed state (questions.trim) at train+eval, Amendment 1 metrics in; zero-shot real_test in kaggle/out_smoke is REAL (speak false-alarm 0.957, ask 0.857); sizing in kaggle/RUN_FULL.md
+11:54 US-006 full run launched: kernel v4, 1961 train, 2 epochs, 95-min budget; poller cap 120 min
+13:10 US-006 done: trained real speak/ask false-alarm 0%/0% (from 96%/86%), synth macro-F1 0.34->0.68; robustness: extra field/renamed ok, shuffled order -0.17. US-008 report written.

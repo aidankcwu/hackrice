@@ -1,6 +1,67 @@
 # Report: is Laya worth it as the decider?
 
-_Status: in progress. Sections are added as each stage finishes._
+_Finished 2026-09-24 13:15 CDT. Rules: EVAL_PROTOCOL.md (fixed before training, amendment 1 at 03:37)._
+
+## Verdict
+
+**Friday: stay on the clerk.** Laya takes about 1.5 s per decision on the Mac mini's GPU for our
+10 questions, against 250 ms needed and 2.0 s for the clerk. Trained quality is also below the bar.
+
+**Long term: training works, and it would make a usable decider if it ran on a GPU server.**
+Two epochs on 1,961 generated states took it from unusable to disciplined:
+
+| What changed with training | Untrained | Trained |
+|---|---|---|
+| Real moments: says "speak" when it should be quiet | 96% | **0%** |
+| Real moments: says "ask" when it should not | 86% | **0%** |
+| Real moments: macro-F1 over the 4 questions with enough positives | 0.30 | 0.46 |
+| Generated test: macro-F1 over all 8 yes/no questions | 0.34 | **0.68** |
+| Generated test: speak F1 / false-alarm rate | 0.36 / 67% | **0.69 / 5%** |
+| Generated test: ask F1 | 0.15 | 0.43 |
+| Topic accuracy (real / generated) | 0.52 / 0.60 | 0.80 / 0.92 |
+| Calibration error, real (lower is better) | 0.21 | 0.035 |
+
+**Your "new field" worry mostly does not hold, but field ORDER matters.** Adding an unseen field
+(-0.007) or renaming a field (-0.003) cost nothing. Shuffling the order of the fields cost 0.17
+macro-F1. Our state builder always emits the same order, so in practice: add new fields at the end
+and never reorder, and retrain when a field starts to matter for the decision.
+
+## Decision rules (EVAL_PROTOCOL.md)
+
+| Rule | Result | Status |
+|---|---|---|
+| Friday 1: trimmed p50 <= 250 ms on mps | 1,500 ms | missed |
+| Friday 2a: real speak / ask false-alarm <= 5% | 0% / 0% | met |
+| Friday 2b: generated speak F1 >= 0.80, ask F1 >= 0.70, macro-F1 >= 0.75 | 0.69 / 0.43 / 0.68 | missed |
+| Friday 3: serve trained weights on this Mac | not tried (Friday already decided; 3.5 GB disk, heavy swap) | not evaluated |
+| Friday 4: saves >= 1 s wearer-facing | at most ~0.5 s | missed |
+| Long-term 1: trained beats untrained by >= 0.15 macro-F1 on real | +0.16 (and +0.34 on generated) | met, barely on real |
+| Long-term 2: each altered form costs <= 0.05 | extra field -0.007, renamed -0.003, shuffled order 0.17 | missed on order only |
+| Long-term 3: trimmed p50 <= 500 ms on mps, or a path to it | 1,500 ms; paths: 2 questions ~325 ms here, Kaggle T4 ~350-420 ms for all 10 | missed, path exists |
+
+## What to trust and what not to
+
+- **The real test set is narrow.** 141 moments from one 3-minute phone-at-laptop session. The right
+  answer was "stay quiet" for all of them, so it measures restraint, not whether Bryan speaks up at
+  the right moment. "Speak when it matters" is only measured on generated data.
+- **Generated test numbers are optimistic,** because the same kind of agent wrote train and test.
+- **Trained 2 epochs only, and the best epoch was the last,** so more epochs would probably help.
+  `ask` (F1 0.43) is the weakest question.
+- **The labels are the rulebook's judgment** (RULEBOOK.md, 49 rules). Generators reported that the
+  `watch` rules fire on most intake moments (40-80% yes). Review the rulebook before any real training.
+- **Jev was not tested** (signups closed, no key). The harness here can score it in ~10 minutes once a key exists.
+
+## Run details
+
+- Data: 2,426 generated states in 13 themed batches, grouped split 1,961 / 239 / 226, no duplicates,
+  no scene in both train and test. Remember/ask/act/look had 7.6-9.9% positives in train (149-194 each).
+- Training: Laya's official method (policy gradient on a proper scoring reward plus soft cross-entropy,
+  per-type temperatures fitted on validation), 2x T4 on Kaggle, 1.03 states/s, 66 min of training,
+  74 min total. Trained weights stay on Kaggle (private kernel `wuaidan/laya-eval-train`).
+- Full metrics: results/metrics_full.md, results/trained.json, results/baseline_notebook.json,
+  results/robustness.json, results/latency.json.
+- What went wrong overnight: the Kaggle pipeline stage took about 8 hours instead of 1, and nothing
+  enforced its deadline, so the full run started at 11:54 instead of about 05:30.
 
 ## Latency
 

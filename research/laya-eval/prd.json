@@ -40,8 +40,8 @@
         "label yes-rates per question are printed into progress.txt"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "141 real states labeled; only 10 real escalations exist"
     },
     {
       "id": "US-004",
@@ -54,8 +54,8 @@
         "no state text appears in both train and a test set"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "2426 states, 13 batches; rare questions 7.6-9.9% yes (149-194 positives), accepted"
     },
     {
       "id": "US-005",
@@ -67,8 +67,8 @@
         "measured training throughput (examples/s) recorded in progress.txt"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "smoke passed (kernel v3)"
     },
     {
       "id": "US-006",
@@ -79,8 +79,8 @@
         "REPORT.md has a Quality section with real_test and synth_test tables"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "full run kernel v4 done 13:09; results in results/"
     },
     {
       "id": "US-007",
@@ -92,7 +92,7 @@
       ],
       "priority": 4,
       "passes": false,
-      "notes": ""
+      "notes": "SKIPPED: dropped at 03:41 to protect disk and memory; notebook zero-shot is the baseline"
     },
     {
       "id": "US-008",
@@ -104,8 +104,8 @@
         "committed locally"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "REPORT.md verdict written 13:15"
     }
   ]
 }

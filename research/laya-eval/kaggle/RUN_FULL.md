@@ -14,16 +14,16 @@ STAGE=/private/tmp/claude-501/-Users-ljawhomebot-hackrice/a46816de-d932-4e2c-a51
 Measured by the smoke run (kernel v2/v3, 2x T4 via DataParallel, trimmed state, median sequence 455
 tokens, max_len 1024, 10 question rows per state):
 
-| quantity | value |
-|---|---|
-| `STATES_PER_S` (training, fwd+bwd, incl. warm-up) | **1.19 states/s** (11.9 question-rows/s) |
-| `EVAL_STATE_S` (Agent.predict_batch, 10 questions) | 0.31 s/state |
-| `SETUP_S` (kernel boot + pip + model download/load) | ~60 s |
-| checkpoint save + val (5 states) | ~3 s; budget 30 s |
+| quantity | v2 (20 real_test) | v3 (141 real_test) | use for sizing |
+|---|---|---|---|
+| `STATES_PER_S` (training, fwd+bwd, incl. warm-up) | 1.19 | 0.97 | **1.0 states/s** (~10 question-rows/s) |
+| `EVAL_STATE_S` (Agent.predict_batch, 10 questions) | 0.31 s | 0.35-0.42 s | **0.4 s/state** |
+| `SETUP_S` (boot + pip + HF download + load) | ~60 s | ~145 s | **150 s** |
+| val + checkpoint save (5 states) | 3.2 s | 3.8 s | formula below |
 
 Worked example: 60-min budget, n_real_test 141, n_synth_test 100, n_synth_val 100, 3 epochs:
-FIXED_S = 60 + 0.31*(705+200) = 341; VAL_S = 0.31*150+30 = 77; avail_s = 3600-341-231-180 = 2848;
-MAX_TRAIN = floor(1.19*2848/3) = 1129 states/epoch.
+FIXED_S = 150 + 0.4*(705+200) = 512; VAL_S = 0.4*150+30 = 90; avail_s = 3600-512-270-180 = 2638;
+MAX_TRAIN = floor(1.0*2638/3) = 879 states per epoch.
 
 Pick `EPOCHS` (3 is a sane default; early stopping on synth_val
 ends it sooner if val CE stops falling), then
