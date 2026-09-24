@@ -15,13 +15,23 @@ struct ConnectRows: Equatable {
     let invite: ConnectRow
     let glasses: ConnectRow
     let stream: ConnectRow
+    /// "Start watching" is enabled only when the rows above are ready: a reachable invite
+    /// link and glasses at least registered. While disabled the rows already say what is
+    /// missing, so the button needs no message of its own. Stop is never disabled.
+    let canStart: Bool
 
     /// `checking`: a link test is in flight. `registering`: DAT registration is running.
     static func derive(_ input: ConnectionInputs, checking: Bool, registering: Bool) -> ConnectRows {
         ConnectRows(
             invite: invite(input, checking: checking),
             glasses: glasses(input, registering: registering),
-            stream: stream(input))
+            stream: stream(input),
+            canStart: canStart(input))
+    }
+
+    static func canStart(_ input: ConnectionInputs) -> Bool {
+        guard case .reachable = input.link, !input.accessDenied else { return false }
+        return input.glasses == .registered || input.glasses == .connected
     }
 
     static let glassesOffFix = "Turn the glasses on, then open Meta AI to reconnect them."

@@ -91,6 +91,26 @@ struct ConnectRowsTests {
         #expect(rows(input).stream == ConnectRow(level: .amber, text: "No frames for 25 s"))
     }
 
+    @Test func startNeedsReachableLinkAndRegisteredGlasses() {
+        var input = healthy()
+        input.watching = false
+        #expect(rows(input).canStart)
+        input.glasses = .registered
+        #expect(rows(input).canStart)
+        input.glasses = .notRegistered
+        #expect(!rows(input).canStart)
+        input.glasses = .unavailable
+        #expect(!rows(input).canStart)
+        input = healthy()
+        input.link = .notSet
+        #expect(!rows(input).canStart)
+        input.link = .unreachable(APIError.tokenRejected.sentence)
+        #expect(!rows(input).canStart)
+        input = healthy()
+        input.accessDenied = true
+        #expect(!rows(input).canStart)
+    }
+
     @Test func inviteLinkDetection() {
         #expect(ServerURL.isInviteLink("wss://glasses.example.com/t/alice/ws/glasses?token=abc123"))
         #expect(ServerURL.isInviteLink("  wss://glasses.example.com/ws/glasses?token=abc\n"))

@@ -27,7 +27,7 @@ struct ConnectView: View {
                     }
 
                     Section {
-                        primaryButton
+                        primaryButton(canStart: rows.canStart)
                         if let error = appState.lastError, !rows.fixes.contains(error) {
                             Text(error)
                                 .font(BrianType.secondary)
@@ -101,12 +101,15 @@ struct ConnectView: View {
             }
             .frame(minHeight: 44)
             if appState.clipboardOffer {
-                Button("Use the link on your clipboard") {
+                Button {
                     Task {
                         await appState.useClipboardLink()
                         finishEditingIfApplied()
                     }
+                } label: {
+                    Label("Use the link on your clipboard", systemImage: "doc.on.clipboard")
                 }
+                .buttonStyle(.glass)
                 .frame(minHeight: 44)
             }
         }
@@ -145,7 +148,8 @@ struct ConnectView: View {
 
     // MARK: Start / Stop
 
-    private var primaryButton: some View {
+    /// Disabled (dimmed) until the rows above are ready; Stop is always live.
+    private func primaryButton(canStart: Bool) -> some View {
         Button(appState.watching ? "Stop" : "Start watching") {
             if appState.watching {
                 Task { await appState.stopWatching() }
@@ -159,6 +163,7 @@ struct ConnectView: View {
         .buttonStyle(.glassProminent)
         .controlSize(.large)
         .frame(maxWidth: .infinity)
+        .disabled(!appState.watching && !canStart)
     }
 
     // MARK: Live panel
