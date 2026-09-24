@@ -1,0 +1,72 @@
+# Ralph progress (app/web)
+Started: Thu Sep 24 14:48:15 CDT 2026
+---
+
+## 2026-09-24 — W-001 Embed mode (passes)
+- phone/src/lib/embed.ts: applyEmbed(win) decides embed from ?embed=1|0 (URL wins, stored
+  in sessionStorage "zeroist.embed"; 0 clears), then sessionStorage, then cookie
+  zeroist_embed=1; sets/clears data-embed on <html>. It is self-contained on purpose:
+  layout.tsx inlines applyEmbed.toString() as a blocking <head> script (EMBED_SCRIPT), so it
+  must never reference module scope. EmbedCapture (useLayoutEffect) re-applies after
+  hydration because React's dev remount strips <html> attributes. <html suppressHydrationWarning>.
+- Code can call isEmbedded() (reads the attribute). CSS: Tailwind variant `embed:` defined in
+  globals.css (@custom-variant embed (&:where([data-embed] *))).
+- Shell: tab screens hide header and TabBar with embed:hidden; a Menu button (hidden embed:grid)
+  sits left of the h1; bottom padding drops to pb-8. Pushed screens are unchanged (back bar),
+  which W-003 relies on. The "Find my protocol" pill lives in the hidden top bar, so W-003's
+  menu must add a Find card when embedded (the Menu has no Find item today).
+- Verified with a CDP probe: hard load /calendar?embed=1 -> menu -> /treatments (soft) -> back
+  -> hard /analysis (no param) all stay embedded; /analysis?embed=0 restores the chrome.
+- ENVIRONMENT: phone/node_modules is a symlink outside the worktree and Turbopack refuses it.
+  Run build and dev with TURBOPACK_ROOT=/ (new opt-in knob in next.config.ts), e.g.
+  `TURBOPACK_ROOT=/ npm run build`, `TURBOPACK_ROOT=/ NEXT_PUBLIC_FIXTURES=1 npx next dev -p 3100`.
+- Also: docs/APP_PRD.md is not on app/web; read it with `git show origin/main:docs/APP_PRD.md`.
+- Seen, not mine: Analysis week chart is clipped on the left at 390 px with or without embed.
+
+## 2026-09-24 — W-002 Token handoff on any route (passes)
+- No product change was needed. src/proxy.ts's matcher covers every route (not just "/"), and
+  TokenCapture sits in the root layout, so accessToken() stores and scrubs ?token= on every page.
+  stripTokenParam deletes only `token`, so embed=1 survives.
+- Added phone/src/proxy.test.ts (cookie set at /, /calendar, /analysis; cookie-only later nav
+  passes; wrong token 401; strip keeps embed=1). Needed phone/vitest.config.ts to give vitest
+  tsconfig's `@/` alias (proxy.ts imports @/lib/runtime); tests may now import `@/…`.
+- Live check: `TURBOPACK_ROOT=/ ACCESS_TOKEN=T NEXT_PUBLIC_FIXTURES=1 npx next dev -p 3100`;
+  /calendar with no token -> 401; headless Chrome on /calendar?token=T&embed=1 and
+  /analysis?token=T&embed=1 ends at ?embed=1 with data-embed set, no tab bar, HttpOnly
+  brian_app_token=T cookie, and a reload still gets in. Cookie path is basePath ("/" in dev).
+- Next: W-003 (menu in embed mode: drop Today/Protocol, add a Find card; see W-001 notes).
+
+## 2026-09-24 — W-003 Menu and pushed screens embedded (passes)
+- src/lib/screens.ts: NATIVE_TABS = ["today", "protocol"] and backFallback(screen, embedded):
+  the history-less back target is the tab's own page, else Today; embedded it is /analysis
+  whenever that would be a native tab or a menu screen. Shell's BackButton and FindFlow's
+  back both use it (they used to push "/", the web Today, which has no business in a web view).
+- Menu: menuItems(embedded) (exported, tested in src/lib/screens.test.ts). Embedded: no
+  My protocol, and a "Find my protocol" card (Compass, sage, "Six questions, one template",
+  chip "6 questions") first, standing in for the top pill's button. Not embedded: unchanged.
+  Menu reads isEmbedded() at render; it only mounts on click, so no hydration concern.
+- scripts/shot.mjs gained --click=<selector> (clicks the first visible match, waits 600 ms):
+  `node scripts/shot.mjs --click='button[aria-label=Menu]' "/analysis?embed=1" out.png`.
+- Verified with a CDP probe from /analysis?embed=1: menu -> each of treatments, biomarkers,
+  devices, library, tests, concierge, sources, find -> Back lands on /analysis?embed=1 with
+  data-embed set and no tab bar; Find from /calendar returns to /calendar. Find's back is a
+  text "Back" button (FindFrame), not aria-label=Back.
+- Left alone, for W-004's notes: adopting a protocol (Find "done", library ReviewScreen)
+  still router.push("/protocol"), so embedded the web view shows the web Protocol screen
+  (hamburger + title, no back button). The pick is saved in web localStorage; the native
+  Protocol tab does not see it. Orchestrator's call whether that matters.
+- PUSH: `git push` was refused by the loop's permission layer this iteration (not a git
+  error). Commits are local on app/web; the next iteration should push first.
+- Next: W-004 (docs/APP_WEB_NOTES.md).
+
+## 2026-09-24 — W-004 Notes for the native side (passes)
+- Wrote docs/APP_WEB_NOTES.md: URL table (first load ?token=T&embed=1, later ?embed=1,
+  /healthz), embed resolution order, what embed hides, token cookie attributes and
+  URL scrub, known web-side gaps, screenshot list and how to reproduce.
+- Decision worth the native loop's eye: the zeroist_embed cookie must be set WITHOUT
+  HttpOnly (embed.ts reads document.cookie); sessionStorage is per web view, so each tab's
+  first load needs embed=1.
+- Docs-only story; lint, tsc, 59 tests, build all green anyway.
+- PUSH: `git push` was refused again by the loop's permission layer (not a git error);
+  app/web is ahead of origin. Whoever has push rights must push app/web.
+- All stories pass.

@@ -1,18 +1,20 @@
 "use client";
 
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Menu as MenuIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Menu } from "@/components/menu/Menu";
-import { Button, STROKE, TabBar, TopBar } from "@/components/ui";
-import { SCREENS, TABS, type ScreenId } from "@/lib/screens";
+import { Button, ICON_SIZES, STROKE, TabBar, TopBar } from "@/components/ui";
+import { isEmbedded } from "@/lib/embed";
+import { backFallback, SCREENS, TABS, type ScreenId } from "@/lib/screens";
 
 /**
  * A tab's content ends this far above the bottom edge: the tab bar (64), its
  * 8 px float, and 16 px clear, plus the home indicator, so the last row scrolls
- * out from under the bar.
+ * out from under the bar. Embedded there is no web tab bar (the native one sits
+ * outside the web view), so a tab ends like a pushed screen.
  */
-const TAB_CLEARANCE = "calc(88px + env(safe-area-inset-bottom))";
+const TAB_CLEARANCE = "pb-[calc(88px+env(safe-area-inset-bottom))] embed:pb-8";
 
 export interface ShellProps {
   screen: ScreenId;
@@ -35,6 +37,10 @@ export interface ShellProps {
  * the content, the content, and the floating tab bar. Every other screen is
  * pushed: the pill carries a back button and the title instead, and there is
  * no tab bar. The hamburger opens the Menu over everything.
+ *
+ * Embedded in the native app (`?embed=1`, src/lib/embed.ts) a tab drops the
+ * top pill and the tab bar: the hamburger moves beside the screen title and
+ * the content runs to the bottom. A pushed screen keeps its back bar.
  */
 export function Shell({ screen, pushed: pushedDetail, title: titleOverride, theme, scale, action, children }: ShellProps) {
   const title = titleOverride ?? SCREENS[screen].title;
@@ -66,7 +72,10 @@ export function Shell({ screen, pushed: pushedDetail, title: titleOverride, them
     >
       {/* Everything under the menu is inert while it is open, so focus and screen readers stay inside the overlay. */}
       <div className="contents" inert={menuOpen || undefined}>
-        <header className="sticky top-0 z-20" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+        <header
+          className={`sticky top-0 z-20 ${pushed ? "" : "embed:hidden"}`}
+          style={{ paddingTop: "env(safe-area-inset-top)" }}
+        >
           {pushed ? (
             <PushedBar screen={screen} title={title} action={action} />
           ) : (
@@ -82,17 +91,31 @@ export function Shell({ screen, pushed: pushedDetail, title: titleOverride, them
           )}
         </header>
 
-        <main className="flex-1 px-gutter" style={{ paddingBottom: pushed ? 32 : TAB_CLEARANCE }}>
+        <main className={`flex-1 px-gutter ${pushed ? "pb-8" : `${TAB_CLEARANCE} embed:pt-[env(safe-area-inset-top)]`}`}>
           {pushed ? null : (
             <div className="flex items-center justify-between gap-2 pt-4 pb-2">
-              <h1 className="type-screen-title m-0 text-ink">{title}</h1>
+              <div className="flex min-w-0 items-center gap-1">
+                <button
+                  type="button"
+                  aria-label="Menu"
+                  onClick={openMenu}
+                  className="-ml-3 hidden size-11 shrink-0 place-items-center rounded-full text-ink transition-colors duration-120 active:bg-surface-2 embed:grid"
+                >
+                  <MenuIcon size={ICON_SIZES.card} strokeWidth={STROKE} aria-hidden="true" />
+                </button>
+                <h1 className="type-screen-title m-0 text-ink">{title}</h1>
+              </div>
               {action}
             </div>
           )}
           {children}
         </main>
 
-        {pushed ? null : <TabBar active={screen} />}
+        {pushed ? null : (
+          <div className="embed:hidden">
+            <TabBar active={screen} />
+          </div>
+        )}
       </div>
       {menuOpen ? <Menu onClose={closeMenu} /> : null}
     </div>
@@ -112,15 +135,14 @@ function PushedBar({ screen, title, action }: { screen: ScreenId; title: string;
   );
 }
 
-/** Back to where the detail was pushed from; with no history, to the tab it belongs to (Today for a menu screen). */
+/** Back to where the detail was pushed from; with no history, to the tab it belongs to (`backFallback`). */
 function BackButton({ screen }: { screen: ScreenId }) {
   const router = useRouter();
-  const home = TABS.includes(screen) ? SCREENS[screen].href : SCREENS.today.href;
   return (
     <button
       type="button"
       aria-label="Back"
-      onClick={() => (window.history.length > 1 ? router.back() : router.push(home))}
+      onClick={() => (window.history.length > 1 ? router.back() : router.push(backFallback(screen, isEmbedded())))}
       className="grid size-11 shrink-0 place-items-center rounded-full text-ink transition-colors duration-120 active:bg-surface-2"
     >
       <ChevronLeft size={24} strokeWidth={STROKE} aria-hidden="true" />

@@ -7,6 +7,10 @@ import type { NextConfig } from "next";
  *                                 must NOT strip it. Unset = served at "/" (dev).
  *   NEXT_OUTPUT=standalone        self-contained server for the Docker image.
  *
+ *   TURBOPACK_ROOT=/              a git worktree whose node_modules is a symlink
+ *                                 to another checkout: Turbopack refuses files
+ *                                 outside its root, so widen it. Unset = auto.
+ *
  * Runtime (per container, no rebuild): ACCESS_TOKEN (src/proxy.ts). The backend
  * address and the token are resolved in the browser (src/lib/runtime.ts), so a
  * hosted image carries no secret and no NEXT_PUBLIC_API_* value. See phone/Dockerfile.
@@ -21,6 +25,7 @@ const basePath = normalizeBasePath(process.env.NEXT_BASE_PATH);
 
 const nextConfig: NextConfig = {
   ...(basePath ? { basePath } : {}),
+  ...(process.env.TURBOPACK_ROOT ? { turbopack: { root: process.env.TURBOPACK_ROOT } } : {}),
   ...(process.env.NEXT_OUTPUT === "standalone" ? { output: "standalone" as const } : {}),
   // The client needs the mount point for its own /api/token and the manifest's URLs.
   env: { NEXT_PUBLIC_BASE_PATH: basePath },
