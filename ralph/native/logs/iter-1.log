@@ -1,0 +1,25 @@
+Ignoring 55 permissions.allow entries from .claude/settings.json: this workspace has not been trusted. Run Claude Code interactively here once and accept the trust dialog, or set projects["/Users/ljawhomebot/hackrice"].hasTrustDialogAccepted: true in /Users/ljawhomebot/.claude.json.
+N-001 is done and committed, but **nothing is pushed**: the tool permissions refused `git push -u origin app/native` twice. Both commits are only in this worktree, so someone needs to run that push by hand (or allow it) before the next iteration.
+
+The build passes and all 43 tests pass on the iPhone simulator, 12 of them new for this story. There are no screenshots because N-001 changes no screens.
+
+**What the model does**
+- `ConnectionStatus.derive` turns the connection inputs into one colour and one line. The first problem a person has to fix wins, in this order:
+  1. Red "Invalid invite link" when the server refuses the token.
+  2. Red "Not connected" when no invite link is set.
+  3. Red "Server unreachable".
+  4. Red "Glasses off".
+  5. Grey "Not watching".
+  6. Amber "Reconnecting…" when the connection to the server drops.
+  7. Amber "Starting…" before the first frame arrives.
+  8. Amber "No frames for N s" when frames stop for over 10 s.
+  9. Green "Watching · N min".
+- `AppState` now exposes `connectionStatus` and `streamStats`, each with a `(now:)` version. Views that show minutes or "last frame N s ago" will need a one-second timer to call them.
+- Two definitions to know:
+  - **Frames sent** counts only the current watching session. The sender's own count never resets, so the app records a starting value when watching begins.
+  - **Server acknowledged** means the connection is up and at least one frame got through this session. The server sends no acknowledgement per frame, so this is the best signal the phone has.
+- In demo mode the numbers are faked at one frame every 1.5 s, and "Bryan last said" shows a line taken from the demo data.
+
+**Link files:** only additions, with a note at the top of each file saying so. `MacLink` gains `lastSpokenText` and `lastSpokenAt`, set whenever the Mac sends speech or audio. `LinkGlue` gains read-only access to those and to the frame counts.
+
+`docs/APP_PRD.md` is not on `app/native`, only on `main`, so I read it with `git show e8483bd:docs/APP_PRD.md`. That's noted in `ralph/native/progress.txt`, along with the push problem and a tip for N-002 (it needs a demo flag that forces the glasses off).

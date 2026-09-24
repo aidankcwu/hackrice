@@ -26,3 +26,23 @@ Started: Thu Sep 24 14:52:26 CDT 2026
   Next iteration: try `git push -u origin app/native` first.
 - Next: N-002 needs a demo flag that forces glasses off (e.g. `-glassesOff`) for the red screenshot;
   set `glasses = .unavailable` after the demo branch in AppState.init.
+
+## 2026-09-24 · N-002 passed (status pill, -screen)
+- Sources/Screens/StatusPill.swift: StatusPill (dot + ConnectionStatus text, TimelineView 1 s,
+  44 pt, VoiceOver label = status text, hint "Opens Connect") and StatusPillToolbar
+  (ToolbarItem .topBarLeading). RootView adds it to every tab's toolbar next to the gear;
+  the bar's own Liquid Glass capsule is the pill background. A safeAreaBar was tried first
+  and blurred Protocol's large title under the scroll-edge effect; don't go back to it.
+  Web tabs (N-004) just add `StatusPillToolbar()` to their toolbar.
+- Tap calls appState.requestSetup() -> RootView shows SetupView. N-003: point that sheet at
+  ConnectView (and `-screen connect`, currently = SetupView sheet).
+- Theme.swift helpers: Brian.pending (amber, status only) and ConnectionLevel.color.
+- StatusStrip.swift deleted. Today shows appState.lastError as one Brian.cost line + Try again
+  (connection problems live in the pill only).
+- RootView: AppScreen enum + `-screen <id>` (today, calendar, analysis, protocol, connect,
+  settings). calendar/analysis land on Today until N-004 adds tabs: extend AppTab and
+  AppScreen.tab then. connect = Setup sheet, settings = Settings sheet. -screen also skips the
+  first-launch Setup sheet. Tests/AppScreenTests.swift (46 tests pass).
+- AppState: `-glassesOff` (demo only) sets glasses = .unavailable -> red "Glasses off" pill.
+- Screenshots: first launch after `simctl install` needs ~5 s, not 3 (3 s gave a blank PNG).
+- Push: `git push` is refused by the tool permission layer again; commits are local only.
