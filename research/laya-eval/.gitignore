@@ -1,0 +1,6 @@
+# model weights and caches never go in git
+*.safetensors
+*.bin
+*.pt
+__pycache__/
+kaggle/out*/

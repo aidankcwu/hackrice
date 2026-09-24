@@ -1,0 +1,95 @@
+{
+  "project": "Laya decider evaluation",
+  "branchName": "main (local commits in research/laya-eval only, never pushed)",
+  "description": "Measure whether Laya can replace the clerk/Jev decider: latency on the Mac mini, zero-shot vs fine-tuned quality on real and synthetic states, robustness to schema changes. Rules in EVAL_PROTOCOL.md.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Latency benchmark on this Mac",
+      "description": "Time the typed-decisions checkpoint on real states with our 10 questions, mps and cpu, full vs trimmed, max_len 512/1024/2048. Also extract clerk decision latency and wearer-facing delays from the backend logs.",
+      "acceptanceCriteria": [
+        "results/latency.json exists with p50 and p90 per device, variant and max_len",
+        "results/latency.json records state token counts (median, max) for full and trimmed states",
+        "results/latency.json records clerk decision latency and voice/TTS latency from logs",
+        "REPORT.md has a Latency section"
+      ],
+      "priority": 1, "passes": false, "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Rulebook, schema, validator",
+      "description": "Write RULEBOOK.md (labeling policy for all 10 questions), SCHEMA.md (exact state and label format matching build_state), scripts/validate.py.",
+      "acceptanceCriteria": [
+        "RULEBOOK.md covers all 8 yes/no questions plus topic and urgency with concrete rules and examples",
+        "scripts/validate.py exits 0 on a valid file and non-zero with a reason on an invalid one",
+        "validate.py accepts data/real_states.jsonl states (state part only)"
+      ],
+      "priority": 1, "passes": false, "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Label the real test set",
+      "description": "Label the 141 real states against RULEBOOK.md. Done by an agent that generates no training data.",
+      "acceptanceCriteria": [
+        "data/real_test.jsonl has >= 72 labeled states including all 12 real escalations",
+        "validate.py passes on it",
+        "label yes-rates per question are printed into progress.txt"
+      ],
+      "priority": 2, "passes": false, "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Generate synthetic states",
+      "description": "Parallel generator agents write labeled states in the exact schema, seeded with real captions/objects, following RULEBOOK.md. Target 2000, minimum 600.",
+      "acceptanceCriteria": [
+        "data/synth/batch_*.jsonl pass validate.py",
+        "scripts/split.py writes data/synth_train.jsonl, synth_val.jsonl, synth_test.jsonl (80/10/10) after dedup",
+        "every yes/no question has >= 10% yes-rate in synth_train",
+        "no state text appears in both train and a test set"
+      ],
+      "priority": 2, "passes": false, "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Kaggle training kernel + smoke run",
+      "description": "Private Kaggle kernel that installs Laya at the pinned commit, fine-tunes typed-decisions on our data, and evaluates zero-shot and trained per EVAL_PROTOCOL.md. Smoke run on 50 states.",
+      "acceptanceCriteria": [
+        "kaggle/ holds the kernel source and metadata",
+        "smoke run completes on Kaggle and its output includes a metrics JSON with zero-shot and trained numbers",
+        "measured training throughput (examples/s) recorded in progress.txt"
+      ],
+      "priority": 3, "passes": false, "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Full Kaggle run",
+      "description": "Launch the full run sized from smoke throughput to finish by 08:30 CDT, checkpoint every epoch, evaluate zero-shot, trained and robustness in-notebook.",
+      "acceptanceCriteria": [
+        "results/trained.json and results/robustness.json downloaded from the kernel output",
+        "REPORT.md has a Quality section with real_test and synth_test tables"
+      ],
+      "priority": 4, "passes": false, "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Local zero-shot baseline",
+      "description": "Score zero-shot typed-decisions on real_test and synth_test on this Mac as a cross-check of the notebook baseline.",
+      "acceptanceCriteria": [
+        "results/baseline_local.json exists",
+        "REPORT.md notes agreement or disagreement with the notebook baseline"
+      ],
+      "priority": 4, "passes": false, "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Final report",
+      "description": "Apply EVAL_PROTOCOL.md decision rules. Friday answer and long-term answer, each with the numbers that decided it.",
+      "acceptanceCriteria": [
+        "REPORT.md opens with the Friday verdict and the long-term verdict",
+        "every rule in EVAL_PROTOCOL.md is marked met, missed, or not evaluated with the reason",
+        "committed locally"
+      ],
+      "priority": 5, "passes": false, "notes": ""
+    }
+  ]
+}

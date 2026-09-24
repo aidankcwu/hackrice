@@ -1,0 +1,2 @@
+# Progress log (append-only; one line per event)
+03:27 plan written: PLAN.md, EVAL_PROTOCOL.md, prd.json
