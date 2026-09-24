@@ -9,8 +9,8 @@ const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: `${base}/`,
-    name: "Brian",
-    short_name: "Brian",
+    name: "Bryan",
+    short_name: "Bryan",
     start_url: base || "/",
     scope: `${base}/`,
     display: "standalone",

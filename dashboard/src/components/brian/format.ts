@@ -1,5 +1,5 @@
 /**
- * Small formatters shared by the Brian panels. Locale is pinned to en-US so
+ * Small formatters shared by the Bryan panels. Locale is pinned to en-US so
  * the server and the first client render produce identical strings.
  *
  * Everything here goes through `Intl.*` or `toFixed`; no date or number format

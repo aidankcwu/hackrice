@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# Brian phone web app — one container per tester, behind the reverse proxy.
+# Bryan phone web app — one container per tester, behind the reverse proxy.
 #
 # Build (context = this directory). NEXT_BASE_PATH is baked in by Next, so a
 # tester mounted at /t/NAME/app needs an image built with that path; the deps

@@ -1,5 +1,5 @@
 """
-brian_score.py — Project Brian healthspan scoring engine.
+brian_score.py — Project Bryan healthspan scoring engine.
 
 What this is
 ------------

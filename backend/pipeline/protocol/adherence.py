@@ -46,7 +46,7 @@ SIGHTING_TRIGGERS: dict[str, str] = {
 }
 
 #: Spoken once when a dose window closes with no sighting.
-MISSED_LINE = "Your {name} window just closed. Take it now, or mark it skipped in Brian."
+MISSED_LINE = "Your {name} window just closed. Take it now, or mark it skipped in Bryan."
 
 #: Statuses a sighting may turn into ``seen``. ``None`` is a day with no row.
 _SEEABLE = (None, "waiting")

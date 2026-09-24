@@ -22,7 +22,7 @@ export function TopBar({ onMenu, action, mainTab = false }: TopBarProps) {
         >
           <Menu size={ICON_SIZES.card} strokeWidth={STROKE} aria-hidden="true" />
         </button>
-        <span className="type-wordmark pointer-events-none absolute inset-x-14 text-center text-ink">Brian</span>
+        <span className="type-wordmark pointer-events-none absolute inset-x-14 text-center text-ink">Bryan</span>
         {mainTab && action ? <div className="ml-auto flex items-center pr-1 *:h-9 *:min-h-9">{action}</div> : null}
       </div>
     </div>
