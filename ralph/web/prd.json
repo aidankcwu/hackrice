@@ -69,8 +69,8 @@
         "lint, typecheck, tests, build pass"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Chart caption moved out of the w-max scroller (ColumnsCaption) so it wraps; scripts/overflow.mjs sweeps 12 embedded routes and all 3 Analysis ranges, all ok at 390 px"
     }
   ]
 }

@@ -70,3 +70,26 @@ Started: Thu Sep 24 14:48:15 CDT 2026
 - PUSH: `git push` was refused again by the loop's permission layer (not a git error);
   app/web is ahead of origin. Whoever has push rights must push app/web.
 - All stories pass.
+
+## 2026-09-24 — W-005 No horizontal overflow at 390 px embedded (passes)
+- Cause: Columns rendered its caption inside Analysis's `w-max` scroll row, so the
+  caption laid out on one line (~560 px), widened the row, and `scrollLeft = scrollWidth`
+  scrolled to the caption's end: first days and the caption's start cut off. The page
+  itself never overflowed (scrollWidth 390); the damage was inside the scroller.
+- Fix: Columns takes `caption={false}`; the caption is exported as `ColumnsCaption`
+  (carries `data-chart-caption`) and Analysis renders it under the scroller (`data-chart`).
+  Calendar is unchanged (caption default true). This week (7 columns, 298 px) now fits
+  with no scroll; 2 weeks / 30 days scroll inside the row and open on the latest day.
+- scripts/chrome.mjs: the CDP plumbing, now shared (`withPhone({width,height}, run)`,
+  `page.open/evaluate/send`). shot.mjs keeps its CLI and flags unchanged.
+- scripts/overflow.mjs [out.txt] [width]: loads each route ?embed=1, fails on
+  scrollWidth > width or any element past the edge that is not inside its own
+  overflow container; on /analysis clicks each range and checks latest column and
+  caption are on screen. Result committed at phone/screenshots/W-005-overflow.txt.
+  It caught the old bug (caption cut off) before the fix.
+- PORT: 3100 was held by the native loop's own web copy
+  (wt-native/.../scratchpad/web/phone). Do not kill it and do not trust screenshots
+  from it for this branch. I ran the fixtures server on 3101 with PHONE_URL=http://localhost:3101.
+- PUSH: `git push -u origin app/web` was refused by the loop's permission layer again
+  (not a git error). app/web is ahead of origin; someone with push rights must push.
+- All stories pass.
