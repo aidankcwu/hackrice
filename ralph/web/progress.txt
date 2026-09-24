@@ -58,3 +58,15 @@ Started: Thu Sep 24 14:48:15 CDT 2026
 - PUSH: `git push` was refused by the loop's permission layer this iteration (not a git
   error). Commits are local on app/web; the next iteration should push first.
 - Next: W-004 (docs/APP_WEB_NOTES.md).
+
+## 2026-09-24 — W-004 Notes for the native side (passes)
+- Wrote docs/APP_WEB_NOTES.md: URL table (first load ?token=T&embed=1, later ?embed=1,
+  /healthz), embed resolution order, what embed hides, token cookie attributes and
+  URL scrub, known web-side gaps, screenshot list and how to reproduce.
+- Decision worth the native loop's eye: the zeroist_embed cookie must be set WITHOUT
+  HttpOnly (embed.ts reads document.cookie); sessionStorage is per web view, so each tab's
+  first load needs embed=1.
+- Docs-only story; lint, tsc, 59 tests, build all green anyway.
+- PUSH: `git push` was refused again by the loop's permission layer (not a git error);
+  app/web is ahead of origin. Whoever has push rights must push app/web.
+- All stories pass.

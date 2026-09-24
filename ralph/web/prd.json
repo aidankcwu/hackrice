@@ -54,8 +54,8 @@
         "Committed and pushed"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "docs/APP_WEB_NOTES.md: URL table, embed order (query/sessionStorage/non-HttpOnly cookie), token cookie+scrub, known gaps, screenshot list"
     }
   ]
 }
