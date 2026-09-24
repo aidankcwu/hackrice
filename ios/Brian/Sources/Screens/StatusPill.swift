@@ -10,7 +10,7 @@ struct StatusPill: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let status = appState.connectionStatus(now: context.date)
             Button {
-                appState.requestSetup()
+                appState.requestConnect()
             } label: {
                 HStack(spacing: 8) {
                     Circle()

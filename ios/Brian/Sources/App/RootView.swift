@@ -1,7 +1,7 @@
-// IOS_SPEC.md "Structure" + APP_PRD.md: Setup as a sheet on first launch, the tabs, and a
-// Settings gear in every tab's toolbar. Every tab carries the status pill above its
-// content; tapping it asks AppState for Setup (Connect replaces Setup in N-003).
-// RootView owns the navigation stacks; SetupView and SettingsView bring their own.
+// IOS_SPEC.md "Structure" + APP_PRD.md: Connect full screen on first launch, the tabs, and
+// a Settings gear in every tab's toolbar. Every tab carries the status pill above its
+// content; tapping it asks AppState for Connect, shown as a sheet.
+// RootView owns the navigation stacks; ConnectView and SettingsView bring their own.
 import SwiftUI
 
 /// Screens a `-screen <id>` launch argument can open on (screenshots, APP_NATIVE_NOTES.md).
@@ -31,13 +31,17 @@ struct RootView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
     @State private var tab: AppTab = .today
-    @State private var showSetup = false
+    /// Connect from the pill or Settings: a sheet over the tabs.
+    @State private var showConnect = false
+    /// Connect on first launch: full screen, closed with Done.
+    @State private var showConnectFullScreen = false
     @State private var showSettings = false
     @State private var bootstrapped = false
 
-    /// Set once Setup has been closed (Done or Later), so it opens by itself only once.
-    static let setupSeenKey = "setupSeen"
-    /// Launch argument that opens Setup on launch even in demo mode (screenshots).
+    /// Set once Connect has been closed, so it opens by itself only once. The key keeps
+    /// its Setup-era name so existing installs do not see it again.
+    static let connectSeenKey = "setupSeen"
+    /// Older spelling of `-screen connect`, kept for existing screenshot scripts.
     static let showSetupArgument = "-showSetup"
 
     var body: some View {
@@ -62,19 +66,20 @@ struct RootView: View {
             }
         }
         .tint(Brian.ink)
-        .sheet(isPresented: $showSetup, onDismiss: {
-            UserDefaults.standard.set(true, forKey: Self.setupSeenKey)
-        }) {
-            SetupView()
+        .fullScreenCover(isPresented: $showConnectFullScreen, onDismiss: markConnectSeen) {
+            ConnectView()
+        }
+        .sheet(isPresented: $showConnect, onDismiss: markConnectSeen) {
+            ConnectView()
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
-        .onChange(of: appState.setupRequested) { _, requested in
+        .onChange(of: appState.connectRequested) { _, requested in
             guard requested else { return }
             showSettings = false
-            showSetup = true
-            appState.setupRequested = false
+            showConnect = true
+            appState.connectRequested = false
         }
         .task {
             guard !bootstrapped else { return }
@@ -83,9 +88,9 @@ struct RootView: View {
             let screen = AppScreen.from(arguments: arguments)
             if let screen { tab = screen.tab }
             let forced = arguments.contains(Self.showSetupArgument) || screen == .connect
-            let firstLaunch = !appState.demo && !UserDefaults.standard.bool(forKey: Self.setupSeenKey)
+            let firstLaunch = !appState.demo && !UserDefaults.standard.bool(forKey: Self.connectSeenKey)
             if forced || (firstLaunch && screen == nil) {
-                showSetup = true
+                showConnectFullScreen = true
             } else if screen == .settings {
                 showSettings = true
             }
@@ -103,6 +108,10 @@ struct RootView: View {
                 await GlassesFactory.handleIncomingURL(url)
             }
         }
+    }
+
+    private func markConnectSeen() {
+        UserDefaults.standard.set(true, forKey: Self.connectSeenKey)
     }
 
     @ToolbarContentBuilder

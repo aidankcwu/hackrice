@@ -3,6 +3,7 @@
 // may add private state; the public surface below is what the Screens are written against.
 import Foundation
 import Observation
+import UIKit
 
 enum LinkState: Equatable {
     case notSet
@@ -13,16 +14,16 @@ enum LinkState: Equatable {
 @MainActor
 @Observable
 final class AppState {
-    // Setup
+    // Connect
     var glasses: GlassesState = .unavailable
     var link: LinkState = .notSet
-    /// The Setup/Settings paste box's draft text only — never the applied link. It is
+    /// The Connect/Settings paste box's draft text only — never the applied link. It is
     /// cleared back to "" the moment a paste parses, so a token never sits in a visible
     /// field or round-trips back into one; see `endpointLabel` for what's shown after.
     var serverURL: String = ""          // wss://DOMAIN/t/NAME/ws/glasses?token=...  (hosted) or ws://ip:8010/ws/glasses (LAN)
     /// Redacted, token-free label for the applied server (`ServerURL.endpointLabel`),
     /// e.g. "glasses.example.com/t/alice" or "10.0.0.5:8010". Nil until a pasted link
-    /// parses successfully; Setup/Settings show this instead of the paste box then.
+    /// parses successfully; Connect/Settings show this instead of the paste box then.
     var endpointLabel: String? = nil
     /// The consent gate is the persisted Link gate; there is no second source of truth.
     var consentGiven: Bool {
@@ -39,8 +40,15 @@ final class AppState {
             }
         }
     }
-    /// Settings requests this; RootView owns the actual sheet presentation.
-    var setupRequested = false
+    /// The status pill and Settings request Connect; RootView owns the presentation.
+    var connectRequested = false
+    /// A link test is in flight (Connect's invite row reads "Checking…").
+    var checkingLink = false
+    /// DAT registration is running (Connect's glasses row reads "Registering…").
+    var registeringGlasses = false
+    /// The clipboard probably holds a link; Connect offers "Use the link on your clipboard".
+    /// Set without reading the clipboard, so no paste prompt appears until the tap.
+    var clipboardOffer = false
     /// DEBUG corpus capture is opt-in and persisted across relaunches.
     var recordCorpusEnabled: Bool {
         didSet {
@@ -77,7 +85,16 @@ final class AppState {
     /// view that shows them ticks `now` with a `TimelineView`.
     var connectionStatus: ConnectionStatus { connectionStatus(now: Date()) }
     func connectionStatus(now: Date) -> ConnectionStatus {
-        ConnectionStatus.derive(ConnectionInputs(
+        ConnectionStatus.derive(connectionInputs(now: now))
+    }
+
+    /// Connect's three rows, from the same inputs as the pill.
+    func connectRows(now: Date) -> ConnectRows {
+        ConnectRows.derive(connectionInputs(now: now), checking: checkingLink, registering: registeringGlasses)
+    }
+
+    private func connectionInputs(now: Date) -> ConnectionInputs {
+        ConnectionInputs(
             glasses: glasses,
             link: link,
             watching: watching,
@@ -85,7 +102,7 @@ final class AppState {
             accessDenied: !demo && glue.accessDenied,
             backendConnected: backendConnected,
             stats: streamStats(now: now),
-            now: now))
+            now: now)
     }
 
     /// Live numbers for this watching session; demo mode fakes a steady 1.5 s cadence.
@@ -127,7 +144,12 @@ final class AppState {
     static let demoEnvironment = "BRIAN_DEMO"
     /// Demo only: start with the glasses reported off (red status pill).
     static let glassesOffArgument = "-glassesOff"
-    /// What the Setup row shows in demo mode.
+    /// Demo only: a first launch. No link, glasses not registered, not watching, and a
+    /// link on the clipboard.
+    static let freshArgument = "-fresh"
+    /// Demo only: the server refused the link (red invite row), not watching.
+    static let tokenRejectedArgument = "-tokenRejected"
+    /// What the invite row shows in demo mode.
     static let demoLabel = "10.0.0.5:8010"
     static let demoServerURL = "ws://10.0.0.5:8010/ws/glasses"
     static let pollInterval: Duration = .seconds(30)
@@ -176,7 +198,21 @@ final class AppState {
             watching = true
             watchingSince = Date().addingTimeInterval(-14 * 60)
             // `-glassesOff`: the red pill for screenshots, with everything else still live.
-            if ProcessInfo.processInfo.arguments.contains(Self.glassesOffArgument) { glasses = .unavailable }
+            let arguments = ProcessInfo.processInfo.arguments
+            if arguments.contains(Self.glassesOffArgument) { glasses = .unavailable }
+            if arguments.contains(Self.freshArgument) {
+                serverURL = ""
+                link = .notSet
+                glasses = .notRegistered
+                watching = false
+                watchingSince = nil
+                clipboardOffer = true
+            }
+            if arguments.contains(Self.tokenRejectedArgument) {
+                link = .unreachable(APIError.tokenRejected.sentence)
+                watching = false
+                watchingSince = nil
+            }
         } else {
             // Older builds kept the pasted link, token included, in plain UserDefaults;
             // move it into the Keychain once, then read the token-free form back.
@@ -226,7 +262,7 @@ final class AppState {
         stopPolling()
     }
 
-    // MARK: - Setup
+    // MARK: - Connect
 
     func applyServerURL(_ url: String) async {
         let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -263,6 +299,8 @@ final class AppState {
     }
 
     func testServer() async {
+        checkingLink = true
+        defer { checkingLink = false }
         if demo {
             link = .reachable(Self.demoLabel)
             return
@@ -289,6 +327,8 @@ final class AppState {
     }
 
     func registerGlasses() async {
+        registeringGlasses = true
+        defer { registeringGlasses = false }
         do {
             try await session.register()
             glasses = session.state
@@ -301,8 +341,34 @@ final class AppState {
         session.openMetaAI()
     }
 
-    func requestSetup() {
-        setupRequested = true
+    func requestConnect() {
+        connectRequested = true
+    }
+
+    // MARK: - Clipboard (Connect)
+
+    /// Asks the pasteboard whether it probably holds a web link, which iOS answers
+    /// without the paste prompt. Only offered while no working link is applied.
+    func checkClipboard() async {
+        if demo { return }
+        if case .reachable = link { clipboardOffer = false; return }
+        let patterns = (try? await UIPasteboard.general.detectedPatterns(for: [\.probableWebURL])) ?? []
+        clipboardOffer = patterns.contains(\.probableWebURL)
+    }
+
+    /// The tap on "Use the link on your clipboard": reads it (iOS may ask once) and
+    /// applies it when it is an invite link; otherwise says what to paste instead.
+    func useClipboardLink() async {
+        clipboardOffer = false
+        if demo {
+            await applyServerURL(Self.demoServerURL)
+            return
+        }
+        guard let text = UIPasteboard.general.string, ServerURL.isInviteLink(text) else {
+            link = .unreachable("The clipboard does not hold an invite link. Copy the full wss:// link from your invite.")
+            return
+        }
+        await applyServerURL(text)
     }
 
     // MARK: - Watching

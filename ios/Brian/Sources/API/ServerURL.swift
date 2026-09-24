@@ -21,7 +21,7 @@ struct ServerURL: Equatable, Sendable {
     let apiBase: URL
     /// Sent as `X-Access-Token` on every request. Nil on a LAN link.
     let token: String?
-    /// Token-free, for the Setup row and status lines: "DOMAIN/t/NAME" or "IP:PORT".
+    /// Token-free, for the Connect row and status lines: "DOMAIN/t/NAME" or "IP:PORT".
     let label: String
     let secure: Bool
 
@@ -73,8 +73,8 @@ struct ServerURL: Equatable, Sendable {
         return c.url
     }
 
-    /// Same as `label` — the redacted, token-free string Setup/Settings show once a
-    /// link is applied (TokenStore.swift's `ServerURLStore`, SettingsView, SetupView).
+    /// Same as `label` — the redacted, token-free string Connect/Settings show once a
+    /// link is applied (TokenStore.swift's `ServerURLStore`, SettingsView, ConnectView).
     var endpointLabel: String { label }
 
     /// TokenStore account key for this link: unique per host+path, so two testers'

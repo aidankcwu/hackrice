@@ -43,8 +43,8 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Button("Open Setup") {
-                        appState.requestSetup()
+                    Button("Connect") {
+                        appState.requestConnect()
                         dismiss()
                     }
                 }

@@ -21,7 +21,7 @@ enum APIError: Error, Equatable {
     var sentence: String {
         switch self {
         case .notConfigured:
-            return "No server set. Paste your server link in Setup."
+            return "No invite link set. Paste the link from your invite in Connect."
         case .unreachable(let label, let lan):
             return lan
                 ? "Backend \(label) unreachable. Check that the Mac and phone share Wi‑Fi."
