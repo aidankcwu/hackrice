@@ -1,6 +1,6 @@
 # phone
 
-The Brian phone app as a mobile web app (docs/PLAN.md Job F). Spec: `docs/IOS_SPEC.md`.
+The Bryan phone app as a mobile web app (docs/PLAN.md Job F). Spec: `docs/IOS_SPEC.md`.
 Look and copy: `.claude/skills/brian-ios-design/SKILL.md`.
 
 ```bash

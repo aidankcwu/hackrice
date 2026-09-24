@@ -216,7 +216,7 @@ def test_a_dose_window_closing_unsighted_is_missed_and_speaks_once(db) -> None:
     assert status_of(db, "Morning dose")["status"] == "missed"
     assert status_of(db, "Evening dose") is None
     assert speech.said == [
-        "Your Morning dose window just closed. Take it now, or mark it skipped in Brian."
+        "Your Morning dose window just closed. Take it now, or mark it skipped in Bryan."
     ]
 
 

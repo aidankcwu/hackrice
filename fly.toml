@@ -1,4 +1,4 @@
-# Fly.io config for the Brian backend. Steps and every env var: docs/DEPLOY.md.
+# Fly.io config for the Bryan backend. Steps and every env var: docs/DEPLOY.md.
 # Set `app` to the name you created with `fly apps create`.
 app = "brian-backend"
 primary_region = "dfw"

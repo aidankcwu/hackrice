@@ -5,7 +5,7 @@
 import SwiftUI
 import UIKit
 
-/// Brian palette: direction C · Instrument, picked in F.0, with A's green/red pair for the sign.
+/// Bryan palette: direction C · Instrument, picked in F.0, with A's green/red pair for the sign.
 /// Data colours only ever appear next to a sign and a word that carry the meaning too.
 enum Brian {
     static let page     = Color(light: 0xFFFFFF, dark: 0x000000)

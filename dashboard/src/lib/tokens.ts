@@ -1,5 +1,5 @@
 /**
- * Project Brian design tokens — the JavaScript copy.
+ * Project Bryan design tokens — the JavaScript copy.
  *
  * Source of truth for anything that needs a literal colour at runtime (recharts
  * fills, inline SVG). The CSS copy lives in `src/app/globals.css` as custom

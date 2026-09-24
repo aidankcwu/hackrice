@@ -26,7 +26,7 @@ export const PROVENANCE_HINT: Readonly<Record<Provenance, string>> = {
   glasses: "Measured by the Ray-Ban Meta glasses (episodes from the camera pipeline)",
   whoop: "From the wearer's WHOOP data",
   fitbit: "From the wearer's Fitbit, via the Google Health API",
-  healthkit: "From the wearer's Apple Health, synced by the Brian phone app",
+  healthkit: "From the wearer's Apple Health, synced by the Bryan phone app",
   entered: "Entered by the wearer (PVT, self-check)",
   seeded: "Demo seed data, not the wearer's own",
   imputed: "Not measured today: imputed at the population reference and earns nothing",

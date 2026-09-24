@@ -7,9 +7,9 @@ import "./globals.css";
 // sit beside this file and Next links them. The name matches the native app's
 // CFBundleDisplayName (ios/Brian/project.yml).
 export const metadata: Metadata = {
-  title: "Brian",
-  applicationName: "Brian",
-  appleWebApp: { capable: true, title: "Brian", statusBarStyle: "default" },
+  title: "Bryan",
+  applicationName: "Bryan",
+  appleWebApp: { capable: true, title: "Bryan", statusBarStyle: "default" },
   formatDetection: { telephone: false },
   // Next writes `mobile-web-app-capable`; older iOS reads only the prefixed tag.
   other: { "apple-mobile-web-app-capable": "yes" },
