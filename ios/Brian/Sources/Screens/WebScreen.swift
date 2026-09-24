@@ -53,8 +53,9 @@ struct WebScreen: View {
             message(APIError.tokenRejected.sentence,
                     tone: Brian.cost, button: "Open Connect") { appState.requestConnect() }
         case .loading, .loaded:
+            // Not .ignoresSafeArea(.bottom): the tab bar is part of the bottom safe area,
+            // so keeping it lets the page's last row scroll fully above the bar.
             WebPageView(url: url, load: load)
-                .ignoresSafeArea(edges: .bottom)
                 .background(Brian.page)
                 .overlay {
                     if load.phase == .loading {
