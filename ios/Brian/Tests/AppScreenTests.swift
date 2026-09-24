@@ -14,9 +14,16 @@ struct AppScreenTests {
         #expect(AppScreen.from(arguments: ["-screen", "home"]) == nil)
     }
 
-    @Test func sheetsAndPendingTabsLandOnToday() {
+    @Test func eachScreenLandsOnItsTabAndSheetsOnToday() {
+        #expect(AppScreen.today.tab == .today)
+        #expect(AppScreen.calendar.tab == .calendar)
+        #expect(AppScreen.analysis.tab == .analysis)
+        #expect(AppScreen.protocol.tab == .protocol)
         #expect(AppScreen.connect.tab == .today)
         #expect(AppScreen.settings.tab == .today)
-        #expect(AppScreen.protocol.tab == .protocol)
+    }
+
+    @Test func tabsAreInPRDOrder() {
+        #expect(AppTab.allCases == [.today, .calendar, .analysis, .protocol])
     }
 }

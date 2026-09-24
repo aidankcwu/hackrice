@@ -1,4 +1,5 @@
-// IOS_SPEC.md "Structure" + APP_PRD.md: Connect full screen on first launch, the tabs, and
+// IOS_SPEC.md "Structure" + APP_PRD.md: Connect full screen on first launch, the four tabs
+// (Today, Calendar, Analysis, Protocol; the middle two are the web app), and
 // a Settings gear in every tab's toolbar. Every tab carries the status pill above its
 // content; tapping it asks AppState for Connect, shown as a sheet.
 // RootView owns the navigation stacks; ConnectView and SettingsView bring their own.
@@ -16,15 +17,20 @@ enum AppScreen: String, CaseIterable {
         return AppScreen(rawValue: arguments[index + 1].lowercased())
     }
 
-    /// The tab this screen lives on. Calendar and Analysis land on Today until they exist
-    /// (N-004); Connect and Settings are sheets over Today.
+    /// The tab this screen lives on. Connect and Settings are sheets over Today.
     var tab: AppTab {
-        self == .protocol ? .protocol : .today
+        switch self {
+        case .calendar: .calendar
+        case .analysis: .analysis
+        case .protocol: .protocol
+        case .today, .connect, .settings: .today
+        }
     }
 }
 
-enum AppTab: Hashable {
-    case today, `protocol`
+/// Exactly four tabs, in this order (APP_PRD.md "The product").
+enum AppTab: Hashable, CaseIterable {
+    case today, calendar, analysis, `protocol`
 }
 
 struct RootView: View {
@@ -49,6 +55,24 @@ struct RootView: View {
             Tab("Today", systemImage: "list.bullet", value: AppTab.today) {
                 NavigationStack {
                     TodayView()
+                        .toolbar {
+                            StatusPillToolbar()
+                            settingsButton
+                        }
+                }
+            }
+            Tab("Calendar", systemImage: "calendar", value: AppTab.calendar) {
+                NavigationStack {
+                    WebScreen(title: "Calendar", path: "/calendar")
+                        .toolbar {
+                            StatusPillToolbar()
+                            settingsButton
+                        }
+                }
+            }
+            Tab("Analysis", systemImage: "chart.bar", value: AppTab.analysis) {
+                NavigationStack {
+                    WebScreen(title: "Analysis", path: "/analysis")
                         .toolbar {
                             StatusPillToolbar()
                             settingsButton

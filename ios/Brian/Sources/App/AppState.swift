@@ -138,6 +138,13 @@ final class AppState {
             lastSpokenAt: since.addingTimeInterval(9 * 60))
     }
 
+    // MARK: Web tabs (N-004)
+
+    /// Where Calendar and Analysis load from; changes when the invite link does.
+    var webSource: WebSource {
+        WebSource.derive(demo: demo, override: webBaseOverride, server: server)
+    }
+
     static let recordCorpusKey = "recordCorpus"
     /// Launch argument / environment switch for demo mode (IOS_SPEC.md "Demo mode").
     static let demoArgument = "-demo"
@@ -158,7 +165,10 @@ final class AppState {
     @ObservationIgnored private let glue: Link
     @ObservationIgnored private let session: GlassesSessioning
     @ObservationIgnored private var pollTask: Task<Void, Never>?
-    @ObservationIgnored private var server: ServerURL?
+    /// Observed (not ignored) so `webSource` follows a changed invite link.
+    private var server: ServerURL?
+    /// Demo only: `-webBase` / BRIAN_WEB_BASE, where the web tabs load from.
+    @ObservationIgnored private var webBaseOverride: URL?
     /// `glue.framesSent` when this watching session started; the sender's count is cumulative.
     @ObservationIgnored private var framesAtStart = 0
     /// Where the applied link's token lives (Keychain in the app; in-memory in tests).
@@ -199,6 +209,8 @@ final class AppState {
             watchingSince = Date().addingTimeInterval(-14 * 60)
             // `-glassesOff`: the red pill for screenshots, with everything else still live.
             let arguments = ProcessInfo.processInfo.arguments
+            webBaseOverride = WebSource.override(arguments: arguments,
+                                                 environment: ProcessInfo.processInfo.environment)
             if arguments.contains(Self.glassesOffArgument) { glasses = .unavailable }
             if arguments.contains(Self.freshArgument) {
                 serverURL = ""

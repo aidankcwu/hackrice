@@ -73,6 +73,14 @@ struct ServerURL: Equatable, Sendable {
         return c.url
     }
 
+    /// The web app behind a hosted link: `https://DOMAIN/t/NAME/app` (APP_PRD.md "Web
+    /// tabs"), no trailing slash. Nil on a LAN link: a Mac on this Wi-Fi serves no web app.
+    var webBase: URL? {
+        guard secure, var c = URLComponents(url: apiBase, resolvingAgainstBaseURL: false) else { return nil }
+        c.path = apiBase.path + "/app"
+        return c.url
+    }
+
     /// Same as `label` — the redacted, token-free string Connect/Settings show once a
     /// link is applied (TokenStore.swift's `ServerURLStore`, SettingsView, ConnectView).
     var endpointLabel: String { label }
