@@ -6,3 +6,17 @@
 03:37 US-003 done (agent): n=141 labeled, speak yes 0.0, ask 0.007, annotate 0.149, look 0.043; only 10 real escalations exist (not 12). EVAL_PROTOCOL amendment 1 added: real_test uses false-alarm rate for rare questions.
 03:40 US-001 done: mps trimmed p50 1498ms@512/1500ms@1024, full@1024 3248ms (cpu 2-3x slower); clerk decision median 1972ms; Friday rule 1 (<=250ms) MISSED; long-term rule 3 missed as measured, path via 2 questions (325ms)
 03:41 orchestrator: swap at 8.3 GB is what ate disk (3.5 GB free); US-007 local baseline DROPPED to protect disk/memory, notebook zero-shot baseline is the baseline. Wave 2 generators 08-11 launched.
+03:45 gen batch_01 (food and treats) done: n=176, speak=25.6% ask=8.0%
+03:46 gen batch_06 (people and social connection) done: n=193, speak=18.7% ask=7.3%
+03:46 gen batch_03 (alcohol and social settings) done: n=199, speak=26% ask=9%
+03:48 gen batch_07 (medication, smoking and vaping) done: n=175, speak=22.9% ask=8.0%
+03:49 gen batch_04 (screens, phones and late nights) done: n=183, speak=27% ask=8% (act=23%, watch=74% — W3 fires on every late-night screen block)
+03:51 gen batch_05 (outdoors, daylight and movement) done: n=184, speak=20.1% ask=8.2%
+03:52 gen batch_09 (ambiguity: no_ai, contradictory/generic captions, dark frames, far objects, ownership) done: n=157, speak=13.4% ask=8.9%
+03:52 gen batch_02 (caffeine) done: n=181, speak=24% ask=9%
+03:53 gen batch_10 (act/watch: calendar walks, app shields, dose reminders, hydration follow-ups) done: n=173, speak=21% ask=8%
+03:53 gen batch_08 (repetition and compliance) done: n=159, speak=27.7% ask=6.3%
+03:54 gen batch_11 (mundane moments, restraint) done: n=150, speak=8.7% ask=2.0%
+04:03 gen batch_13 (student-founder and remote-engineer whole days and nights) done: n=246, speak=22.0% ask=8.5%
+04:05 gen batch_12 (whole-day snapshots, athlete + PM parent) done: n=250, speak=18.8% ask=7.6%
+04:05 US-004 data done: 13 batches, 2426 states, split train 1961 / val 239 / test 226, 0 dups, 0 group overlap. Deviation: remember/ask/act/look train yes-rate 7.6-9.9% (< 10% target) but >=149 positives each; accepted, noted in REPORT.
