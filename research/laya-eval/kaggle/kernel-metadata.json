@@ -1,0 +1,13 @@
+{
+  "id": "wuaidan/laya-eval-train",
+  "title": "laya-eval-train",
+  "code_file": "train_eval.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": ["wuaidan/laya-eval-data"],
+  "competition_sources": [],
+  "kernel_sources": []
+}

@@ -1,0 +1,11 @@
+# Mac mini hosting: Tailscale Funnel terminates TLS at
+# https://aidan-mini.tail39b2e2.ts.net and forwards to 127.0.0.1:8080.
+# So Caddy serves plain HTTP on :80 inside the container, reachable only from
+# this machine, and never tries to fetch its own Let's Encrypt certificate.
+# Loaded via COMPOSE_FILE in deploy/.env; the VPS setup ignores this file.
+services:
+  caddy:
+    environment:
+      DOMAIN: ":80"
+    ports: !override
+      - "127.0.0.1:8080:80"

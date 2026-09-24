@@ -1,0 +1,25 @@
+# Progress log (append-only; one line per event)
+03:27 plan written: PLAN.md, EVAL_PROTOCOL.md, prd.json
+03:31 US-002 done: RULEBOOK.md (49 rules over 10 questions + generator notes), SCHEMA.md, scripts/validate.py (real_states --state-only OK n=141; broken file fails)
+03:32 US-002 verified by orchestrator (validator OK on real states); data/pools.json written (6 personas, 5 trends)
+03:37 US-003 done: n=141, yes-rates speak=0.0 ask=0.007 annotate=0.149 (others in data/real_test.stats.json)
+03:37 US-003 done (agent): n=141 labeled, speak yes 0.0, ask 0.007, annotate 0.149, look 0.043; only 10 real escalations exist (not 12). EVAL_PROTOCOL amendment 1 added: real_test uses false-alarm rate for rare questions.
+03:40 US-001 done: mps trimmed p50 1498ms@512/1500ms@1024, full@1024 3248ms (cpu 2-3x slower); clerk decision median 1972ms; Friday rule 1 (<=250ms) MISSED; long-term rule 3 missed as measured, path via 2 questions (325ms)
+03:41 orchestrator: swap at 8.3 GB is what ate disk (3.5 GB free); US-007 local baseline DROPPED to protect disk/memory, notebook zero-shot baseline is the baseline. Wave 2 generators 08-11 launched.
+03:45 gen batch_01 (food and treats) done: n=176, speak=25.6% ask=8.0%
+03:46 gen batch_06 (people and social connection) done: n=193, speak=18.7% ask=7.3%
+03:46 gen batch_03 (alcohol and social settings) done: n=199, speak=26% ask=9%
+03:48 gen batch_07 (medication, smoking and vaping) done: n=175, speak=22.9% ask=8.0%
+03:49 gen batch_04 (screens, phones and late nights) done: n=183, speak=27% ask=8% (act=23%, watch=74% — W3 fires on every late-night screen block)
+03:51 gen batch_05 (outdoors, daylight and movement) done: n=184, speak=20.1% ask=8.2%
+03:52 gen batch_09 (ambiguity: no_ai, contradictory/generic captions, dark frames, far objects, ownership) done: n=157, speak=13.4% ask=8.9%
+03:52 gen batch_02 (caffeine) done: n=181, speak=24% ask=9%
+03:53 gen batch_10 (act/watch: calendar walks, app shields, dose reminders, hydration follow-ups) done: n=173, speak=21% ask=8%
+03:53 gen batch_08 (repetition and compliance) done: n=159, speak=27.7% ask=6.3%
+03:54 gen batch_11 (mundane moments, restraint) done: n=150, speak=8.7% ask=2.0%
+04:03 gen batch_13 (student-founder and remote-engineer whole days and nights) done: n=246, speak=22.0% ask=8.5%
+04:05 gen batch_12 (whole-day snapshots, athlete + PM parent) done: n=250, speak=18.8% ask=7.6%
+04:05 US-004 data done: 13 batches, 2426 states, split train 1961 / val 239 / test 226, 0 dups, 0 group overlap. Deviation: remember/ask/act/look train yes-rate 7.6-9.9% (< 10% target) but >=149 positives each; accepted, noted in REPORT.
+11:28 US-005 done: throughput=0.97 states/s (9.7 question-rows/s; 1.19 in v2) smoke wall=8.2 min (kernel v3, 141 real_test + 50/5/5 placeholder synth), method=official RLCD (noisy-logit PG on proper scoring reward + soft CE, enc LR 2.5e-5/head 1e-4, fp16, grad ckpt, 2xT4 DataParallel, per-type temps fitted on synth_val), notes: trimmed state (questions.trim) at train+eval, Amendment 1 metrics in; zero-shot real_test in kaggle/out_smoke is REAL (speak false-alarm 0.957, ask 0.857); sizing in kaggle/RUN_FULL.md
+11:54 US-006 full run launched: kernel v4, 1961 train, 2 epochs, 95-min budget; poller cap 120 min
+13:10 US-006 done: trained real speak/ask false-alarm 0%/0% (from 96%/86%), synth macro-F1 0.34->0.68; robustness: extra field/renamed ok, shuffled order -0.17. US-008 report written.

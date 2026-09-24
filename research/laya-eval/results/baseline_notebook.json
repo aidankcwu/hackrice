@@ -1,0 +1,285 @@
+{
+ "status": "done",
+ "config": {
+  "mode": "full",
+  "max_train": 0,
+  "epochs": 2,
+  "max_len": 1024,
+  "lr": 2.5e-05,
+  "time_budget_min": 95.0,
+  "state_mode": "trim",
+  "keep_ckpt": true,
+  "head_max_len": 256,
+  "micro_batch": 16,
+  "grad_accum": 4,
+  "eval_batch_states": 8,
+  "patience": 1,
+  "margin_s": 180,
+  "data_parallel": true,
+  "label_smoothing": 0.0,
+  "grad_ckpt": true,
+  "seed": 0
+ },
+ "method": "official RLCD objective (noisy-logit policy gradient on proper scoring reward + soft CE), single-process, DataParallel over available GPUs",
+ "state_transform": "questions.trim (no persona/trends, 4 ticks, 8 today lines)",
+ "env": {
+  "gpus": [
+   "Tesla T4",
+   "Tesla T4"
+  ],
+  "torch": "2.10.0+cu128",
+  "transformers": "5.0.0",
+  "laya_commit": "23a1752"
+ },
+ "sizes": {
+  "synth_train": 1961,
+  "synth_val": 239,
+  "synth_test": 226,
+  "real_test": 141
+ },
+ "train": {
+  "history": [
+   {
+    "epoch": 1,
+    "fraction_of_epoch": 1.0,
+    "train_ce": 0.41821049343411726,
+    "val_ce": 0.3209575698686136,
+    "val_macro_f1": 0.6599109031455622,
+    "temperatures": [
+     0.9639049768447876,
+     1.1019947528839111,
+     1.0773979425430298
+    ],
+    "val_and_ckpt_s": 77.4,
+    "ckpt": "ckpt_ep1"
+   },
+   {
+    "epoch": 2,
+    "fraction_of_epoch": 1.0,
+    "train_ce": 0.2612930462546768,
+    "val_ce": 0.295731113142991,
+    "val_macro_f1": 0.708690630302543,
+    "temperatures": [
+     1.4565763473510742,
+     1.5290483236312866,
+     1.382656216621399
+    ],
+    "val_and_ckpt_s": 77.3,
+    "ckpt": "ckpt_ep2"
+   }
+  ],
+  "rows_seen": 39220,
+  "step_s": 3816.3185811042786,
+  "stop_reason": "epochs completed",
+  "micro_batch": 16,
+  "grad_accum": 4,
+  "data_parallel": true,
+  "epochs_done": 2.0,
+  "best_epoch": 2,
+  "states_per_s": 1.0276919802814632,
+  "rows_per_s": 10.276919802814632,
+  "eval_ckpt": "ckpt_ep2"
+ },
+ "wall": {
+  "install_s": 11.1,
+  "load_s": 16.2,
+  "total_s": 4439.8,
+  "zero_shot_eval_s": 120.5,
+  "train_s": 3980.8,
+  "trained_eval_s": 286.8
+ },
+ "sets": {
+  "real_test": {
+   "n": 141,
+   "questions": {
+    "annotate": {
+     "acc": 0.15602836879432624,
+     "f1_yes": 0.2608695652173913,
+     "auroc": 0.6121031746031746,
+     "false_alarm_rate": 0.9916666666666667,
+     "pred_yes_rate": 0.9929078014184397,
+     "true_yes_rate": 0.14893617021276595,
+     "n_pos": 21
+    },
+    "log_insight": {
+     "acc": 0.03546099290780142,
+     "f1_yes": 0.0684931506849315,
+     "auroc": 0.8764705882352941,
+     "false_alarm_rate": 1.0,
+     "pred_yes_rate": 1.0,
+     "true_yes_rate": 0.03546099290780142,
+     "n_pos": 5
+    },
+    "remember": {
+     "acc": 0.8794326241134752,
+     "f1_yes": 0.0,
+     "auroc": 0.572463768115942,
+     "false_alarm_rate": 0.10144927536231885,
+     "pred_yes_rate": 0.09929078014184398,
+     "true_yes_rate": 0.02127659574468085,
+     "n_pos": 3
+    },
+    "watch": {
+     "acc": 0.46808510638297873,
+     "f1_yes": 0.6231155778894473,
+     "auroc": 0.29545454545454547,
+     "false_alarm_rate": 0.9245283018867925,
+     "pred_yes_rate": 0.7872340425531915,
+     "true_yes_rate": 0.624113475177305,
+     "n_pos": 88
+    },
+    "speak": {
+     "acc": 0.0425531914893617,
+     "f1_yes": null,
+     "auroc": null,
+     "false_alarm_rate": 0.9574468085106383,
+     "pred_yes_rate": 0.9574468085106383,
+     "true_yes_rate": 0.0,
+     "n_pos": 0
+    },
+    "ask": {
+     "acc": 0.14184397163120568,
+     "f1_yes": 0.0,
+     "auroc": 0.021428571428571463,
+     "false_alarm_rate": 0.8571428571428571,
+     "pred_yes_rate": 0.851063829787234,
+     "true_yes_rate": 0.0070921985815602835,
+     "n_pos": 1
+    },
+    "act": {
+     "acc": 0.014184397163120567,
+     "f1_yes": null,
+     "auroc": null,
+     "false_alarm_rate": 0.9858156028368794,
+     "pred_yes_rate": 0.9858156028368794,
+     "true_yes_rate": 0.0,
+     "n_pos": 0
+    },
+    "look": {
+     "acc": 0.9574468085106383,
+     "f1_yes": 0.25,
+     "auroc": 0.3777777777777778,
+     "false_alarm_rate": 0.007407407407407408,
+     "pred_yes_rate": 0.014184397163120567,
+     "true_yes_rate": 0.0425531914893617,
+     "n_pos": 6
+    }
+   },
+   "macro_f1": 0.30061957344794255,
+   "macro_f1_questions": [
+    "annotate",
+    "log_insight",
+    "watch",
+    "look"
+   ],
+   "macro_f1_min_pos": 5,
+   "speak_f1": null,
+   "speak_false_alarm_rate": 0.9574468085106383,
+   "ask_f1": 0.0,
+   "ask_false_alarm_rate": 0.8571428571428571,
+   "ece": 0.20555079787234043,
+   "topic_acc": 0.524822695035461,
+   "urgency_acc": 0.0,
+   "urgency_acc_rounded_expected": 0.0070921985815602835,
+   "eval_s": 46.3
+  },
+  "synth_test": {
+   "n": 226,
+   "questions": {
+    "annotate": {
+     "acc": 0.5619469026548672,
+     "f1_yes": 0.6953846153846154,
+     "auroc": 0.4731847076730235,
+     "false_alarm_rate": 0.8082191780821918,
+     "pred_yes_rate": 0.7610619469026548,
+     "true_yes_rate": 0.6769911504424779,
+     "n_pos": 153
+    },
+    "log_insight": {
+     "acc": 0.40707964601769914,
+     "f1_yes": 0.5533333333333333,
+     "auroc": 0.545413372859025,
+     "false_alarm_rate": 0.9347826086956522,
+     "pred_yes_rate": 0.9380530973451328,
+     "true_yes_rate": 0.3893805309734513,
+     "n_pos": 88
+    },
+    "remember": {
+     "acc": 0.7831858407079646,
+     "f1_yes": 0.14035087719298245,
+     "auroc": 0.5852497096399535,
+     "false_alarm_rate": 0.15609756097560976,
+     "pred_yes_rate": 0.1592920353982301,
+     "true_yes_rate": 0.09292035398230089,
+     "n_pos": 21
+    },
+    "watch": {
+     "acc": 0.5486725663716814,
+     "f1_yes": 0.5819672131147541,
+     "auroc": 0.5321667729591838,
+     "false_alarm_rate": 0.45918367346938777,
+     "pred_yes_rate": 0.5132743362831859,
+     "true_yes_rate": 0.5663716814159292,
+     "n_pos": 128
+    },
+    "speak": {
+     "acc": 0.41150442477876104,
+     "f1_yes": 0.357487922705314,
+     "auroc": 0.5246323529411765,
+     "false_alarm_rate": 0.6705882352941176,
+     "pred_yes_rate": 0.668141592920354,
+     "true_yes_rate": 0.24778761061946902,
+     "n_pos": 56
+    },
+    "ask": {
+     "acc": 0.7035398230088495,
+     "f1_yes": 0.1518987341772152,
+     "auroc": 0.5050747863247864,
+     "false_alarm_rate": 0.2644230769230769,
+     "pred_yes_rate": 0.26991150442477874,
+     "true_yes_rate": 0.07964601769911504,
+     "n_pos": 18
+    },
+    "act": {
+     "acc": 0.26991150442477874,
+     "f1_yes": 0.1791044776119403,
+     "auroc": 0.6531909483854563,
+     "false_alarm_rate": 0.7922705314009661,
+     "pred_yes_rate": 0.8053097345132744,
+     "true_yes_rate": 0.084070796460177,
+     "n_pos": 19
+    },
+    "look": {
+     "acc": 0.9070796460176991,
+     "f1_yes": 0.08695652173913043,
+     "auroc": 0.43228602383531955,
+     "false_alarm_rate": 0.04225352112676056,
+     "pred_yes_rate": 0.04424778761061947,
+     "true_yes_rate": 0.05752212389380531,
+     "n_pos": 13
+    }
+   },
+   "macro_f1": 0.34331046190741066,
+   "macro_f1_questions": [
+    "annotate",
+    "log_insight",
+    "remember",
+    "watch",
+    "speak",
+    "ask",
+    "act",
+    "look"
+   ],
+   "macro_f1_min_pos": 1,
+   "speak_f1": 0.357487922705314,
+   "speak_false_alarm_rate": 0.6705882352941176,
+   "ask_f1": 0.1518987341772152,
+   "ask_false_alarm_rate": 0.2644230769230769,
+   "ece": 0.04266421460176992,
+   "topic_acc": 0.5973451327433629,
+   "urgency_acc": 0.17256637168141592,
+   "urgency_acc_rounded_expected": 0.17256637168141592,
+   "eval_s": 74.2
+  }
+ }
+}

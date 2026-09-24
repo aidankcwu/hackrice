@@ -1,0 +1,221 @@
+{
+ "laya": {
+  "checkpoint": "convaiinnovations/laya subfolder typed-decisions",
+  "questions_per_call": 10,
+  "note": "Laya tokenizes the state once, builds one (state + question) sequence per question, and runs the 10 rows as one batch per system_one call; timings are per call (all 10 questions). p50/p90 over the last n real states after 3 warm-up calls. Docker backend running.",
+  "state_tokens": {
+   "n_states": 141,
+   "full": {
+    "median": 1174,
+    "max": 1272,
+    "min": 854
+   },
+   "trimmed": {
+    "median": 434,
+    "max": 553,
+    "min": 288
+   }
+  },
+  "mps": {
+   "load_s": 2.86,
+   "torch": "2.14.0",
+   "runs": {
+    "trimmed@512": {
+     "n": 15,
+     "p50_ms": 1497.8,
+     "p90_ms": 1514.9,
+     "min_ms": 1480.2,
+     "max_ms": 1529.5
+    },
+    "trimmed@1024": {
+     "n": 15,
+     "p50_ms": 1499.7,
+     "p90_ms": 1525.8,
+     "min_ms": 1476.5,
+     "max_ms": 1527.8
+    },
+    "trimmed@2048": {
+     "n": 15,
+     "p50_ms": 1502.9,
+     "p90_ms": 1534.0,
+     "min_ms": 1484.8,
+     "max_ms": 1547.4
+    },
+    "full@512": {
+     "n": 15,
+     "p50_ms": 1537.9,
+     "p90_ms": 1552.3,
+     "min_ms": 1534.1,
+     "max_ms": 1553.7
+    },
+    "full@1024": {
+     "n": 15,
+     "p50_ms": 3248.4,
+     "p90_ms": 3281.3,
+     "min_ms": 3228.3,
+     "max_ms": 3286.2
+    },
+    "full@2048": {
+     "n": 15,
+     "p50_ms": 4216.4,
+     "p90_ms": 4248.5,
+     "min_ms": 4149.6,
+     "max_ms": 4254.5
+    }
+   }
+  },
+  "cpu": {
+   "load_s": 2.6,
+   "torch": "2.14.0",
+   "runs": {
+    "trimmed@512": {
+     "n": 8,
+     "p50_ms": 3535.8,
+     "p90_ms": 3589.7,
+     "min_ms": 3499.8,
+     "max_ms": 3733.0
+    },
+    "trimmed@1024": {
+     "n": 8,
+     "p50_ms": 3432.2,
+     "p90_ms": 3459.0,
+     "min_ms": 3316.8,
+     "max_ms": 3547.9
+    },
+    "trimmed@2048": {
+     "n": 8,
+     "p50_ms": 3338.4,
+     "p90_ms": 3370.4,
+     "min_ms": 3290.9,
+     "max_ms": 3392.4
+    },
+    "full@512": {
+     "n": 8,
+     "p50_ms": 3510.9,
+     "p90_ms": 3551.7,
+     "min_ms": 3487.9,
+     "max_ms": 3576.5
+    },
+    "full@1024": {
+     "n": 8,
+     "p50_ms": 8193.5,
+     "p90_ms": 8271.8,
+     "min_ms": 8018.8,
+     "max_ms": 8696.0
+    },
+    "full@2048": {
+     "n": 8,
+     "p50_ms": 11043.8,
+     "p90_ms": 11687.6,
+     "min_ms": 10734.4,
+     "max_ms": 12196.1
+    }
+   }
+  },
+  "mps_fewer_questions_trimmed@512": {
+   "speak+ask (2 rows)": {
+    "n": 15,
+    "p50_ms": 325.0,
+    "p90_ms": 395.3
+   },
+   "speak (1 row)": {
+    "n": 15,
+    "p50_ms": 163.1,
+    "p90_ms": 169.3
+   }
+  }
+ },
+ "pipeline_reference": {
+  "source": "session DB snapshot tonight.db (decisions table, read-only) and `docker logs brian-backend-aidan-1` (log times are UTC; session ~02:07-02:10 CDT). Nothing in the backend was modified.",
+  "decision_paths": {
+   "(null)": 2,
+   "clerk": 10
+  },
+  "clerk_decision_ms": {
+   "n": 10,
+   "median_ms": 1971.5,
+   "min_ms": 1286,
+   "max_ms": 3283,
+   "p90_ms": 2600,
+   "model": "gpt-5.4-mini",
+   "what": "decisions.latency_ms where path='clerk'"
+  },
+  "t1_calls_from_log_ms": {
+   "n": 10,
+   "median_ms": 1971.5,
+   "min_ms": 1286,
+   "max_ms": 3283,
+   "p90_ms": 2600,
+   "what": "pipeline.reasoner.client T1 lines (same calls as the clerk decisions)"
+  },
+  "voice_turn_ms": {
+   "n": 5,
+   "median_ms": 1781,
+   "min_ms": 973,
+   "max_ms": 2777,
+   "p90_ms": 1931,
+   "what": "conversation agent turn (gpt-5.4-mini voice call)"
+  },
+  "tts_ms": {
+   "n": 5,
+   "median_ms": 232,
+   "min_ms": 169,
+   "max_ms": 815,
+   "p90_ms": 319,
+   "what": "ElevenLabs synthesis, speech mode=elevenlabs ms="
+  },
+  "t0_vlm_gemini": {
+   "reports": [
+    {
+     "ticks": 59,
+     "p50_ms": 1254,
+     "p90_ms": 1427
+    },
+    {
+     "ticks": 119,
+     "p50_ms": 1257,
+     "p90_ms": 1436
+    }
+   ],
+   "what": "Gemini Flash-Lite T0 tagging, cumulative p50/p90 per report line"
+  },
+  "wearer_trigger_to_audio_ms": {
+   "n": 4,
+   "median_ms": 3788.0,
+   "min_ms": 1297,
+   "max_ms": 5006,
+   "p90_ms": 5006,
+   "events": [
+    {
+     "at": "07:07:27",
+     "total_ms": 4563,
+     "voice_ms": 1139,
+     "tts_ms": 815,
+     "waited_for_decision": true
+    },
+    {
+     "at": "07:07:42",
+     "total_ms": 3013,
+     "voice_ms": 2777,
+     "tts_ms": 232,
+     "waited_for_decision": false
+    },
+    {
+     "at": "07:09:14",
+     "total_ms": 5006,
+     "voice_ms": 1781,
+     "tts_ms": 228,
+     "waited_for_decision": true
+    },
+    {
+     "at": "07:10:12",
+     "total_ms": 1297,
+     "voice_ms": 973,
+     "tts_ms": 319,
+     "waited_for_decision": false
+    }
+   ],
+   "what": "per proactive utterance: start of the T1 decision the voice call waited on (one that ended <= 0.5 s before it began), else the voice call start -> ElevenLabs mp3 ready. Estimate from log timestamps. Excludes phone playback and Bluetooth. waited_for_decision = the voice call started only after the decision."
+  }
+ }
+}
