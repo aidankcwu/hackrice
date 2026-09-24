@@ -1,0 +1,8 @@
+// Committed. Non-secret build settings, plus an optional local override.
+//
+// The Meta client token is deliberately NOT in git: this repo is public.
+// Put it in Local.xcconfig (gitignored, see Local.xcconfig.example).
+// `#include?` is the optional form -- a missing Local.xcconfig is not an error,
+// so a fresh clone still generates and builds. The app then has an empty
+// ClientToken and Meta registration fails, which is the visible, correct symptom.
+#include? "Local.xcconfig"

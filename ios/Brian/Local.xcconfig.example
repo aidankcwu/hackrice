@@ -1,0 +1,3 @@
+// Copy to Local.xcconfig and fill in. Local.xcconfig is gitignored.
+// Value comes from the Meta Wearables Developer Center (TESTFLIGHT.md A1).
+CLIENT_TOKEN = AR|<meta-app-id>|<client-token-hex>
