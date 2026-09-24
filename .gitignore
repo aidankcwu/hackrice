@@ -16,3 +16,4 @@ runs/
 
 # Meta client token: this repo is public (ios/Brian/Local.xcconfig.example)
 ios/Brian/Local.xcconfig
+ralph/*/logs/

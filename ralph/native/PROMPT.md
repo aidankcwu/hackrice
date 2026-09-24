@@ -38,3 +38,23 @@ Worktree root: the current directory (branch `app/native`). Do ONE story, then s
 7. If every story passes, print exactly <promise>COMPLETE</promise>. Otherwise just end.
 If blocked by something outside ios/Brian, write it under "BLOCKED" in progress.txt and end
 without marking the story passed.
+
+ADDED 15:20: main moves while you work (a Brian -> Bryan spelling pass and Stage B config
+landed in ios/Brian). At the START of every iteration run `git fetch -q origin && git merge
+--no-edit origin/main`. If it conflicts, resolve keeping both intents (the spelling "Bryan"
+wins in strings and comments; your feature code wins in logic), make sure it builds, commit
+the merge, push, then continue with the story.
+
+ORCHESTRATOR REVIEW 15:25 (fold into N-006, or earlier if you touch ConnectView anyway):
+- "Use the link on your clipboard" reads as plain text; make it an obvious button (.glass)
+  with a clipboard symbol.
+- "Start watching" must be disabled (dimmed) until the invite link is reachable and the
+  glasses are at least registered; a tap while disabled is impossible, so the rows above
+  already say what is missing.
+- docs/APP_WEB_NOTES.md is now on origin/main (merged): use its URL forms in N-004.
+
+ORCHESTRATOR REVIEW 15:30 (must be fixed in N-006 if not before): in N-004-calendar.png and
+N-004-analysis.png the web content runs underneath the native tab bar (the last rows of the
+page are hidden behind it). The WKWebView must respect the tab bar: keep its bottom edge above
+the tab bar, or add the tab bar height plus the bottom safe area as a bottom content inset,
+so the page's last row is fully visible when scrolled to the end. Re-take both screenshots.
