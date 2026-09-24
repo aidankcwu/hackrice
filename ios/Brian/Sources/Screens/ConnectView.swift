@@ -55,7 +55,13 @@ struct ConnectView: View {
         }
         // Presentations do not inherit RootView's tint; ink, never system blue.
         .tint(Brian.ink)
-        .task { await appState.checkClipboard() }
+        .task {
+            if appState.linkChangeRequested {
+                isEditingLink = true
+                appState.linkChangeRequested = false
+            }
+            await appState.checkClipboard()
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await appState.checkClipboard() } }
         }

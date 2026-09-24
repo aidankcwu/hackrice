@@ -42,6 +42,8 @@ final class AppState {
     }
     /// The status pill and Settings request Connect; RootView owns the presentation.
     var connectRequested = false
+    /// Settings' "Change": Connect opens with the paste field showing, then clears this.
+    var linkChangeRequested = false
     /// A link test is in flight (Connect's invite row reads "Checking…").
     var checkingLink = false
     /// DAT registration is running (Connect's glasses row reads "Registering…").
@@ -49,7 +51,7 @@ final class AppState {
     /// The clipboard probably holds a link; Connect offers "Use the link on your clipboard".
     /// Set without reading the clipboard, so no paste prompt appears until the tap.
     var clipboardOffer = false
-    /// DEBUG corpus capture is opt-in and persisted across relaunches.
+    /// Corpus capture (Settings, every build) is opt-in, off by default, persisted across relaunches.
     var recordCorpusEnabled: Bool {
         didSet {
             UserDefaults.standard.set(recordCorpusEnabled, forKey: Self.recordCorpusKey)
@@ -354,6 +356,12 @@ final class AppState {
     }
 
     func requestConnect() {
+        connectRequested = true
+    }
+
+    /// Settings has no link field of its own: "Change" opens Connect's paste field.
+    func requestLinkChange() {
+        linkChangeRequested = true
         connectRequested = true
     }
 

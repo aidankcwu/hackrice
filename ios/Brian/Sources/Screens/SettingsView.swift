@@ -1,13 +1,11 @@
+// APP_PRD.md "Settings": invite link (label + Change), Connect, voice, permissions, record
+// corpus, version. The link is only ever pasted in Connect; "Change" opens it there.
 import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @AppStorage("speakThroughGlasses") private var speakThroughGlasses = true
-    // Redacted-label state is view-local: once a link parses, AppState clears the
-    // paste box (never round-trips the token into it) and this flag decides which of
-    // the two rows below is shown. Demo mode is unchanged — it always shows the field.
-    @State private var isEditingServer = false
 #if DEBUG
     @AppStorage("useMockGlasses") private var useMockGlasses = false
 #endif
@@ -15,51 +13,84 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Server") {
-                    if let endpointLabel = appState.endpointLabel, !appState.demo, !isEditingServer {
-                        HStack {
-                            Text(endpointLabel)
-                                .foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            Button("Change") { isEditingServer = true }
-                        }
-                    } else {
-                        TextField("Server URL", text: Bindable(appState).serverURL)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .keyboardType(.URL)
-                        Button("Test") {
-                            Task {
-                                await appState.applyServerURL(appState.serverURL)
-                                await appState.testServer()
-                                if appState.endpointLabel != nil { isEditingServer = false }
+                Section("Invite link") {
+                    HStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(linkLabel)
+                                .font(BrianType.body)
+                                .foregroundStyle(appState.link == .notSet ? Brian.muted : Brian.text)
+                            if case .unreachable(let sentence) = appState.link {
+                                Text(sentence)
+                                    .font(BrianType.secondary)
+                                    .foregroundStyle(Brian.cost)
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Button(appState.link == .notSet ? "Paste link" : "Change") {
+                            appState.requestLinkChange()
+                        }
+                        .buttonStyle(.glass)
                     }
-                }
-
-                Section("Voice") {
-                    Toggle("Speak through the glasses", isOn: $speakThroughGlasses)
+                    .frame(minHeight: 44)
                 }
 
                 Section {
-                    Button("Connect") {
+                    Button {
                         appState.requestConnect()
-                        dismiss()
+                    } label: {
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            let status = appState.connectionStatus(now: context.date)
+                            LabeledContent {
+                                HStack(spacing: 8) {
+                                    Circle()
+                                        .fill(status.level.color)
+                                        .frame(width: 8, height: 8)
+                                        .accessibilityHidden(true)
+                                    Text(status.text)
+                                        .font(BrianType.secondary.monospacedDigit())
+                                        .foregroundStyle(Brian.muted)
+                                }
+                            } label: {
+                                Text("Connect").foregroundStyle(Brian.ink)
+                            }
+                        }
                     }
+                    .frame(minHeight: 44)
+                }
+
+                Section {
+                    Toggle("Speak through the glasses", isOn: $speakThroughGlasses)
+                        .frame(minHeight: 44)
+                } header: {
+                    Text("Voice")
+                } footer: {
+                    Text("Off, or with the glasses away, Bryan's lines arrive as notifications instead.")
+                }
+
+                Section {
+                    DisclosureGroup("Permissions") {
+                        ForEach(PermissionRow.Kind.allCases, id: \.self) { PermissionRow(kind: $0) }
+                    }
+                    .frame(minHeight: 44)
+                }
+
+                Section {
+                    Toggle("Record corpus", isOn: Bindable(appState).recordCorpusEnabled)
+                        .frame(minHeight: 44)
+                } footer: {
+                    Text("Saves one frame a second to this phone while watching, for tuning. Leave off unless asked.")
                 }
 
 #if DEBUG
                 Section("Debug") {
-                    Text(debugStatusLine).foregroundStyle(.secondary)
-                    Toggle("Record corpus", isOn: Bindable(appState).recordCorpusEnabled)
-                    Button("Say a test line") { Task { await appState.sayTestLine() } }
+                    Text(appState.linkStatusLine).foregroundStyle(Brian.muted)
                     Toggle("Use mock glasses", isOn: $useMockGlasses)
                 }
 #endif
 
                 Section("About") {
-                    LabeledContent("Version", value: version)
+                    LabeledContent("Version", value: info("CFBundleShortVersionString"))
+                    LabeledContent("Build", value: info("CFBundleVersion"))
                 }
             }
             .listStyle(.insetGrouped)
@@ -70,17 +101,20 @@ struct SettingsView: View {
                 }
             }
         }
+        // Presentations do not inherit RootView's tint; ink, never system blue.
+        .tint(Brian.ink)
     }
 
-#if DEBUG
-    private var debugStatusLine: String {
-        appState.linkStatusLine
+    /// Token-free: the reachable label, else the applied endpoint, else "Not set".
+    private var linkLabel: String {
+        switch appState.link {
+        case .reachable(let label): label
+        case .unreachable: appState.endpointLabel ?? "Not set"
+        case .notSet: "Not set"
+        }
     }
-#endif
 
-    private var version: String {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
-        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
-        return build.map { "\(version) (\($0))" } ?? version
+    private func info(_ key: String) -> String {
+        Bundle.main.object(forInfoDictionaryKey: key) as? String ?? "—"
     }
 }
