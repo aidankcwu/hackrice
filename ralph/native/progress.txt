@@ -1,0 +1,28 @@
+# Ralph progress (app/native)
+Started: Thu Sep 24 14:52:26 CDT 2026
+---
+
+## 2026-09-24 · N-001 passed (connection state model)
+- New ios/Brian/Sources/App/ConnectionStatus.swift: ConnectionLevel (grey/amber/green/red),
+  ConnectionStatus(level,text), StreamStats, ConnectionInputs, and the pure
+  ConnectionStatus.derive. Priority: token refused ("Invalid invite link") > link not set
+  ("Not connected") > unreachable ("Server unreachable") > glasses unavailable/notRegistered
+  ("Glasses off") > not watching (grey "Not watching") > socket down (amber "Reconnecting…")
+  > no frame yet (amber "Starting…") > no frame for >10 s (amber "No frames for N s")
+  > green "Watching · N min".
+- AppState: `connectionStatus` / `connectionStatus(now:)`, `streamStats` / `streamStats(now:)`.
+  Views showing minutes or "last frame N s ago" must wrap in TimelineView(.periodic(from:.now, by:1))
+  and call the `(now:)` variants. framesSent is per session (baseline taken in startWatching;
+  sender.sentCount is cumulative). serverAcknowledged = socket up && >=1 frame delivered this
+  session (the server sends no per-frame ack). Token refusal via API shows as
+  LinkState.unreachable(APIError.tokenRejected.sentence); `LinkState.isTokenRejected` detects it.
+- Demo: AppState.demoStats fakes 1 frame / 1.5 s, ack true, AppState.demoSpokenLine
+  ("Coffee this late may cost you sleep tonight.", from the decisions fixture).
+- Link files, additive only (header comments say so): MacLink.lastSpokenText/lastSpokenAt set in
+  handle() for speak/audio; LinkGlue read-only framesSent/lastFrameAt/lastSpokenText/lastSpokenAt.
+- Tests: Tests/ConnectionStatusTests.swift; 43 tests pass on iPhone sim 6C6A1567-….
+- NOTE: docs/APP_PRD.md is NOT on app/native; read it with `git show e8483bd:docs/APP_PRD.md` (on main).
+- NOTE: this iteration's `git push` was refused by the tool permission layer; commits are local.
+  Next iteration: try `git push -u origin app/native` first.
+- Next: N-002 needs a demo flag that forces glasses off (e.g. `-glassesOff`) for the red screenshot;
+  set `glasses = .unavailable` after the demo branch in AppState.init.
