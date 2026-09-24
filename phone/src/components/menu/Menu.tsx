@@ -1,9 +1,10 @@
 "use client";
 
-import { LayoutGrid, UserRound, X, type LucideIcon } from "lucide-react";
+import { Compass, LayoutGrid, UserRound, X, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, type MouseEvent } from "react";
 import { Button, Card, ICON_SIZES, MEANING_ICONS, STROKE, type Tint } from "@/components/ui";
-import { SCREENS, type ScreenId } from "@/lib/screens";
+import { isEmbedded } from "@/lib/embed";
+import { NATIVE_TABS, SCREENS, type ScreenId } from "@/lib/screens";
 
 export interface MenuProps {
   onClose: () => void;
@@ -17,10 +18,13 @@ interface MenuItem {
   icon: LucideIcon;
   line: string;
   chip: string;
+  /** Only when embedded: stands in for the top pill's button, which embed mode hides. */
+  embedOnly?: boolean;
 }
 
-/** The menu's cards, in order. Library and Account use icons outside MEANING_ICONS so no meaning is shared. */
+/** The menu's cards, in order. Find, Library and Account use icons outside MEANING_ICONS so no meaning is shared. */
 const ITEMS: readonly MenuItem[] = [
+  { screen: "find", title: "Find my protocol", tint: "sage", icon: Compass, line: "Six questions, one template", chip: "6 questions", embedOnly: true },
   { screen: "protocol", title: "My protocol", tint: "sage", icon: MEANING_ICONS.protocol, line: "Today's windows and doses", chip: "Today" },
   { screen: "library", title: "Protocol library", tint: "sand", icon: LayoutGrid, line: "Blueprint, Sleep first, New parent, and more", chip: "6 templates" },
   { screen: "treatments", title: "Treatments", tint: "slate", icon: MEANING_ICONS.pill, line: "Peptides, GLP-1s, supplements", chip: "24 items" },
@@ -32,6 +36,14 @@ const ITEMS: readonly MenuItem[] = [
   { screen: "claims", title: "What we don’t claim", tint: "stone", icon: MEANING_ICONS.mind, line: "Nine things the app will not say", chip: "Honest" },
   { screen: "settings", title: "Account", tint: "bluegrey", icon: UserRound, line: "Backend, token, appearance", chip: "Settings" },
 ];
+
+/**
+ * The cards to show. Embedded in the native app, the native tabs (Today,
+ * Protocol) are not offered, and Find takes the place of the hidden top pill.
+ */
+export function menuItems(embedded: boolean): readonly MenuItem[] {
+  return ITEMS.filter((item) => (embedded ? !NATIVE_TABS.includes(item.screen) : !item.embedOnly));
+}
 
 /**
  * The menu: a full-screen overlay on the page colour, opened from the top
@@ -88,7 +100,7 @@ export function Menu({ onClose }: MenuProps) {
         </div>
 
         <div onClick={onCardClick} className="mt-section grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
-          {ITEMS.map((item) => (
+          {menuItems(isEmbedded()).map((item) => (
             <Card
               key={item.screen}
               href={SCREENS[item.screen].href}

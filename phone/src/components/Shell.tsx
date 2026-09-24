@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Menu } from "@/components/menu/Menu";
 import { Button, ICON_SIZES, STROKE, TabBar, TopBar } from "@/components/ui";
-import { SCREENS, TABS, type ScreenId } from "@/lib/screens";
+import { isEmbedded } from "@/lib/embed";
+import { backFallback, SCREENS, TABS, type ScreenId } from "@/lib/screens";
 
 /**
  * A tab's content ends this far above the bottom edge: the tab bar (64), its
@@ -134,15 +135,14 @@ function PushedBar({ screen, title, action }: { screen: ScreenId; title: string;
   );
 }
 
-/** Back to where the detail was pushed from; with no history, to the tab it belongs to (Today for a menu screen). */
+/** Back to where the detail was pushed from; with no history, to the tab it belongs to (`backFallback`). */
 function BackButton({ screen }: { screen: ScreenId }) {
   const router = useRouter();
-  const home = TABS.includes(screen) ? SCREENS[screen].href : SCREENS.today.href;
   return (
     <button
       type="button"
       aria-label="Back"
-      onClick={() => (window.history.length > 1 ? router.back() : router.push(home))}
+      onClick={() => (window.history.length > 1 ? router.back() : router.push(backFallback(screen, isEmbedded())))}
       className="grid size-11 shrink-0 place-items-center rounded-full text-ink transition-colors duration-120 active:bg-surface-2"
     >
       <ChevronLeft size={24} strokeWidth={STROKE} aria-hidden="true" />
