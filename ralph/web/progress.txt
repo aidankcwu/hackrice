@@ -22,3 +22,16 @@ Started: Thu Sep 24 14:48:15 CDT 2026
   `TURBOPACK_ROOT=/ npm run build`, `TURBOPACK_ROOT=/ NEXT_PUBLIC_FIXTURES=1 npx next dev -p 3100`.
 - Also: docs/APP_PRD.md is not on app/web; read it with `git show origin/main:docs/APP_PRD.md`.
 - Seen, not mine: Analysis week chart is clipped on the left at 390 px with or without embed.
+
+## 2026-09-24 — W-002 Token handoff on any route (passes)
+- No product change was needed. src/proxy.ts's matcher covers every route (not just "/"), and
+  TokenCapture sits in the root layout, so accessToken() stores and scrubs ?token= on every page.
+  stripTokenParam deletes only `token`, so embed=1 survives.
+- Added phone/src/proxy.test.ts (cookie set at /, /calendar, /analysis; cookie-only later nav
+  passes; wrong token 401; strip keeps embed=1). Needed phone/vitest.config.ts to give vitest
+  tsconfig's `@/` alias (proxy.ts imports @/lib/runtime); tests may now import `@/…`.
+- Live check: `TURBOPACK_ROOT=/ ACCESS_TOKEN=T NEXT_PUBLIC_FIXTURES=1 npx next dev -p 3100`;
+  /calendar with no token -> 401; headless Chrome on /calendar?token=T&embed=1 and
+  /analysis?token=T&embed=1 ends at ?embed=1 with data-embed set, no tab bar, HttpOnly
+  brian_app_token=T cookie, and a reload still gets in. Cookie path is basePath ("/" in dev).
+- Next: W-003 (menu in embed mode: drop Today/Protocol, add a Find card; see W-001 notes).
