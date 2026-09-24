@@ -3,7 +3,16 @@ import SwiftUI
 struct TodayView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var askConsent = false
+
+    /// Side by side at normal sizes; stacked at accessibility sizes, where a button or chip
+    /// beside a sentence squeezes it to one word per line.
+    private func row(spacing: CGFloat, alignment: VerticalAlignment = .center) -> AnyLayout {
+        typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(alignment: alignment, spacing: spacing))
+    }
 
     var body: some View {
         ScrollView {
@@ -45,7 +54,8 @@ struct TodayView: View {
     /// Connection problems live in the status pill; this is everything else that failed
     /// (a refresh, a start): one sentence of cause, one button of fix.
     private func errorRow(_ error: String) -> some View {
-        HStack(spacing: 16) {
+        let layout = row(spacing: 16)
+        return layout {
             Text(error)
                 .font(BrianType.secondary)
                 .foregroundStyle(Brian.cost)
@@ -63,7 +73,8 @@ struct TodayView: View {
                 .minimumScaleFactor(0.65)
                 .lineLimit(1)
 
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+            let label = row(spacing: 8, alignment: .firstTextBaseline)
+            label {
                 Text(Hours.word(appState.healthspan?.hoursToday ?? 0))
                     .font(BrianType.secondary)
                     .foregroundStyle(Brian.muted)

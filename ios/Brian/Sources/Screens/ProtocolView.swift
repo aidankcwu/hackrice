@@ -78,7 +78,7 @@ struct ProtocolView: View {
             if let seen = item.seenAt { return "Seen \(Date(timeIntervalSince1970: seen).formatted(date: .omitted, time: .shortened))" }
             return "Seen"
         case "missed": return "Missed"
-        case "done": return "Done (you)"
+        case "done": return "Marked done"
         default: return "Waiting"
         }
     }

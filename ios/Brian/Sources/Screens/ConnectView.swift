@@ -198,9 +198,15 @@ private struct ConnectRowView<Action: View>: View {
     @ViewBuilder var action: Action
     /// Puts the dot on the middle of the state line's first line at any text size.
     @ScaledMetric(relativeTo: .subheadline) private var dotInset: CGFloat = 6
+    @ScaledMetric(relativeTo: .subheadline) private var dotSize: CGFloat = 8
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        HStack(spacing: 16) {
+        // At accessibility sizes the button goes under the text, or "Change" breaks mid-word.
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(spacing: 16))
+        layout {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(BrianType.body)
@@ -208,7 +214,7 @@ private struct ConnectRowView<Action: View>: View {
                 HStack(alignment: .top, spacing: 8) {
                     Circle()
                         .fill(row.level.color)
-                        .frame(width: 8, height: 8)
+                        .frame(width: dotSize, height: dotSize)
                         .padding(.top, dotInset)
                         .accessibilityHidden(true)
                     Text(row.text)

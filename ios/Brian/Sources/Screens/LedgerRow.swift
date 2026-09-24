@@ -31,9 +31,15 @@ struct LedgerEntry: Identifiable {
 
 struct LedgerRow: View {
     let entry: LedgerEntry
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        HStack(spacing: 8) {
+        // At accessibility sizes the time and the outcome take their own lines, so the title
+        // keeps the width instead of wrapping a word per line.
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+            : AnyLayout(HStackLayout(spacing: 8))
+        layout {
             Text(entry.date, format: .dateTime.hour().minute())
                 .font(BrianType.secondary.monospacedDigit())
                 .foregroundStyle(Brian.muted)
@@ -41,16 +47,20 @@ struct LedgerRow: View {
                 .fixedSize(horizontal: true, vertical: false)
                 .frame(minWidth: Space.timeColumn, alignment: .leading)
 
-            Image(systemName: BrianSymbol.family(entry.kind))
-                .font(.system(size: 18))
-                .foregroundStyle(Brian.muted)
-                .frame(width: 18)
-                .accessibilityHidden(true)
+            HStack(spacing: 8) {
+                Image(systemName: BrianSymbol.family(entry.kind))
+                    .font(.system(size: 18))
+                    .foregroundStyle(Brian.muted)
+                    .frame(width: 18)
+                    .padding(.trailing, 8)   // symbol 18 · 16 · title, per the design skill
+                    .accessibilityHidden(true)
 
-            Text(entry.label)
-                .font(BrianType.body)
-                .foregroundStyle(entry.outcome == .heldBack ? Brian.muted : Brian.text)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                // Episode labels arrive lower case ("meal, rice bowl"); the ledger is sentence case.
+                Text(entry.label.prefix(1).uppercased() + entry.label.dropFirst())
+                    .font(BrianType.body)
+                    .foregroundStyle(entry.outcome == .heldBack ? Brian.muted : Brian.text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             if let outcome = entry.outcome {
                 HStack(spacing: 4) {
