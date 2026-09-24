@@ -1,11 +1,17 @@
 /**
  * The backend client. Nothing else in the app calls `fetch`.
  *
- *   NEXT_PUBLIC_API_BASE    backend origin, default http://localhost:8010
- *   NEXT_PUBLIC_API_TOKEN   sent as `Authorization: Bearer <token>` when set
+ *   NEXT_PUBLIC_API_BASE    backend origin; unset, it is derived at runtime from the
+ *                           page's URL (`/t/NAME/app/…` → same origin + `/t/NAME`),
+ *                           else http://localhost:8010 (src/lib/runtime.ts)
+ *   NEXT_PUBLIC_API_TOKEN   dev only: the bearer token when no `?token=` was opened
  *   NEXT_PUBLIC_FIXTURES=1  serve phone/fixtures/*.json instead of the network
+ *
+ * The token (from `?token=` on the page, kept per tester in localStorage) rides
+ * on every request as `Authorization: Bearer <token>`.
  */
 import { fixtureUnreachable, loadFixture, writeFixture } from "./fixtures";
+import { apiBase, ensureAccessToken } from "./runtime";
 import type {
   Decision,
   Episode,
@@ -19,8 +25,6 @@ import type {
   Status,
 } from "./types";
 
-export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8010").replace(/\/+$/, "");
-const API_TOKEN = process.env.NEXT_PUBLIC_API_TOKEN || "";
 export const FIXTURES = process.env.NEXT_PUBLIC_FIXTURES === "1";
 
 /** IOS_SPEC "Data layer": 15 s, then the request counts as failed. */
@@ -46,11 +50,12 @@ type Method = "GET" | "POST" | "PUT" | "DELETE";
 /** One network round trip. `cache: "no-store"` keeps every answer, frames included, off the disk. */
 async function send(path: string, method: Method, accept: string, body?: unknown): Promise<Response> {
   const headers: Record<string, string> = { accept };
-  if (API_TOKEN) headers.authorization = `Bearer ${API_TOKEN}`;
+  const token = await ensureAccessToken();
+  if (token) headers.authorization = `Bearer ${token}`;
   if (body !== undefined) headers["content-type"] = "application/json";
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, {
+    response = await fetch(`${apiBase()}${path}`, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),

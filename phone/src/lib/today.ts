@@ -3,7 +3,8 @@
  * decides nothing about health: every number and word here is the backend's,
  * rounded, signed, or named per `brian-ios-design` and the IOS_SPEC vocabulary.
  */
-import { API_BASE, ApiError, FIXTURES } from "./api";
+import { ApiError, FIXTURES } from "./api";
+import { apiBase, isHosted } from "./runtime";
 import type { Day } from "./month/types";
 import { dayKey, type TestStore } from "./tests";
 import type { Decision, Episode, Healthspan, Reported, Session, Status } from "./types";
@@ -92,10 +93,11 @@ export function glassesConnected(status: Status): boolean {
 
 /** "10.0.0.5" for `http://10.0.0.5:8010`: the host the phone is talking to. */
 export function backendHost(): string {
+  const base = apiBase();
   try {
-    return new URL(API_BASE).hostname;
+    return new URL(base).hostname;
   } catch {
-    return API_BASE;
+    return base;
   }
 }
 
@@ -108,8 +110,14 @@ export function watchedMinutes(session: Session, status: Status | null): number 
 
 /** One sentence of cause, one of fix. The button beside it is always "Try again". */
 export function errorSentence(error: ApiError): string {
-  if (error.status === null) return "Backend unreachable. Check that the Mac and phone share Wi‑Fi.";
-  if (error.status === 401 || error.status === 403) return "Backend refused this phone. Check the API token.";
+  // Hosted (`/t/NAME/app`): there is no Mac to check, only the link and the network.
+  const hosted = isHosted();
+  if (error.status === null) {
+    return hosted ? "Backend unreachable. Check this phone's connection." : "Backend unreachable. Check that the Mac and phone share Wi‑Fi.";
+  }
+  if (error.status === 401 || error.status === 403) {
+    return hosted ? "Backend refused this phone. Open your access link again." : "Backend refused this phone. Check the API token.";
+  }
   return `Backend error ${error.status}. Restart the backend on the Mac.`;
 }
 

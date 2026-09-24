@@ -1,13 +1,21 @@
 "use client";
 
-import { useId, type ReactNode } from "react";
+import { useId, useSyncExternalStore, type ReactNode } from "react";
 import { SwitchRow } from "@/components/concierge/SwitchRow";
 import { Field, InsetList, ListRow } from "@/components/ui";
-import { API_BASE } from "@/lib/api";
+import { accessToken, apiBase } from "@/lib/runtime";
 import { VOICE_KEY, WIND_DOWN_DEFAULT, WIND_DOWN_KEY, useSetting } from "@/lib/settings";
 
-/** Whether a bearer token rides on every request (`NEXT_PUBLIC_API_TOKEN`). The token itself never shows. */
-const TOKEN_SET = Boolean(process.env.NEXT_PUBLIC_API_TOKEN);
+/**
+ * The backend address and whether a bearer token rides on every request, both
+ * resolved in the browser (src/lib/runtime.ts: a hosted page derives them from
+ * its URL). The prerendered HTML shows the build's defaults; the client swaps
+ * in the real values without a hydration mismatch. The token itself never shows.
+ */
+const noSubscribe = () => () => {};
+const serverBase = () => apiBase();
+const serverTokenSet = () => Boolean(process.env.NEXT_PUBLIC_API_TOKEN);
+const clientTokenSet = () => accessToken() !== null;
 
 /**
  * Settings ("Account" in the menu), pushed from the gear: inset grouped lists.
@@ -19,6 +27,8 @@ export function Settings({ version }: { version: string }) {
   const [voice, setVoice] = useSetting(VOICE_KEY, "on");
   const [windDown, setWindDown] = useSetting(WIND_DOWN_KEY, WIND_DOWN_DEFAULT);
   const windDownId = useId();
+  const backend = useSyncExternalStore(noSubscribe, apiBase, serverBase);
+  const tokenSet = useSyncExternalStore(noSubscribe, clientTokenSet, serverTokenSet);
 
   return (
     <div className="mt-4 flex flex-col gap-section">
@@ -57,11 +67,11 @@ export function Settings({ version }: { version: string }) {
           title="Address"
           trailing={
             <Value>
-              <BreakableUrl url={API_BASE} />
+              <BreakableUrl url={backend} />
             </Value>
           }
         />
-        <ListRow title="Token" trailing={<Value>{TOKEN_SET ? "Set" : "Not set"}</Value>} />
+        <ListRow title="Token" trailing={<Value>{tokenSet ? "Set" : "Not set"}</Value>} />
       </InsetList>
 
       <InsetList label="About">

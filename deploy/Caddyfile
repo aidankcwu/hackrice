@@ -6,6 +6,8 @@
 # new_tester.sh):
 #
 #   /t/NAME/            -> redirect to /t/NAME/dashboard, query kept
+#   /t/NAME/app*        -> the tester's phone web app, prefix KEPT (Next has
+#                          the base path baked in)
 #   /t/NAME/dashboard*  -> the tester's dashboard, prefix KEPT (Next has the
 #                          base path baked in)
 #   /t/NAME/*           -> the tester's backend, prefix STRIPPED, so it sees
@@ -14,7 +16,8 @@
 #
 # Only `handle` blocks, never `handle_path`: blocks of one directive are
 # tried most-specific path first and the bare catch-all last, so
-# /t/NAME/dashboard* always wins over /t/NAME/*, and the 404 over nothing.
+# /t/NAME/app* and /t/NAME/dashboard* always win over /t/NAME/*, and the 404
+# over nothing.
 
 {$DOMAIN} {
 	import /etc/caddy/routes/*.caddy

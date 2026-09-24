@@ -1,5 +1,5 @@
 # The templates every tester's services extend (testers/NAME.yml, written by
-# new_tester.sh). Never started on their own: compose only reads a service
+# new_tester.sh): backend, dashboard and phone. Never started on their own: compose only reads a service
 # out of this file when another one extends it.
 services:
   # The pipeline backend. The image's CMD runs
@@ -38,4 +38,17 @@ services:
       PORT: "3000"
       HOSTNAME: 0.0.0.0
     mem_limit: 512m
+    logging: *logging
+
+  # The phone web app (phone/Dockerfile, Lukas's Next.js app). Built once per
+  # tester, because Next bakes the /t/NAME/app base path into the bundle. It
+  # renders no tester data on the server: the browser calls the backend at
+  # https://DOMAIN/t/NAME with the token. Its own HEALTHCHECK probes
+  # /t/NAME/app/healthz; it idles at about 40 MB.
+  phone:
+    restart: unless-stopped
+    environment:
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+    mem_limit: 256m
     logging: *logging
