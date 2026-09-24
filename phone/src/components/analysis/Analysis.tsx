@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Columns } from "@/components/calendar/Columns";
+import { Columns, ColumnsCaption } from "@/components/calendar/Columns";
 import { Button, EmptyState, ErrorState, LoadingState, SegmentedControl } from "@/components/ui";
 import { analyze } from "@/lib/analysis";
 import { insightsFor } from "@/lib/insights";
@@ -76,15 +76,18 @@ export function Analysis() {
         <SegmentedControl options={SPANS} value={span} onChange={setSpan} size={32} ariaLabel="Range" />
       </div>
 
-      {/* Bleeds to the screen edges with a 16 px lead; 14 and 30 columns scroll and snap, no scrollbar. */}
+      {/* Bleeds to the screen edges with a 16 px lead; 14 and 30 columns scroll and snap, no scrollbar.
+          The caption sits outside the scroller so it wraps to the screen instead of widening the row. */}
       <div
         ref={scroller}
+        data-chart
         className="-mx-gutter mt-4 overflow-x-auto px-gutter [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory scroll-pl-gutter [&_[role=group]]:snap-start"
       >
         <div className="w-max min-w-full">
-          <Columns columns={result.columns} height={COLUMN_H} cap={COLUMN_CAP} numbers={result.numbers} width={32} />
+          <Columns columns={result.columns} height={COLUMN_H} cap={COLUMN_CAP} numbers={result.numbers} width={32} caption={false} />
         </div>
       </div>
+      <ColumnsCaption sleep={result.columns.some((c) => c.sleepMinutes !== undefined)} />
 
       {result.clusters.length ? (
         <ol className="m-0 mt-section flex list-none flex-col gap-3 p-0" aria-label="What the reds cost">

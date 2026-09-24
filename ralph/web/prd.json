@@ -56,6 +56,21 @@
       "priority": 4,
       "passes": true,
       "notes": "docs/APP_WEB_NOTES.md: URL table, embed order (query/sessionStorage/non-HttpOnly cookie), token cookie+scrub, known gaps, screenshot list"
+    },
+    {
+      "id": "W-005",
+      "title": "No horizontal overflow at 390px in embed mode",
+      "description": "As a tester on the Analysis tab inside the native app, the page never scrolls sideways: the weekly chart and its caption fit the 390px width (or scroll only inside their own container, starting at the latest day), and every other screen reachable from the menu fits too.",
+      "acceptanceCriteria": [
+        "Analysis at 390x844 with embed=1: document.scrollingElement.scrollWidth <= 390 (add a check script or test)",
+        "The weekly chart shows the latest day fully and its caption is not cut off",
+        "A sweep over /calendar, /analysis, /treatments, /tests, /biomarkers, /devices, /library, /find, /concierge, /sources, /claims, /settings at 390px reports no page-level horizontal overflow (write the result to phone/screenshots/W-005-overflow.txt)",
+        "Screenshot W-005-analysis.png",
+        "lint, typecheck, tests, build pass"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "Chart caption moved out of the w-max scroller (ColumnsCaption) so it wraps; scripts/overflow.mjs sweeps 12 embedded routes and all 3 Analysis ranges, all ok at 390 px"
     }
   ]
 }

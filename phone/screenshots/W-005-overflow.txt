@@ -1,0 +1,19 @@
+Horizontal overflow sweep at 390 px, embed=1, 2026-09-24T20:25:53.568Z
+
+ok   /calendar    scrollWidth 390
+ok   /analysis    scrollWidth 390
+ok     chart "This week": 7 days, latest day on screen, caption on screen, scrollWidth 390
+ok     chart "2 weeks": 14 days, latest day on screen, caption on screen, scrollWidth 390
+ok     chart "30 days": 30 days, latest day on screen, caption on screen, scrollWidth 390
+ok   /treatments  scrollWidth 390
+ok   /tests       scrollWidth 390
+ok   /biomarkers  scrollWidth 390
+ok   /devices     scrollWidth 390
+ok   /library     scrollWidth 390
+ok   /find        scrollWidth 390
+ok   /concierge   scrollWidth 390
+ok   /sources     scrollWidth 390
+ok   /claims      scrollWidth 390
+ok   /settings    scrollWidth 390
+
+PASS: no page-level horizontal overflow at 390 px

@@ -31,6 +31,8 @@ Fixtures mode serves `fixtures/*.json` (copies of `ios/Brian/Fixtures/`). Screen
 `node scripts/shot.mjs "/?screen=today&mode=light" <out.png>` takes a true 390 x 844 screenshot with
 headless Chrome; a path is resolved against `PHONE_URL` (default `http://localhost:3100`, the fixtures
 dev server: `NEXT_PUBLIC_FIXTURES=1 npx next dev -p 3100`).
+`node scripts/overflow.mjs [out.txt]` loads every embedded screen at 390 px and fails on page-level
+horizontal overflow (and on /analysis, a chart whose latest day or caption is cut off).
 
 On the iPhone: `npm run dev -- -H 0.0.0.0`, open `http://<this PC's Wi-Fi IP>:3000` in Safari,
 Share → Add to Home Screen.
