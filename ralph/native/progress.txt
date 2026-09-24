@@ -107,3 +107,21 @@ Started: Thu Sep 24 14:52:26 CDT 2026
   web loop to add it upstream.
 - Web-side gap seen in N-004-analysis.png (known, in APP_WEB_NOTES): week chart clipped left.
 - Push: refused by the tool permission layer again; commits are local only.
+
+## 2026-09-24 · N-005 passed (Settings cleanup)
+- Merged origin/main first (Bryan spelling pass, Config.xcconfig/Local.xcconfig.example,
+  PrivacyInfo). Only conflict was Brian.xcodeproj/project.pbxproj: took theirs and re-ran
+  `xcodegen generate`; always resolve pbxproj that way (it is generated from project.yml).
+- SettingsView rewritten: "Invite link" section (token-free label from link state, "Change" or
+  "Paste link"; unreachable adds the sentence in Brian.cost), a Connect row showing the live
+  ConnectionStatus dot + text, Voice ("Speak through the glasses" + footer), collapsed
+  Permissions DisclosureGroup (keeps the whole list on one screen), Record corpus toggle in
+  every build (was DEBUG-only; off by default via defaults.bool), DEBUG section (status line,
+  mock glasses; "Say a test line" dropped since Connect has Test voice), About: Version, Build.
+  `.tint(Brian.ink)` on the sheet.
+- Settings has NO server field any more. AppState.requestLinkChange() sets linkChangeRequested
+  + connectRequested; ConnectView's .task opens its paste field when the flag is set and clears it.
+- Screenshot N-005-settings.png (-demo -screen settings).
+- Next: N-006 design pass + docs/APP_NATIVE_NOTES.md. Dynamic Type XXL screenshots: try
+  `xcrun simctl ui $DEV content_size accessibility-extra-extra-large` before launching, and reset
+  with `content_size large` afterwards.

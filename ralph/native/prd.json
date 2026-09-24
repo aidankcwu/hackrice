@@ -22,7 +22,7 @@
     {"id": "N-005", "title": "Settings cleanup",
      "description": "Settings shows: invite link (endpoint label + Change), Connect button, Voice through the glasses toggle, Permissions, Record corpus (off by default), version/build. No duplicate server field elsewhere.",
      "acceptanceCriteria": ["SettingsView matches the list above", "Screenshot N-005-settings.png", "Build and tests pass"],
-     "priority": 5, "passes": false, "notes": ""},
+     "priority": 5, "passes": true, "notes": "Settings: link label + Change (opens Connect's paste field), Connect row with live status, voice, collapsed permissions, Record corpus (all builds, off), version/build; no server field"},
     {"id": "N-006", "title": "Design pass and notes",
      "description": "Run the brian-ios-design checklist against every committed screenshot; fix spacing, copy, contrast, tap targets, Dynamic Type at XXL for Today and Connect. Write docs/APP_NATIVE_NOTES.md: how to build, run demo, take screenshots, what each launch argument does, what is still untested on hardware.",
      "acceptanceCriteria": ["Screenshots N-006-<screen>.png for today, connect, calendar, analysis, protocol, settings (light) plus today-xxl.png and connect-xxl.png", "docs/APP_NATIVE_NOTES.md exists", "Build and tests pass"],
