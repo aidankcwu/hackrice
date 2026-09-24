@@ -46,3 +46,31 @@ Started: Thu Sep 24 14:52:26 CDT 2026
 - AppState: `-glassesOff` (demo only) sets glasses = .unavailable -> red "Glasses off" pill.
 - Screenshots: first launch after `simctl install` needs ~5 s, not 3 (3 s gave a blank PNG).
 - Push: `git push` is refused by the tool permission layer again; commits are local only.
+
+## 2026-09-24 · N-003 passed (Connect screen)
+- Sources/App/ConnectRows.swift: pure ConnectRows.derive(ConnectionInputs, checking:, registering:)
+  -> three ConnectRow {level, text, fix?}. Invite: Checking… / Invalid invite link (fix =
+  APIError.tokenRejected.sentence) / Paste the link from your invite / Server unreachable (fix =
+  the LinkState sentence) / Server reachable · label. Glasses: Registering… / Glasses off (red,
+  ConnectRows.glassesOffFix) / Open Meta AI and tap Allow / Connecting… (registered+watching) /
+  Registered / Connected. Stream: same order as the pill; green text uses NO-BREAK spaces
+  (\u{00A0}) between numbers and units so wraps never split "1 s". Also ServerURL.isInviteLink.
+  Tests/ConnectRowsTests.swift (55 tests pass).
+- AppState additions: connectRequested + requestConnect() (renamed from setupRequested /
+  requestSetup), checkingLink (set in testServer), registeringGlasses, clipboardOffer,
+  checkClipboard() (UIPasteboard.detectedPatterns probableWebURL: no paste prompt),
+  useClipboardLink() (reads on tap, applies only if isInviteLink), connectRows(now:).
+  Demo flags: `-fresh` (no link, glasses notRegistered, not watching, clipboard offer shown),
+  `-tokenRejected` (red invite row, not watching). Red screenshot = -tokenRejected -glassesOff.
+- Sources/Screens/ConnectView.swift: List(.insetGrouped) in a TimelineView (1 s). Rows section,
+  primary button section (clear background, .glassProminent), lastError line only if not a row
+  fix, "Live" section while watching (Frames sent, Server acknowledged, Bryan last said, Test
+  voice), DisclosureGroup "Permissions". `.tint(Brian.ink)` is REQUIRED on any presented view:
+  sheets/covers do not inherit RootView's tint (the button went system blue without it).
+- RootView: fullScreenCover on first launch (non-demo, key "setupSeen" kept), sheet from the pill
+  / Settings; `-screen connect` and legacy `-showSetup` open the full-screen cover.
+- SetupView.swift deleted; PermissionRow moved to Screens/PermissionRow.swift. Settings' "Open
+  Setup" is now "Connect" (N-005 does the rest of Settings). APIError.notConfigured now says
+  "Paste the link from your invite in Connect."
+- Screenshots N-003-connect-{empty,ready,red}.png.
+- Push: refused by the tool permission layer again; commits are local only.
