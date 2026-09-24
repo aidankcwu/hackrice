@@ -39,7 +39,8 @@ export function NumberBadge({ n, size = BADGE }: { n: number; size?: number }) {
  * day, the two ceilings on top, last night's sleep as a bar at the bottom.
  * `onPick` makes a column open its day; `numbers` puts a number on every bar
  * (Analysis). `width` 44 lets the columns flex to fit the screen; 32 fixes them
- * for a scrolling row.
+ * for a scrolling row. `caption={false}` leaves the caption to the caller, which
+ * renders `ColumnsCaption` outside its scroller so the caption wraps to the screen.
  */
 export function Columns({
   columns,
@@ -49,6 +50,7 @@ export function Columns({
   onPick,
   numbers,
   width = 44,
+  caption = true,
 }: {
   columns: Column[];
   height: number;
@@ -57,6 +59,7 @@ export function Columns({
   onPick?: (index: number) => void;
   numbers?: Partial<Record<RuleId, number>>;
   width?: 32 | 44;
+  caption?: boolean;
 }) {
   const narrow = width === 32;
   const y = (m: number) => yAt(m, height, cap);
@@ -108,10 +111,17 @@ export function Columns({
           );
         })}
       </div>
-      <p className="type-caption m-0 mt-2 text-muted">
-        Over each day: cognition, then body, as % of ceiling.{hasSleep ? " Under it: last night's sleep, full at 9 h." : ""}
-      </p>
+      {caption ? <ColumnsCaption sleep={hasSleep} /> : null}
     </div>
+  );
+}
+
+/** What the numbers over each column and the bar under it mean. */
+export function ColumnsCaption({ sleep }: { sleep: boolean }) {
+  return (
+    <p data-chart-caption className="type-caption m-0 mt-2 text-muted">
+      Over each day: cognition, then body, as % of ceiling.{sleep ? " Under it: last night's sleep, full at 9 h." : ""}
+    </p>
   );
 }
 
