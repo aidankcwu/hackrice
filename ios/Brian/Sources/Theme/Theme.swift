@@ -227,3 +227,21 @@ enum BrianSymbol {
         }
     }
 }
+
+extension Brian {
+    /// Connection status only (APP_PRD.md "Status pill"): the amber of "on its way".
+    /// Never on data; always beside the words that say the same thing.
+    static let pending = Color(light: 0xB45309, dark: 0xFBBF24)
+}
+
+extension ConnectionLevel {
+    /// The status dot. Grey is muted; green and red reuse the earn/cost pair.
+    var color: Color {
+        switch self {
+        case .grey: Brian.muted
+        case .amber: Brian.pending
+        case .green: Brian.earn
+        case .red: Brian.cost
+        }
+    }
+}

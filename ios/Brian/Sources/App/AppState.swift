@@ -58,7 +58,7 @@ final class AppState {
     var heldBackToday: Int = 0          // decisions that proposed speech and were not spoken
     // Protocol
     var protocolItems: [ProtocolItem] = []
-    // Errors: one sentence with a fix, shown in the StatusStrip, never an alert.
+    // Errors: one sentence with a fix, shown on Today under the status pill, never an alert.
     var lastError: String? = nil
 
     // MARK: Added by Coder A
@@ -67,7 +67,7 @@ final class AppState {
     var loading: Bool = false
     /// Debug line for Settings: MacLink status · CapturePacketSender status.
     var linkStatusLine: String { demo ? "connected 10.0.0.5:8010 · sent 412" : glue.statusLine }
-    /// Live socket state for the StatusStrip while capture is running.
+    /// Live socket state while capture is running (feeds `connectionStatus`).
     var backendConnected: Bool { demo || glue.backendConnected }
 
     // MARK: Connection status (N-001)
@@ -125,6 +125,8 @@ final class AppState {
     /// Launch argument / environment switch for demo mode (IOS_SPEC.md "Demo mode").
     static let demoArgument = "-demo"
     static let demoEnvironment = "BRIAN_DEMO"
+    /// Demo only: start with the glasses reported off (red status pill).
+    static let glassesOffArgument = "-glassesOff"
     /// What the Setup row shows in demo mode.
     static let demoLabel = "10.0.0.5:8010"
     static let demoServerURL = "ws://10.0.0.5:8010/ws/glasses"
@@ -173,6 +175,8 @@ final class AppState {
             link = .reachable(Self.demoLabel)
             watching = true
             watchingSince = Date().addingTimeInterval(-14 * 60)
+            // `-glassesOff`: the red pill for screenshots, with everything else still live.
+            if ProcessInfo.processInfo.arguments.contains(Self.glassesOffArgument) { glasses = .unavailable }
         } else {
             // Older builds kept the pasted link, token included, in plain UserDefaults;
             // move it into the Keychain once, then read the token-free form back.

@@ -3,13 +3,12 @@ import SwiftUI
 struct TodayView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
-    @State private var showSetup = false
     @State private var askConsent = false
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Space.section) {
-                StatusStrip { showSetup = true }
+                if let error = appState.lastError { errorRow(error) }
 
                 Button(appState.watching ? "Stop" : "Start watching") {
                     if appState.watching {
@@ -37,11 +36,24 @@ struct TodayView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await appState.refreshToday() } }
         }
-        .sheet(isPresented: $showSetup) { SetupView() }
         .streamingConsentSheet(isPresented: $askConsent) {
             appState.consentGiven = true
             Task { await appState.startWatching() }
         }
+    }
+
+    /// Connection problems live in the status pill; this is everything else that failed
+    /// (a refresh, a start): one sentence of cause, one button of fix.
+    private func errorRow(_ error: String) -> some View {
+        HStack(spacing: 16) {
+            Text(error)
+                .font(BrianType.secondary)
+                .foregroundStyle(Brian.cost)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Try again") { Task { await appState.refreshToday() } }
+                .buttonStyle(.glass)
+        }
+        .frame(minHeight: 44)
     }
 
     private var hero: some View {
