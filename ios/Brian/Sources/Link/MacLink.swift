@@ -1,4 +1,10 @@
 //  MacLink.swift
+//
+//  ios/Brian addition (app/native, N-001), additive only: `lastSpokenText` and
+//  `lastSpokenAt` observables, set in `handle(_:)` whenever the Mac sends a `speak` or
+//  `audio` message, so the Connect screen can show what Bryan last said. Nothing else
+//  in this file changed.
+//
 //  docs/PERSON_A.md A11 — prove the phone <-> Mac socket before any payload rides on it.
 //
 //  Kept deliberately small. A11 exists as its own task because without
@@ -168,6 +174,10 @@ final class MacLink {
   var sentCount = 0
   /// Utterances spoken out the glasses. A16's proof.
   var spokenCount = 0
+  /// What Bryan last said and when (N-001, additive). Set on every `speak`/`audio`
+  /// message, whether it played through the glasses or went to a notification.
+  var lastSpokenText: String?
+  var lastSpokenAt: Date?
 
   /// The app-level route policy. `Link` sets this from the glasses state so a whisper
   /// is either played on connected glasses or posted as a notification, never both.
@@ -723,6 +733,10 @@ final class MacLink {
     let wireAudio = "audio"  // longevity.wire.AUDIO
     let text = obj["text"] as? String ?? ""
     lastFromMac = "\(type): \(text)"
+    if (type == "speak" || type == wireAudio), !text.isEmpty {
+      lastSpokenText = text
+      lastSpokenAt = Date()
+    }
     if type == "speak", !text.isEmpty {
       if shouldPlayWhispers() { speak(text) } else { onWhisperNotification?(text) }
     }

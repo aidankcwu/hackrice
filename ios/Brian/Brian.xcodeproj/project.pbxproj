@@ -40,9 +40,11 @@
 		C1B19C8AEBFD91058B23C797 /* CorpusRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DADCD752FC08855D793C233 /* CorpusRecorder.swift */; };
 		C3BAB02BA79CC9529F18AB8F /* DecisionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFB8CE49186524D14922312D /* DecisionDetailView.swift */; };
 		C5D710043499E64708498215 /* MWDATCore in Frameworks */ = {isa = PBXBuildFile; productRef = BB7E7E146200D0E3FAB56B31 /* MWDATCore */; };
+		C7DFC1AEB9E8A457C4C44848 /* ConnectionStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E760E93084D97676A29AA74 /* ConnectionStatus.swift */; };
 		CC2F598E05E6F65F91FED789 /* MWDATMockDevice in Frameworks */ = {isa = PBXBuildFile; productRef = 5790B1A5E7F806A634FA4D98 /* MWDATMockDevice */; };
 		D5D141B310A82507E0ABAFF7 /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60181F8A77EFB973B77ACD3F /* TodayView.swift */; };
 		E53C3A89A85F69463BFCEBB7 /* PhoneSensors.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEBBFD68F94F717801E94B11 /* PhoneSensors.swift */; };
+		ED26871AF9E5A219EA3979F0 /* ConnectionStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863CF68F9EB53AF75F79DCFA /* ConnectionStatusTests.swift */; };
 		FCFB72DB3DDE79F3E4F83ACC /* ConsentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08016FC880A45D9E221A4853 /* ConsentView.swift */; };
 		FFA713834BD5D5515ED098C6 /* LedgerRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0AE0B716B62471511F8F628 /* LedgerRow.swift */; };
 /* End PBXBuildFile section */
@@ -79,6 +81,8 @@
 		64EF3A07666084C85B7A6719 /* ProtocolView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolView.swift; sourceTree = "<group>"; };
 		6786913689B235383BC1435E /* QuestionListener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuestionListener.swift; sourceTree = "<group>"; };
 		7D7113769C45F5A93F12D25E /* SetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupView.swift; sourceTree = "<group>"; };
+		7E760E93084D97676A29AA74 /* ConnectionStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStatus.swift; sourceTree = "<group>"; };
+		863CF68F9EB53AF75F79DCFA /* ConnectionStatusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStatusTests.swift; sourceTree = "<group>"; };
 		89C5D79D3A26E176A1CCD1C4 /* protocol_today.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = protocol_today.json; sourceTree = "<group>"; };
 		94A9C97FA2A625A5950E617E /* today_episodes.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = today_episodes.json; sourceTree = "<group>"; };
 		A1CDD197CD3E40D0BC5B3760 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
@@ -167,6 +171,7 @@
 			children = (
 				FC0FBA5F12B4F1CA114B1D05 /* AppState.swift */,
 				556B6B840C8FD7BC38F4C8B5 /* BrianApp.swift */,
+				7E760E93084D97676A29AA74 /* ConnectionStatus.swift */,
 				09C05E5F73DB82BC32C24B71 /* GlassesFactory.swift */,
 				D7A112AAC56185A28D26D0BB /* RootView.swift */,
 			);
@@ -188,6 +193,7 @@
 		BC0C393894CFFA79A9B5159E /* Tests */ = {
 			isa = PBXGroup;
 			children = (
+				863CF68F9EB53AF75F79DCFA /* ConnectionStatusTests.swift */,
 				34CA65A06BE3C5F30E52D1B6 /* ModelsTests.swift */,
 				C7BDB86B2CE2D6C1359E16DD /* ServerURLTests.swift */,
 			);
@@ -336,6 +342,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				ED26871AF9E5A219EA3979F0 /* ConnectionStatusTests.swift in Sources */,
 				49CC45830016BCCB18D833C2 /* ModelsTests.swift in Sources */,
 				826F3A446F99A62C3A230B4D /* ServerURLTests.swift in Sources */,
 			);
@@ -350,6 +357,7 @@
 				9862AF82A356B2CD09A334E8 /* AppState.swift in Sources */,
 				4C3417B4BFA43C1AFEAC5638 /* BrianApp.swift in Sources */,
 				854D738D40C85C225ED0CD56 /* CapturePacketSender.swift in Sources */,
+				C7DFC1AEB9E8A457C4C44848 /* ConnectionStatus.swift in Sources */,
 				FCFB72DB3DDE79F3E4F83ACC /* ConsentView.swift in Sources */,
 				C1B19C8AEBFD91058B23C797 /* CorpusRecorder.swift in Sources */,
 				C3BAB02BA79CC9529F18AB8F /* DecisionDetailView.swift in Sources */,

@@ -1,3 +1,6 @@
+// ios/Brian addition (app/native, N-001), additive only: read-only accessors below
+// `backendConnected` that expose the sender's delivery counters and MacLink's last
+// spoken line to AppState's ConnectionStatus / StreamStats. Nothing else changed.
 import Foundation
 import Observation
 import UserNotifications
@@ -79,6 +82,11 @@ final class Link {
     var endpointLabel: String { macLink.endpointLabel }
     var accessDenied: Bool { macLink.accessDenied }
     var backendConnected: Bool { macLink.connected }
+    /// Capture packets the transport confirmed, cumulative across sessions (N-001).
+    var framesSent: Int { sender.sentCount }
+    var lastFrameAt: Date? { sender.lastSentAt }
+    var lastSpokenText: String? { macLink.lastSpokenText }
+    var lastSpokenAt: Date? { macLink.lastSpokenAt }
 
     func setCorpusRecording(_ enabled: Bool) {
         recorder.isRecording = enabled

@@ -70,6 +70,57 @@ final class AppState {
     /// Live socket state for the StatusStrip while capture is running.
     var backendConnected: Bool { demo || glue.backendConnected }
 
+    // MARK: Connection status (N-001)
+
+    /// The one answer to "is it working?" for the status pill and Connect screen.
+    /// Observation tracks every input; the minutes and "last frame" parts are time, so a
+    /// view that shows them ticks `now` with a `TimelineView`.
+    var connectionStatus: ConnectionStatus { connectionStatus(now: Date()) }
+    func connectionStatus(now: Date) -> ConnectionStatus {
+        ConnectionStatus.derive(ConnectionInputs(
+            glasses: glasses,
+            link: link,
+            watching: watching,
+            watchingSince: watchingSince,
+            accessDenied: !demo && glue.accessDenied,
+            backendConnected: backendConnected,
+            stats: streamStats(now: now),
+            now: now))
+    }
+
+    /// Live numbers for this watching session; demo mode fakes a steady 1.5 s cadence.
+    var streamStats: StreamStats { streamStats(now: Date()) }
+    func streamStats(now: Date) -> StreamStats {
+        if demo { return Self.demoStats(watching: watching, since: watchingSince, now: now) }
+        let sent = watching ? max(0, glue.framesSent - framesAtStart) : 0
+        let elapsed = watchingSince.map { now.timeIntervalSince($0) } ?? 0
+        return StreamStats(
+            framesSent: sent,
+            framesPerSecond: elapsed >= CapturePacketSender.defaultInterval ? Double(sent) / elapsed : 0,
+            secondsSinceLastFrame: sent > 0 ? glue.lastFrameAt.map { max(0, now.timeIntervalSince($0)) } : nil,
+            serverAcknowledged: backendConnected && sent > 0,
+            lastSpokenText: glue.lastSpokenText,
+            lastSpokenAt: glue.lastSpokenAt)
+    }
+
+    /// The whisper demo mode says Bryan last spoke, nine minutes into the session.
+    static let demoSpokenLine = "Coffee this late may cost you sleep tonight."
+
+    static func demoStats(watching: Bool, since: Date?, now: Date) -> StreamStats {
+        guard watching, let since else {
+            return StreamStats(lastSpokenText: demoSpokenLine, lastSpokenAt: now.addingTimeInterval(-9 * 60))
+        }
+        let interval = CapturePacketSender.defaultInterval
+        let elapsed = max(0, now.timeIntervalSince(since))
+        return StreamStats(
+            framesSent: Int(elapsed / interval),
+            framesPerSecond: 1 / interval,
+            secondsSinceLastFrame: elapsed.truncatingRemainder(dividingBy: interval),
+            serverAcknowledged: true,
+            lastSpokenText: demoSpokenLine,
+            lastSpokenAt: since.addingTimeInterval(9 * 60))
+    }
+
     static let recordCorpusKey = "recordCorpus"
     /// Launch argument / environment switch for demo mode (IOS_SPEC.md "Demo mode").
     static let demoArgument = "-demo"
@@ -84,6 +135,8 @@ final class AppState {
     @ObservationIgnored private let session: GlassesSessioning
     @ObservationIgnored private var pollTask: Task<Void, Never>?
     @ObservationIgnored private var server: ServerURL?
+    /// `glue.framesSent` when this watching session started; the sender's count is cumulative.
+    @ObservationIgnored private var framesAtStart = 0
     /// Where the applied link's token lives (Keychain in the app; in-memory in tests).
     @ObservationIgnored private let tokenStore: TokenStoring
 
@@ -266,6 +319,7 @@ final class AppState {
             lastError = APIError.notConfigured.sentence
             return
         }
+        framesAtStart = glue.framesSent
         do {
             try await glue.start(session: session)
             watching = true
