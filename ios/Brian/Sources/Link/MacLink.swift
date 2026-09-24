@@ -732,7 +732,7 @@ final class MacLink {
       if shouldPlayWhispers() {
         playAudio(obj)
       } else {
-        onWhisperNotification?(text.isEmpty ? "Brian has a whisper for you." : text)
+        onWhisperNotification?(text.isEmpty ? "Bryan has a whisper for you." : text)
       }
     }
     if type == "ask" {

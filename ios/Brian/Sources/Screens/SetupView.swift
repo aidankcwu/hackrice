@@ -84,7 +84,7 @@ struct SetupView: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .navigationTitle("Set up Brian")
+            .navigationTitle("Set up Zeroist")
             .navigationBarTitleDisplayMode(.inline)
         }
     }

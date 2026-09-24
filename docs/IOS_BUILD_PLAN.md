@@ -75,5 +75,5 @@ Build and run:
     xcodebuild -project Brian.xcodeproj -scheme Brian \
       -destination 'platform=iOS Simulator,name=iPhone 17' -configuration Debug build
     xcodebuild ... test
-    xcrun simctl install <udid> <DerivedData>/Build/Products/Debug-iphonesimulator/Brian.app
+    xcrun simctl install <udid> <DerivedData>/Build/Products/Debug-iphonesimulator/Zeroist.app
     xcrun simctl launch <udid> com.zeroist.app -demo

@@ -212,7 +212,7 @@ private enum GlassesSessionError: LocalizedError {
         case .registration:
             return "Open Meta AI and turn on Developer Mode, then tap Register."
         case .permission:
-            return "Open Meta AI, allow camera access for Brian, then tap Start again."
+            return "Open Meta AI, allow camera access for Zeroist, then tap Start again."
         case .connection:
             return "Put on and unfold your glasses, then tap Start again."
         }
