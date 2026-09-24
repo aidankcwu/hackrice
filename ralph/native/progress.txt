@@ -125,3 +125,21 @@ Started: Thu Sep 24 14:52:26 CDT 2026
 - Next: N-006 design pass + docs/APP_NATIVE_NOTES.md. Dynamic Type XXL screenshots: try
   `xcrun simctl ui $DEV content_size accessibility-extra-extra-large` before launching, and reset
   with `content_size large` afterwards.
+
+## 2026-09-24 · N-006 passed (Design pass and notes) — every story passes
+- Merged origin/main first (APP_WEB_NOTES, phone embed mode, ralph/web); no conflicts.
+- Orchestrator review folded in: "Use the link on your clipboard" is a `.glass` Label button
+  with `doc.on.clipboard`; Start watching is `.disabled` until `ConnectRows.canStart` (link
+  .reachable, not accessDenied, glasses .registered or .connected). Stop is never disabled.
+  New test startNeedsReachableLinkAndRegisteredGlasses (69 tests pass).
+- Design pass: at accessibility type sizes Connect rows put the button under the text
+  ("Change" broke mid-word), Today's hero label/Seeded chip and error row stack, ledger rows
+  put time/outcome on their own lines; Connect dot scales (@ScaledMetric). Ledger titles are
+  sentence-cased on display; 16 pt between symbol and title. Protocol "Done (you)" -> "Marked done".
+- Screenshots N-006-{today,connect,connect-empty,calendar,analysis,protocol,settings,
+  today-xxl,connect-xxl}.png. Web tabs: fixtures server from a scratch `git archive HEAD phone`
+  copy (main's phone/ now has embed mode) with "127.0.0.1" added to allowedDevOrigins there.
+- docs/APP_NATIVE_NOTES.md: build, demo launch arguments, screenshots, design changes,
+  what is untested on hardware.
+- Still open, web side: embedded pages show their own ☰ menu; Analysis week chart clipped left.
+- Push: refused by the tool permission layer again; commits are local only.

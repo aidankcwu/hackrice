@@ -26,6 +26,6 @@
     {"id": "N-006", "title": "Design pass and notes",
      "description": "Run the brian-ios-design checklist against every committed screenshot; fix spacing, copy, contrast, tap targets, Dynamic Type at XXL for Today and Connect. Write docs/APP_NATIVE_NOTES.md: how to build, run demo, take screenshots, what each launch argument does, what is still untested on hardware.",
      "acceptanceCriteria": ["Screenshots N-006-<screen>.png for today, connect, calendar, analysis, protocol, settings (light) plus today-xxl.png and connect-xxl.png", "docs/APP_NATIVE_NOTES.md exists", "Build and tests pass"],
-     "priority": 6, "passes": false, "notes": ""}
+     "priority": 6, "passes": true, "notes": "Rubric pass: a11y-size stacking (Connect rows, hero label, ledger), sentence-case ledger, Marked done; orchestrator Connect fixes (glass clipboard button, Start disabled via ConnectRows.canStart); APP_NATIVE_NOTES.md"}
   ]
 }
