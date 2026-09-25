@@ -1,0 +1,40 @@
+# Ralph progress (demo, native)
+Started: Thu Sep 24 20:14:50 CDT 2026
+---
+
+## 2026-09-24 D-001 fixed header and three tabs (passes)
+What I did
+- Tabs: Home (house), Analysis, Protocol. Calendar tab gone. AppScreen ids: home, analysis,
+  protocol, connect, settings, preview; `-screen today` still maps to home.
+- Header, shared by every tab through the `AppHeader` ViewModifier in Screens/StatusPill.swift:
+  navigation bar = StatusPill (leading: battery %, eyeglasses ink/muted, dot + status) and a
+  trailing group [Preview camera.viewfinder][gear]; Start watching / Stop (WatchButton,
+  .glassProminent, full width, .large) sits in `.safeAreaBar(edge: .top)` under the bar.
+  RootView owns the sheets (Connect, Settings, Preview, consent gate).
+- HeaderState.derive (App/HeaderState.swift) is pure; Tests/HeaderStateTests.swift.
+- GlassesSessioning gained `deviceState: GlassesDeviceState?` + `onDeviceStateChange`.
+  GlassesSession: deviceForIdentifier(first device) + Device.addDeviceStateListener, nil
+  unless snapshot.linkState == .connected. Mock/Demo glasses: `.demo` (82%, worn).
+  AppState.glassesDevice; -glassesOff and -fresh set it nil. AppState.headerState(now:).
+- TodayView -> HomeView (Screens/HomeView.swift), its own Start button removed; content as before.
+- PreviewView is a placeholder sheet ("Glasses view", "No frames yet") for D-002.
+- Protocol: Add moved out of the toolbar into its own clear Section above the list (D-005 reworks).
+
+Decisions (the orchestrator should look at these)
+- DAT SDK bumped 0.9.0 -> 1.0.0 (project.yml `from: "1.0.0"`, own commit 661b644). 0.9.x has no
+  battery/worn at all; 1.0.0 (tagged 2026-09-24) adds Device.batteryLevel/donState and
+  addDeviceStateListener. The app built unchanged. UNTESTED ON HARDWARE; revert that commit
+  plus the GlassesSession observeDeviceState block if the glasses misbehave.
+- All four header controls in one navigation bar do NOT fit a 402 pt iPhone: the system folded
+  Preview and the gear into "•••" even with "Stop" and a 13 pt pill. Hence the two-row header
+  (nav bar + safeAreaBar). Both are system bars and stay fixed while the page scrolls.
+- Tabs use `.toolbarTitleDisplayMode(.inline)` (set in AppHeader): a large title sat under the
+  Start/Stop bar's scroll-edge fade and read greyed out. The inline title gets no room next to
+  the pill, so the tab bar is what names the tab. D-005's "3 of 5 today" row can carry Protocol.
+- Pill and the two icon buttons are capped at DynamicTypeSize.large with the Large Content
+  Viewer, like system bar items; otherwise the gear folds into "•••" at accessibility sizes.
+
+Next iteration must know
+- Build/test: xcodebuild's exit code gets lost behind `| grep`; redirect to a log and check $?.
+- `git -C /Users/ljawhomebot/hackrice ...` instead of `cd … && git` (the permission hook asks).
+- Screenshots: sips -Z 1000 a copy into the scratchpad before reading; the full PNG is fine too.

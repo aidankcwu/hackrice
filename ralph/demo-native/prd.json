@@ -15,8 +15,8 @@
         "Build and tests exit 0"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Header = nav bar (pill leading; Preview + gear trailing) + Start/Stop in a safeAreaBar under it (one bar overflows at 402 pt); DAT pinned to 1.0.0 for device state."
     },
     {
       "id": "D-003",
