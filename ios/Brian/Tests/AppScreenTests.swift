@@ -34,3 +34,15 @@ struct AppScreenTests {
         #expect(AppTab.allCases == [.home, .analysis, .protocol])
     }
 }
+
+struct HomeScrollTargetTests {
+    @Test func parsesSectionsAndTheEndForm() {
+        #expect(HomeScrollTarget("summary") == HomeScrollTarget("SUMMARY"))
+        #expect(HomeScrollTarget("summary")?.section == .summary)
+        #expect(HomeScrollTarget("summary")?.atEnd == false)
+        #expect(HomeScrollTarget("summary-end")?.atEnd == true)
+        #expect(HomeScrollTarget("log-end")?.section == .log)
+        #expect(HomeScrollTarget("nowhere") == nil)
+        #expect(HomeScrollTarget("-end") == nil)
+    }
+}

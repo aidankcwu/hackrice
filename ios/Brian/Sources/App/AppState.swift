@@ -61,6 +61,8 @@ final class AppState {
         }
     }
     var demo: Bool = false              // -demo launch arg / BRIAN_DEMO=1: fixtures, mock glasses, "Seeded" chip
+    /// Demo only (`-scrollTo summary`, `-scrollTo summary-end`): where Home scrolls once loaded.
+    var homeScrollTarget: HomeScrollTarget? = nil
     // Today
     var watching: Bool = false
     var watchingSince: Date? = nil
@@ -189,6 +191,8 @@ final class AppState {
     static let freshArgument = "-fresh"
     /// Demo only: the server refused the link (red invite row), not watching.
     static let tokenRejectedArgument = "-tokenRejected"
+    /// Demo only: `-scrollTo <section>` scrolls Home to that section (`HomeSection`) for screenshots.
+    static let scrollToArgument = "-scrollTo"
     /// What the invite row shows in demo mode.
     static let demoLabel = "10.0.0.5:8010"
     static let demoServerURL = "ws://10.0.0.5:8010/ws/glasses"
@@ -262,6 +266,9 @@ final class AppState {
                 watching = false
                 watchingSince = nil
                 clipboardOffer = true
+            }
+            if let index = arguments.firstIndex(of: Self.scrollToArgument), index + 1 < arguments.count {
+                homeScrollTarget = HomeScrollTarget(arguments[index + 1])
             }
             if arguments.contains(Self.tokenRejectedArgument) {
                 link = .unreachable(APIError.tokenRejected.sentence)

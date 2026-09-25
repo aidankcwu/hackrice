@@ -3,6 +3,25 @@
 // protocol card, sessions, stats and log arrive in D-005 … D-008.
 import SwiftUI
 
+/// Home's sections, top to bottom; the ids `-scrollTo` accepts (screenshots).
+enum HomeSection: String, CaseIterable {
+    case metrics, summary, log
+}
+
+/// `-scrollTo summary` puts the section's top under the header; `summary-end` its bottom
+/// above the tab bar, for sections taller than the screen.
+struct HomeScrollTarget: Equatable {
+    let section: HomeSection
+    let atEnd: Bool
+
+    init?(_ argument: String) {
+        let value = argument.lowercased()
+        atEnd = value.hasSuffix("-end")
+        guard let section = HomeSection(rawValue: atEnd ? String(value.dropLast(4)) : value) else { return nil }
+        self.section = section
+    }
+}
+
 struct HomeView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
@@ -19,22 +38,28 @@ struct HomeView: View {
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: Space.section) {
-                if let error = appState.lastError { errorRow(error) }
-                metrics
-                summary
-                ledger
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: Space.section) {
+                    if let error = appState.lastError { errorRow(error) }
+                    metrics.id(HomeSection.metrics)
+                    summary.id(HomeSection.summary)
+                    ledger.id(HomeSection.log)
+                }
+                .padding(.horizontal, Space.gutter)
+                .padding(.vertical, 24)
             }
-            .padding(.horizontal, Space.gutter)
-            .padding(.vertical, 24)
+            .task {
+                await appState.refreshToday()
+                await appState.loadSummaryIfNeeded()
+                if let target = appState.homeScrollTarget {
+                    appState.homeScrollTarget = nil
+                    proxy.scrollTo(target.section, anchor: target.atEnd ? .bottom : .top)
+                }
+            }
         }
         .background(Brian.page)
         .refreshable { await appState.refreshToday() }
-        .task {
-            await appState.refreshToday()
-            await appState.loadSummaryIfNeeded()
-        }
         // The first episode of the day can arrive while Home is open (the 30 s poll).
         .onChange(of: appState.episodes.isEmpty) { _, empty in
             if !empty { Task { await appState.loadSummaryIfNeeded() } }

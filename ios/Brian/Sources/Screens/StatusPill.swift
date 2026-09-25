@@ -69,7 +69,10 @@ struct WatchButton: View {
                 askConsent()
             }
         } label: {
+            // The tint is Brian.ink, near-white in dark mode: the label takes the page colour
+            // so it stays readable on the fill in both appearances.
             Text(header.primaryTitle)
+                .foregroundStyle(Brian.page)
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.glassProminent)
