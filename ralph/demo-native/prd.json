@@ -140,8 +140,8 @@
         "Build and tests exit 0"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Compact Start/Stop capsule + hard scroll edge, Protocol on Brian.page with hairline rows, dark/XXXL fixes; 27 D-010 shots; APP_NATIVE_NOTES rewritten."
     }
   ]
 }

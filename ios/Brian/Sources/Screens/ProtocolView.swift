@@ -69,6 +69,8 @@ struct ProtocolView: View {
                     if summary.isEmpty {
                         Text("No protocol yet. Add an item, or start from a template below.")
                             .foregroundStyle(Brian.muted)
+                            .padding(.vertical, 12)
+                            .listRowSeparator(.hidden)
                     } else {
                         ForEach(summary.rows) { row in
                             if let item = items[row.id] {

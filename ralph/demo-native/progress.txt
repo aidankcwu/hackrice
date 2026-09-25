@@ -275,3 +275,35 @@ Next iteration must know (D-010)
   capsule in the header (still a full-width bar in every D-009 shot), and Protocol on
   Brian.page with Home's hairline rows instead of the inset card on grouped grey (also
   visible in D-009-protocol-empty: the "No protocol yet" line sits in a white inset card).
+
+## 2026-09-24 D-010 Design pass, Analysis tab check, notes (passes)
+What I did
+- Header (orchestrator 20:55): WatchButton is a capsule sized to its label, centred in the
+  safeAreaBar, capped at xxxLarge with the large-content viewer; the bar sets
+  `.scrollEdgeEffectStyle(.hard, for: .top)` so rows do not scroll legibly beside it.
+  Kept the second bar on every state: "Start watching" beside even "Glasses off" folds
+  Preview and the gear into "•••" at 402 pt, and a button that jumps bars reads worse.
+- Protocol (orchestrator 21:10): plain List on Brian.page, rows inset 24, Brian.line
+  hairlines from gutter to gutter (`alignmentGuide(.listRowSeparatorLeading) { 0 }` on a
+  Group wrapping all rows), Templates is a BrianType.title row. Still a List for swipes.
+  The header row got 16 pt vertical padding: the cell clipped the glass Add's shadow.
+- Dark: Connect's Start / Stop label is Brian.page (was white on the near-white ink fill).
+  AddItemView's Save was already fine (D-010-protocol-edit-dark).
+- XXXL: Protocol checkbox capped + fixedSize (it overlapped the name), ProtocolStateLabel
+  wraps at accessibility sizes; Connect row text splits on " · " and shrinks no-space
+  parts; Settings stacks Change under the link and scales its dot.
+- WebScreen error states use .glass (the header holds the one prominent button).
+- Analysis with the fixtures server (scratch copy, -H 0.0.0.0, Aidan-mini.local:3100): no
+  menu, no web h1, no Find my protocol pill, chart not clipped on the left.
+- docs/APP_NATIVE_NOTES.md rewritten for the demo app.
+
+Screenshots: D-010-* (27): home, home-summary, home-dark, home-off, home-empty, home-xxl,
+home-xxxl, analysis(-dark, -xxxl), protocol(-templates, -dark, -edit-dark, -empty, -xxxl),
+connect(-dark, -xxxl), settings(-xxxl), preview(-xxxl), session(-xxxl), hero-sheet(-xxxl).
+
+Next iteration / orchestrator must know
+- The native "Analysis" inline title is hidden by the system beside the wide
+  "Watching · 14 min" pill (Protocol removes its title for the same reason). The tab bar
+  names the tab. If the title must show, it needs a place outside the nav bar.
+- Web-side, for the web loop: the embedded week chart leaves an empty band on its right
+  (~20% of the width); the web page ignores Dynamic Type at XXXL.
