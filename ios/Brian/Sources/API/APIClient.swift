@@ -117,6 +117,20 @@ final class APIClient {
         return try await get("/api/decisions", query: [URLQueryItem(name: "limit", value: String(limit))])
     }
 
+    /// `POST /api/recap` `{from, to, speak}`: the written summary of a window (D-004).
+    func recap(from: Date, to: Date, speak: Bool = false) async throws -> Recap {
+        if isFixtures { return try fixture("recap_today") }
+        let body: [String: Any] = ["from": from.timeIntervalSince1970, "to": to.timeIntervalSince1970,
+                                   "speak": speak]
+        let data = try JSONSerialization.data(withJSONObject: body)
+        let reply: Data = try await raw("POST", "/api/recap", body: data)
+        do {
+            return try decoder.decode(Recap.self, from: reply)
+        } catch {
+            throw APIError.badResponse
+        }
+    }
+
     /// First saved frame for a decision, as JPEG bytes, or nil when none survived.
     /// `GET /api/evidence/{id}` lists `[{decision_id, frame_ref, t, bytes}]`; then
     /// `GET /api/evidence/{id}/{frame_ref}` is the JPEG. Shown, never written to disk.

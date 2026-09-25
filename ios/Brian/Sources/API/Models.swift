@@ -186,6 +186,51 @@ struct WatchSession: Codable, Identifiable, Equatable {
     }
 }
 
+// MARK: - Recap (POST /api/recap, GET /api/recaps/{id})
+
+/// The written part of a recap. The wire nests it as `narrative: {headline, paragraphs,
+/// suggestions, spoken}` beside `id`, `generated_at`, `session`, `score`, `moments`; a flat
+/// `{headline, paragraphs, suggestions}` decodes too. Shown as written, never rewritten.
+struct Recap: Codable, Equatable {
+    let id: String?
+    let generatedAt: Double?
+    let headline: String
+    let paragraphs: [String]
+    let suggestions: [String]
+
+    init(id: String? = nil, generatedAt: Double? = nil, headline: String,
+         paragraphs: [String] = [], suggestions: [String] = []) {
+        self.id = id
+        self.generatedAt = generatedAt
+        self.headline = headline
+        self.paragraphs = paragraphs
+        self.suggestions = suggestions
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, generatedAt, narrative, headline, paragraphs, suggestions
+    }
+
+    init(from decoder: Decoder) throws {
+        let outer = try decoder.container(keyedBy: CodingKeys.self)
+        id = try? outer.decodeIfPresent(String.self, forKey: .id)
+        generatedAt = try? outer.decodeIfPresent(Double.self, forKey: .generatedAt)
+        let c = (try? outer.nestedContainer(keyedBy: CodingKeys.self, forKey: .narrative)) ?? outer
+        headline = try c.decode(String.self, forKey: .headline)
+        paragraphs = (try? c.decodeIfPresent([String].self, forKey: .paragraphs)) ?? []
+        suggestions = (try? c.decodeIfPresent([String].self, forKey: .suggestions)) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(id, forKey: .id)
+        try c.encodeIfPresent(generatedAt, forKey: .generatedAt)
+        try c.encode(headline, forKey: .headline)
+        try c.encode(paragraphs, forKey: .paragraphs)
+        try c.encode(suggestions, forKey: .suggestions)
+    }
+}
+
 // MARK: - Episodes (GET /api/episodes)
 
 struct Reported: Codable, Equatable {

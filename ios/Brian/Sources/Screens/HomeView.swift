@@ -1,6 +1,6 @@
 // DEMO_UI_PRD.md "Home". Start watching / Stop lives in the shared header now. Metrics
-// (hero, Daylight / Screens tiles, watched line) are D-003; the summary, protocol card,
-// sessions, stats and log arrive in D-004 … D-008.
+// (hero, Daylight / Screens tiles, watched line) are D-003; the daily summary is D-004; the
+// protocol card, sessions, stats and log arrive in D-005 … D-008.
 import SwiftUI
 
 struct HomeView: View {
@@ -23,6 +23,7 @@ struct HomeView: View {
             LazyVStack(alignment: .leading, spacing: Space.section) {
                 if let error = appState.lastError { errorRow(error) }
                 metrics
+                summary
                 ledger
             }
             .padding(.horizontal, Space.gutter)
@@ -30,7 +31,14 @@ struct HomeView: View {
         }
         .background(Brian.page)
         .refreshable { await appState.refreshToday() }
-        .task { await appState.refreshToday() }
+        .task {
+            await appState.refreshToday()
+            await appState.loadSummaryIfNeeded()
+        }
+        // The first episode of the day can arrive while Home is open (the 30 s poll).
+        .onChange(of: appState.episodes.isEmpty) { _, empty in
+            if !empty { Task { await appState.loadSummaryIfNeeded() } }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await appState.refreshToday() } }
         }
@@ -123,9 +131,76 @@ struct HomeView: View {
         .accessibilityLabel("\(label), \(value ?? "none seen")")
     }
 
+    /// Today's written summary (D-004): the backend's recap for midnight → now, as written.
+    private var summary: some View {
+        let card = appState.summaryCard
+        let header = row(spacing: 8, alignment: .firstTextBaseline)
+        return VStack(alignment: .leading, spacing: 16) {
+            header {
+                Text("Today")
+                    .font(BrianType.title)
+                    .foregroundStyle(Brian.ink)
+                    .accessibilityAddTraits(.isHeader)
+                    .frame(maxWidth: typeSize.isAccessibilitySize ? nil : .infinity, alignment: .leading)
+                if let status = card.status {
+                    Text(status)
+                        .font(BrianType.secondary)
+                        .foregroundStyle(Brian.muted)
+                }
+            }
+
+            switch card.body {
+            case .empty:
+                summarySentence(SummaryCard.emptySentence)
+            case .writing:
+                summarySentence(SummaryCard.writingSentence)
+            case .failed:
+                summarySentence(SummaryCard.failedSentence)
+            case .recap(let recap):
+                Text(recap.headline)
+                    .font(BrianType.body.weight(.semibold))
+                    .foregroundStyle(Brian.ink)
+                ForEach(Array(recap.paragraphs.enumerated()), id: \.offset) { _, paragraph in
+                    Text(paragraph)
+                        .font(BrianType.body)
+                        .foregroundStyle(Brian.text)
+                }
+                if !recap.suggestions.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(Array(recap.suggestions.enumerated()), id: \.offset) { _, suggestion in
+                            Label {
+                                Text(suggestion).foregroundStyle(Brian.text)
+                            } icon: {
+                                Image(systemName: "arrow.turn.down.right").foregroundStyle(Brian.muted)
+                            }
+                            .font(BrianType.body)
+                        }
+                    }
+                }
+            }
+
+            if card.showsRefresh {
+                Button("Refresh") { Task { await appState.refreshSummary() } }
+                    .buttonStyle(.glass)
+                    .disabled(appState.summaryLoading)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .panel()
+    }
+
+    private func summarySentence(_ text: String) -> some View {
+        Text(text)
+            .font(BrianType.body)
+            .foregroundStyle(Brian.muted)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
     private var ledger: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Today")
+            // D-008 turns this into the collapsed "Log"; "Today" is the summary's title now.
+            Text("Log")
                 .font(BrianType.title)
                 .padding(.bottom, 8)
 

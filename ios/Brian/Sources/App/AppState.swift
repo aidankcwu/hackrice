@@ -70,6 +70,11 @@ final class AppState {
     var heldBackToday: Int = 0          // decisions that proposed speech and were not spoken
     /// Recent Start → Stop spans, newest first (`GET /api/sessions`; D-006 fetches them).
     var sessions: [WatchSession] = []
+    /// Home's daily summary (D-004): the last `POST /api/recap` for today, kept in memory only.
+    var summary: DailySummary? = nil
+    var summaryLoading = false
+    /// The last summary fetch failed; the card says so only while nothing is cached.
+    var summaryFailed = false
     // Protocol
     var protocolItems: [ProtocolItem] = []
     // Errors: one sentence with a fix, shown on Today under the status pill, never an alert.
@@ -113,6 +118,12 @@ final class AppState {
     /// Home's tiles and watched line (D-003).
     func homeMetrics(now: Date) -> HomeMetrics {
         HomeMetrics.derive(episodes: episodes, sessions: sessions, watchingSince: watchingSince, now: now)
+    }
+
+    /// Home's daily summary card (D-004).
+    var summaryCard: SummaryCard {
+        SummaryCard.derive(summary: summary, loading: summaryLoading, failed: summaryFailed,
+                           hasEpisodes: !episodes.isEmpty)
     }
 
     private func connectionInputs(now: Date) -> ConnectionInputs {
@@ -191,6 +202,8 @@ final class AppState {
     private var server: ServerURL?
     /// Demo only: `-webBase` / BRIAN_WEB_BASE, where the web tabs load from.
     @ObservationIgnored private var webBaseOverride: URL?
+    /// Home fetched the summary by itself once; after that only Refresh or a Stop does.
+    @ObservationIgnored private var summaryAutoFetched = false
     /// `glue.framesSent` when this watching session started; the sender's count is cumulative.
     @ObservationIgnored private var framesAtStart = 0
     /// Where the applied link's token lives (Keychain in the app; in-memory in tests).
@@ -455,6 +468,37 @@ final class AppState {
         watching = false
         watchingSince = nil
         stopPolling()
+        // A session just ended: today's summary is out of date.
+        if !episodes.isEmpty { await refreshSummary() }
+    }
+
+    // MARK: - Daily summary (D-004)
+
+    /// Home's appearance: fetch once, as soon as today has an episode. Later fetches are
+    /// Refresh and the end of a session.
+    func loadSummaryIfNeeded() async {
+        guard !summaryAutoFetched, summary == nil, !episodes.isEmpty else { return }
+        summaryAutoFetched = true
+        await refreshSummary()
+    }
+
+    /// `POST /api/recap` for local midnight → now, not spoken. The previous text stays up
+    /// while this runs; a failure is kept to the card, never `lastError`.
+    func refreshSummary() async {
+        if !demo && server == nil { return }
+        guard !summaryLoading else { return }
+        summaryLoading = true
+        defer { summaryLoading = false }
+        let now = Date()
+        do {
+            let recap = try await api.recap(from: Calendar.current.startOfDay(for: now), to: now, speak: false)
+            summary = DailySummary(recap: recap, fetchedAt: Date())
+            summaryFailed = false
+        } catch is CancellationError {
+            if summary == nil { summaryAutoFetched = false }     // Home asks again next time
+        } catch {
+            summaryFailed = true
+        }
     }
 
     // MARK: - Today
