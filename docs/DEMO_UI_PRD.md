@@ -172,7 +172,7 @@ The existing ProtocolView, reworked:
   `phone/src/lib/protocol.ts` and the library fixtures; kinds map to the backend's four
   (dose, meal, walk, winddown). At least 3 templates per group.
 - Edit: tapping a row's name opens AddItemView pre-filled (name, kind, window, days), saved
-  through a `PATCH /api/protocol/{id}` (exists; wire `updateProtocolItem` in AppState).
+  through a `PUT /api/protocol/{id}` (exists; add `updateProtocolItem` to APIClient and AppState).
 
 ## Analysis tab (D-010, web W-101 … W-103)
 
