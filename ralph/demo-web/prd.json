@@ -1,0 +1,47 @@
+{
+  "project": "Zeroist demo UI, web (phone/) embedded Analysis",
+  "branchName": "demo-web",
+  "spec": "docs/DEMO_UI_PRD.md",
+  "userStories": [
+    {
+      "id": "W-101",
+      "title": "Embed mode: no menu, no web title, no Find pill",
+      "description": "When embedded (data-embed on <html>, src/lib/embed.ts) the Shell hides the hamburger button, the page's own <h1> title, and the 'Find my protocol' pill on every screen, so the native inline title is the only title. The Menu component must be unreachable in embed mode (no button, no keyboard shortcut, no route that opens it). Pushed detail screens keep their back button. Top padding of the content in embed mode is adjusted so the first element sits at the same distance from the top as the title used to.",
+      "acceptanceCriteria": [
+        "/analysis?embed=1 shows no hamburger, no h1, no Find pill; /calendar?embed=1 same",
+        "A test in src (vitest) asserts the Shell renders none of the three when embedded and all three when not",
+        "Screenshots W-101-analysis.png and W-101-calendar.png in embed mode",
+        "lint, tsc, test, build exit 0"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Shell -> ShellFrame({embedded}); embedded tabs render no TopBar/Find pill, hamburger, h1, tab bar or Menu (CSS embed: variant covers first paint); Shell.test.tsx."
+    },
+    {
+      "id": "W-102",
+      "title": "Analysis week chart: no left clipping",
+      "description": "The week chart on /analysis is clipped on its left edge in the phone-width embed (see docs/APP_WEB_NOTES.md and ios/Brian/Screenshots/N-006-analysis.png on main: the first day's bars and the hour axis are cut). Fix the layout so the whole chart, its hour labels and all seven day columns fit inside the gutter at 393 px wide and at 375 px wide, in 'This week', '2 weeks' and '30 days'.",
+      "acceptanceCriteria": [
+        "Overflow sweep script (scripts, see W-005 on main) reports no horizontal overflow on /analysis at 375 and 393 px for all three ranges",
+        "Screenshots W-102-analysis-week.png, W-102-analysis-30d.png at 393 px in embed mode",
+        "lint, tsc, test, build exit 0"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "HourAxis pinned outside the scroller; scroller sized to whole 40 px columns so no day is cut; overflow.mjs now checks cut columns and the hours (ok at 375/393, all ranges)."
+    },
+    {
+      "id": "W-103",
+      "title": "Embed reachability audit and notes",
+      "description": "In embed mode nothing on /analysis (or /calendar) may navigate to /treatments, /tests, /biomarkers, /devices, /library, /sources, /claims, /concierge, /find or /settings. Audit every link and button rendered on those two pages in embed mode (a vitest that renders each page's Shell with data-embed and asserts no anchor/button targets those paths, or a Playwright-style crawl in the fixtures server). Remove or hide any that remain. Update docs/APP_WEB_NOTES.md: what embed hides now, the URL forms the native app uses (only /analysis for the demo), and the test that guards it.",
+      "acceptanceCriteria": [
+        "The audit test exists and passes",
+        "docs/APP_WEB_NOTES.md updated for the demo embed",
+        "lint, tsc, test, build exit 0"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "embedReach.test.tsx: embedded /analysis and /calendar (seeded month, every lever sheet) link to none of the ten screens and their import graph never names one; live crawl agreed, nothing needed removing; notes updated."
+    }
+  ]
+}

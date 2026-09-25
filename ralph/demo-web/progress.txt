@@ -1,0 +1,46 @@
+# Ralph progress (demo, web)
+Started: Thu Sep 24 20:14:51 CDT 2026
+---
+
+## 2026-09-24 W-101 passes
+- phone/src/components/Shell.tsx: Shell = ShellFrame + useEmbedded() (useSyncExternalStore, false on
+  server/hydration). Embedded tabs render no top pill (so no Find pill), no hamburger, no h1, no tab
+  bar, and never mount Menu. Before hydration the `embed:hidden` classes hide the same chrome, and
+  main gets embed:pt-[safe-area+16px] so the first element sits where the title row started.
+- An embedded tab with an `action` gets an action-only row (none of the embedded tabs have one).
+- Test: phone/src/components/Shell.test.tsx (renderToStaticMarkup, next/navigation mocked).
+- Screenshots: phone/screenshots/W-101-analysis.png, W-101-calendar.png.
+- Learned: vitest renders .tsx fine in node env with react-dom/server; no jsdom needed for
+  markup assertions. Week chart left clipping still visible (W-102).
+- git push was not approved in this iteration's sandbox; commits are local until pushed.
+
+## 2026-09-24 W-102 passes
+- Cause: on 2 weeks / 30 days the hour axis lived inside the chart's scroller, so opening on the
+  latest day scrolled the hours off screen and left the leftmost day half cut at the screen edge.
+- phone/src/components/calendar/Columns.tsx: `HourAxis` exported; `Columns` takes `hours={false}`.
+  Calendar is unchanged (hours still inline).
+- phone/src/components/analysis/Analysis.tsx: HourAxis pinned beside the scroller (no more bleed to
+  the screen edge); scroller width `calc(round(down, 100% + 8px, 40px) - 8px)`, so it holds whole
+  32+8 px columns and scrollLeft = max lands on a column edge.
+- phone/scripts/overflow.mjs: chart check also fails on a day cut at either scroller edge, the hours
+  off screen, or the scroller off screen. Old code fails it (1 day cut, hours cut off); new passes
+  at 375 and 393.
+- Screenshots: W-102-analysis-week.png, W-102-analysis-30d.png (393 px). shot.mjs picks a range with
+  `--click='[aria-label=Range] button:nth-child(3)'`.
+- git push was again not approved in this iteration's sandbox; W-102 commits are local until pushed.
+
+## 2026-09-24 W-103 passes
+- phone/src/components/embedReach.test.tsx (7 tests): renders the embedded Shell around Analysis
+  and Calendar with useMonth mocked to the seeded month (static render runs no effects), plus every
+  rule's LeverSheet; fails on any href/action/formaction to treatments, tests, biomarkers, devices,
+  library, sources, claims, concierge, find or settings, or on a Menu button. Also walks the import
+  graph from app/layout, app/analysis/page, app/calendar/page (menu/ not followed; Shell.tsx and
+  lib/screens.ts not scanned, the render checks cover them) and fails if a module names one of those
+  screens, so router.push from a button is caught. Mutation-checked: an injected <a href="/devices">
+  and a "/concierge" string both fail it.
+- Live crawl (throwaway, fixtures server, 393 px): /analysis has 4 buttons, /calendar 5, 0 anchors on
+  either; clicking each leaves the path unchanged; no menu. Nothing had to be removed.
+- docs/APP_WEB_NOTES.md: demo loads only /analysis; what embed hides now; the ten routes stay in the
+  repo but are unreachable; the guard test; stale W-001/W-003 screenshot rows marked superseded.
+  phone/src/lib/embed.ts header comment no longer says the hamburger and title stay.
+- git push worked this iteration (W-101/W-102 commits went up with it).

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Columns, ColumnsCaption } from "@/components/calendar/Columns";
+import { Columns, ColumnsCaption, HourAxis } from "@/components/calendar/Columns";
 import { Button, EmptyState, ErrorState, LoadingState, SegmentedControl } from "@/components/ui";
 import { analyze } from "@/lib/analysis";
 import { insightsFor } from "@/lib/insights";
@@ -23,6 +23,9 @@ const RANGE_LABEL: Record<Span, string> = { "7": "This week", "14": "These 2 wee
 /** The columns: the week view's strip at 32 wide, the night cap 14 px of it. */
 const COLUMN_H = 300;
 const COLUMN_CAP = 14;
+/** A 32 px column and the 8 px gap after it. */
+const COLUMN_GAP = 8;
+const COLUMN_PITCH = 32 + COLUMN_GAP;
 
 /**
  * Analysis: the days side by side with a number on every red bar (one number
@@ -76,15 +79,23 @@ export function Analysis() {
         <SegmentedControl options={SPANS} value={span} onChange={setSpan} size={32} ariaLabel="Range" />
       </div>
 
-      {/* Bleeds to the screen edges with a 16 px lead; 14 and 30 columns scroll and snap, no scrollbar.
+      {/* The hours stay pinned; the days scroll beside them, 14 and 30 snapping a column at a time, no
+          scrollbar. The scroller is a whole number of 40 px columns wide (32 + the 8 px gap, less the
+          last gap), so it opens on the latest day with the leftmost visible column whole, never cut.
           The caption sits outside the scroller so it wraps to the screen instead of widening the row. */}
-      <div
-        ref={scroller}
-        data-chart
-        className="-mx-gutter mt-4 overflow-x-auto px-gutter [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory scroll-pl-gutter [&_[role=group]]:snap-start"
-      >
-        <div className="w-max min-w-full">
-          <Columns columns={result.columns} height={COLUMN_H} cap={COLUMN_CAP} numbers={result.numbers} width={32} caption={false} />
+      <div className="mt-4 flex gap-2">
+        <HourAxis height={COLUMN_H} cap={COLUMN_CAP} />
+        <div className="min-w-0 flex-1">
+          <div
+            ref={scroller}
+            data-chart
+            className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory [&_[role=group]]:snap-start"
+            style={{ width: `calc(round(down, 100% + ${COLUMN_GAP}px, ${COLUMN_PITCH}px) - ${COLUMN_GAP}px)` }}
+          >
+            <div className="w-max">
+              <Columns columns={result.columns} height={COLUMN_H} cap={COLUMN_CAP} numbers={result.numbers} width={32} caption={false} hours={false} />
+            </div>
+          </div>
         </div>
       </div>
       <ColumnsCaption sleep={result.columns.some((c) => c.sleepMinutes !== undefined)} />
