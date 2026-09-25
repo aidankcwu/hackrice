@@ -65,6 +65,7 @@ It shows "Seeded", never "demo".
 | `-screen protocol-templates` / `-screen protocol-edit` | Demo: the Protocol tab scrolled to Templates with Doses open / with the first item's edit sheet up. |
 | `-glassesOff` | Demo: glasses unavailable (red pill, red Glasses row). |
 | `-fresh` | Demo: first launch. No link, glasses not registered, not watching, clipboard offer shown, Start watching disabled. |
+| `-empty` | Demo: the empty day (D-009). Link reachable, glasses connected, not watching; reads `Fixtures/empty_*.json` (no episodes, decisions, sessions, recaps or protocol; healthspan 0.0 h, `measured.count` 0 so the chip says Unmeasured). Every Home layer shows its empty word, Log hidden; the Protocol tab can still add items (in memory). Scroll with `-scrollTo stats-end`, not `log-end` (no Log to land on). |
 | `-tokenRejected` | Demo: the server refused the link (red Invite link row), not watching. |
 | `-webBase <url>` (or env `BRIAN_WEB_BASE`) | Demo: where Calendar and Analysis load from. Without it they show the Seeded placeholder. |
 

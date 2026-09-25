@@ -30,6 +30,8 @@ struct ProtocolView: View {
             }
         }
         .navigationTitle("Protocol")
+        // The tab bar names the tab; beside a short status pill the inline title squeezed to "P…".
+        .toolbar(removing: .title)
         .refreshable { await appState.refreshProtocol() }
         .sheet(isPresented: $showAddItem) { AddItemView() }
         .sheet(item: $editing) { AddItemView(editing: $0) }

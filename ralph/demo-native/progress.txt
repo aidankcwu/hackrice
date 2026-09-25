@@ -248,3 +248,30 @@ Screenshots: D-002-preview, -preview-dark, -preview-xxxl, -preview-empty, -previ
 Next iteration must know
 - Header untouched: the orchestrator's compact Stop capsule review is still open (D-010).
 - Untested on hardware: real DAT frames into the sheet (orientation, rate at frameRate 2).
+
+## 2026-09-24 D-009 Empty state and the -empty launch argument (passes)
+What I did
+- APIClient.emptyFixtures: fixture(name) reads `Fixtures/empty_<name>.json` instead. Six
+  files: episodes, decisions, sessions ([]), recaps ({"recaps":[]}), protocol (no items),
+  healthspan (hours_today 0, measured {count 0, total 20}, no factors). Setting it drops the
+  in-memory protocol copy, so Add from the Protocol tab still works on the empty day.
+- AppState.emptyArgument "-empty" -> startEmpty() (demo only): emptyFixtures on, not
+  watching, and demo stream stats lose the whisper line (nothing has been spoken).
+- HomeView hero chip: "Unmeasured" when healthspan.measuredCount == 0 (it said Seeded in demo).
+- ProtocolView: `.toolbar(removing: .title)`. Beside the short "Not watching" pill the
+  inline title squeezed to "P…"; with "Watching · 14 min" it was already hidden. The tab
+  bar names the tab. Analysis keeps its title (the PRD wants it).
+- Tests/EmptyStateTests.swift: 5 tests (no error, every layer's empty word, nothing spoken,
+  no summary fetch, protocol add from empty). 174 tests green.
+- APP_NATIVE_NOTES.md: -empty row in the launch-argument table.
+
+Screenshots: D-009-home-empty, -home-empty-protocol (-scrollTo summary), -home-empty-end
+(-scrollTo stats-end), -home-empty-xxl, -home-empty-dark, -protocol-empty, -connect-empty,
+-connect-fresh (-fresh unchanged).
+
+Next iteration must know (D-010)
+- `-scrollTo log-end` does nothing under -empty: the Log is hidden, so there is no id.
+- Orchestrator reviews still open, both D-010: the compact .glassProminent Start/Stop
+  capsule in the header (still a full-width bar in every D-009 shot), and Protocol on
+  Brian.page with Home's hairline rows instead of the inset card on grouped grey (also
+  visible in D-009-protocol-empty: the "No protocol yet" line sits in a white inset card).

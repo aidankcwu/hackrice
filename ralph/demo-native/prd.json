@@ -127,8 +127,8 @@
         "Build and tests exit 0"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "-empty reads Fixtures/empty_*.json via APIClient.emptyFixtures; AppState.startEmpty(); hero chip Unmeasured at measured.count 0; Protocol tab title removed (was truncating to 'P…'); EmptyStateTests."
     },
     {
       "id": "D-010",
