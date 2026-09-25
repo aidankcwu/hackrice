@@ -7,24 +7,23 @@ import SwiftUI
 struct PreviewView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if let frame = appState.previewFrame {
+                        // Under the picture as the PRD draws it; above it at accessibility
+                        // sizes, where the picture alone fills the screen.
+                        if dynamicTypeSize.isAccessibilitySize { liveLine }
                         Image(uiImage: frame)
                             .resizable()
                             .scaledToFit()
                             .clipShape(RoundedRectangle(cornerRadius: Brian.panelRadius, style: .continuous))
                             .frame(maxWidth: .infinity)
                             .accessibilityLabel("Latest frame from the glasses")
-                        // "Live · 0.7 frames/s" is a rate over time, so it re-reads once a second.
-                        TimelineView(.periodic(from: .now, by: 1)) { context in
-                            Text(appState.preview.line(now: context.date))
-                                .font(BrianType.secondary.monospacedDigit())
-                                .foregroundStyle(Brian.muted)
-                        }
+                        if !dynamicTypeSize.isAccessibilitySize { liveLine }
                     } else {
                         Text("No frames yet")
                             .font(BrianType.body)
@@ -50,5 +49,14 @@ struct PreviewView: View {
         }
         .onAppear { appState.openPreview() }
         .onDisappear { appState.closePreview() }
+    }
+
+    /// "Live · 0.7 frames/s" is a rate over time, so it re-reads once a second.
+    private var liveLine: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            Text(appState.preview.line(now: context.date))
+                .font(BrianType.secondary.monospacedDigit())
+                .foregroundStyle(Brian.muted)
+        }
     }
 }

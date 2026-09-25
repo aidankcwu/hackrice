@@ -548,10 +548,17 @@ final class AppState {
         guard demo else { return }
         demoPreviewTask = Task { [weak self] in
             let image = PreviewFeed.fixtureImage()
+            // Stamped on a steady clock: sleep overshoots a little, which would read 0.6.
+            let start = Date()
+            var tick = 0.0
             while !Task.isCancelled {
                 guard let self else { return }
-                if let image, self.watching { self.preview.offer(image, at: Date()) }
-                try? await Task.sleep(for: .seconds(PreviewFeed.demoInterval))
+                if let image, self.watching {
+                    self.preview.offer(image, at: start.addingTimeInterval(tick * PreviewFeed.demoInterval))
+                }
+                tick += 1
+                let next = start.addingTimeInterval(tick * PreviewFeed.demoInterval)
+                try? await Task.sleep(for: .seconds(max(0, next.timeIntervalSinceNow)))
             }
         }
     }

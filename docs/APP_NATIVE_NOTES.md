@@ -61,6 +61,7 @@ It shows "Seeded", never "demo".
 | `-showSetup` | Older spelling of `-screen connect`. |
 | `-scrollTo <section>` | Demo: Home scrolls to `metrics`, `summary`, `protocol`, `sessions` (expanded), `stats` or `log` (expanded) once loaded; `summary-end` puts the section's bottom in view instead (`log-end` keeps the Log collapsed). |
 | `-screen session` | Demo: Home with the newest session's detail pushed. |
+| `-screen preview` | Home with the Glasses view sheet up. Demo feeds it `Fixtures/preview.jpg` every 1.5 s while watching ("Live · 0.7 frames/s"); with `-fresh` it says "No frames yet". |
 | `-screen protocol-templates` / `-screen protocol-edit` | Demo: the Protocol tab scrolled to Templates with Doses open / with the first item's edit sheet up. |
 | `-glassesOff` | Demo: glasses unavailable (red pill, red Glasses row). |
 | `-fresh` | Demo: first launch. No link, glasses not registered, not watching, clipboard offer shown, Start watching disabled. |
@@ -117,3 +118,6 @@ Everything here was verified in the simulator in demo mode and in unit tests onl
 - The web tabs against the hosted app: `?token=` + `embed=1` + cookie over HTTPS, the
   401/403 → token-rejected state, and what the pages do when the token rotates.
 - Amber "Reconnecting…" after a Wi-Fi drop: only seen through the derivation tests.
+- The Glasses view sheet (D-002) with real DAT frames: `GlassesSession` hands each
+  `VideoFrame`'s UIImage to `onPreviewFrame` only while the sheet is open; the rate,
+  orientation and memory of real 504×896-ish frames have not been seen on a device.

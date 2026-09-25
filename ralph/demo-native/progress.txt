@@ -216,3 +216,35 @@ Next iteration must know
   of decisions held back, which merging should not hide).
 - Orchestrator's header review (compact Stop capsule) is still open; the full-width Stop bar
   is visible in every D-008 screenshot. D-010 or whoever touches the header.
+
+## 2026-09-24 D-002 Preview sheet with the live glasses frame (passes)
+What I did
+- App/PreviewFeed.swift (pure value type): open() / close() / offer(image, at:). Closed, it
+  holds nothing and refuses frames; close() drops the frame. The picture changes at most
+  every 0.5 s; every arrival counts toward frames/s over a 10 s window. line(now:) =
+  "Live · 0.7 frames/s", "Live" (one frame), "Last frame 12 s ago" / "3 min ago" (> 5 s),
+  "No frames yet". fixtureImage() reads Fixtures/preview.jpg from the bundle.
+- GlassesSessioning gained `onPreviewFrame: ((UIImage, Date) -> Void)?`. GlassesSession calls
+  it from the existing videoFramePublisher listener next to sender.offer; MockGlasses sends
+  preview.jpg to it (the sender still gets its 1-pixel JPEG); DemoGlasses has the property.
+- AppState: `preview` (PreviewFeed), `previewFrame`, `previewOpen`, openPreview() sets
+  session.onPreviewFrame (and in demo starts a task offering preview.jpg every 1.5 s on a
+  steady clock while watching), closePreview() clears the hook, cancels the task, drops
+  the frame. PreviewView calls them in onAppear / onDisappear.
+- PreviewView: frame scaled to fit, radius 20; the line under it in secondary muted, above
+  it at accessibility sizes (it fell below the fold at XXXL). No frame: "No frames yet" +
+  an instruction ("Tap Start watching and the camera's view shows here." when not watching).
+- Fixtures/preview.jpg: 540x960, a desk with a laptop, mug and window, rendered by a PIL
+  script (no people, no personal photos). Tests/PreviewFeedTests.swift: 12 tests incl. an
+  AppState demo test that the frame is gone after closePreview and stays gone.
+
+Decisions
+- Frames cross the glasses seam only through onPreviewFrame, which is nil unless the sheet
+  is open; the header comment of GlassesSessioning says so.
+- Demo frames are stamped start + n × 1.5 s: Task.sleep overshoot read "0.6 frames/s".
+
+Screenshots: D-002-preview, -preview-dark, -preview-xxxl, -preview-empty, -preview-empty-xxxl.
+
+Next iteration must know
+- Header untouched: the orchestrator's compact Stop capsule review is still open (D-010).
+- Untested on hardware: real DAT frames into the sheet (orientation, rate at frameRate 2).

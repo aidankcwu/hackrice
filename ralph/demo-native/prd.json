@@ -114,8 +114,8 @@
         "Build and tests exit 0"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "PreviewFeed (App/PreviewFeed.swift) holds the frame only while open, <=2 updates/s; GlassesSessioning.onPreviewFrame set only while the sheet is up; demo feeds Fixtures/preview.jpg at 1.5 s."
     },
     {
       "id": "D-009",
