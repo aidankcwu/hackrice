@@ -74,7 +74,7 @@ struct SessionDetailView: View {
 
     private func log(_ session: SessionsSummary.Row, now: Date) -> some View {
         let all = Ledger.entries(decisions: appState.decisions, episodes: appState.episodes)
-        let entries = SessionsSummary.entries(all, in: session.session, now: now)
+        let entries = LedgerCoalescer.coalesce(SessionsSummary.entries(all, in: session.session, now: now))
         return VStack(alignment: .leading, spacing: 0) {
             Text("Log")
                 .font(BrianType.title)

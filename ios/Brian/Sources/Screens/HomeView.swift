@@ -1,6 +1,6 @@
 // DEMO_UI_PRD.md "Home". Start watching / Stop lives in the shared header now. Metrics
 // (hero, Daylight / Screens tiles, watched line) are D-003; the daily summary is D-004; the
-// protocol card is D-005; sessions are D-006; the stats sheet is D-007; the log arrives in D-008.
+// protocol card is D-005; sessions are D-006; the stats sheet is D-007; the collapsed, coalesced log is D-008.
 import SwiftUI
 
 /// Home's sections, top to bottom; the ids `-scrollTo` accepts (screenshots).
@@ -31,6 +31,7 @@ struct HomeView: View {
     /// Opens the Protocol tab; RootView owns the tab selection.
     var openProtocol: () -> Void = {}
     @State private var sessionsExpanded = false
+    @State private var logExpanded = false
     /// The session whose detail is pushed.
     @State private var openSession: String?
 
@@ -64,6 +65,7 @@ struct HomeView: View {
                 if let target = appState.homeScrollTarget {
                     appState.homeScrollTarget = nil
                     if target.section == .sessions { sessionsExpanded = true }
+                    if target.section == .log { logExpanded = true }
                     // Let the page (and expanded rows) lay out first, or the scroll lands short at XXL.
                     try? await Task.sleep(for: .milliseconds(400))
                     proxy.scrollTo(target.section, anchor: target.atEnd ? .bottom : .top)
@@ -401,38 +403,38 @@ struct HomeView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    private var ledger: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // D-008 turns this into the collapsed "Log"; "Today" is the summary's title now.
-            Text("Log")
-                .font(BrianType.title)
-                .padding(.bottom, 8)
-
-            if entries.isEmpty {
-                Text("Put the glasses on. Bryan starts counting light, people, and air the moment the camera is up.")
-                    .font(BrianType.body)
-                    .foregroundStyle(Brian.muted)
-                    .padding(.vertical, 16)
-            } else {
-                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                    if let decision = entry.decision {
-                        NavigationLink {
-                            DecisionDetailView(decision: decision, reported: entry.reported)
-                        } label: {
+    /// "Log" (D-008): collapsed by default, rows coalesced; hidden until something is logged.
+    @ViewBuilder private var ledger: some View {
+        let entries = self.entries
+        if !entries.isEmpty {
+            DisclosureGroup(isExpanded: $logExpanded) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(entries) { entry in
+                        Divider().overlay(Brian.line)
+                        if let decision = entry.decision {
+                            NavigationLink {
+                                DecisionDetailView(decision: decision, reported: entry.reported)
+                            } label: {
+                                LedgerRow(entry: entry)
+                            }
+                            .buttonStyle(.plain)
+                        } else {
                             LedgerRow(entry: entry)
                         }
-                        .buttonStyle(.plain)
-                    } else {
-                        LedgerRow(entry: entry)
                     }
-                    if index < entries.count - 1 { Divider().overlay(Brian.line) }
+                    Text("Held back \(heldBackCount) today")
+                        .font(BrianType.caption)
+                        .foregroundStyle(Brian.muted)
+                        .padding(.top, 16)
                 }
+                .padding(.top, 8)
+            } label: {
+                Text("Log")
+                    .font(BrianType.title)
+                    .foregroundStyle(Brian.ink)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             }
-
-            Text("Held back \(heldBackCount) today")
-                .font(BrianType.caption)
-                .foregroundStyle(Brian.muted)
-                .padding(.top, 16)
+            .tint(Brian.muted)
         }
     }
 
@@ -448,7 +450,7 @@ struct HomeView: View {
     }
 
     private var entries: [LedgerEntry] {
-        Ledger.entries(decisions: appState.decisions, episodes: appState.episodes)
+        LedgerCoalescer.coalesce(Ledger.entries(decisions: appState.decisions, episodes: appState.episodes))
     }
 
     private var heldBackCount: Int { Ledger.heldBackCount(appState.decisions) }

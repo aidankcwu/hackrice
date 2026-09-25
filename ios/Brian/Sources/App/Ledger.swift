@@ -1,5 +1,6 @@
 // The log's rows: today's decisions and the episodes no decision covered, newest first.
-// Pure; Home's Log and the session detail (D-006) draw the same rows. D-008 coalesces them.
+// Pure; Home's Log and the session detail (D-006) draw the same rows, then
+// LedgerCoalescer merges repeats (D-008).
 import Foundation
 
 enum Ledger {

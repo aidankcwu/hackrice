@@ -10,6 +10,7 @@
 		0CD39EBD2E42C3627444B1E6 /* TodayStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90FF499C63696F9C19EBAD25 /* TodayStats.swift */; };
 		0E2B95DC0CA574191C9B6AD7 /* ProtocolStateLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36F3F795C9A60AB0830B0FC3 /* ProtocolStateLabel.swift */; };
 		12B5F6F88BD3EF4657194A09 /* WebSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D98DBF53563BEF901573BB1 /* WebSourceTests.swift */; };
+		1740899EEEBCDA46E8E39866 /* LedgerCoalescerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 555C3FA2D6763A6135E61DDE /* LedgerCoalescerTests.swift */; };
 		17A1599D759C39DF2970D60C /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5648C60CCCE2DAEA597B2FEC /* Theme.swift */; };
 		298C8DD74BD4AC7990927CD3 /* AddItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B16D781364F5366E4984DEA /* AddItemView.swift */; };
 		2D47A74FAC14C320D1886B5B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC2C75102A7E6B02D881985A /* SettingsView.swift */; };
@@ -20,6 +21,7 @@
 		3D927F46280E221E7E2BDACA /* SummaryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 559B05FCD80E626C8EA8F515 /* SummaryCard.swift */; };
 		3EAB6CAE70F5D227C0C25DDA /* today_episodes.json in Resources */ = {isa = PBXBuildFile; fileRef = 94A9C97FA2A625A5950E617E /* today_episodes.json */; };
 		3EB69E73C723937EE1804232 /* recap_today.json in Resources */ = {isa = PBXBuildFile; fileRef = D620E55A873A742A0FCEBF4C /* recap_today.json */; };
+		41DE1E0F8273BB34AC077D95 /* LedgerCoalescer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 715F3B168C8A4AF5B79AE260 /* LedgerCoalescer.swift */; };
 		47D169FE3B901DCC2A908876 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1CDD197CD3E40D0BC5B3760 /* APIClient.swift */; };
 		49CC45830016BCCB18D833C2 /* ModelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34CA65A06BE3C5F30E52D1B6 /* ModelsTests.swift */; };
 		4B7E48E6EC8539D7B1A0E419 /* WebScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E87925125E3B1729AE4F38 /* WebScreen.swift */; };
@@ -116,6 +118,7 @@
 		4C637F5B4FB914EB5E14AB90 /* ConnectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectView.swift; sourceTree = "<group>"; };
 		4CC4D8628D79FD675365F135 /* recaps.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = recaps.json; sourceTree = "<group>"; };
 		4DADCD752FC08855D793C233 /* CorpusRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusRecorder.swift; sourceTree = "<group>"; };
+		555C3FA2D6763A6135E61DDE /* LedgerCoalescerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerCoalescerTests.swift; sourceTree = "<group>"; };
 		556B6B840C8FD7BC38F4C8B5 /* BrianApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrianApp.swift; sourceTree = "<group>"; };
 		559B05FCD80E626C8EA8F515 /* SummaryCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryCard.swift; sourceTree = "<group>"; };
 		5648C60CCCE2DAEA597B2FEC /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -127,6 +130,7 @@
 		6786913689B235383BC1435E /* QuestionListener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuestionListener.swift; sourceTree = "<group>"; };
 		6859C0E70A4F1B86BBE2D3AB /* ProtocolSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolSummary.swift; sourceTree = "<group>"; };
 		6D98DBF53563BEF901573BB1 /* WebSourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSourceTests.swift; sourceTree = "<group>"; };
+		715F3B168C8A4AF5B79AE260 /* LedgerCoalescer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerCoalescer.swift; sourceTree = "<group>"; };
 		7883CA2D2A147A7193706643 /* ProtocolSummaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolSummaryTests.swift; sourceTree = "<group>"; };
 		7BBB7DEB47CFB2D11319B758 /* StatusPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusPill.swift; sourceTree = "<group>"; };
 		7E760E93084D97676A29AA74 /* ConnectionStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStatus.swift; sourceTree = "<group>"; };
@@ -155,7 +159,7 @@
 		F7429361390E6D18FE85B496 /* HeaderStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeaderStateTests.swift; sourceTree = "<group>"; };
 		FC0FBA5F12B4F1CA114B1D05 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		FC2C75102A7E6B02D881985A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		"TEMP_2BA495B4-52F8-4922-AA1F-5909C3123776" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
+		"TEMP_3C053C04-F404-4F7B-8F13-92530D1C0626" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -240,6 +244,7 @@
 				09C05E5F73DB82BC32C24B71 /* GlassesFactory.swift */,
 				5FE0DFA2A260EB6C1770CE9C /* HeaderState.swift */,
 				604221AF2E7C32D465F203C5 /* Ledger.swift */,
+				715F3B168C8A4AF5B79AE260 /* LedgerCoalescer.swift */,
 				6859C0E70A4F1B86BBE2D3AB /* ProtocolSummary.swift */,
 				001A825ED887460A25332C9E /* ProtocolTemplates.swift */,
 				D7A112AAC56185A28D26D0BB /* RootView.swift */,
@@ -273,6 +278,7 @@
 				863CF68F9EB53AF75F79DCFA /* ConnectionStatusTests.swift */,
 				629137CFB3B7BE25551A391C /* ConnectRowsTests.swift */,
 				F7429361390E6D18FE85B496 /* HeaderStateTests.swift */,
+				555C3FA2D6763A6135E61DDE /* LedgerCoalescerTests.swift */,
 				34CA65A06BE3C5F30E52D1B6 /* ModelsTests.swift */,
 				7883CA2D2A147A7193706643 /* ProtocolSummaryTests.swift */,
 				C7BDB86B2CE2D6C1359E16DD /* ServerURLTests.swift */,
@@ -325,10 +331,10 @@
 			);
 			sourceTree = "<group>";
 		};
-		"TEMP_D1275468-64B2-48A5-83E1-84D333AF6486" /* Brian */ = {
+		"TEMP_A593C605-7D6F-4409-A845-2D3AB0E6B2EA" /* Brian */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_2BA495B4-52F8-4922-AA1F-5909C3123776" /* Config.xcconfig */,
+				"TEMP_3C053C04-F404-4F7B-8F13-92530D1C0626" /* Config.xcconfig */,
 			);
 			path = Brian;
 			sourceTree = "<group>";
@@ -443,6 +449,7 @@
 				A6A4449114C504C1CE92E3CA /* ConnectRowsTests.swift in Sources */,
 				ED26871AF9E5A219EA3979F0 /* ConnectionStatusTests.swift in Sources */,
 				696DB6207F770A8C1A370D18 /* HeaderStateTests.swift in Sources */,
+				1740899EEEBCDA46E8E39866 /* LedgerCoalescerTests.swift in Sources */,
 				49CC45830016BCCB18D833C2 /* ModelsTests.swift in Sources */,
 				B1FE4548C1109C9BBC5EFB69 /* ProtocolSummaryTests.swift in Sources */,
 				826F3A446F99A62C3A230B4D /* ServerURLTests.swift in Sources */,
@@ -474,6 +481,7 @@
 				5A6720237EA5B56097D7788C /* HeaderState.swift in Sources */,
 				830D6E805C2E2BE708595955 /* HomeView.swift in Sources */,
 				89289F56D11A4884FC214E17 /* Ledger.swift in Sources */,
+				41DE1E0F8273BB34AC077D95 /* LedgerCoalescer.swift in Sources */,
 				FFA713834BD5D5515ED098C6 /* LedgerRow.swift in Sources */,
 				5E13D9D0F983CF0BE6F312C6 /* LinkGlue.swift in Sources */,
 				4E8C49A02C03DE3E77E71110 /* MacLink.swift in Sources */,
@@ -609,7 +617,7 @@
 		};
 		B6722B02BBFA64746616D7BD /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_2BA495B4-52F8-4922-AA1F-5909C3123776" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_3C053C04-F404-4F7B-8F13-92530D1C0626" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Brian.entitlements;
@@ -634,7 +642,7 @@
 		};
 		EA025B21F11DCFD0598B3322 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_2BA495B4-52F8-4922-AA1F-5909C3123776" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_3C053C04-F404-4F7B-8F13-92530D1C0626" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Brian.entitlements;
