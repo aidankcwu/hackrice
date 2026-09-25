@@ -86,8 +86,8 @@
         "Build and tests exit 0"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "TodayStats.derive (pure, 11 tests) -> eight Cells with empty words; meal counts as food; Grid 2-col, 1-col at AX sizes; -scrollTo stats[-end]."
     },
     {
       "id": "D-008",

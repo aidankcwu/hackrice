@@ -163,3 +163,31 @@ Next iteration must know
   race and refreshSessions skips while one is in flight.
 - The session detail's Log shows duplicate adjacent "Outdoors" rows until D-008 coalesces.
 - Untested on hardware: session start/end against the real backend, recap arriving after Stop.
+
+## 2026-09-24 D-007 Today's stats sheet (passes)
+What I did
+- App/TodayStats.swift: TodayStats.Cell {label, value?, detail?, emptyWord; text = PRD one-line
+  form} and TodayStats.derive(episodes:now:locale:timeZone:) -> eight cells in the PRD's order.
+  lengthText (rounded minutes, "Under a minute"), sightings ("1 sighting" / "7 sightings").
+- Tests/TodayStatsTests.swift: 11 new tests, one per PRD row, every empty word, the fixture day
+  (3:29 PM, 3:28–4:08 PM · 40 min, 4:06 PM, 28 min, 7 sightings, people/hydration empty).
+- AppState.todayStats(now:); HomeView "Today's stats" between Sessions and Log
+  (HomeSection.stats): Grid of two columns so a row's cells share height; one column at
+  accessibility sizes. Cell = surface, radius 14, padding 16; value BrianType.number ink, or the
+  empty word in body muted; eating window's length as a secondary line; label secondary muted.
+- -scrollTo now always waits 400 ms before scrolling (it landed short at XXL for stats too).
+
+Decisions
+- The backend emits `meal` (not `food_sighting`); the eating window takes both kinds.
+- Hydration skips alcohol_sighting and caffeine_sighting even if their label says "drink".
+- Eating window's value is the span; its length is a `detail` line (the one-line PRD form
+  "3:28–4:08 PM · 40 min" wrapped badly in a half-width cell). Cell.text keeps the PRD form.
+- Time with people sums kind/label containing people/social/conversation (backend emits
+  `conversation`; the fixture has none, so the demo shows "Not tracked yet").
+
+Screenshots: D-007-home-stats, -home-stats-xxl, -home-stats-xxl-end, -home-stats-dark.
+
+Next iteration must know
+- Episode has no `dominant` field on the phone; nothing needed it yet.
+- Tests normalise U+202F and U+2009 (DateIntervalFormatter puts thin spaces round the en dash).
+- Orchestrator's header review (compact Stop capsule) is still open; D-010 or whoever touches it.
