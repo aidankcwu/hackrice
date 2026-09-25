@@ -1,10 +1,10 @@
 "use client";
 
-import { ChevronLeft, Menu as MenuIcon } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { Menu } from "@/components/menu/Menu";
-import { Button, ICON_SIZES, STROKE, TabBar, TopBar } from "@/components/ui";
+import { Button, STROKE, TabBar, TopBar } from "@/components/ui";
 import { isEmbedded } from "@/lib/embed";
 import { backFallback, SCREENS, TABS, type ScreenId } from "@/lib/screens";
 
@@ -39,10 +39,37 @@ export interface ShellProps {
  * no tab bar. The hamburger opens the Menu over everything.
  *
  * Embedded in the native app (`?embed=1`, src/lib/embed.ts) a tab drops the
- * top pill and the tab bar: the hamburger moves beside the screen title and
- * the content runs to the bottom. A pushed screen keeps its back bar.
+ * top pill (and its Find pill), the hamburger, its own title and the tab bar:
+ * the native inline title is the only title, the content starts where that
+ * title row used to, and the Menu cannot be opened. A pushed screen keeps its
+ * back bar.
  */
-export function Shell({ screen, pushed: pushedDetail, title: titleOverride, theme, scale, action, children }: ShellProps) {
+export function Shell(props: ShellProps) {
+  return <ShellFrame {...props} embedded={useEmbedded()} />;
+}
+
+const noSubscribe = () => () => {};
+
+/**
+ * `isEmbedded()` after hydration, false on the server and during hydration.
+ * Before hydration the `embed:` CSS variant hides the same chrome, so the
+ * first paint already matches.
+ */
+function useEmbedded(): boolean {
+  return useSyncExternalStore(noSubscribe, isEmbedded, () => false);
+}
+
+/** The Shell with embed mode decided by the caller (tests render both). */
+export function ShellFrame({
+  screen,
+  pushed: pushedDetail,
+  title: titleOverride,
+  theme,
+  scale,
+  action,
+  embedded,
+  children,
+}: ShellProps & { embedded: boolean }) {
   const title = titleOverride ?? SCREENS[screen].title;
   const pushed = pushedDetail || !TABS.includes(screen);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -72,52 +99,48 @@ export function Shell({ screen, pushed: pushedDetail, title: titleOverride, them
     >
       {/* Everything under the menu is inert while it is open, so focus and screen readers stay inside the overlay. */}
       <div className="contents" inert={menuOpen || undefined}>
-        <header
-          className={`sticky top-0 z-20 ${pushed ? "" : "embed:hidden"}`}
-          style={{ paddingTop: "env(safe-area-inset-top)" }}
-        >
-          {pushed ? (
-            <PushedBar screen={screen} title={title} action={action} />
-          ) : (
-            <TopBar
-              onMenu={openMenu}
-              mainTab
-              action={
-                <Button variant="secondary" href={SCREENS.find.href} className="min-h-9! px-3!">
-                  {SCREENS.find.title}
-                </Button>
-              }
-            />
-          )}
-        </header>
+        {pushed || !embedded ? (
+          <header
+            className={`sticky top-0 z-20 ${pushed ? "" : "embed:hidden"}`}
+            style={{ paddingTop: "env(safe-area-inset-top)" }}
+          >
+            {pushed ? (
+              <PushedBar screen={screen} title={title} action={action} />
+            ) : (
+              <TopBar
+                onMenu={openMenu}
+                mainTab
+                action={
+                  <Button variant="secondary" href={SCREENS.find.href} className="min-h-9! px-3!">
+                    {SCREENS.find.title}
+                  </Button>
+                }
+              />
+            )}
+          </header>
+        ) : null}
 
-        <main className={`flex-1 px-gutter ${pushed ? "pb-8" : `${TAB_CLEARANCE} embed:pt-[env(safe-area-inset-top)]`}`}>
-          {pushed ? null : (
-            <div className="flex items-center justify-between gap-2 pt-4 pb-2">
-              <div className="flex min-w-0 items-center gap-1">
-                <button
-                  type="button"
-                  aria-label="Menu"
-                  onClick={openMenu}
-                  className="-ml-3 hidden size-11 shrink-0 place-items-center rounded-full text-ink transition-colors duration-120 active:bg-surface-2 embed:grid"
-                >
-                  <MenuIcon size={ICON_SIZES.card} strokeWidth={STROKE} aria-hidden="true" />
-                </button>
-                <h1 className="type-screen-title m-0 text-ink">{title}</h1>
-              </div>
+        <main
+          className={`flex-1 px-gutter ${pushed ? "pb-8" : `${TAB_CLEARANCE} embed:pt-[calc(env(safe-area-inset-top)+16px)]`}`}
+        >
+          {pushed ? null : embedded ? (
+            action ? <div className="flex justify-end pb-2">{action}</div> : null
+          ) : (
+            <div className="flex items-center justify-between gap-2 pt-4 pb-2 embed:hidden">
+              <h1 className="type-screen-title m-0 text-ink">{title}</h1>
               {action}
             </div>
           )}
           {children}
         </main>
 
-        {pushed ? null : (
+        {pushed || embedded ? null : (
           <div className="embed:hidden">
             <TabBar active={screen} />
           </div>
         )}
       </div>
-      {menuOpen ? <Menu onClose={closeMenu} /> : null}
+      {menuOpen && !embedded ? <Menu onClose={closeMenu} /> : null}
     </div>
   );
 }
