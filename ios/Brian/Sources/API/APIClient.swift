@@ -57,6 +57,10 @@ final class APIClient {
     private let fixtureBundle: Bundle
     /// Fixture mode's protocol list, loaded once, then edited in memory.
     private var fixtureProtocol: [ProtocolItem]?
+    /// `-empty` (D-009): read `Fixtures/empty_<name>.json`, a day with nothing watched.
+    var emptyFixtures = false {
+        didSet { fixtureProtocol = nil }
+    }
 
     static let timeout: TimeInterval = 15
     static let tokenHeader = "X-Access-Token"
@@ -259,6 +263,7 @@ final class APIClient {
     // MARK: - Fixtures
 
     func fixture<T: Decodable>(_ name: String) throws -> T {
+        let name = emptyFixtures ? "empty_\(name)" : name
         guard let url = fixtureBundle.url(forResource: name, withExtension: "json") else {
             throw APIError.fixtureMissing(name)
         }

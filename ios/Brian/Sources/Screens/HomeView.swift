@@ -440,7 +440,7 @@ struct HomeView: View {
     }
 
     private var provenance: String {
-        guard let healthspan = appState.healthspan else { return "Unmeasured" }
+        guard let healthspan = appState.healthspan, healthspan.measuredCount != 0 else { return "Unmeasured" }
         if appState.demo || healthspan.measured == false || healthspan.provenance?.lowercased() == "seeded" { return "Seeded" }
         switch healthspan.provenance?.lowercased() {
         case "glasses": return "Glasses"

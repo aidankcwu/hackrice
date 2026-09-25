@@ -191,7 +191,11 @@ final class AppState {
     /// Live numbers for this watching session; demo mode fakes a steady 1.5 s cadence.
     var streamStats: StreamStats { streamStats(now: Date()) }
     func streamStats(now: Date) -> StreamStats {
-        if demo { return Self.demoStats(watching: watching, since: watchingSince, now: now) }
+        if demo {
+            var stats = Self.demoStats(watching: watching, since: watchingSince, now: now)
+            if demoEmpty { (stats.lastSpokenText, stats.lastSpokenAt) = (nil, nil) }
+            return stats
+        }
         let sent = watching ? max(0, glue.framesSent - framesAtStart) : 0
         let elapsed = watchingSince.map { now.timeIntervalSince($0) } ?? 0
         return StreamStats(
@@ -237,6 +241,9 @@ final class AppState {
     /// Demo only: a first launch. No link, glasses not registered, not watching, and a
     /// link on the clipboard.
     static let freshArgument = "-fresh"
+    /// Demo only: a reachable link, glasses registered, nothing watched, no episodes,
+    /// sessions, protocol or summary (DEMO_UI_PRD.md "Empty state").
+    static let emptyArgument = "-empty"
     /// Demo only: the server refused the link (red invite row), not watching.
     static let tokenRejectedArgument = "-tokenRejected"
     /// Demo only: `-scrollTo <section>` scrolls Home to that section (`HomeSection`) for screenshots.
@@ -258,6 +265,8 @@ final class AppState {
     @ObservationIgnored private var webBaseOverride: URL?
     /// Home fetched the summary by itself once; after that only Refresh or a Stop does.
     @ObservationIgnored private var summaryAutoFetched = false
+    /// Demo `-empty`: nothing has been spoken yet either.
+    @ObservationIgnored private var demoEmpty = false
     /// Demo only: offers `Fixtures/preview.jpg` to the open Preview sheet.
     @ObservationIgnored private var demoPreviewTask: Task<Void, Never>?
     /// `glue.framesSent` when this watching session started; the sender's count is cumulative.
@@ -319,6 +328,7 @@ final class AppState {
                 watchingSince = nil
                 clipboardOffer = true
             }
+            if arguments.contains(Self.emptyArgument) { startEmpty() }
             if let index = arguments.firstIndex(of: Self.scrollToArgument), index + 1 < arguments.count {
                 homeScrollTarget = HomeScrollTarget(arguments[index + 1])
             }
@@ -344,6 +354,15 @@ final class AppState {
             }
         }
         glue.setCorpusRecording(recordCorpusEnabled)
+    }
+
+    /// Demo `-empty`: the fixtures become a day with nothing in it, and nothing is watching.
+    func startEmpty() {
+        guard demo else { return }
+        demoEmpty = true
+        api.emptyFixtures = true
+        watching = false
+        watchingSince = nil
     }
 
     // MARK: - Lifecycle (called by RootView)
