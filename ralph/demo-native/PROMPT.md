@@ -39,3 +39,11 @@ Repo root: the current directory, branch `demo`. Do ONE story, then stop.
 7. If every story passes, print exactly <promise>COMPLETE</promise>. Otherwise just end.
 If blocked by something outside ios/Brian, write it under "BLOCKED" in progress.txt with the
 exact ask, and end without marking the story passed.
+
+ORCHESTRATOR REVIEW 20:55 (fold into D-010, or earlier if you touch the header): in
+D-001..D-004 screenshots the Start/Stop button is a full-width black bar under the header.
+Aidan asked for it *in* the header. Make it a compact .glassProminent capsule sized to its
+label ("Stop" / "Start watching"), centered in its bar, not full width; keep it visible while
+scrolling. If the top bar has room at 402 pt when the pill is short (e.g. "Glasses off"), it
+may sit trailing beside Preview; otherwise the second bar stays but compact. Also check
+.glassProminent labels in dark mode on ConnectView and AddItemView (D-004 found white-on-white).
