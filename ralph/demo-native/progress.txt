@@ -67,3 +67,34 @@ Decisions
 Next iteration must know
 - `-screen measured` is the hero-sheet screenshot id (D-010 needs it).
 - HomeView takes `openMeasured` from RootView; keep new sheets in RootView too.
+
+## 2026-09-24 D-004 Home daily summary card (passes)
+What I did
+- Models: Recap {id, generatedAt, headline, paragraphs, suggestions}; decodes the wire's nested
+  `narrative` (POST /api/recap, GET /api/recaps/{id}) or a flat body. D-006 can reuse it for
+  session recaps.
+- APIClient.recap(from:to:speak:) POSTs {from, to, speak} (epoch seconds); fixture mode returns
+  Fixtures/recap_today.json (backend shape, Bryan's voice, about the 3:26-4:09 PM fixture day).
+- App/SummaryCard.swift (pure): DailySummary {recap, fetchedAt}; SummaryCard.derive(summary:
+  loading:failed:hasEpisodes:locale:timeZone:) -> status ("as of 6:12 PM" / "Updating…" / nil),
+  body (.empty / .writing / .failed / .recap), showsRefresh. Tests/SummaryCardTests.swift (11).
+- AppState: summary, summaryLoading, summaryFailed, summaryCard; loadSummaryIfNeeded() (once,
+  when episodes exist; re-armed if the Home task is cancelled mid-fetch), refreshSummary()
+  (midnight -> now, speak false; failures stay on the card, never lastError); stopWatching()
+  refreshes the summary when today has episodes.
+- HomeView: summary panel after the metrics; header row stacks at accessibility sizes;
+  suggestions are Labels with arrow.turn.down.right in muted; Refresh (.glass) bottom right.
+  Ledger heading renamed "Today" -> "Log" (the summary owns "Today" now; D-008 makes it a
+  DisclosureGroup).
+- Demo-only `-scrollTo <metrics|summary|log>[-end]` (AppState.homeScrollTarget, HomeScrollTarget,
+  tested in AppScreenTests). Add new HomeSection cases as D-005..D-008 add sections.
+- Fixed a D-001 bug found in dark mode: WatchButton label is Brian.page (was white on the
+  near-white ink fill). ConnectView's and AddItemView's .glassProminent buttons likely have the
+  same problem in dark mode: D-010 should check them.
+
+Screenshots: D-004-home.png (top of card), D-004-home-refresh.png (suggestions + Refresh),
+D-004-home-xxl.png, D-004-home-dark.png.
+
+Next iteration must know
+- The empty-state sentence is covered by SummaryCardTests; D-009 should add a -empty screenshot.
+- Home sections are long: use `-scrollTo <section>` (and `-end`) for screenshots below the fold.

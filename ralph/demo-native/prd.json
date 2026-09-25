@@ -44,8 +44,8 @@
         "Build and tests exit 0"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SummaryCard.derive (pure, tested) over AppState.summary/summaryLoading/summaryFailed; APIClient.recap POSTs /api/recap; -scrollTo summary[-end] for screenshots."
     },
     {
       "id": "D-005",
