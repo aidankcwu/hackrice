@@ -1,8 +1,8 @@
 /**
  * Embed mode: the native Zeroist app shows Calendar and Analysis in a web view
  * (docs/APP_PRD.md, "Contract between native and web"). It opens
- * `/calendar?embed=1`; the page then drops its own tab bar and top pill and
- * keeps only the hamburger and the screen title.
+ * `/analysis?embed=1` (and `/calendar`); the page then drops its tab bar, top pill,
+ * hamburger and title (Shell.tsx), and links nowhere else (embedReach.test.tsx).
  *
  * Embed is on when any of these says so, checked in this order:
  *
