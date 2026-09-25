@@ -143,3 +143,10 @@ Claude's proposed amendments (2026-09-24, pending Aidan's yes/no):
 - Where Connect lives once the app is redesigned (first launch + a status pill, as now?).
 - Which of the web pages (calendar, analysis) stay, and whether they keep any menu.
 - Settings: what a tester actually needs (invite link, voice on/off, permissions) vs. what goes.
+
+## Status (2026-09-24 21:40)
+
+Built on `demo`: all 10 native stories and 3 web stories pass. Orchestrator verified: build
+exit 0, 174 tests in 17 suites, every D-010 screenshot read (light, dark, XXXL). Build and run
+notes in [APP_NATIVE_NOTES.md](APP_NATIVE_NOTES.md). Untested on hardware: DAT device state
+(battery / worn), the live Preview feed, session start/end against the hosted backend.
