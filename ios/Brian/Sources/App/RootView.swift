@@ -7,6 +7,8 @@ import SwiftUI
 /// Screens a `-screen <id>` launch argument can open on (screenshots, APP_NATIVE_NOTES.md).
 enum AppScreen: String, CaseIterable {
     case home, analysis, `protocol`, connect, settings, preview
+    /// Home with the hero's "How this is measured" sheet up (screenshots).
+    case measured
 
     static let argument = "-screen"
 
@@ -18,12 +20,12 @@ enum AppScreen: String, CaseIterable {
         return value == "today" ? .home : AppScreen(rawValue: value)
     }
 
-    /// The tab this screen lives on. Connect, Settings and Preview are sheets over Home.
+    /// The tab this screen lives on. Connect, Settings, Preview and Measured are sheets over Home.
     var tab: AppTab {
         switch self {
         case .analysis: .analysis
         case .protocol: .protocol
-        case .home, .connect, .settings, .preview: .home
+        case .home, .connect, .settings, .preview, .measured: .home
         }
     }
 }
@@ -43,6 +45,7 @@ struct RootView: View {
     @State private var showConnectFullScreen = false
     @State private var showSettings = false
     @State private var showPreview = false
+    @State private var showMeasured = false
     /// The consent gate before the first stream, asked by the header's Start watching.
     @State private var askConsent = false
     @State private var bootstrapped = false
@@ -57,7 +60,7 @@ struct RootView: View {
         TabView(selection: $tab) {
             Tab("Home", systemImage: "house", value: AppTab.home) {
                 NavigationStack {
-                    HomeView().modifier(header)
+                    HomeView(openMeasured: { showMeasured = true }).modifier(header)
                 }
             }
             Tab("Analysis", systemImage: "chart.bar", value: AppTab.analysis) {
@@ -84,6 +87,9 @@ struct RootView: View {
         .sheet(isPresented: $showPreview) {
             PreviewView()
         }
+        .sheet(isPresented: $showMeasured) {
+            MeasuredView()
+        }
         .streamingConsentSheet(isPresented: $askConsent) {
             appState.consentGiven = true
             Task { await appState.startWatching() }
@@ -108,6 +114,8 @@ struct RootView: View {
                 showSettings = true
             } else if screen == .preview {
                 showPreview = true
+            } else if screen == .measured {
+                showMeasured = true
             }
             await appState.bootstrap()
         }

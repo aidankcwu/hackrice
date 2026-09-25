@@ -68,6 +68,8 @@ final class AppState {
     var episodes: [Episode] = []
     var decisions: [Decision] = []
     var heldBackToday: Int = 0          // decisions that proposed speech and were not spoken
+    /// Recent Start → Stop spans, newest first (`GET /api/sessions`; D-006 fetches them).
+    var sessions: [WatchSession] = []
     // Protocol
     var protocolItems: [ProtocolItem] = []
     // Errors: one sentence with a fix, shown on Today under the status pill, never an alert.
@@ -106,6 +108,11 @@ final class AppState {
             status: ConnectionStatus.derive(inputs),
             watching: watching,
             canStart: ConnectRows.canStart(inputs)))
+    }
+
+    /// Home's tiles and watched line (D-003).
+    func homeMetrics(now: Date) -> HomeMetrics {
+        HomeMetrics.derive(episodes: episodes, sessions: sessions, watchingSince: watchingSince, now: now)
     }
 
     private func connectionInputs(now: Date) -> ConnectionInputs {

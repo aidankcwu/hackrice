@@ -27,6 +27,7 @@ struct AppScreenTests {
         #expect(AppScreen.connect.tab == .home)
         #expect(AppScreen.settings.tab == .home)
         #expect(AppScreen.preview.tab == .home)
+        #expect(AppScreen.measured.tab == .home)
     }
 
     @Test func threeTabsInPRDOrder() {
