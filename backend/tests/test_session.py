@@ -208,3 +208,20 @@ def test_auto_session_can_be_turned_off(tmp_path):
     pipeline.settings = type("S", (), {"auto_session": False})()
     pipeline.sessions = type("S", (), {"current": lambda self: None})()
     Pipeline._auto_session_open(pipeline)   # must not raise, must not start
+
+
+async def test_sessions_list_newest_first(tmp_path) -> None:
+    pipeline = build_pipeline(
+        Settings(db_path=tmp_path / "list.db"), source="sim",
+        reasoner_mode="fake", speed=1, seed_db=False,
+    )
+    app = create_app(pipeline)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                 base_url="http://test") as client:
+        a = (await client.post("/api/session/start", json={"name": "a"})).json()
+        await client.post("/api/session/end")
+        b = (await client.post("/api/session/start", json={"name": "b"})).json()
+        rows = (await client.get("/api/sessions")).json()
+        assert [r["id"] for r in rows[:2]] == [b["id"], a["id"]]
+        assert rows[0]["ended_t"] is None and rows[1]["ended_t"] is not None
+    pipeline.db.close()

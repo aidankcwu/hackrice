@@ -57,8 +57,10 @@ It shows "Seeded", never "demo".
 | Argument | Effect |
 |---|---|
 | `-demo` (or env `BRIAN_DEMO=1`) | Fixtures, mock glasses connected, LAN link `10.0.0.5:8010` reachable, watching for 14 min, fake 1.5 s frame cadence. |
-| `-screen <id>` | Opens on `today`, `calendar`, `analysis`, `protocol`, `connect` or `settings`. |
+| `-screen <id>` | Opens on `home` (`today` still works), `analysis`, `protocol`, `connect`, `settings` or `preview`. |
 | `-showSetup` | Older spelling of `-screen connect`. |
+| `-scrollTo <section>` | Demo: Home scrolls to `metrics`, `summary`, `protocol` or `log` once loaded; `summary-end` puts the section's bottom in view instead. |
+| `-screen protocol-templates` / `-screen protocol-edit` | Demo: the Protocol tab scrolled to Templates with Doses open / with the first item's edit sheet up. |
 | `-glassesOff` | Demo: glasses unavailable (red pill, red Glasses row). |
 | `-fresh` | Demo: first launch. No link, glasses not registered, not watching, clipboard offer shown, Start watching disabled. |
 | `-tokenRejected` | Demo: the server refused the link (red Invite link row), not watching. |

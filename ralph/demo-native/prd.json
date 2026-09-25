@@ -1,0 +1,147 @@
+{
+  "project": "Zeroist demo UI, native (ios/Brian)",
+  "branchName": "demo",
+  "spec": "docs/DEMO_UI_PRD.md",
+  "userStories": [
+    {
+      "id": "D-001",
+      "title": "Fixed header and the three tabs",
+      "description": "PRD 'Header' and 'Removed from the app'. Tabs become Home (list.bullet -> house), Analysis (chart.bar), Protocol (pills); Calendar tab removed. Every tab's toolbar: status pill (battery % when known, eyeglasses symbol ink/muted for worn-or-connected/off, dot + ConnectionStatus text), Start watching / Stop (.glassProminent, the only one on screen, disabled until ConnectRows.canStart, consent gate as today), Preview button (camera.viewfinder, .glass, disabled unless glasses connected; opens an empty placeholder sheet until D-002), Settings gear. GlassesSessioning gains deviceState (batteryLevel, charging, worn) + onDeviceStateChange; GlassesSession implements it with Wearables.shared.deviceForIdentifier + addDeviceStateListener; MockGlasses and demo report 82% worn; -glassesOff reports nil. AppScreen ids: home, analysis, protocol, connect, settings, preview ('today' alias of home). Today's floating Stop button and old pill placement go; TodayView becomes HomeView (content unchanged for now).",
+      "acceptanceCriteria": [
+        "Tab bar shows exactly Home, Analysis, Protocol",
+        "Header on every tab shows battery, glasses symbol, status text, Start/Stop, Preview, gear; it stays while the page scrolls",
+        "HeaderState.derive (pure) has tests for: unknown battery, glasses off, worn, watching",
+        "Screenshots D-001-home.png, D-001-protocol.png, D-001-home-glassesoff.png",
+        "Build and tests exit 0"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Header = nav bar (pill leading; Preview + gear trailing) + Start/Stop in a safeAreaBar under it (one bar overflows at 402 pt); DAT pinned to 1.0.0 for device state."
+    },
+    {
+      "id": "D-003",
+      "title": "Home: metrics, tiles, watched line, hero explanation sheet",
+      "description": "PRD Home section 1. Hero SignedHours with word and provenance chip; tapping opens 'How this is measured' sheet (plain paragraph, then healthspan.factors rows: label, dose+unit, signed hours chip, provenance word, citation in caption). Two tiles Daylight (minutes from outdoor_block episodes) and Screens (minutes from screen_block), side by side, stacked at accessibility sizes. 'Watched 3 h 10 min today' / 'Not watched yet today' line. HomeView ScrollView on Brian.page, gutter 24, section gap 32.",
+      "acceptanceCriteria": [
+        "Hero tap opens the explanation sheet with the factors list from the fixture",
+        "Tiles show fixture values; TodayStats.minutes(kind:) tested",
+        "Watched line uses sessions when present else the watching span; tested",
+        "Screenshots D-003-home.png, D-003-home-xxl.png, D-003-hero-sheet.png",
+        "Build and tests exit 0"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Hero is a Button opening MeasuredView (RootView sheet, -screen measured); tiles/watched line from pure HomeMetrics/TodayStats; open episodes use server duration_s."
+    },
+    {
+      "id": "D-004",
+      "title": "Home: daily summary card",
+      "description": "PRD Home section 2. Panel with 'Today' + 'as of h:mm' header, headline, paragraphs, suggestions list, Refresh (.glass). APIClient.recap(from:to:speak:) POSTs /api/recap; fetched on first Home appearance when today has episodes, on Refresh, and after a session ends; cached in AppState.summary with its time; 'Updating…' while loading with old text kept. Empty sentence before any episode. Demo: Fixtures/recap_today.json (headline, 2 paragraphs, 3 suggestions, Bryan's voice, about the fixture day).",
+      "acceptanceCriteria": [
+        "Card renders fixture summary with as-of time and Refresh",
+        "Empty state sentence when no episodes (use -empty once D-009 exists, else a unit test of the view model)",
+        "Screenshots D-004-home.png",
+        "Build and tests exit 0"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "SummaryCard.derive (pure, tested) over AppState.summary/summaryLoading/summaryFailed; APIClient.recap POSTs /api/recap; -scrollTo summary[-end] for screenshots."
+    },
+    {
+      "id": "D-005",
+      "title": "Protocol card on Home and the reworked Protocol tab",
+      "description": "PRD Home section 3 and 'Protocol tab'. Card: 'Protocol · 3 of 5', rows with kind symbol, name, trailing state (Seen h:mm / Done / Missed / Open until h PM / Later) with the PRD's symbols; tap opens the Protocol tab; empty card offers 'Set one up'. Protocol tab: header row '3 of 5 today' + Add (.glass) below the title; leading checkbox per row (circle / checkmark.circle.fill, ink, 44 pt) toggling markDone/undo; evidence thumbnail only when the image loads (no placeholder box); swipe actions kept; Templates section (six groups from phone/src/lib/protocol.ts and the web library, >= 3 templates each, static ProtocolTemplates.swift, Add creates the item); tap a row's name to edit in AddItemView pre-filled, saved via PUT /api/protocol/{id} (add updateProtocolItem to APIClient and AppState).",
+      "acceptanceCriteria": [
+        "Home card matches fixture states; ProtocolSummary.derive tested (counts, state words)",
+        "Protocol tab: checkbox toggles, templates expand and add, edit pre-fills and saves",
+        "Screenshots D-005-home.png, D-005-protocol.png, D-005-protocol-templates.png, D-005-protocol-edit.png",
+        "Build and tests exit 0"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "ProtocolSummary.derive (pure, tested) drives card + tab; templates static in ProtocolTemplates.swift; -screen protocol-templates / protocol-edit; fixture now 3 of 5."
+    },
+    {
+      "id": "D-006",
+      "title": "Sessions row and session detail",
+      "description": "PRD Home section 4. Start watching POSTs /api/session/start, Stop POSTs /api/session/end (fire and forget, errors logged only). GET /api/sessions (exists on demo) and GET /api/recaps + /api/recaps/{id} feed AppState.sessions / recaps. Collapsed row 'Sessions · 3 · 3 h 10 min' expands to today's sessions newest first (start–end, duration, recap headline); tap pushes SessionDetailView (duration, recap or 'Summary still writing…' + Refresh, ledger rows inside the session). Demo: Fixtures/sessions_today.json (3 sessions) and Fixtures/recaps.json.",
+      "acceptanceCriteria": [
+        "Sessions grouping and duration text tested (SessionsSummary.derive)",
+        "Expanded row and detail screen render fixture data",
+        "Screenshots D-006-home-sessions.png, D-006-session.png",
+        "Build and tests exit 0"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "D-007",
+      "title": "Today's stats sheet",
+      "description": "PRD Home section 5. Two-column grid of stat cells (Brian.surface, radius 14): First daylight, Eating window, Last caffeine, Screens, Longest focus, Alcohol, Time with people, Hydration, with the PRD's rules and empty words. TodayStats.derive(episodes:now:) pure with tests covering each rule and each empty word.",
+      "acceptanceCriteria": [
+        "All eight cells render from the fixture; empties show their empty word in muted",
+        "TodayStats tests cover every row of the PRD table",
+        "Screenshots D-007-home-stats.png, D-007-home-stats-xxl.png",
+        "Build and tests exit 0"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "D-008",
+      "title": "Log: collapsed, coalesced ledger",
+      "description": "PRD Home section 6. DisclosureGroup 'Log', collapsed by default, at the bottom of Home, holding the ledger rows coalesced (same label within 10 min merge; strongest outcome kept: said > asked > acted > held back); 'Held back N today' footer stays. LedgerCoalescer pure with tests (the fixture's two 'outdoors' rows nine seconds apart become one).",
+      "acceptanceCriteria": [
+        "Expanded Log shows no duplicate adjacent labels for the fixture",
+        "LedgerCoalescer tests",
+        "Screenshots D-008-home-log.png",
+        "Build and tests exit 0"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "D-002",
+      "title": "Preview sheet with the live glasses frame",
+      "description": "PRD 'Preview sheet'. Sheet 'Glasses view' with the latest frame (<= 2 updates/s while open) and 'Live · 0.7 frames/s' / 'No frames yet'. GlassesSession keeps the latest UIImage in AppState.previewFrame only while previewOpen; nothing written to disk. Demo: Fixtures/preview.jpg (an indoor scene, no person; generate a plain photo-like JPEG if none is at hand). Also add -previewOpen? No: `-screen preview` opens Home with the sheet up.",
+      "acceptanceCriteria": [
+        "Preview button opens the sheet; demo shows the fixture image with the live line",
+        "Frames are only retained while the sheet is open (test on the retaining type)",
+        "Screenshots D-002-preview.png",
+        "Build and tests exit 0"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "D-009",
+      "title": "Empty state and the -empty launch argument",
+      "description": "PRD 'Empty state'. -empty: demo with a reachable link, glasses registered, nothing watched, no episodes, no sessions, no protocol, no summary. Every Home layer shows its empty word; Log hidden; nothing reads as an error. Also -fresh still works for Connect.",
+      "acceptanceCriteria": [
+        "Screenshots D-009-home-empty.png, D-009-protocol-empty.png",
+        "No 'error', no red text, no blank panel in the empty screenshots",
+        "Build and tests exit 0"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "D-010",
+      "title": "Design pass, Analysis tab check, notes",
+      "description": "Walk every screen against the skill rubric at default and XXXL: home, home-xxl, analysis (with the fixtures server; the web side hides its menu and title on demo-web / demo), protocol, connect, settings, preview, session detail, hero sheet. Fix spacing, alignment, truncation, banned elements. Rewrite docs/APP_NATIVE_NOTES.md for the demo app (screens, launch args, fixtures, screenshots list, what is untested on hardware).",
+      "acceptanceCriteria": [
+        "Screenshots D-010-*.png for every screen listed, reviewed and fixed",
+        "docs/APP_NATIVE_NOTES.md describes the demo app accurately",
+        "Build and tests exit 0"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

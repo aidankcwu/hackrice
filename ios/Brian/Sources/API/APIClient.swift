@@ -117,6 +117,20 @@ final class APIClient {
         return try await get("/api/decisions", query: [URLQueryItem(name: "limit", value: String(limit))])
     }
 
+    /// `POST /api/recap` `{from, to, speak}`: the written summary of a window (D-004).
+    func recap(from: Date, to: Date, speak: Bool = false) async throws -> Recap {
+        if isFixtures { return try fixture("recap_today") }
+        let body: [String: Any] = ["from": from.timeIntervalSince1970, "to": to.timeIntervalSince1970,
+                                   "speak": speak]
+        let data = try JSONSerialization.data(withJSONObject: body)
+        let reply: Data = try await raw("POST", "/api/recap", body: data)
+        do {
+            return try decoder.decode(Recap.self, from: reply)
+        } catch {
+            throw APIError.badResponse
+        }
+    }
+
     /// First saved frame for a decision, as JPEG bytes, or nil when none survived.
     /// `GET /api/evidence/{id}` lists `[{decision_id, frame_ref, t, bytes}]`; then
     /// `GET /api/evidence/{id}/{frame_ref}` is the JPEG. Shown, never written to disk.
@@ -170,6 +184,24 @@ final class APIClient {
                                    "window_end": windowEnd, "days": Array(Set(days)).sorted()]
         let data = try JSONSerialization.data(withJSONObject: body)
         let _: Data = try await raw("POST", "/api/protocol", body: data)
+    }
+
+    /// `PUT /api/protocol/{id}` `{name, kind, window_start, window_end, days}`: today's status is kept.
+    func updateProtocol(id: String, name: String, kind: String, windowStart: String, windowEnd: String,
+                        days: [Int]) async throws {
+        if isFixtures {
+            fixtureProtocol = try loadFixtureProtocol().map { item in
+                guard item.id == id else { return item }
+                return ProtocolItem(id: id, name: name, kind: kind, windowStart: windowStart, windowEnd: windowEnd,
+                                    days: Array(Set(days)).sorted(), status: item.status,
+                                    seenAt: item.seenAt, evidenceRef: item.evidenceRef)
+            }.sorted { $0.windowStart < $1.windowStart }
+            return
+        }
+        let body: [String: Any] = ["name": name, "kind": kind, "window_start": windowStart,
+                                   "window_end": windowEnd, "days": Array(Set(days)).sorted()]
+        let data = try JSONSerialization.data(withJSONObject: body)
+        let _: Data = try await raw("PUT", "/api/protocol/\(id)", body: data)
     }
 
     /// `DELETE /api/protocol/{id}`.

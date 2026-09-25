@@ -16,6 +16,8 @@ enum LinkState: Equatable {
 final class AppState {
     // Connect
     var glasses: GlassesState = .unavailable
+    /// Battery and worn state of the linked glasses (the header); nil while none is linked.
+    var glassesDevice: GlassesDeviceState? = nil
     var link: LinkState = .notSet
     /// The Connect/Settings paste box's draft text only — never the applied link. It is
     /// cleared back to "" the moment a paste parses, so a token never sits in a visible
@@ -59,6 +61,11 @@ final class AppState {
         }
     }
     var demo: Bool = false              // -demo launch arg / BRIAN_DEMO=1: fixtures, mock glasses, "Seeded" chip
+    /// Demo only (`-scrollTo summary`, `-scrollTo summary-end`): where Home scrolls once loaded.
+    var homeScrollTarget: HomeScrollTarget? = nil
+    /// Demo only (`-screen protocol-templates`, `-screen protocol-edit`): what the Protocol
+    /// tab opens once loaded. ProtocolView consumes it.
+    var protocolLaunch: AppScreen? = nil
     // Today
     var watching: Bool = false
     var watchingSince: Date? = nil
@@ -66,6 +73,13 @@ final class AppState {
     var episodes: [Episode] = []
     var decisions: [Decision] = []
     var heldBackToday: Int = 0          // decisions that proposed speech and were not spoken
+    /// Recent Start → Stop spans, newest first (`GET /api/sessions`; D-006 fetches them).
+    var sessions: [WatchSession] = []
+    /// Home's daily summary (D-004): the last `POST /api/recap` for today, kept in memory only.
+    var summary: DailySummary? = nil
+    var summaryLoading = false
+    /// The last summary fetch failed; the card says so only while nothing is cached.
+    var summaryFailed = false
     // Protocol
     var protocolItems: [ProtocolItem] = []
     // Errors: one sentence with a fix, shown on Today under the status pill, never an alert.
@@ -93,6 +107,33 @@ final class AppState {
     /// Connect's three rows, from the same inputs as the pill.
     func connectRows(now: Date) -> ConnectRows {
         ConnectRows.derive(connectionInputs(now: now), checking: checkingLink, registering: registeringGlasses)
+    }
+
+    /// The header above every tab (D-001), from the same inputs as the pill.
+    func headerState(now: Date) -> HeaderState {
+        let inputs = connectionInputs(now: now)
+        return HeaderState.derive(HeaderState.Inputs(
+            device: glassesDevice,
+            glasses: glasses,
+            status: ConnectionStatus.derive(inputs),
+            watching: watching,
+            canStart: ConnectRows.canStart(inputs)))
+    }
+
+    /// Home's tiles and watched line (D-003).
+    func homeMetrics(now: Date) -> HomeMetrics {
+        HomeMetrics.derive(episodes: episodes, sessions: sessions, watchingSince: watchingSince, now: now)
+    }
+
+    /// Home's protocol card and the Protocol tab's rows (D-005).
+    func protocolSummary(now: Date) -> ProtocolSummary {
+        ProtocolSummary.derive(items: protocolItems, now: now)
+    }
+
+    /// Home's daily summary card (D-004).
+    var summaryCard: SummaryCard {
+        SummaryCard.derive(summary: summary, loading: summaryLoading, failed: summaryFailed,
+                           hasEpisodes: !episodes.isEmpty)
     }
 
     private func connectionInputs(now: Date) -> ConnectionInputs {
@@ -158,6 +199,8 @@ final class AppState {
     static let freshArgument = "-fresh"
     /// Demo only: the server refused the link (red invite row), not watching.
     static let tokenRejectedArgument = "-tokenRejected"
+    /// Demo only: `-scrollTo <section>` scrolls Home to that section (`HomeSection`) for screenshots.
+    static let scrollToArgument = "-scrollTo"
     /// What the invite row shows in demo mode.
     static let demoLabel = "10.0.0.5:8010"
     static let demoServerURL = "ws://10.0.0.5:8010/ws/glasses"
@@ -171,6 +214,8 @@ final class AppState {
     private var server: ServerURL?
     /// Demo only: `-webBase` / BRIAN_WEB_BASE, where the web tabs load from.
     @ObservationIgnored private var webBaseOverride: URL?
+    /// Home fetched the summary by itself once; after that only Refresh or a Stop does.
+    @ObservationIgnored private var summaryAutoFetched = false
     /// `glue.framesSent` when this watching session started; the sender's count is cumulative.
     @ObservationIgnored private var framesAtStart = 0
     /// Where the applied link's token lives (Keychain in the app; in-memory in tests).
@@ -195,6 +240,10 @@ final class AppState {
         session.onStateChange = { [weak self] state in
             self?.glasses = state
         }
+        self.glassesDevice = session.deviceState
+        session.onDeviceStateChange = { [weak self] device in
+            self?.glassesDevice = device
+        }
         glue.onAccessDenied = { [weak self] in
             self?.watching = false
             self?.watchingSince = nil
@@ -213,14 +262,21 @@ final class AppState {
             let arguments = ProcessInfo.processInfo.arguments
             webBaseOverride = WebSource.override(arguments: arguments,
                                                  environment: ProcessInfo.processInfo.environment)
-            if arguments.contains(Self.glassesOffArgument) { glasses = .unavailable }
+            if arguments.contains(Self.glassesOffArgument) {
+                glasses = .unavailable
+                glassesDevice = nil
+            }
             if arguments.contains(Self.freshArgument) {
                 serverURL = ""
                 link = .notSet
                 glasses = .notRegistered
+                glassesDevice = nil
                 watching = false
                 watchingSince = nil
                 clipboardOffer = true
+            }
+            if let index = arguments.firstIndex(of: Self.scrollToArgument), index + 1 < arguments.count {
+                homeScrollTarget = HomeScrollTarget(arguments[index + 1])
             }
             if arguments.contains(Self.tokenRejectedArgument) {
                 link = .unreachable(APIError.tokenRejected.sentence)
@@ -427,6 +483,37 @@ final class AppState {
         watching = false
         watchingSince = nil
         stopPolling()
+        // A session just ended: today's summary is out of date.
+        if !episodes.isEmpty { await refreshSummary() }
+    }
+
+    // MARK: - Daily summary (D-004)
+
+    /// Home's appearance: fetch once, as soon as today has an episode. Later fetches are
+    /// Refresh and the end of a session.
+    func loadSummaryIfNeeded() async {
+        guard !summaryAutoFetched, summary == nil, !episodes.isEmpty else { return }
+        summaryAutoFetched = true
+        await refreshSummary()
+    }
+
+    /// `POST /api/recap` for local midnight → now, not spoken. The previous text stays up
+    /// while this runs; a failure is kept to the card, never `lastError`.
+    func refreshSummary() async {
+        if !demo && server == nil { return }
+        guard !summaryLoading else { return }
+        summaryLoading = true
+        defer { summaryLoading = false }
+        let now = Date()
+        do {
+            let recap = try await api.recap(from: Calendar.current.startOfDay(for: now), to: now, speak: false)
+            summary = DailySummary(recap: recap, fetchedAt: Date())
+            summaryFailed = false
+        } catch is CancellationError {
+            if summary == nil { summaryAutoFetched = false }     // Home asks again next time
+        } catch {
+            summaryFailed = true
+        }
     }
 
     // MARK: - Today
@@ -508,6 +595,20 @@ final class AppState {
             try await self.api.addProtocol(name: name, kind: kind, windowStart: windowStart,
                                            windowEnd: windowEnd, days: days)
         }
+    }
+
+    func updateProtocolItem(_ item: ProtocolItem, name: String, kind: String, windowStart: String,
+                            windowEnd: String, days: [Int]) async {
+        await protocolEdit {
+            try await self.api.updateProtocol(id: item.id, name: name, kind: kind, windowStart: windowStart,
+                                              windowEnd: windowEnd, days: days)
+        }
+    }
+
+    /// The checkbox: seen or done → Undo; anything else → Mark done.
+    func toggleProtocolItem(_ item: ProtocolItem) async {
+        let status = item.status.lowercased()
+        if status == "seen" || status == "done" { await undo(item) } else { await markDone(item) }
     }
 
     func deleteProtocolItem(_ item: ProtocolItem) async {

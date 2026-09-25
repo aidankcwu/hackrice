@@ -1,0 +1,130 @@
+# Ralph progress (demo, native)
+Started: Thu Sep 24 20:14:50 CDT 2026
+---
+
+## 2026-09-24 D-001 fixed header and three tabs (passes)
+What I did
+- Tabs: Home (house), Analysis, Protocol. Calendar tab gone. AppScreen ids: home, analysis,
+  protocol, connect, settings, preview; `-screen today` still maps to home.
+- Header, shared by every tab through the `AppHeader` ViewModifier in Screens/StatusPill.swift:
+  navigation bar = StatusPill (leading: battery %, eyeglasses ink/muted, dot + status) and a
+  trailing group [Preview camera.viewfinder][gear]; Start watching / Stop (WatchButton,
+  .glassProminent, full width, .large) sits in `.safeAreaBar(edge: .top)` under the bar.
+  RootView owns the sheets (Connect, Settings, Preview, consent gate).
+- HeaderState.derive (App/HeaderState.swift) is pure; Tests/HeaderStateTests.swift.
+- GlassesSessioning gained `deviceState: GlassesDeviceState?` + `onDeviceStateChange`.
+  GlassesSession: deviceForIdentifier(first device) + Device.addDeviceStateListener, nil
+  unless snapshot.linkState == .connected. Mock/Demo glasses: `.demo` (82%, worn).
+  AppState.glassesDevice; -glassesOff and -fresh set it nil. AppState.headerState(now:).
+- TodayView -> HomeView (Screens/HomeView.swift), its own Start button removed; content as before.
+- PreviewView is a placeholder sheet ("Glasses view", "No frames yet") for D-002.
+- Protocol: Add moved out of the toolbar into its own clear Section above the list (D-005 reworks).
+
+Decisions (the orchestrator should look at these)
+- DAT SDK bumped 0.9.0 -> 1.0.0 (project.yml `from: "1.0.0"`, own commit 661b644). 0.9.x has no
+  battery/worn at all; 1.0.0 (tagged 2026-09-24) adds Device.batteryLevel/donState and
+  addDeviceStateListener. The app built unchanged. UNTESTED ON HARDWARE; revert that commit
+  plus the GlassesSession observeDeviceState block if the glasses misbehave.
+- All four header controls in one navigation bar do NOT fit a 402 pt iPhone: the system folded
+  Preview and the gear into "•••" even with "Stop" and a 13 pt pill. Hence the two-row header
+  (nav bar + safeAreaBar). Both are system bars and stay fixed while the page scrolls.
+- Tabs use `.toolbarTitleDisplayMode(.inline)` (set in AppHeader): a large title sat under the
+  Start/Stop bar's scroll-edge fade and read greyed out. The inline title gets no room next to
+  the pill, so the tab bar is what names the tab. D-005's "3 of 5 today" row can carry Protocol.
+- Pill and the two icon buttons are capped at DynamicTypeSize.large with the Large Content
+  Viewer, like system bar items; otherwise the gear folds into "•••" at accessibility sizes.
+
+Next iteration must know
+- Build/test: xcodebuild's exit code gets lost behind `| grep`; redirect to a log and check $?.
+- `git -C /Users/ljawhomebot/hackrice ...` instead of `cd … && git` (the permission hook asks).
+- Screenshots: sips -Z 1000 a copy into the scratchpad before reading; the full PNG is fine too.
+
+## 2026-09-24 D-003 Home metrics, tiles, watched line, hero sheet (passes)
+What I did
+- App/TodayStats.swift (pure): TodayStats.minutes(kind:episodes:now:) + durationText ("14 min",
+  "2 h 05 min"); HomeMetrics.derive(episodes:sessions:watchingSince:now:calendar:) -> daylight,
+  screens, watchedLine; HealthFactorText (provenance word, dose with unit, citation, order).
+  Tests/TodayStatsTests.swift covers all of it, fixture included (Daylight 10 min, Screens 28 min).
+- Models: Healthspan.factors ([HealthFactor], decoded leniently via Lenient<T>), Episode.durationS
+  (var, default nil so the memberwise init still works), WatchSession {id, name, startedT, endedT}
+  for GET /api/sessions. AppState.sessions exists but is EMPTY until D-006 fetches it; the watched
+  line then switches from the watching span to the sessions sum by itself.
+- HomeView: hero panel is a plain Button (info.circle top-right, muted) -> MeasuredView sheet;
+  two Brian.surface tiles (radius 20, HStack, VStack at accessibility sizes); watched line. The old
+  "Score 76 · −0.1 years" line is gone (not in the PRD). Ledger unchanged (D-008).
+- MeasuredView (Screens/): List insetGrouped, the PRD paragraph, then factors biggest |hours| first,
+  missing last: label + SignedHoursChip, "5,500 steps · Seeded", citation (source up to its ": ").
+- AppScreen gained `measured` (-screen measured opens Home with the sheet up). RootView owns it.
+
+Decisions
+- /api/healthspan factors carry no unit; HealthFactorText.unit(for:) is a plain-word table keyed by
+  brian_score.py FACTORS keys (falls back to a decoded `unit` if the backend ever sends one).
+- Provenance words: Glasses = live/derived with basis glasses; Missing = missing/unmeasured/no dose;
+  everything else Seeded (so derived-from-apple_watch reads Seeded, which is true in the demo).
+- An open episode's length is the server's duration_s, not now − start: the fixture's open
+  outdoor_block is days old and read "52 h 34 min" of daylight before this.
+
+Next iteration must know
+- `-screen measured` is the hero-sheet screenshot id (D-010 needs it).
+- HomeView takes `openMeasured` from RootView; keep new sheets in RootView too.
+
+## 2026-09-24 D-004 Home daily summary card (passes)
+What I did
+- Models: Recap {id, generatedAt, headline, paragraphs, suggestions}; decodes the wire's nested
+  `narrative` (POST /api/recap, GET /api/recaps/{id}) or a flat body. D-006 can reuse it for
+  session recaps.
+- APIClient.recap(from:to:speak:) POSTs {from, to, speak} (epoch seconds); fixture mode returns
+  Fixtures/recap_today.json (backend shape, Bryan's voice, about the 3:26-4:09 PM fixture day).
+- App/SummaryCard.swift (pure): DailySummary {recap, fetchedAt}; SummaryCard.derive(summary:
+  loading:failed:hasEpisodes:locale:timeZone:) -> status ("as of 6:12 PM" / "Updating…" / nil),
+  body (.empty / .writing / .failed / .recap), showsRefresh. Tests/SummaryCardTests.swift (11).
+- AppState: summary, summaryLoading, summaryFailed, summaryCard; loadSummaryIfNeeded() (once,
+  when episodes exist; re-armed if the Home task is cancelled mid-fetch), refreshSummary()
+  (midnight -> now, speak false; failures stay on the card, never lastError); stopWatching()
+  refreshes the summary when today has episodes.
+- HomeView: summary panel after the metrics; header row stacks at accessibility sizes;
+  suggestions are Labels with arrow.turn.down.right in muted; Refresh (.glass) bottom right.
+  Ledger heading renamed "Today" -> "Log" (the summary owns "Today" now; D-008 makes it a
+  DisclosureGroup).
+- Demo-only `-scrollTo <metrics|summary|log>[-end]` (AppState.homeScrollTarget, HomeScrollTarget,
+  tested in AppScreenTests). Add new HomeSection cases as D-005..D-008 add sections.
+- Fixed a D-001 bug found in dark mode: WatchButton label is Brian.page (was white on the
+  near-white ink fill). ConnectView's and AddItemView's .glassProminent buttons likely have the
+  same problem in dark mode: D-010 should check them.
+
+Screenshots: D-004-home.png (top of card), D-004-home-refresh.png (suggestions + Refresh),
+D-004-home-xxl.png, D-004-home-dark.png.
+
+Next iteration must know
+- The empty-state sentence is covered by SummaryCardTests; D-009 should add a -empty screenshot.
+- Home sections are long: use `-scrollTo <section>` (and `-end`) for screenshots below the fold.
+
+## 2026-09-24 D-005 Protocol card on Home and the reworked Protocol tab (passes)
+What I did
+- App/ProtocolSummary.swift (pure): derive(items:now:locale:timeZone:) -> rows in window order
+  (name, kind, window "7:00–10:00 AM", state, stateSymbol, tone, checked) + "3 of 5".
+  States: seen "Seen 8:42 AM" (checkmark.circle.fill, ink), done "Done" (checkmark.circle, ink),
+  missed "Missed" (xmark.circle, cost), waiting/undone by the clock: "Later" before the window,
+  "Open until 10 PM" inside it, "Missed" once it closed (the backend only marks doses missed).
+- App/ProtocolTemplates.swift: six groups (Doses, Meals, Movement, Light, Sleep, Screens), 3-5
+  each, from phone/src/content/protocols.ts; Light/Movement -> walk, Sleep/Screens -> winddown;
+  windows crossing midnight end at 23:59 (backend needs start < end). isAdded matches by name.
+- APIClient.updateProtocol (PUT /api/protocol/{id}, fixture mode keeps status);
+  AppState.updateProtocolItem, toggleProtocolItem, protocolSummary(now:), protocolLaunch.
+- HomeView: protocol card after the summary (HomeSection.protocol); whole card is a plain Button
+  that switches to the Protocol tab (RootView passes openProtocol); empty card "No protocol yet."
+  + .glass "Set one up". Home's LazyVStack is now a VStack: -scrollTo landed short at XXL.
+- ProtocolView: "3 of 5 today" + Add (stacked at AX sizes), leading 44 pt checkbox, name/window
+  is a button that opens AddItemView(editing:), evidence thumbnail only when the image loads,
+  swipe actions kept, Templates section of DisclosureGroups with Add / "Added".
+- AddItemView: edit mode (pre-filled, "Edit item", Save); kinds are the backend's four (it used
+  to offer "sleep", which the backend rejects with 400); Save disabled unless start < end.
+- Fixture: Daylight walk is now seen at 3:29 PM (fixture day), so the demo reads 3 of 5.
+- Kind symbols are dropped at accessibility sizes on the card and tab rows (they squeezed names).
+
+Screenshots: D-005-home, -home-xxl, -protocol, -protocol-xxl, -protocol-templates, -protocol-edit.
+Launch: -scrollTo protocol; -screen protocol-templates; -screen protocol-edit.
+
+Next iteration must know
+- Tests with times normalise ICU's U+202F before AM/PM (see plain() in ProtocolSummaryTests).
+- The -empty (D-009) card state is "No protocol yet." + Set one up; tab says "Nothing yet today".

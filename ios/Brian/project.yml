@@ -13,7 +13,7 @@ options:
 packages:
   MWDAT:
     url: https://github.com/facebook/meta-wearables-dat-ios
-    from: "0.9.0"                         # newest tag on 2026-09-23 (`git ls-remote --tags <url>`)
+    from: "1.0.0"                         # 2026-09-24: first tag with Device.batteryLevel / donState / addDeviceStateListener
 
 targets:
   Brian:

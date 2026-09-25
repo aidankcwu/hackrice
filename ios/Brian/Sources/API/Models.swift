@@ -26,10 +26,12 @@ struct Healthspan: Codable, Equatable {
     // Added by Coder A (not in the original contract):
     let measuredCount: Int?
     let measuredTotal: Int?
+    /// Added for D-003: one row per hazard factor, for the "How this is measured" sheet.
+    let factors: [HealthFactor]?
 
     init(overall: Double, hoursToday: Double, yearsDelta: Double? = nil, day: String? = nil,
          measured: Bool? = nil, provenance: String? = nil,
-         measuredCount: Int? = nil, measuredTotal: Int? = nil) {
+         measuredCount: Int? = nil, measuredTotal: Int? = nil, factors: [HealthFactor]? = nil) {
         self.overall = overall
         self.hoursToday = hoursToday
         self.yearsDelta = yearsDelta
@@ -38,17 +40,18 @@ struct Healthspan: Codable, Equatable {
         self.provenance = provenance
         self.measuredCount = measuredCount
         self.measuredTotal = measuredTotal
+        self.factors = factors
     }
 
     /// A copy with a different chip word. Demo mode uses it to force "seeded".
     func with(provenance: String?) -> Healthspan {
         Healthspan(overall: overall, hoursToday: hoursToday, yearsDelta: yearsDelta, day: day,
                    measured: measured, provenance: provenance,
-                   measuredCount: measuredCount, measuredTotal: measuredTotal)
+                   measuredCount: measuredCount, measuredTotal: measuredTotal, factors: factors)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case overall, hoursToday, yearsDelta, day, measured, provenance, measuredCount, measuredTotal
+        case overall, hoursToday, yearsDelta, day, measured, provenance, measuredCount, measuredTotal, factors
     }
 
     private struct MeasuredCount: Decodable { let count: Int?; let total: Int? }
@@ -85,6 +88,7 @@ struct Healthspan: Codable, Equatable {
         } else {
             provenance = nil
         }
+        factors = (try? c.decodeIfPresent([Lenient<HealthFactor>].self, forKey: .factors))?.compactMap(\.value)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -97,6 +101,7 @@ struct Healthspan: Codable, Equatable {
         try c.encodeIfPresent(provenance, forKey: .provenance)
         try c.encodeIfPresent(measuredCount, forKey: .measuredCount)
         try c.encodeIfPresent(measuredTotal, forKey: .measuredTotal)
+        try c.encodeIfPresent(factors, forKey: .factors)
     }
 
     /// The chip word. A `live` row is one a connected device (or the glasses) wrote;
@@ -110,6 +115,119 @@ struct Healthspan: Codable, Equatable {
         if liveBases.contains("whoop") { return "whoop" }
         if !liveBases.isDisjoint(with: ["health", "apple_watch", "phone", "apple_health"]) { return "health" }
         return "glasses"
+    }
+}
+
+/// One row of `healthspan.factors`: a dose, the hours it moved today, and where the dose
+/// came from. `provenance` is live | seeded | derived | missing; `basis` names the device
+/// (glasses, phone, whoop, apple_watch, ...). The wire has no unit; `HealthFactorText` adds it.
+struct HealthFactor: Codable, Equatable, Identifiable {
+    let key: String
+    let label: String
+    let dose: Double?
+    let hours: Double
+    let provenance: String?
+    let basis: String?
+    let measured: Bool?
+    let source: String?
+    let unit: String?
+
+    var id: String { key }
+
+    init(key: String, label: String, dose: Double?, hours: Double, provenance: String? = nil,
+         basis: String? = nil, measured: Bool? = nil, source: String? = nil, unit: String? = nil) {
+        self.key = key
+        self.label = label
+        self.dose = dose
+        self.hours = hours
+        self.provenance = provenance
+        self.basis = basis
+        self.measured = measured
+        self.source = source
+        self.unit = unit
+    }
+}
+
+/// Decodes one array element or nothing, so one odd row never drops the whole array.
+struct Lenient<T: Decodable>: Decodable {
+    let value: T?
+    init(from decoder: Decoder) throws { value = try? T(from: decoder) }
+}
+
+// MARK: - Sessions (GET /api/sessions)
+
+/// One Start watching → Stop span, `{id, name, started_t, ended_t}`; `endedT` is nil while open.
+/// D-003 reads it for the watched line; D-006 fetches it.
+struct WatchSession: Codable, Identifiable, Equatable {
+    let id: String
+    let name: String?
+    let startedT: Double
+    let endedT: Double?
+
+    init(id: String, name: String? = nil, startedT: Double, endedT: Double? = nil) {
+        self.id = id
+        self.name = name
+        self.startedT = startedT
+        self.endedT = endedT
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, name, startedT, endedT }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        if let text = try? c.decode(String.self, forKey: .id) {
+            id = text
+        } else {
+            id = String(try c.decode(Int.self, forKey: .id))
+        }
+        name = try? c.decodeIfPresent(String.self, forKey: .name)
+        startedT = try c.decode(Double.self, forKey: .startedT)
+        endedT = try? c.decodeIfPresent(Double.self, forKey: .endedT)
+    }
+}
+
+// MARK: - Recap (POST /api/recap, GET /api/recaps/{id})
+
+/// The written part of a recap. The wire nests it as `narrative: {headline, paragraphs,
+/// suggestions, spoken}` beside `id`, `generated_at`, `session`, `score`, `moments`; a flat
+/// `{headline, paragraphs, suggestions}` decodes too. Shown as written, never rewritten.
+struct Recap: Codable, Equatable {
+    let id: String?
+    let generatedAt: Double?
+    let headline: String
+    let paragraphs: [String]
+    let suggestions: [String]
+
+    init(id: String? = nil, generatedAt: Double? = nil, headline: String,
+         paragraphs: [String] = [], suggestions: [String] = []) {
+        self.id = id
+        self.generatedAt = generatedAt
+        self.headline = headline
+        self.paragraphs = paragraphs
+        self.suggestions = suggestions
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, generatedAt, narrative, headline, paragraphs, suggestions
+    }
+
+    init(from decoder: Decoder) throws {
+        let outer = try decoder.container(keyedBy: CodingKeys.self)
+        id = try? outer.decodeIfPresent(String.self, forKey: .id)
+        generatedAt = try? outer.decodeIfPresent(Double.self, forKey: .generatedAt)
+        let c = (try? outer.nestedContainer(keyedBy: CodingKeys.self, forKey: .narrative)) ?? outer
+        headline = try c.decode(String.self, forKey: .headline)
+        paragraphs = (try? c.decodeIfPresent([String].self, forKey: .paragraphs)) ?? []
+        suggestions = (try? c.decodeIfPresent([String].self, forKey: .suggestions)) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(id, forKey: .id)
+        try c.encodeIfPresent(generatedAt, forKey: .generatedAt)
+        try c.encode(headline, forKey: .headline)
+        try c.encode(paragraphs, forKey: .paragraphs)
+        try c.encode(suggestions, forKey: .suggestions)
     }
 }
 
@@ -129,6 +247,8 @@ struct Episode: Codable, Identifiable, Equatable {
     let startT: Double
     let endT: Double?
     let reported: Reported?
+    /// Added for D-003: the server's running length, the only honest length of an open episode.
+    var durationS: Double? = nil
 }
 
 // MARK: - Decisions (GET /api/decisions)

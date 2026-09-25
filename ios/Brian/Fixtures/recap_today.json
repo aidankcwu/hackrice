@@ -1,0 +1,29 @@
+{
+  "id": "r_7c41d0a2",
+  "generated_at": 1790111400.0,
+  "model": "claude",
+  "spoken": false,
+  "session": {
+    "id": null,
+    "name": null,
+    "from_t": 1790053200.0,
+    "to_t": 1790111400.0,
+    "duration_s": 58200.0,
+    "tick_count": 1712,
+    "ai_coverage": 0.94,
+    "decision_count": 38
+  },
+  "narrative": {
+    "headline": "An even afternoon: daylight and a real meal offset the screens, but the coffee ran late.",
+    "paragraphs": [
+      "Between 3:26 and 4:09 PM the glasses saw 28 minutes of sustained screen time in nine blocks, broken up by about 10 minutes outdoors. The rice bowl counts toward the Mediterranean pattern, worth +0.3 h. Net for the day is 0.0 h: nothing earned yet, nothing lost.",
+      "The cost is people. No conversation was seen today, and social connection is the largest single factor on the board at −1.1 h. Coffee was in frame seven times, the last at 4:06 PM, late enough to cut into deep sleep tonight. Alcohol was in frame too; one drink scores −0.03 h."
+    ],
+    "suggestions": [
+      "No more caffeine today. Water or herbal tea from here.",
+      "See or call one person before dinner, even for ten minutes.",
+      "Walk outside for 15 minutes before the light goes."
+    ],
+    "spoken": "Even afternoon. Daylight and the rice bowl offset the screens. No more coffee today, and talk to someone before dinner."
+  }
+}

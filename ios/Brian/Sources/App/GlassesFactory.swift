@@ -41,6 +41,8 @@ enum GlassesFactory {
 final class DemoGlasses: GlassesSessioning {
     private(set) var state: GlassesState = .connected
     var onStateChange: ((GlassesState) -> Void)?
+    private(set) var deviceState: GlassesDeviceState? = .demo
+    var onDeviceStateChange: ((GlassesDeviceState?) -> Void)?
     func openMetaAI() {}
     func register() async throws {}
     func handleIncomingURL(_ url: URL) async {}

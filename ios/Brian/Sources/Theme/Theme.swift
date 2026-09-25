@@ -194,6 +194,7 @@ enum BrianSymbol {
     static let backend = "desktopcomputer"
     static let watching = "record.circle"
     static let settings = "gearshape"
+    static let preview = "camera.viewfinder"
     // Outcomes. Held back has no icon: muted words "held back".
     static let whispered = "waveform"
     static let asked = "questionmark.bubble"

@@ -15,6 +15,9 @@ final class GlassesSession: GlassesSessioning, CaptureSenderConfigurable, Corpus
     private var deviceTask: Task<Void, Never>?
     private let sessionTokens = ListenerTokenBag()
     private let streamTokens = ListenerTokenBag()
+    private let deviceStateTokens = ListenerTokenBag()
+    /// The device whose state `deviceState` follows: the first one DAT lists.
+    private var observedDevice: DeviceIdentifier?
 
     private(set) var state: GlassesState = .notRegistered {
         didSet {
@@ -23,6 +26,14 @@ final class GlassesSession: GlassesSessioning, CaptureSenderConfigurable, Corpus
         }
     }
     var onStateChange: ((GlassesState) -> Void)?
+
+    private(set) var deviceState: GlassesDeviceState? = nil {
+        didSet {
+            guard oldValue != deviceState else { return }
+            onDeviceStateChange?(deviceState)
+        }
+    }
+    var onDeviceStateChange: ((GlassesDeviceState?) -> Void)?
 
     convenience init() {
         try? Wearables.configure()
@@ -33,6 +44,7 @@ final class GlassesSession: GlassesSessioning, CaptureSenderConfigurable, Corpus
         self.wearables = wearables
         self.deviceSelector = AutoDeviceSelector(wearables: wearables)
         updateAvailability(devices: wearables.devices, registration: wearables.registrationState)
+        observeDeviceState(devices: wearables.devices)
         registrationTask = Task { [weak self] in
             guard let self else { return }
             for await registration in wearables.registrationStateStream() {
@@ -43,6 +55,7 @@ final class GlassesSession: GlassesSessioning, CaptureSenderConfigurable, Corpus
             guard let self else { return }
             for await devices in wearables.devicesStream() {
                 self.updateAvailability(devices: devices, registration: self.wearables.registrationState)
+                self.observeDeviceState(devices: devices)
             }
         }
     }
@@ -50,6 +63,7 @@ final class GlassesSession: GlassesSessioning, CaptureSenderConfigurable, Corpus
     isolated deinit {
         registrationTask?.cancel()
         deviceTask?.cancel()
+        deviceStateTokens.clear()
         deviceSession?.stop()
     }
 
@@ -183,6 +197,30 @@ final class GlassesSession: GlassesSessioning, CaptureSenderConfigurable, Corpus
                 self?.recorder?.offer(image)
             }
         }.store(in: streamTokens)
+    }
+
+    /// DAT "Device state": resolve the listed device and follow its battery and worn
+    /// state. The listener fires at once with the current snapshot and on every change.
+    private func observeDeviceState(devices: [DeviceIdentifier]) {
+        let first = devices.first
+        guard first != observedDevice else { return }
+        deviceStateTokens.clear()
+        observedDevice = first
+        deviceState = nil
+        guard let first, let device = wearables.deviceForIdentifier(first) else { return }
+        device.addDeviceStateListener { [weak self] snapshot in
+            let mapped = Self.deviceState(from: snapshot)
+            Task { @MainActor in self?.deviceState = mapped }
+        }.store(in: deviceStateTokens)
+    }
+
+    /// Values are stale once the link drops, so a disconnected snapshot reads as nil.
+    nonisolated static func deviceState(from snapshot: DeviceState) -> GlassesDeviceState? {
+        guard snapshot.linkState == .connected else { return nil }
+        return GlassesDeviceState(
+            batteryLevel: snapshot.batteryLevel,
+            charging: snapshot.chargingState == .charging,
+            worn: snapshot.donState == .unknown ? nil : snapshot.donState == .donned)
     }
 
     private func clearStream() {

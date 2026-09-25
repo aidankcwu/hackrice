@@ -119,7 +119,21 @@ Claude's proposed amendments (2026-09-24, pending Aidan's yes/no):
 
 ## Decisions so far
 
-(none locked yet; Aidan is still talking)
+- Three tabs: Home, Analysis, Protocol. No Calendar tab for the demo. No hamburger.
+- Fixed header on every tab: battery + glasses symbol + status pill, Start/Stop, Preview, gear.
+- Home order: metrics (hero + Daylight/Screens tiles + watched line) → daily summary card
+  → protocol card → sessions row → stats sheet → collapsed Log.
+- Protocol card opens the Protocol tab, which gets checkboxes, templates, edit.
+- Everything is specified in [DEMO_UI_PRD.md](DEMO_UI_PRD.md).
+
+## Branching (2026-09-24)
+
+- `demo` is the branch for the tester build; it diverges from `main` in the UI and will be
+  built on after the demo. `demo-web` is a temporary worktree branch for the web loop; it
+  merges into `demo` and is deleted. `app/native` and `app/web` are merged into main and
+  can be deleted. Stale `origin/*` branches from the hackathon (12 days old) are untouched.
+- Loops: `ralph/demo-native` (in the main checkout, on `demo`) and `ralph/demo-web`
+  (worktree `../hackrice-demo-web`, on `demo-web`).
 
 ## Open questions to settle as we go
 

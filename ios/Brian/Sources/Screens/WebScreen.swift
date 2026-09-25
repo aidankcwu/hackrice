@@ -8,7 +8,7 @@ import WebKit
 struct WebScreen: View {
     @Environment(AppState.self) private var appState
     let title: String
-    /// "/calendar" or "/analysis", appended to the web base.
+    /// "/analysis", appended to the web base.
     let path: String
 
     @State private var load = WebLoad()

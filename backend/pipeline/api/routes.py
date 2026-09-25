@@ -107,6 +107,12 @@ async def end_session(request: Request) -> dict:
     return {**session.model_dump(), "recap": "generating"}
 
 
+@router.get("/api/sessions")
+async def list_sessions(request: Request, limit: int = Query(50, ge=1, le=200)) -> list[dict]:
+    """Every session, newest first (the phone's Sessions row, docs/DEMO_UI_PRD.md)."""
+    return _dump(_pipeline(request).db.list_sessions(limit))
+
+
 @router.get("/api/session/current")
 async def current_session(request: Request) -> dict | None:
     session = _pipeline(request).sessions.current()

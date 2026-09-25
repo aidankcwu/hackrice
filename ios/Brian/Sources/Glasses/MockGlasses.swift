@@ -15,6 +15,8 @@ final class MockGlasses: GlassesSessioning, CaptureSenderConfigurable, CorpusRec
         }
     }
     var onStateChange: ((GlassesState) -> Void)?
+    private(set) var deviceState: GlassesDeviceState? = .demo
+    var onDeviceStateChange: ((GlassesDeviceState?) -> Void)?
 
     func useCaptureSender(_ sender: CapturePacketSender) {
         self.sender = sender

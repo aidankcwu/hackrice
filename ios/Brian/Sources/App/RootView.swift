@@ -1,47 +1,57 @@
-// IOS_SPEC.md "Structure" + APP_PRD.md: Connect full screen on first launch, the four tabs
-// (Today, Calendar, Analysis, Protocol; the middle two are the web app), and
-// a Settings gear in every tab's toolbar. Every tab carries the status pill above its
-// content; tapping it asks AppState for Connect, shown as a sheet.
-// RootView owns the navigation stacks; ConnectView and SettingsView bring their own.
+// DEMO_UI_PRD.md "The product in one screen": three tabs (Home, Analysis, Protocol; the
+// middle one is the web app) under one fixed header (AppHeader: status pill, Start
+// watching / Stop, Preview, Settings). Connect opens full screen on first launch.
+// RootView owns the navigation stacks and every sheet the header opens.
 import SwiftUI
 
 /// Screens a `-screen <id>` launch argument can open on (screenshots, APP_NATIVE_NOTES.md).
 enum AppScreen: String, CaseIterable {
-    case today, calendar, analysis, `protocol`, connect, settings
+    case home, analysis, `protocol`, connect, settings, preview
+    /// Home with the hero's "How this is measured" sheet up (screenshots).
+    case measured
+    /// The Protocol tab scrolled to Templates with Doses open, and with the first item's
+    /// edit sheet up (screenshots).
+    case protocolTemplates = "protocol-templates"
+    case protocolEdit = "protocol-edit"
 
     static let argument = "-screen"
 
     /// The value after `-screen`, or nil when the argument is absent or unknown.
+    /// `today` is the old name of `home`, kept for existing scripts.
     static func from(arguments: [String]) -> AppScreen? {
         guard let index = arguments.firstIndex(of: argument), index + 1 < arguments.count else { return nil }
-        return AppScreen(rawValue: arguments[index + 1].lowercased())
+        let value = arguments[index + 1].lowercased()
+        return value == "today" ? .home : AppScreen(rawValue: value)
     }
 
-    /// The tab this screen lives on. Connect and Settings are sheets over Today.
+    /// The tab this screen lives on. Connect, Settings, Preview and Measured are sheets over Home.
     var tab: AppTab {
         switch self {
-        case .calendar: .calendar
         case .analysis: .analysis
-        case .protocol: .protocol
-        case .today, .connect, .settings: .today
+        case .protocol, .protocolTemplates, .protocolEdit: .protocol
+        case .home, .connect, .settings, .preview, .measured: .home
         }
     }
 }
 
-/// Exactly four tabs, in this order (APP_PRD.md "The product").
+/// Exactly three tabs, in this order (DEMO_UI_PRD.md).
 enum AppTab: Hashable, CaseIterable {
-    case today, calendar, analysis, `protocol`
+    case home, analysis, `protocol`
 }
 
 struct RootView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
-    @State private var tab: AppTab = .today
+    @State private var tab: AppTab = .home
     /// Connect from the pill or Settings: a sheet over the tabs.
     @State private var showConnect = false
     /// Connect on first launch: full screen, closed with Done.
     @State private var showConnectFullScreen = false
     @State private var showSettings = false
+    @State private var showPreview = false
+    @State private var showMeasured = false
+    /// The consent gate before the first stream, asked by the header's Start watching.
+    @State private var askConsent = false
     @State private var bootstrapped = false
 
     /// Set once Connect has been closed, so it opens by itself only once. The key keeps
@@ -52,40 +62,19 @@ struct RootView: View {
 
     var body: some View {
         TabView(selection: $tab) {
-            Tab("Today", systemImage: "list.bullet", value: AppTab.today) {
+            Tab("Home", systemImage: "house", value: AppTab.home) {
                 NavigationStack {
-                    TodayView()
-                        .toolbar {
-                            StatusPillToolbar()
-                            settingsButton
-                        }
-                }
-            }
-            Tab("Calendar", systemImage: "calendar", value: AppTab.calendar) {
-                NavigationStack {
-                    WebScreen(title: "Calendar", path: "/calendar")
-                        .toolbar {
-                            StatusPillToolbar()
-                            settingsButton
-                        }
+                    HomeView(openMeasured: { showMeasured = true }, openProtocol: { tab = .protocol }).modifier(header)
                 }
             }
             Tab("Analysis", systemImage: "chart.bar", value: AppTab.analysis) {
                 NavigationStack {
-                    WebScreen(title: "Analysis", path: "/analysis")
-                        .toolbar {
-                            StatusPillToolbar()
-                            settingsButton
-                        }
+                    WebScreen(title: "Analysis", path: "/analysis").modifier(header)
                 }
             }
             Tab("Protocol", systemImage: "pills", value: AppTab.protocol) {
                 NavigationStack {
-                    ProtocolView()
-                        .toolbar {
-                            StatusPillToolbar()
-                            settingsButton
-                        }
+                    ProtocolView().modifier(header)
                 }
             }
         }
@@ -99,6 +88,16 @@ struct RootView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
+        .sheet(isPresented: $showPreview) {
+            PreviewView()
+        }
+        .sheet(isPresented: $showMeasured) {
+            MeasuredView()
+        }
+        .streamingConsentSheet(isPresented: $askConsent) {
+            appState.consentGiven = true
+            Task { await appState.startWatching() }
+        }
         .onChange(of: appState.connectRequested) { _, requested in
             guard requested else { return }
             showSettings = false
@@ -111,12 +110,19 @@ struct RootView: View {
             let arguments = ProcessInfo.processInfo.arguments
             let screen = AppScreen.from(arguments: arguments)
             if let screen { tab = screen.tab }
+            if appState.demo, screen == .protocolTemplates || screen == .protocolEdit {
+                appState.protocolLaunch = screen
+            }
             let forced = arguments.contains(Self.showSetupArgument) || screen == .connect
             let firstLaunch = !appState.demo && !UserDefaults.standard.bool(forKey: Self.connectSeenKey)
             if forced || (firstLaunch && screen == nil) {
                 showConnectFullScreen = true
             } else if screen == .settings {
                 showSettings = true
+            } else if screen == .preview {
+                showPreview = true
+            } else if screen == .measured {
+                showMeasured = true
             }
             await appState.bootstrap()
         }
@@ -138,15 +144,10 @@ struct RootView: View {
         UserDefaults.standard.set(true, forKey: Self.connectSeenKey)
     }
 
-    @ToolbarContentBuilder
-    private var settingsButton: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                showSettings = true
-            } label: {
-                Image(systemName: BrianSymbol.settings)
-            }
-            .accessibilityLabel("Settings")
-        }
+    private var header: AppHeader {
+        AppHeader(
+            askConsent: { askConsent = true },
+            openPreview: { showPreview = true },
+            openSettings: { showSettings = true })
     }
 }
