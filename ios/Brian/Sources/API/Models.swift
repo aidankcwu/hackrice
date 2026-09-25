@@ -231,6 +231,25 @@ struct Recap: Codable, Equatable {
     }
 }
 
+/// One row of `GET /api/recaps` (`{"recaps": [...]}`): no body, just enough to match a
+/// session. The body is `GET /api/recaps/{id}`.
+struct RecapListing: Codable, Identifiable, Equatable {
+    let id: String
+    let sessionId: String?
+    let generatedAt: Double?
+}
+
+struct RecapList: Decodable {
+    let items: [RecapListing]
+
+    private enum CodingKeys: String, CodingKey { case recaps }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        items = try c.decode([Lenient<RecapListing>].self, forKey: .recaps).compactMap(\.value)
+    }
+}
+
 // MARK: - Episodes (GET /api/episodes)
 
 struct Reported: Codable, Equatable {

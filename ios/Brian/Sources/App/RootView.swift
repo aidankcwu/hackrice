@@ -13,6 +13,8 @@ enum AppScreen: String, CaseIterable {
     /// edit sheet up (screenshots).
     case protocolTemplates = "protocol-templates"
     case protocolEdit = "protocol-edit"
+    /// Home with the newest session's detail pushed (screenshots).
+    case session
 
     static let argument = "-screen"
 
@@ -29,7 +31,7 @@ enum AppScreen: String, CaseIterable {
         switch self {
         case .analysis: .analysis
         case .protocol, .protocolTemplates, .protocolEdit: .protocol
-        case .home, .connect, .settings, .preview, .measured: .home
+        case .home, .connect, .settings, .preview, .measured, .session: .home
         }
     }
 }
@@ -113,6 +115,7 @@ struct RootView: View {
             if appState.demo, screen == .protocolTemplates || screen == .protocolEdit {
                 appState.protocolLaunch = screen
             }
+            if appState.demo, screen == .session { appState.homeLaunch = screen }
             let forced = arguments.contains(Self.showSetupArgument) || screen == .connect
             let firstLaunch = !appState.demo && !UserDefaults.standard.bool(forKey: Self.connectSeenKey)
             if forced || (firstLaunch && screen == nil) {

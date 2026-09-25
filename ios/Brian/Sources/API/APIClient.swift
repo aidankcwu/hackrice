@@ -131,6 +131,49 @@ final class APIClient {
         }
     }
 
+    // MARK: Sessions (D-006)
+
+    /// `POST /api/session/start` `{"name": ""}`: Start watching opens a session.
+    func startSession(name: String = "") async throws {
+        if isFixtures { return }
+        let data = try JSONSerialization.data(withJSONObject: ["name": name])
+        let _: Data = try await raw("POST", "/api/session/start", body: data)
+    }
+
+    /// `POST /api/session/end`: Stop closes it; the backend then writes its recap by itself.
+    func endSession() async throws {
+        if isFixtures { return }
+        let _: Data = try await raw("POST", "/api/session/end")
+    }
+
+    /// `GET /api/sessions?limit=N`, newest first.
+    func sessions(limit: Int = 50) async throws -> [WatchSession] {
+        if isFixtures { return try fixture("sessions_today") }
+        let rows: [Lenient<WatchSession>] = try await get("/api/sessions",
+                                                          query: [URLQueryItem(name: "limit", value: String(limit))])
+        return rows.compactMap(\.value)
+    }
+
+    /// `GET /api/recaps`: every saved recap, newest first, without bodies.
+    func recaps(limit: Int = 50) async throws -> [RecapListing] {
+        if isFixtures { return (try fixture("recaps") as RecapList).items }
+        let list: RecapList = try await get("/api/recaps", query: [URLQueryItem(name: "limit", value: String(limit))])
+        return list.items
+    }
+
+    /// `GET /api/recaps/{id}`: one recap's body.
+    func recap(id: String) async throws -> Recap {
+        if isFixtures {
+            let bodies: FixtureRecaps = try fixture("recaps")
+            guard let recap = bodies.recaps.first(where: { $0.id == id }) else { throw APIError.notFound }
+            return recap
+        }
+        return try await get("/api/recaps/\(id)")
+    }
+
+    /// Fixtures/recaps.json holds the listing and the bodies in one file.
+    private struct FixtureRecaps: Decodable { let recaps: [Recap] }
+
     /// First saved frame for a decision, as JPEG bytes, or nil when none survived.
     /// `GET /api/evidence/{id}` lists `[{decision_id, frame_ref, t, bytes}]`; then
     /// `GET /api/evidence/{id}/{frame_ref}` is the JPEG. Shown, never written to disk.

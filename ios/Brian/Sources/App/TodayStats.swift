@@ -41,22 +41,26 @@ struct HomeMetrics: Equatable {
     static let daylightKind = "outdoor_block"
     static let screensKind = "screen_block"
 
+    /// `dayStart` is the local midnight the day starts at; nil means today's (`now`'s).
+    /// Demo mode passes the fixture day's, so its sessions count as today's.
     static func derive(episodes: [Episode], sessions: [WatchSession], watchingSince: Date?,
-                       now: Date, calendar: Calendar = .current) -> HomeMetrics {
+                       now: Date, calendar: Calendar = .current, dayStart: Date? = nil) -> HomeMetrics {
         HomeMetrics(
             daylight: TodayStats.minutes(kind: daylightKind, episodes: episodes, now: now).map(TodayStats.durationText),
             screens: TodayStats.minutes(kind: screensKind, episodes: episodes, now: now).map(TodayStats.durationText),
             watchedLine: watchedLine(seconds: watchedSeconds(sessions: sessions, watchingSince: watchingSince,
-                                                             now: now, calendar: calendar)))
+                                                             now: now, calendar: calendar, dayStart: dayStart)))
     }
 
     /// Seconds watched since local midnight: today's sessions when the backend has any,
     /// else the current watching span. Open spans run to `now`; spans that began
-    /// yesterday count from midnight.
+    /// yesterday count from midnight. The same window as the Sessions row's total.
     static func watchedSeconds(sessions: [WatchSession], watchingSince: Date?, now: Date,
-                               calendar: Calendar = .current) -> TimeInterval {
-        let midnight = calendar.startOfDay(for: now).timeIntervalSince1970
-        let end = now.timeIntervalSince1970
+                               calendar: Calendar = .current, dayStart: Date? = nil) -> TimeInterval {
+        let start = dayStart ?? calendar.startOfDay(for: now)
+        let midnight = start.timeIntervalSince1970
+        let dayEnd = (calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400))
+        let end = min(now, dayEnd).timeIntervalSince1970
         func overlap(_ start: Double, _ stop: Double?) -> Double {
             max(0, min(stop ?? end, end) - max(start, midnight))
         }

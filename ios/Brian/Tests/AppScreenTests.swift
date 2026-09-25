@@ -9,6 +9,7 @@ struct AppScreenTests {
         #expect(AppScreen.from(arguments: ["-screen", "preview"]) == .preview)
         #expect(AppScreen.from(arguments: ["-screen", "protocol-edit"]) == .protocolEdit)
         #expect(AppScreen.from(arguments: ["-screen", "protocol-templates"]) == .protocolTemplates)
+        #expect(AppScreen.from(arguments: ["-screen", "session"]) == .session)
     }
 
     @Test func todayIsAnAliasOfHome() {
@@ -32,6 +33,7 @@ struct AppScreenTests {
         #expect(AppScreen.measured.tab == .home)
         #expect(AppScreen.protocolTemplates.tab == .protocol)
         #expect(AppScreen.protocolEdit.tab == .protocol)
+        #expect(AppScreen.session.tab == .home)
     }
 
     @Test func threeTabsInPRDOrder() {
@@ -47,6 +49,7 @@ struct HomeScrollTargetTests {
         #expect(HomeScrollTarget("summary-end")?.atEnd == true)
         #expect(HomeScrollTarget("log-end")?.section == .log)
         #expect(HomeScrollTarget("protocol")?.section == .protocol)
+        #expect(HomeScrollTarget("sessions")?.section == .sessions)
         #expect(HomeScrollTarget("nowhere") == nil)
         #expect(HomeScrollTarget("-end") == nil)
     }

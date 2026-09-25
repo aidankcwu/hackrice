@@ -1,0 +1,59 @@
+{
+  "recaps": [
+    {
+      "id": "r_s3a91e07",
+      "session_id": "s_0922_3",
+      "from_t": 1790110380.0,
+      "to_t": 1790111400.0,
+      "generated_at": 1790111440.0,
+      "duration_s": 1020.0,
+      "narrative": {
+        "headline": "The late coffees are the cost here: three of them after 3:50 PM.",
+        "paragraphs": [
+          "Coffee was in frame at 3:53, 4:00 and 4:06 PM, late enough to cut into deep sleep tonight. About 11 minutes of screen in three blocks, and three trips outside that added up to about 4 minutes. The rice bowl came back three times and still counts toward the Mediterranean pattern."
+        ],
+        "suggestions": [
+          "No more caffeine today. Water or herbal tea from here.",
+          "Walk outside for 15 minutes before the light goes."
+        ],
+        "spoken": "The late coffees are the cost here: three of them after 3:50 PM."
+      }
+    },
+    {
+      "id": "r_s2c04b3d",
+      "session_id": "s_0922_2",
+      "from_t": 1790109600.0,
+      "to_t": 1790110320.0,
+      "generated_at": 1790110355.0,
+      "duration_s": 720.0,
+      "narrative": {
+        "headline": "Two more coffees, and the screen came back after every break.",
+        "paragraphs": [
+          "Screen time came in four short blocks, about 7 minutes, each starting within a minute or two of coming back in. Outdoors twice, close to 4 minutes. Coffee was in frame twice and alcohol three times."
+        ],
+        "suggestions": [
+          "Leave the phone inside the next time you step out."
+        ],
+        "spoken": "Two more coffees, and the screen came back after every break."
+      }
+    },
+    {
+      "id": "r_s1d7f2a8",
+      "session_id": "s_0922_1",
+      "from_t": 1790108700.0,
+      "to_t": 1790109540.0,
+      "generated_at": 1790109570.0,
+      "duration_s": 840.0,
+      "narrative": {
+        "headline": "A screen-heavy start, broken by two short stretches outside.",
+        "paragraphs": [
+          "About 8 minutes of sustained screen in three blocks, with two trips outdoors of about 3 minutes in all. Coffee was in frame twice and alcohol twice. The rice bowl counts toward the Mediterranean pattern."
+        ],
+        "suggestions": [
+          "Hold the next coffee until tomorrow morning."
+        ],
+        "spoken": "A screen-heavy start, broken by two short stretches outside."
+      }
+    }
+  ]
+}

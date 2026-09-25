@@ -3,6 +3,7 @@
 // may add private state; the public surface below is what the Screens are written against.
 import Foundation
 import Observation
+import os
 import UIKit
 
 enum LinkState: Equatable {
@@ -66,6 +67,8 @@ final class AppState {
     /// Demo only (`-screen protocol-templates`, `-screen protocol-edit`): what the Protocol
     /// tab opens once loaded. ProtocolView consumes it.
     var protocolLaunch: AppScreen? = nil
+    /// Demo only (`-screen session`): Home pushes the newest session's detail once loaded.
+    var homeLaunch: AppScreen? = nil
     // Today
     var watching: Bool = false
     var watchingSince: Date? = nil
@@ -73,8 +76,14 @@ final class AppState {
     var episodes: [Episode] = []
     var decisions: [Decision] = []
     var heldBackToday: Int = 0          // decisions that proposed speech and were not spoken
-    /// Recent Start → Stop spans, newest first (`GET /api/sessions`; D-006 fetches them).
+    /// Recent Start → Stop spans, newest first (`GET /api/sessions`).
     var sessions: [WatchSession] = []
+    /// `GET /api/recaps` (newest first, no bodies) and the bodies fetched for today's sessions,
+    /// by recap id. A recap body never changes once written, so it is fetched once.
+    var recapListings: [RecapListing] = []
+    var recapBodies: [String: Recap] = [:]
+    /// A sessions / recaps fetch is running (the session detail's Refresh).
+    var sessionsLoading = false
     /// Home's daily summary (D-004): the last `POST /api/recap` for today, kept in memory only.
     var summary: DailySummary? = nil
     var summaryLoading = false
@@ -122,7 +131,28 @@ final class AppState {
 
     /// Home's tiles and watched line (D-003).
     func homeMetrics(now: Date) -> HomeMetrics {
-        HomeMetrics.derive(episodes: episodes, sessions: sessions, watchingSince: watchingSince, now: now)
+        HomeMetrics.derive(episodes: episodes, sessions: sessions, watchingSince: watchingSince, now: now,
+                           dayStart: dayStart(now: now))
+    }
+
+    /// Home's Sessions row and the session detail (D-006).
+    func sessionsSummary(now: Date) -> SessionsSummary {
+        SessionsSummary.derive(sessions: sessions, recaps: recapListings, bodies: recapBodies,
+                               dayStart: dayStart(now: now), now: now)
+    }
+
+    /// Local midnight of "today". Demo fixtures are one recorded day (`healthspan.day`), so
+    /// demo mode counts that day's sessions as today's; live mode uses the phone's day.
+    func dayStart(now: Date) -> Date {
+        let calendar = Calendar.current
+        if demo, let day = healthspan?.day {
+            let parts = day.split(separator: "-").compactMap { Int($0) }
+            if parts.count == 3,
+               let date = calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2])) {
+                return date
+            }
+        }
+        return calendar.startOfDay(for: now)
     }
 
     /// Home's protocol card and the Protocol tab's rows (D-005).
@@ -205,6 +235,8 @@ final class AppState {
     static let demoLabel = "10.0.0.5:8010"
     static let demoServerURL = "ws://10.0.0.5:8010/ws/glasses"
     static let pollInterval: Duration = .seconds(30)
+    /// Session start / end and recap fetches fail quietly: logged here, never shown.
+    private static let log = Logger(subsystem: "com.zeroist.app", category: "sessions")
 
     @ObservationIgnored private let api: APIClient
     @ObservationIgnored private let glue: Link
@@ -472,6 +504,7 @@ final class AppState {
             watchingSince = Date()
             lastError = nil
             startPolling()
+            Task { await self.sessionCall("start") { try await self.api.startSession() } }
             await refreshToday()
         } catch {
             lastError = Self.sentence(for: error)
@@ -479,12 +512,57 @@ final class AppState {
     }
 
     func stopWatching() async {
-        if !demo { glue.stop() }
+        if !demo {
+            glue.stop()
+            Task { await self.sessionCall("end") { try await self.api.endSession() } }
+        }
         watching = false
         watchingSince = nil
         stopPolling()
         // A session just ended: today's summary is out of date.
         if !episodes.isEmpty { await refreshSummary() }
+    }
+
+    // MARK: - Sessions (D-006)
+
+    /// Fire and forget: a failed start or end is logged, never shown. Refetches the list
+    /// after, so the Sessions row picks up the new or just-closed session.
+    private func sessionCall(_ name: String, _ call: () async throws -> Void) async {
+        do {
+            try await call()
+        } catch {
+            Self.log.error("session \(name, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+        }
+        await refreshSessions()
+    }
+
+    /// `GET /api/sessions` and `GET /api/recaps`, then the recap bodies today's sessions
+    /// still lack. Failures are logged and keep what was there.
+    func refreshSessions() async {
+        if !demo && server == nil { return }
+        guard !sessionsLoading else { return }
+        sessionsLoading = true
+        defer { sessionsLoading = false }
+        do {
+            async let list = api.sessions(limit: 50)
+            async let listed = api.recaps(limit: 50)
+            (sessions, recapListings) = try await (list, listed)
+        } catch is CancellationError {
+            return
+        } catch {
+            Self.log.error("sessions fetch failed: \(String(describing: error), privacy: .public)")
+            return
+        }
+        for row in sessionsSummary(now: Date()).rows {
+            guard let id = row.recapID, recapBodies[id] == nil else { continue }
+            do {
+                recapBodies[id] = try await api.recap(id: id)
+            } catch is CancellationError {
+                return
+            } catch {
+                Self.log.error("recap \(id, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+            }
+        }
     }
 
     // MARK: - Daily summary (D-004)
@@ -538,6 +616,7 @@ final class AppState {
         } catch {
             lastError = Self.sentence(for: error)
         }
+        await refreshSessions()
     }
 
     /// `/api/decisions` is not per day. A decision is today's when its episode is one of

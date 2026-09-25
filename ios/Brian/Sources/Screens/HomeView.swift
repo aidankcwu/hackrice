@@ -5,7 +5,7 @@ import SwiftUI
 
 /// Home's sections, top to bottom; the ids `-scrollTo` accepts (screenshots).
 enum HomeSection: String, CaseIterable {
-    case metrics, summary, `protocol`, log
+    case metrics, summary, `protocol`, sessions, log
 }
 
 /// `-scrollTo summary` puts the section's top under the header; `summary-end` its bottom
@@ -30,6 +30,9 @@ struct HomeView: View {
     var openMeasured: () -> Void = {}
     /// Opens the Protocol tab; RootView owns the tab selection.
     var openProtocol: () -> Void = {}
+    @State private var sessionsExpanded = false
+    /// The session whose detail is pushed.
+    @State private var openSession: String?
 
     /// Side by side at normal sizes; stacked at accessibility sizes, where a button or chip
     /// beside a sentence squeezes it to one word per line.
@@ -48,6 +51,7 @@ struct HomeView: View {
                     metrics.id(HomeSection.metrics)
                     summary.id(HomeSection.summary)
                     protocolCard.id(HomeSection.protocol)
+                    sessionsCard.id(HomeSection.sessions)
                     ledger.id(HomeSection.log)
                 }
                 .padding(.horizontal, Space.gutter)
@@ -58,11 +62,19 @@ struct HomeView: View {
                 await appState.loadSummaryIfNeeded()
                 if let target = appState.homeScrollTarget {
                     appState.homeScrollTarget = nil
+                    if target.section == .sessions { sessionsExpanded = true }
                     proxy.scrollTo(target.section, anchor: target.atEnd ? .bottom : .top)
+                }
+                if appState.homeLaunch == .session {
+                    appState.homeLaunch = nil
+                    openSession = appState.sessionsSummary(now: .now).rows.first?.id
                 }
             }
         }
         .background(Brian.page)
+        .navigationDestination(item: $openSession) { id in
+            SessionDetailView(sessionID: id)
+        }
         .refreshable { await appState.refreshToday() }
         // The first episode of the day can arrive while Home is open (the 30 s poll).
         .onChange(of: appState.episodes.isEmpty) { _, empty in
@@ -186,26 +198,7 @@ struct HomeView: View {
             case .failed:
                 summarySentence(SummaryCard.failedSentence)
             case .recap(let recap):
-                Text(recap.headline)
-                    .font(BrianType.body.weight(.semibold))
-                    .foregroundStyle(Brian.ink)
-                ForEach(Array(recap.paragraphs.enumerated()), id: \.offset) { _, paragraph in
-                    Text(paragraph)
-                        .font(BrianType.body)
-                        .foregroundStyle(Brian.text)
-                }
-                if !recap.suggestions.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(Array(recap.suggestions.enumerated()), id: \.offset) { _, suggestion in
-                            Label {
-                                Text(suggestion).foregroundStyle(Brian.text)
-                            } icon: {
-                                Image(systemName: "arrow.turn.down.right").foregroundStyle(Brian.muted)
-                            }
-                            .font(BrianType.body)
-                        }
-                    }
-                }
+                RecapText(recap: recap)
             }
 
             if card.showsRefresh {
@@ -270,6 +263,76 @@ struct HomeView: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// Today's Start → Stop spans (D-006): one collapsed row; expanded, one row per session,
+    /// newest first. A row pushes the session's detail.
+    private var sessionsCard: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            let summary = appState.sessionsSummary(now: context.date)
+            VStack(alignment: .leading, spacing: 16) {
+                if summary.isEmpty {
+                    Text(summary.title)
+                        .font(BrianType.title)
+                        .foregroundStyle(Brian.ink)
+                        .accessibilityAddTraits(.isHeader)
+                    Text(SessionsSummary.emptySentence)
+                        .font(BrianType.body)
+                        .foregroundStyle(Brian.muted)
+                } else {
+                    DisclosureGroup(isExpanded: $sessionsExpanded) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(summary.rows) { session in
+                                Divider().overlay(Brian.line)
+                                Button { openSession = session.id } label: { sessionRow(session) }
+                                    .buttonStyle(.plain)
+                                    .accessibilityHint("Opens the session")
+                            }
+                        }
+                        .padding(.top, 8)
+                    } label: {
+                        Text(summary.title)
+                            .font(BrianType.title)
+                            .foregroundStyle(Brian.ink)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    }
+                    .tint(Brian.muted)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .panel()
+        }
+    }
+
+    private func sessionRow(_ session: SessionsSummary.Row) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                let times = row(spacing: 8, alignment: .firstTextBaseline)
+                times {
+                    Text(session.span)
+                        .font(BrianType.body.monospacedDigit())
+                        .foregroundStyle(Brian.text)
+                        .frame(maxWidth: typeSize.isAccessibilitySize ? nil : .infinity, alignment: .leading)
+                    Text(session.duration)
+                        .font(BrianType.secondary.monospacedDigit())
+                        .foregroundStyle(Brian.muted)
+                }
+                if let headline = session.headline {
+                    Text(headline)
+                        .font(BrianType.secondary)
+                        .foregroundStyle(Brian.muted)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            Image(systemName: "chevron.right")
+                .font(BrianType.caption.weight(.semibold))
+                .foregroundStyle(Brian.muted)
+                .accessibilityHidden(true)
+        }
+        .padding(.vertical, 12)
+        .frame(minHeight: Space.logRow)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
     private func summarySentence(_ text: String) -> some View {
         Text(text)
             .font(BrianType.body)
@@ -324,75 +387,8 @@ struct HomeView: View {
     }
 
     private var entries: [LedgerEntry] {
-        var result: [LedgerEntry] = []
-        var usedEpisodeIDs = Set<String>()
-
-        for decision in appState.decisions {
-            let episode = decision.episodeId.flatMap { id in appState.episodes.first { $0.id == id } }
-            if let id = decision.episodeId { usedEpisodeIDs.insert(id) }
-            let chip = outcome(for: decision)
-            // A no-op decision (only annotate/log_insight/watch/nothing/remember, no
-            // episode to anchor it) is noise, not a moment worth a row — drop it. Keep
-            // every row that has an episode behind it or a chip to show.
-            guard episode != nil || chip != nil else { continue }
-            result.append(LedgerEntry(
-                id: "decision-\(decision.id)", date: Date(timeIntervalSince1970: decision.t),
-                label: label(for: decision, episode: episode), kind: episode?.kind ?? decision.trigger,
-                outcome: chip, decision: decision, reported: episode?.reported))
-        }
-        for episode in appState.episodes where !usedEpisodeIDs.contains(episode.id) {
-            result.append(LedgerEntry(
-                id: "episode-\(episode.id)", date: Date(timeIntervalSince1970: episode.startT),
-                label: episode.label ?? cleanedTrigger(episode.kind), kind: episode.kind, outcome: nil,
-                decision: nil, reported: episode.reported))
-        }
-        return result.sorted { $0.date > $1.date }
+        Ledger.entries(decisions: appState.decisions, episodes: appState.episodes)
     }
 
-    /// Human row label: the episode's own label first, then the decision's plain-English
-    /// interpretation, and only as a last resort a cleaned-up trigger. Raw triggers such
-    /// as "watch:check for more caffeine" must never reach the row directly (brian-ui law).
-    private func label(for decision: Decision, episode: Episode?) -> String {
-        if let label = episode?.label, !label.isEmpty { return label }
-        if !decision.interpretation.isEmpty { return decision.interpretation }
-        return cleanedTrigger(decision.trigger)
-    }
-
-    /// Strips the internal "watch:" / "autopilot:" scheduling prefixes and turns
-    /// snake_case into words, so a raw trigger never leaks as a colon-prefixed key.
-    private func cleanedTrigger(_ trigger: String) -> String {
-        var t = trigger
-        for prefix in ["watch:", "autopilot:"] where t.hasPrefix(prefix) {
-            t.removeFirst(prefix.count)
-        }
-        return t.replacingOccurrences(of: "_", with: " ")
-    }
-
-    /// Outcome badge, or nil for no chip at all.
-    ///
-    /// - `said`: spoke == true, or a proposed ask/speak that was handed off to a
-    ///   conversation.
-    /// - `asked`: an `ask` action still pending (not handed off) — e.g. outcome
-    ///   `conversation_active`.
-    /// - `acted`: a real `act` action (a calendar block, a screen shield, ...).
-    /// - `held back` (brian-ui law 4): restraint, not silence — an ask or speak action
-    ///   that was proposed and then suppressed (`Decision.heldBack`), and isn't already
-    ///   covered by `asked` above.
-    /// - nil: the decision's actions are only bookkeeping (annotate/log_insight/watch/
-    ///   nothing/remember) — nothing was proposed, so there is nothing to show restraint
-    ///   about.
-    private func outcome(for decision: Decision) -> LedgerEntry.Outcome? {
-        if decision.spoke { return .said }
-        if decision.actions.contains(where: { $0.proposesSpeech && $0.handedOff }) { return .said }
-        if decision.actions.contains(where: { $0.type == "ask" }) { return .asked }
-        if decision.actions.contains(where: { $0.type == "act" }) { return .acted }
-        if decision.heldBack { return .heldBack }
-        return nil
-    }
-
-    /// Footer count — the same rule as the row chips, not AppState's own tally, so the
-    /// number on screen always matches what "held back" rows are actually visible above.
-    private var heldBackCount: Int {
-        appState.decisions.filter { outcome(for: $0) == .heldBack }.count
-    }
+    private var heldBackCount: Int { Ledger.heldBackCount(appState.decisions) }
 }
