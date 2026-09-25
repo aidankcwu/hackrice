@@ -115,7 +115,7 @@
 		F68ECE541029CD2BDAEF7463 /* LinkGlue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkGlue.swift; sourceTree = "<group>"; };
 		FC0FBA5F12B4F1CA114B1D05 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		FC2C75102A7E6B02D881985A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		"TEMP_8BDB0B87-5D9D-43EC-A5C1-D4F18E03779A" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
+		"TEMP_815F62AB-9E92-4802-A7A7-46EA40A677F6" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -265,10 +265,10 @@
 			);
 			sourceTree = "<group>";
 		};
-		"TEMP_4AC3F1F3-3195-45C0-BF6F-14CCBBF028B0" /* Brian */ = {
+		"TEMP_C26086AA-243B-40F5-A466-25F754D16C1A" /* Brian */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_8BDB0B87-5D9D-43EC-A5C1-D4F18E03779A" /* Config.xcconfig */,
+				"TEMP_815F62AB-9E92-4802-A7A7-46EA40A677F6" /* Config.xcconfig */,
 			);
 			path = Brian;
 			sourceTree = "<group>";
@@ -529,7 +529,7 @@
 		};
 		B6722B02BBFA64746616D7BD /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_8BDB0B87-5D9D-43EC-A5C1-D4F18E03779A" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_815F62AB-9E92-4802-A7A7-46EA40A677F6" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Brian.entitlements;
@@ -554,7 +554,7 @@
 		};
 		EA025B21F11DCFD0598B3322 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_8BDB0B87-5D9D-43EC-A5C1-D4F18E03779A" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_815F62AB-9E92-4802-A7A7-46EA40A677F6" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Brian.entitlements;
@@ -678,7 +678,7 @@
 			repositoryURL = "https://github.com/facebook/meta-wearables-dat-ios";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 0.9.0;
+				minimumVersion = 1.0.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
