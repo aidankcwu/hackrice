@@ -58,8 +58,8 @@
         "Build and tests exit 0"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "ProtocolSummary.derive (pure, tested) drives card + tab; templates static in ProtocolTemplates.swift; -screen protocol-templates / protocol-edit; fixture now 3 of 5."
     },
     {
       "id": "D-006",
