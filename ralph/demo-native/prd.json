@@ -30,8 +30,8 @@
         "Build and tests exit 0"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Hero is a Button opening MeasuredView (RootView sheet, -screen measured); tiles/watched line from pure HomeMetrics/TodayStats; open episodes use server duration_s."
     },
     {
       "id": "D-004",

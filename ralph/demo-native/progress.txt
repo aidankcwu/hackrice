@@ -38,3 +38,32 @@ Next iteration must know
 - Build/test: xcodebuild's exit code gets lost behind `| grep`; redirect to a log and check $?.
 - `git -C /Users/ljawhomebot/hackrice ...` instead of `cd … && git` (the permission hook asks).
 - Screenshots: sips -Z 1000 a copy into the scratchpad before reading; the full PNG is fine too.
+
+## 2026-09-24 D-003 Home metrics, tiles, watched line, hero sheet (passes)
+What I did
+- App/TodayStats.swift (pure): TodayStats.minutes(kind:episodes:now:) + durationText ("14 min",
+  "2 h 05 min"); HomeMetrics.derive(episodes:sessions:watchingSince:now:calendar:) -> daylight,
+  screens, watchedLine; HealthFactorText (provenance word, dose with unit, citation, order).
+  Tests/TodayStatsTests.swift covers all of it, fixture included (Daylight 10 min, Screens 28 min).
+- Models: Healthspan.factors ([HealthFactor], decoded leniently via Lenient<T>), Episode.durationS
+  (var, default nil so the memberwise init still works), WatchSession {id, name, startedT, endedT}
+  for GET /api/sessions. AppState.sessions exists but is EMPTY until D-006 fetches it; the watched
+  line then switches from the watching span to the sessions sum by itself.
+- HomeView: hero panel is a plain Button (info.circle top-right, muted) -> MeasuredView sheet;
+  two Brian.surface tiles (radius 20, HStack, VStack at accessibility sizes); watched line. The old
+  "Score 76 · −0.1 years" line is gone (not in the PRD). Ledger unchanged (D-008).
+- MeasuredView (Screens/): List insetGrouped, the PRD paragraph, then factors biggest |hours| first,
+  missing last: label + SignedHoursChip, "5,500 steps · Seeded", citation (source up to its ": ").
+- AppScreen gained `measured` (-screen measured opens Home with the sheet up). RootView owns it.
+
+Decisions
+- /api/healthspan factors carry no unit; HealthFactorText.unit(for:) is a plain-word table keyed by
+  brian_score.py FACTORS keys (falls back to a decoded `unit` if the backend ever sends one).
+- Provenance words: Glasses = live/derived with basis glasses; Missing = missing/unmeasured/no dose;
+  everything else Seeded (so derived-from-apple_watch reads Seeded, which is true in the demo).
+- An open episode's length is the server's duration_s, not now − start: the fixture's open
+  outdoor_block is days old and read "52 h 34 min" of daylight before this.
+
+Next iteration must know
+- `-screen measured` is the hero-sheet screenshot id (D-010 needs it).
+- HomeView takes `openMeasured` from RootView; keep new sheets in RootView too.
