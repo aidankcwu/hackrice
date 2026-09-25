@@ -40,8 +40,8 @@
         "lint, tsc, test, build exit 0"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "embedReach.test.tsx: embedded /analysis and /calendar (seeded month, every lever sheet) link to none of the ten screens and their import graph never names one; live crawl agreed, nothing needed removing; notes updated."
     }
   ]
 }
