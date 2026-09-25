@@ -1,11 +1,11 @@
 // DEMO_UI_PRD.md "Home". Start watching / Stop lives in the shared header now. Metrics
 // (hero, Daylight / Screens tiles, watched line) are D-003; the daily summary is D-004; the
-// protocol card, sessions, stats and log arrive in D-005 … D-008.
+// protocol card is D-005; sessions, stats and log arrive in D-006 … D-008.
 import SwiftUI
 
 /// Home's sections, top to bottom; the ids `-scrollTo` accepts (screenshots).
 enum HomeSection: String, CaseIterable {
-    case metrics, summary, log
+    case metrics, summary, `protocol`, log
 }
 
 /// `-scrollTo summary` puts the section's top under the header; `summary-end` its bottom
@@ -28,6 +28,8 @@ struct HomeView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     /// Opens "How this is measured"; RootView owns the sheet.
     var openMeasured: () -> Void = {}
+    /// Opens the Protocol tab; RootView owns the tab selection.
+    var openProtocol: () -> Void = {}
 
     /// Side by side at normal sizes; stacked at accessibility sizes, where a button or chip
     /// beside a sentence squeezes it to one word per line.
@@ -40,10 +42,12 @@ struct HomeView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: Space.section) {
+                // Not lazy: a few dozen rows, and `-scrollTo` needs real heights to land.
+                VStack(alignment: .leading, spacing: Space.section) {
                     if let error = appState.lastError { errorRow(error) }
                     metrics.id(HomeSection.metrics)
                     summary.id(HomeSection.summary)
+                    protocolCard.id(HomeSection.protocol)
                     ledger.id(HomeSection.log)
                 }
                 .padding(.horizontal, Space.gutter)
@@ -213,6 +217,57 @@ struct HomeView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .panel()
+    }
+
+    /// Today's protocol at a glance (D-005). Read-only; the whole card opens the Protocol tab.
+    private var protocolCard: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            let summary = appState.protocolSummary(now: context.date)
+            VStack(alignment: .leading, spacing: 16) {
+                Text(summary.isEmpty ? "Protocol" : "Protocol · \(summary.count)")
+                    .font(BrianType.title)
+                    .foregroundStyle(Brian.ink)
+                    .accessibilityAddTraits(.isHeader)
+                if summary.isEmpty {
+                    Text("No protocol yet.")
+                        .font(BrianType.body)
+                        .foregroundStyle(Brian.muted)
+                    Button("Set one up", action: openProtocol)
+                        .buttonStyle(.glass)
+                } else {
+                    Button(action: openProtocol) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            ForEach(summary.rows) { protocolRow($0) }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens Protocol")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .panel()
+        }
+    }
+
+    private func protocolRow(_ item: ProtocolSummary.Row) -> some View {
+        let layout = row(spacing: 12, alignment: .firstTextBaseline)
+        return layout {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                if !typeSize.isAccessibilitySize {
+                    Image(systemName: BrianSymbol.protocolKind(item.kind))
+                        .foregroundStyle(Brian.muted)
+                        .frame(width: 28)
+                        .accessibilityHidden(true)
+                }
+                Text(item.name).foregroundStyle(Brian.text)
+            }
+            .font(BrianType.body)
+            .frame(maxWidth: typeSize.isAccessibilitySize ? nil : .infinity, alignment: .leading)
+            ProtocolStateLabel(row: item)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private func summarySentence(_ text: String) -> some View {

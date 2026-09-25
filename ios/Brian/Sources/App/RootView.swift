@@ -9,6 +9,10 @@ enum AppScreen: String, CaseIterable {
     case home, analysis, `protocol`, connect, settings, preview
     /// Home with the hero's "How this is measured" sheet up (screenshots).
     case measured
+    /// The Protocol tab scrolled to Templates with Doses open, and with the first item's
+    /// edit sheet up (screenshots).
+    case protocolTemplates = "protocol-templates"
+    case protocolEdit = "protocol-edit"
 
     static let argument = "-screen"
 
@@ -24,7 +28,7 @@ enum AppScreen: String, CaseIterable {
     var tab: AppTab {
         switch self {
         case .analysis: .analysis
-        case .protocol: .protocol
+        case .protocol, .protocolTemplates, .protocolEdit: .protocol
         case .home, .connect, .settings, .preview, .measured: .home
         }
     }
@@ -60,7 +64,7 @@ struct RootView: View {
         TabView(selection: $tab) {
             Tab("Home", systemImage: "house", value: AppTab.home) {
                 NavigationStack {
-                    HomeView(openMeasured: { showMeasured = true }).modifier(header)
+                    HomeView(openMeasured: { showMeasured = true }, openProtocol: { tab = .protocol }).modifier(header)
                 }
             }
             Tab("Analysis", systemImage: "chart.bar", value: AppTab.analysis) {
@@ -106,6 +110,9 @@ struct RootView: View {
             let arguments = ProcessInfo.processInfo.arguments
             let screen = AppScreen.from(arguments: arguments)
             if let screen { tab = screen.tab }
+            if appState.demo, screen == .protocolTemplates || screen == .protocolEdit {
+                appState.protocolLaunch = screen
+            }
             let forced = arguments.contains(Self.showSetupArgument) || screen == .connect
             let firstLaunch = !appState.demo && !UserDefaults.standard.bool(forKey: Self.connectSeenKey)
             if forced || (firstLaunch && screen == nil) {

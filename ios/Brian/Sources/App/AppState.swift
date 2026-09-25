@@ -63,6 +63,9 @@ final class AppState {
     var demo: Bool = false              // -demo launch arg / BRIAN_DEMO=1: fixtures, mock glasses, "Seeded" chip
     /// Demo only (`-scrollTo summary`, `-scrollTo summary-end`): where Home scrolls once loaded.
     var homeScrollTarget: HomeScrollTarget? = nil
+    /// Demo only (`-screen protocol-templates`, `-screen protocol-edit`): what the Protocol
+    /// tab opens once loaded. ProtocolView consumes it.
+    var protocolLaunch: AppScreen? = nil
     // Today
     var watching: Bool = false
     var watchingSince: Date? = nil
@@ -120,6 +123,11 @@ final class AppState {
     /// Home's tiles and watched line (D-003).
     func homeMetrics(now: Date) -> HomeMetrics {
         HomeMetrics.derive(episodes: episodes, sessions: sessions, watchingSince: watchingSince, now: now)
+    }
+
+    /// Home's protocol card and the Protocol tab's rows (D-005).
+    func protocolSummary(now: Date) -> ProtocolSummary {
+        ProtocolSummary.derive(items: protocolItems, now: now)
     }
 
     /// Home's daily summary card (D-004).
@@ -587,6 +595,20 @@ final class AppState {
             try await self.api.addProtocol(name: name, kind: kind, windowStart: windowStart,
                                            windowEnd: windowEnd, days: days)
         }
+    }
+
+    func updateProtocolItem(_ item: ProtocolItem, name: String, kind: String, windowStart: String,
+                            windowEnd: String, days: [Int]) async {
+        await protocolEdit {
+            try await self.api.updateProtocol(id: item.id, name: name, kind: kind, windowStart: windowStart,
+                                              windowEnd: windowEnd, days: days)
+        }
+    }
+
+    /// The checkbox: seen or done → Undo; anything else → Mark done.
+    func toggleProtocolItem(_ item: ProtocolItem) async {
+        let status = item.status.lowercased()
+        if status == "seen" || status == "done" { await undo(item) } else { await markDone(item) }
     }
 
     func deleteProtocolItem(_ item: ProtocolItem) async {
