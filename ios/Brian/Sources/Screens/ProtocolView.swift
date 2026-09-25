@@ -144,10 +144,13 @@ struct ProtocolView: View {
                     .font(.title2)
                     .foregroundStyle(Brian.ink)
                     // The circle starts on the gutter, where Home's Log times start.
-                    .frame(width: 44, height: 44, alignment: .leading)
+                    // Capped, or at accessibility sizes it crowds the name to a word per line.
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                    .frame(minWidth: 44, minHeight: 44, alignment: .leading)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
+            .fixedSize()
             .accessibilityLabel(row.name)
             .accessibilityValue(row.checked ? "Done" : "Not done")
             .accessibilityHint(row.checked ? "Undo" : "Mark done")

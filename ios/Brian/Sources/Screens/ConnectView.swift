@@ -221,9 +221,24 @@ private struct ConnectRowView<Action: View>: View {
                         .frame(width: dotSize, height: dotSize)
                         .padding(.top, dotInset)
                         .accessibilityHidden(true)
-                    Text(row.text)
+                    // At accessibility sizes each " · " part takes its own line, and a part
+                    // with no space (an address like 10.0.0.5:8010) shrinks rather than
+                    // breaking a digit onto the next line.
+                    if typeSize.isAccessibilitySize {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(Array(row.text.components(separatedBy: " · ").enumerated()), id: \.offset) { _, part in
+                                Text(part)
+                                    .lineLimit(part.contains(" ") ? nil : 1)
+                                    .minimumScaleFactor(part.contains(" ") ? 1 : 0.5)
+                            }
+                        }
                         .font(BrianType.secondary.monospacedDigit())
                         .foregroundStyle(Brian.muted)
+                    } else {
+                        Text(row.text)
+                            .font(BrianType.secondary.monospacedDigit())
+                            .foregroundStyle(Brian.muted)
+                    }
                 }
                 if let fix = row.fix {
                     Text(fix)

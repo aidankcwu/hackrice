@@ -78,6 +78,9 @@ struct WatchButton: View {
         }
         .buttonStyle(.glassProminent)
         .controlSize(.large)
+        // Header text stops growing where the system's bar buttons do; a long press shows it large.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .accessibilityShowsLargeContentViewer()
         .disabled(!header.primaryEnabled)
     }
 }

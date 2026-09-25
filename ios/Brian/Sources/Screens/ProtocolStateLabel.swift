@@ -4,9 +4,13 @@ import SwiftUI
 /// `Brian.cost` with a cross, "Open until 10 PM" and "Later" as muted words.
 struct ProtocolStateLabel: View {
     let row: ProtocolSummary.Row
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        HStack(spacing: 4) {
+        // One line beside a name; at accessibility sizes it sits under the name and may wrap
+        // ("Seen" / "8:42 AM") instead of running into the right gutter.
+        let wraps = typeSize.isAccessibilitySize
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
             if let symbol = row.stateSymbol {
                 Image(systemName: symbol).accessibilityHidden(true)
             }
@@ -14,8 +18,8 @@ struct ProtocolStateLabel: View {
         }
         .font(BrianType.secondary)
         .foregroundStyle(color)
-        .lineLimit(1)
-        .fixedSize(horizontal: true, vertical: false)
+        .lineLimit(wraps ? nil : 1)
+        .fixedSize(horizontal: !wraps, vertical: false)
     }
 
     private var color: Color {

@@ -5,6 +5,8 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .subheadline) private var dotSize: CGFloat = 8
     @AppStorage("speakThroughGlasses") private var speakThroughGlasses = true
 #if DEBUG
     @AppStorage("useMockGlasses") private var useMockGlasses = false
@@ -14,7 +16,12 @@ struct SettingsView: View {
         NavigationStack {
             List {
                 Section("Invite link") {
-                    HStack(spacing: 16) {
+                    // At accessibility sizes the button goes under the link, or "Change"
+                    // breaks mid-word and the address splits at the colon.
+                    let layout = typeSize.isAccessibilitySize
+                        ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+                        : AnyLayout(HStackLayout(spacing: 16))
+                    layout {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(linkLabel)
                                 .font(BrianType.body)
@@ -41,10 +48,10 @@ struct SettingsView: View {
                         TimelineView(.periodic(from: .now, by: 1)) { context in
                             let status = appState.connectionStatus(now: context.date)
                             LabeledContent {
-                                HStack(spacing: 8) {
+                                HStack(alignment: .firstTextBaseline, spacing: 8) {
                                     Circle()
                                         .fill(status.level.color)
-                                        .frame(width: 8, height: 8)
+                                        .frame(width: dotSize, height: dotSize)
                                         .accessibilityHidden(true)
                                     Text(status.text)
                                         .font(BrianType.secondary.monospacedDigit())
