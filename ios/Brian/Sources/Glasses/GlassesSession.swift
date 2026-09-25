@@ -34,6 +34,7 @@ final class GlassesSession: GlassesSessioning, CaptureSenderConfigurable, Corpus
         }
     }
     var onDeviceStateChange: ((GlassesDeviceState?) -> Void)?
+    var onPreviewFrame: ((UIImage, Date) -> Void)?
 
     convenience init() {
         try? Wearables.configure()
@@ -195,6 +196,7 @@ final class GlassesSession: GlassesSessioning, CaptureSenderConfigurable, Corpus
             Task { @MainActor [weak self] in
                 self?.sender?.offer(image, at: at)
                 self?.recorder?.offer(image)
+                self?.onPreviewFrame?(image, at)
             }
         }.store(in: streamTokens)
     }

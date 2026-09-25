@@ -4,6 +4,7 @@
 //   Settings "Use mock glasses" (DEBUG)  MockGlasses (read at launch; relaunch to switch)
 //   otherwise                            GlassesSession (Meta DAT)
 import Foundation
+import UIKit
 
 @MainActor
 enum GlassesFactory {
@@ -43,6 +44,7 @@ final class DemoGlasses: GlassesSessioning {
     var onStateChange: ((GlassesState) -> Void)?
     private(set) var deviceState: GlassesDeviceState? = .demo
     var onDeviceStateChange: ((GlassesDeviceState?) -> Void)?
+    var onPreviewFrame: ((UIImage, Date) -> Void)?
     func openMetaAI() {}
     func register() async throws {}
     func handleIncomingURL(_ url: URL) async {}

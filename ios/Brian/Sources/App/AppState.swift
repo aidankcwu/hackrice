@@ -89,6 +89,11 @@ final class AppState {
     var summaryLoading = false
     /// The last summary fetch failed; the card says so only while nothing is cached.
     var summaryFailed = false
+    // Preview (D-002)
+    /// The Glasses view sheet's latest frame, held only while the sheet is open.
+    private(set) var preview = PreviewFeed()
+    var previewFrame: UIImage? { preview.frame }
+    var previewOpen: Bool { preview.isOpen }
     // Protocol
     var protocolItems: [ProtocolItem] = []
     // Errors: one sentence with a fix, shown on Today under the status pill, never an alert.
@@ -253,6 +258,8 @@ final class AppState {
     @ObservationIgnored private var webBaseOverride: URL?
     /// Home fetched the summary by itself once; after that only Refresh or a Stop does.
     @ObservationIgnored private var summaryAutoFetched = false
+    /// Demo only: offers `Fixtures/preview.jpg` to the open Preview sheet.
+    @ObservationIgnored private var demoPreviewTask: Task<Void, Never>?
     /// `glue.framesSent` when this watching session started; the sender's count is cumulative.
     @ObservationIgnored private var framesAtStart = 0
     /// Where the applied link's token lives (Keychain in the app; in-memory in tests).
@@ -526,6 +533,35 @@ final class AppState {
         stopPolling()
         // A session just ended: today's summary is out of date.
         if !episodes.isEmpty { await refreshSummary() }
+    }
+
+    // MARK: - Preview (D-002)
+
+    /// The Glasses view sheet appeared: frames start reaching `preview`. The session hands
+    /// them over only while `onPreviewFrame` is set, i.e. from here until `closePreview`.
+    func openPreview() {
+        guard !preview.isOpen else { return }
+        preview.open()
+        session.onPreviewFrame = { [weak self] image, at in
+            self?.preview.offer(image, at: at)
+        }
+        guard demo else { return }
+        demoPreviewTask = Task { [weak self] in
+            let image = PreviewFeed.fixtureImage()
+            while !Task.isCancelled {
+                guard let self else { return }
+                if let image, self.watching { self.preview.offer(image, at: Date()) }
+                try? await Task.sleep(for: .seconds(PreviewFeed.demoInterval))
+            }
+        }
+    }
+
+    /// The sheet went away: stop taking frames and drop the one on screen.
+    func closePreview() {
+        session.onPreviewFrame = nil
+        demoPreviewTask?.cancel()
+        demoPreviewTask = nil
+        preview.close()
     }
 
     // MARK: - Sessions (D-006)

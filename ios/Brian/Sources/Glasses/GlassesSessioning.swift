@@ -1,8 +1,9 @@
 // The one seam between the glasses and the rest of the app (IOS_SPEC.md "Glasses/").
 // Coder B implements it twice: GlassesSession (Meta DAT, ported from the CameraAccess
 // sample's WearablesViewModel + CameraViewModel) and MockGlasses (DEBUG, no hardware).
-// Frames never cross this seam: the implementation hands them straight to
-// CapturePacketSender, exactly as the sample app does today.
+// Frames cross this seam only to the Preview sheet (D-002), and only while AppState has set
+// `onPreviewFrame`, i.e. while the sheet is open. Otherwise the implementation hands them
+// straight to CapturePacketSender, exactly as the sample app does today.
 import Foundation
 import UIKit
 
@@ -34,6 +35,9 @@ protocol GlassesSessioning: AnyObject {
     /// Battery and worn state of the linked glasses; nil while none is linked.
     var deviceState: GlassesDeviceState? { get }
     var onDeviceStateChange: ((GlassesDeviceState?) -> Void)? { get set }
+    /// Set only while the Preview sheet is open: every camera frame, on the main actor.
+    /// Nil otherwise, so no frame is handed on or held.
+    var onPreviewFrame: ((UIImage, Date) -> Void)? { get set }
     /// Deep-link to the Meta AI app for pairing / Developer Mode.
     func openMetaAI()
     /// DAT registration flow. Throws with a sentence a person can act on.

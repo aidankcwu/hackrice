@@ -17,6 +17,7 @@ final class MockGlasses: GlassesSessioning, CaptureSenderConfigurable, CorpusRec
     var onStateChange: ((GlassesState) -> Void)?
     private(set) var deviceState: GlassesDeviceState? = .demo
     var onDeviceStateChange: ((GlassesDeviceState?) -> Void)?
+    var onPreviewFrame: ((UIImage, Date) -> Void)?
 
     func useCaptureSender(_ sender: CapturePacketSender) {
         self.sender = sender
@@ -38,6 +39,10 @@ final class MockGlasses: GlassesSessioning, CaptureSenderConfigurable, CorpusRec
                 if let image = Self.fixtureImage() {
                     self?.sender?.offer(image, at: Date())
                     self?.recorder?.offer(image)
+                }
+                // The sender gets the 1-pixel frame; the Preview sheet a picture a person can read.
+                if let preview = PreviewFeed.fixtureImage() {
+                    self?.onPreviewFrame?(preview, Date())
                 }
                 try? await Task.sleep(for: .seconds(1.5))
             }
