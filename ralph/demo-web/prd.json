@@ -27,8 +27,8 @@
         "lint, tsc, test, build exit 0"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "HourAxis pinned outside the scroller; scroller sized to whole 40 px columns so no day is cut; overflow.mjs now checks cut columns and the hours (ok at 375/393, all ranges)."
     },
     {
       "id": "W-103",

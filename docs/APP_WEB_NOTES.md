@@ -74,7 +74,14 @@ never collide.
   The pick is saved in the web view's localStorage; the native Protocol tab does not see it.
 - The menu still offers **Account** (`/settings`: backend, token, appearance), which
   overlaps native Settings.
-- Analysis's week chart is clipped on the left at 390 px, with or without embed.
+
+## Analysis chart (W-102)
+
+The hour axis (6, 12, 18, 24) is pinned outside the chart's scroller, and the scroller is a
+whole number of 40 px columns wide (CSS `round(down, …)`), so every range opens on the latest
+day with only whole columns showing and the hours always on screen. `node scripts/overflow.mjs
+"" <width>` fails if any day column is cut at either edge of the scroller or the hours leave the
+screen; it passes at 375 and 393 px for all three ranges.
 
 ## Screenshots (`phone/screenshots/`, 390 × 844, fixtures, `embed=1`)
 
@@ -86,6 +93,8 @@ never collide.
 | `W-003-treatments.png` | `/treatments?embed=1` with Back |
 | `W-003-biomarkers.png` | `/biomarkers?embed=1` with Back |
 | `W-003-devices.png` | `/devices?embed=1` with Back |
+| `W-102-analysis-week.png` | `/analysis?embed=1` at 393 px, This week: hours pinned, seven days whole |
+| `W-102-analysis-30d.png` | Same, 30 days: opens on the latest eight whole days |
 
 Reproduce: from `phone/`, `TURBOPACK_ROOT=/ NEXT_PUBLIC_FIXTURES=1 npx next dev -p 3100`
 (`TURBOPACK_ROOT` only in a worktree with a symlinked node_modules), then
