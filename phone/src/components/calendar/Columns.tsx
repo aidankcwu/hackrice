@@ -40,7 +40,9 @@ export function NumberBadge({ n, size = BADGE }: { n: number; size?: number }) {
  * `onPick` makes a column open its day; `numbers` puts a number on every bar
  * (Analysis). `width` 44 lets the columns flex to fit the screen; 32 fixes them
  * for a scrolling row. `caption={false}` leaves the caption to the caller, which
- * renders `ColumnsCaption` outside its scroller so the caption wraps to the screen.
+ * renders `ColumnsCaption` outside its scroller so the caption wraps to the screen;
+ * `hours={false}` leaves the hour axis to the caller too, which pins `HourAxis`
+ * beside its scroller so the hours never scroll away.
  */
 export function Columns({
   columns,
@@ -51,6 +53,7 @@ export function Columns({
   numbers,
   width = 44,
   caption = true,
+  hours = true,
 }: {
   columns: Column[];
   height: number;
@@ -60,6 +63,7 @@ export function Columns({
   numbers?: Partial<Record<RuleId, number>>;
   width?: 32 | 44;
   caption?: boolean;
+  hours?: boolean;
 }) {
   const narrow = width === 32;
   const y = (m: number) => yAt(m, height, cap);
@@ -68,13 +72,7 @@ export function Columns({
   return (
     <div>
       <div className={`flex ${narrow ? "gap-2" : "gap-2 min-[390px]:gap-3"}`}>
-        <div aria-hidden="true" className="relative shrink-0" style={{ width: HOUR_W, marginTop: HEADER_H, height }}>
-          {MARKS.map((h) => (
-            <span key={h} className="type-tab absolute right-1 text-muted tabular-nums" style={{ top: y(h * 60) - 6 }}>
-              {h}
-            </span>
-          ))}
-        </div>
+        {hours ? <HourAxis height={height} cap={cap} /> : null}
         {columns.map((column) => {
           const date = new Date(`${column.date}T12:00:00`);
           const weekday = date.toLocaleDateString("en-US", { weekday: narrow ? "narrow" : "short" });
@@ -112,6 +110,19 @@ export function Columns({
         })}
       </div>
       {caption ? <ColumnsCaption sleep={hasSleep} /> : null}
+    </div>
+  );
+}
+
+/** 6, 12, 18, 24 down the left of the columns, level with their hairlines. */
+export function HourAxis({ height, cap }: { height: number; cap: number }) {
+  return (
+    <div aria-hidden="true" data-chart-hours className="relative shrink-0" style={{ width: HOUR_W, marginTop: HEADER_H, height }}>
+      {MARKS.map((h) => (
+        <span key={h} className="type-tab absolute right-1 text-muted tabular-nums" style={{ top: yAt(h * 60, height, cap) - 6 }}>
+          {h}
+        </span>
+      ))}
     </div>
   );
 }
