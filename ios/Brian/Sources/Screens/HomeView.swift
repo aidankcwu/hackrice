@@ -65,7 +65,8 @@ struct HomeView: View {
                 if let target = appState.homeScrollTarget {
                     appState.homeScrollTarget = nil
                     if target.section == .sessions { sessionsExpanded = true }
-                    if target.section == .log { logExpanded = true }
+                    // `log` opens the Log; `log-end` leaves it collapsed at the page's foot.
+                    if target.section == .log && !target.atEnd { logExpanded = true }
                     // Let the page (and expanded rows) lay out first, or the scroll lands short at XXL.
                     try? await Task.sleep(for: .milliseconds(400))
                     proxy.scrollTo(target.section, anchor: target.atEnd ? .bottom : .top)

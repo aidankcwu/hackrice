@@ -100,8 +100,8 @@
         "Build and tests exit 0"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "LedgerCoalescer (pure, 9 tests) merges neighbouring same-label rows within 10 min; Home Log is a collapsed DisclosureGroup, hidden when empty; session detail coalesces too."
     },
     {
       "id": "D-002",

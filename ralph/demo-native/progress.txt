@@ -191,3 +191,28 @@ Next iteration must know
 - Episode has no `dominant` field on the phone; nothing needed it yet.
 - Tests normalise U+202F and U+2009 (DateIntervalFormatter puts thin spaces round the en dash).
 - Orchestrator's header review (compact Stop capsule) is still open; D-010 or whoever touches it.
+
+## 2026-09-24 D-008 Log: collapsed, coalesced ledger (passes)
+What I did
+- App/LedgerCoalescer.swift (pure): coalesce(entries) on newest-first rows. A row joins the
+  group above when labels match (trimmed, case-insensitive) and it is <= 10 min older than the
+  group's earliest row so far (so a steady stream chains). Merged row: earliest row's id and
+  time, label of the earliest; outcome + decision + kind + reported from the strongest outcome
+  (said > asked > acted > held back), else from any row with a decision (so it still opens).
+- Tests/LedgerCoalescerTests.swift: 9 tests incl. the demo fixture (the two "outdoors" rows
+  nine seconds apart become one, "decision-d_3156"; no adjacent duplicate labels after).
+- HomeView: Log is a DisclosureGroup (title "Log", muted chevron, like Sessions but on the
+  page, not a panel), collapsed by default, rows coalesced, "Held back N today" footer inside.
+  The whole section is hidden when there are no rows (what D-009 asks for).
+- SessionDetailView: its Log coalesces after the session filter (filter first, so a merged
+  row's earliest time never falls outside the session).
+- -scrollTo log expands the Log; -scrollTo log-end leaves it collapsed at the page's foot.
+  APP_NATIVE_NOTES.md launch-argument table updated.
+
+Screenshots: D-008-home-log, -home-log-collapsed, -home-log-dark, -home-log-xxl.
+
+Next iteration must know
+- Ledger.heldBackCount still counts raw decisions, not coalesced rows (the footer is a count
+  of decisions held back, which merging should not hide).
+- Orchestrator's header review (compact Stop capsule) is still open; the full-width Stop bar
+  is visible in every D-008 screenshot. D-010 or whoever touches the header.

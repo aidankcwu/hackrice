@@ -59,7 +59,7 @@ It shows "Seeded", never "demo".
 | `-demo` (or env `BRIAN_DEMO=1`) | Fixtures, mock glasses connected, LAN link `10.0.0.5:8010` reachable, watching for 14 min, fake 1.5 s frame cadence. |
 | `-screen <id>` | Opens on `home` (`today` still works), `analysis`, `protocol`, `connect`, `settings` or `preview`. |
 | `-showSetup` | Older spelling of `-screen connect`. |
-| `-scrollTo <section>` | Demo: Home scrolls to `metrics`, `summary`, `protocol`, `sessions` (expanded) or `log` once loaded; `summary-end` puts the section's bottom in view instead. |
+| `-scrollTo <section>` | Demo: Home scrolls to `metrics`, `summary`, `protocol`, `sessions` (expanded), `stats` or `log` (expanded) once loaded; `summary-end` puts the section's bottom in view instead (`log-end` keeps the Log collapsed). |
 | `-screen session` | Demo: Home with the newest session's detail pushed. |
 | `-screen protocol-templates` / `-screen protocol-edit` | Demo: the Protocol tab scrolled to Templates with Doses open / with the first item's edit sheet up. |
 | `-glassesOff` | Demo: glasses unavailable (red pill, red Glasses row). |
