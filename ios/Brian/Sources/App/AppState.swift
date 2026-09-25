@@ -16,6 +16,8 @@ enum LinkState: Equatable {
 final class AppState {
     // Connect
     var glasses: GlassesState = .unavailable
+    /// Battery and worn state of the linked glasses (the header); nil while none is linked.
+    var glassesDevice: GlassesDeviceState? = nil
     var link: LinkState = .notSet
     /// The Connect/Settings paste box's draft text only — never the applied link. It is
     /// cleared back to "" the moment a paste parses, so a token never sits in a visible
@@ -93,6 +95,17 @@ final class AppState {
     /// Connect's three rows, from the same inputs as the pill.
     func connectRows(now: Date) -> ConnectRows {
         ConnectRows.derive(connectionInputs(now: now), checking: checkingLink, registering: registeringGlasses)
+    }
+
+    /// The header above every tab (D-001), from the same inputs as the pill.
+    func headerState(now: Date) -> HeaderState {
+        let inputs = connectionInputs(now: now)
+        return HeaderState.derive(HeaderState.Inputs(
+            device: glassesDevice,
+            glasses: glasses,
+            status: ConnectionStatus.derive(inputs),
+            watching: watching,
+            canStart: ConnectRows.canStart(inputs)))
     }
 
     private func connectionInputs(now: Date) -> ConnectionInputs {
@@ -195,6 +208,10 @@ final class AppState {
         session.onStateChange = { [weak self] state in
             self?.glasses = state
         }
+        self.glassesDevice = session.deviceState
+        session.onDeviceStateChange = { [weak self] device in
+            self?.glassesDevice = device
+        }
         glue.onAccessDenied = { [weak self] in
             self?.watching = false
             self?.watchingSince = nil
@@ -213,11 +230,15 @@ final class AppState {
             let arguments = ProcessInfo.processInfo.arguments
             webBaseOverride = WebSource.override(arguments: arguments,
                                                  environment: ProcessInfo.processInfo.environment)
-            if arguments.contains(Self.glassesOffArgument) { glasses = .unavailable }
+            if arguments.contains(Self.glassesOffArgument) {
+                glasses = .unavailable
+                glassesDevice = nil
+            }
             if arguments.contains(Self.freshArgument) {
                 serverURL = ""
                 link = .notSet
                 glasses = .notRegistered
+                glassesDevice = nil
                 watching = false
                 watchingSince = nil
                 clipboardOffer = true

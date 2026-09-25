@@ -1,10 +1,11 @@
+// DEMO_UI_PRD.md "Home". Start watching / Stop lives in the shared header now; the
+// metrics, summary, protocol card, sessions, stats and log arrive in D-003 … D-008.
 import SwiftUI
 
-struct TodayView: View {
+struct HomeView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var typeSize
-    @State private var askConsent = false
 
     /// Side by side at normal sizes; stacked at accessibility sizes, where a button or chip
     /// beside a sentence squeezes it to one word per line.
@@ -18,21 +19,6 @@ struct TodayView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Space.section) {
                 if let error = appState.lastError { errorRow(error) }
-
-                Button(appState.watching ? "Stop" : "Start watching") {
-                    if appState.watching {
-                        Task { await appState.stopWatching() }
-                    } else if appState.consentGiven || StreamingConsent.isGranted {
-                        appState.consentGiven = true
-                        Task { await appState.startWatching() }
-                    } else {
-                        askConsent = true
-                    }
-                }
-                .buttonStyle(.glassProminent)
-                .controlSize(.large)
-                .frame(maxWidth: .infinity)
-
                 hero
                 ledger
             }
@@ -44,10 +30,6 @@ struct TodayView: View {
         .task { await appState.refreshToday() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await appState.refreshToday() } }
-        }
-        .streamingConsentSheet(isPresented: $askConsent) {
-            appState.consentGiven = true
-            Task { await appState.startWatching() }
         }
     }
 

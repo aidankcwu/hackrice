@@ -7,38 +7,44 @@ struct ProtocolView: View {
 
     var body: some View {
         List {
-            if appState.protocolItems.isEmpty {
-                Text("No items yet. Add the first dose window.")
-                    .foregroundStyle(Brian.muted)
-            } else {
-                ForEach(appState.protocolItems) { item in
-                    protocolRow(item)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                Task { await appState.deleteProtocolItem(item) }
-                            } label: { Label("Delete", systemImage: "trash") }
-                        }
-                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                            if item.status == "seen" || item.status == "done" {
-                                Button("Undo") { Task { await appState.undo(item) } }
-                                    .tint(Brian.muted)
-                            } else {
-                                Button("Mark done") { Task { await appState.markDone(item) } }
-                                    .tint(Brian.ink)
+            // The toolbar is the shared header now, so Add sits above the list.
+            Section {
+                HStack {
+                    Spacer()
+                    Button("Add", systemImage: "plus") { showAddItem = true }
+                        .buttonStyle(.glass)
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+            }
+
+            Section {
+                if appState.protocolItems.isEmpty {
+                    Text("No items yet. Add the first dose window.")
+                        .foregroundStyle(Brian.muted)
+                } else {
+                    ForEach(appState.protocolItems) { item in
+                        protocolRow(item)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    Task { await appState.deleteProtocolItem(item) }
+                                } label: { Label("Delete", systemImage: "trash") }
                             }
-                        }
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                if item.status == "seen" || item.status == "done" {
+                                    Button("Undo") { Task { await appState.undo(item) } }
+                                        .tint(Brian.muted)
+                                } else {
+                                    Button("Mark done") { Task { await appState.markDone(item) } }
+                                        .tint(Brian.ink)
+                                }
+                            }
+                    }
                 }
             }
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Protocol")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { showAddItem = true } label: { Image(systemName: "plus") }
-                    .buttonStyle(.glass)
-                    .accessibilityLabel("Add item")
-            }
-        }
         .refreshable { await appState.refreshProtocol() }
         .task { await appState.refreshProtocol() }
         .sheet(isPresented: $showAddItem) { AddItemView() }

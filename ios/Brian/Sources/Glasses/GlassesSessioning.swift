@@ -13,10 +13,27 @@ enum GlassesState: Equatable {
     case connected        // a DAT session is up; frames flow while streaming
 }
 
+/// What the glasses report about themselves (DAT "Device state"): the header's battery
+/// percent and the eyeglasses symbol. Nil on the seam whenever the device is not linked,
+/// because DAT stops refreshing these values once it disconnects.
+struct GlassesDeviceState: Equatable {
+    /// 0–100, nil until the glasses send a reading.
+    var batteryLevel: Int?
+    var charging: Bool = false
+    /// True worn, false taken off, nil when the glasses do not say.
+    var worn: Bool?
+
+    /// Mock and demo glasses.
+    static let demo = GlassesDeviceState(batteryLevel: 82, charging: false, worn: true)
+}
+
 @MainActor
 protocol GlassesSessioning: AnyObject {
     var state: GlassesState { get }
     var onStateChange: ((GlassesState) -> Void)? { get set }
+    /// Battery and worn state of the linked glasses; nil while none is linked.
+    var deviceState: GlassesDeviceState? { get }
+    var onDeviceStateChange: ((GlassesDeviceState?) -> Void)? { get set }
     /// Deep-link to the Meta AI app for pairing / Developer Mode.
     func openMetaAI()
     /// DAT registration flow. Throws with a sentence a person can act on.
