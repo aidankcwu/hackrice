@@ -1,5 +1,7 @@
 // DEMO_UI_PRD.md "Protocol tab" (D-005): "3 of 5 today" + Add, today's items with a
 // checkbox each (Mark done / Undo), swipe actions, tap a name to edit, then Templates.
+// One canvas with Home: a plain list on Brian.page, 24 pt gutters, full-width Brian.line
+// hairlines between rows like Home's Log, no inset card. A List still, for swipe actions.
 import SwiftUI
 import UIKit
 
@@ -40,74 +42,91 @@ struct ProtocolView: View {
     private func list(summary: ProtocolSummary) -> some View {
         let items = Dictionary(appState.protocolItems.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         return List {
-            // The toolbar is the shared header, so the count and Add sit above the list.
-            Section {
-                let header = typeSize.isAccessibilitySize
-                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 16))
-                    : AnyLayout(HStackLayout(spacing: 16))
-                header {
-                    Text(summary.isEmpty ? "Nothing yet today" : "\(summary.count) today")
+            Group {
+                // The toolbar is the shared header, so the count and Add sit above the list.
+                Section {
+                    let header = typeSize.isAccessibilitySize
+                        ? AnyLayout(VStackLayout(alignment: .leading, spacing: 16))
+                        : AnyLayout(HStackLayout(spacing: 16))
+                    header {
+                        Text(summary.isEmpty ? "Nothing yet today" : "\(summary.count) today")
+                            .font(BrianType.title)
+                            .foregroundStyle(Brian.ink)
+                            .accessibilityAddTraits(.isHeader)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Button { showAddItem = true } label: {
+                            Label("Add", systemImage: "plus").labelStyle(.titleAndIcon)
+                        }
+                        .buttonStyle(.glass)
+                        .fixedSize()
+                    }
+                    // Room for the glass button's shadow: the list cell clips at its edge.
+                    .padding(.vertical, 16)
+                    .listRowSeparator(.hidden)
+                }
+
+                Section {
+                    if summary.isEmpty {
+                        Text("No protocol yet. Add an item, or start from a template below.")
+                            .foregroundStyle(Brian.muted)
+                    } else {
+                        ForEach(summary.rows) { row in
+                            if let item = items[row.id] {
+                                protocolRow(row, item: item)
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                        Button(role: .destructive) {
+                                            Task { await appState.deleteProtocolItem(item) }
+                                        } label: { Label("Delete", systemImage: "trash") }
+                                    }
+                                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                        if row.checked {
+                                            Button("Undo") { Task { await appState.undo(item) } }
+                                                .tint(Brian.muted)
+                                        } else {
+                                            Button("Mark done") { Task { await appState.markDone(item) } }
+                                                .tint(Brian.ink)
+                                        }
+                                    }
+                            }
+                        }
+                    }
+                }
+
+                Section {
+                    Text("Templates")
                         .font(BrianType.title)
                         .foregroundStyle(Brian.ink)
                         .accessibilityAddTraits(.isHeader)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Button { showAddItem = true } label: {
-                        Label("Add", systemImage: "plus").labelStyle(.titleAndIcon)
-                    }
-                    .buttonStyle(.glass)
-                    .fixedSize()
-                }
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 0))
-            }
-
-            Section {
-                if summary.isEmpty {
-                    Text("No protocol yet. Add an item, or start from a template below.")
-                        .foregroundStyle(Brian.muted)
-                } else {
-                    ForEach(summary.rows) { row in
-                        if let item = items[row.id] {
-                            protocolRow(row, item: item)
-                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) {
-                                        Task { await appState.deleteProtocolItem(item) }
-                                    } label: { Label("Delete", systemImage: "trash") }
-                                }
-                                .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                    if row.checked {
-                                        Button("Undo") { Task { await appState.undo(item) } }
-                                            .tint(Brian.muted)
-                                    } else {
-                                        Button("Mark done") { Task { await appState.markDone(item) } }
-                                            .tint(Brian.ink)
-                                    }
-                                }
+                        .padding(.top, Space.section)
+                        .padding(.bottom, 8)
+                        .listRowSeparator(.hidden, edges: .top)
+                    ForEach(ProtocolTemplates.groups) { group in
+                        DisclosureGroup(isExpanded: binding(for: group.id)) {
+                            ForEach(group.templates) { templateRow($0) }
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: group.symbol)
+                                    .foregroundStyle(Brian.muted)
+                                    .frame(width: 28)
+                                    .accessibilityHidden(true)
+                                Text(group.title).foregroundStyle(Brian.text)
+                            }
+                            .frame(minHeight: 44)
                         }
                     }
                 }
             }
-
-            Section {
-                ForEach(ProtocolTemplates.groups) { group in
-                    DisclosureGroup(isExpanded: binding(for: group.id)) {
-                        ForEach(group.templates) { templateRow($0) }
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: group.symbol)
-                                .foregroundStyle(Brian.muted)
-                                .frame(width: 28)
-                                .accessibilityHidden(true)
-                            Text(group.title).foregroundStyle(Brian.text)
-                        }
-                        .frame(minHeight: 44)
-                    }
-                }
-            } header: {
-                Text("Templates")
-            }
+            .listRowBackground(Brian.page)
+            .listRowInsets(EdgeInsets(top: 0, leading: Space.gutter, bottom: 0, trailing: Space.gutter))
+            .listRowSeparatorTint(Brian.line)
+            // Hairlines run the full content width, from gutter to gutter, not from the text.
+            .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
         }
-        .listStyle(.insetGrouped)
+        .listStyle(.plain)
+        .listSectionSpacing(0)
+        .environment(\.defaultMinListRowHeight, 44)
+        .scrollContentBackground(.hidden)
+        .background(Brian.page)
         .tint(Brian.ink)
     }
 
@@ -124,7 +143,8 @@ struct ProtocolView: View {
                 Image(systemName: row.checked ? "checkmark.circle.fill" : "circle")
                     .font(.title2)
                     .foregroundStyle(Brian.ink)
-                    .frame(width: 44, height: 44)
+                    // The circle starts on the gutter, where Home's Log times start.
+                    .frame(width: 44, height: 44, alignment: .leading)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)

@@ -95,8 +95,9 @@ struct WebScreen: View {
                     .font(BrianType.body)
                     .foregroundStyle(tone)
                     .fixedSize(horizontal: false, vertical: true)
+                // The header's Start / Stop is the one prominent button on every tab.
                 Button(button, action: action)
-                    .buttonStyle(.glassProminent)
+                    .buttonStyle(.glass)
                     .controlSize(.large)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

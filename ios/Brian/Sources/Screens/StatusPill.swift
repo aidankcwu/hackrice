@@ -1,8 +1,9 @@
 // DEMO_UI_PRD.md "Header", above every tab and fixed while the page scrolls. The
 // navigation bar carries the status pill (leading), Preview and the Settings gear
-// (trailing); Start watching / Stop sits in a system safe-area bar right under it. All four
-// in one bar do not fit a 402 pt phone: the system folds Preview and the gear into a
-// "•••" menu. RootView owns the sheets.
+// (trailing); Start watching / Stop is a compact capsule sized to its label, centred in a
+// system safe-area bar right under it, so it stays put while the page scrolls. All four in
+// one bar do not fit a 402 pt phone: even beside the short "Glasses off" pill, "Start
+// watching" pushes Preview and the gear into a "•••" menu. RootView owns the sheets.
 import SwiftUI
 
 struct StatusPill: View {
@@ -73,7 +74,7 @@ struct WatchButton: View {
             // so it stays readable on the fill in both appearances.
             Text(header.primaryTitle)
                 .foregroundStyle(Brian.page)
-                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 8)
         }
         .buttonStyle(.glassProminent)
         .controlSize(.large)
@@ -123,8 +124,12 @@ struct AppHeader: ViewModifier {
             }
             .safeAreaBar(edge: .top) {
                 WatchButton(askConsent: askConsent)
+                    .frame(maxWidth: .infinity)
                     .padding(.horizontal, Space.gutter)
                     .padding(.vertical, 8)
             }
+            // The capsule leaves the bar's sides open: a hard edge keeps rows from
+            // scrolling legibly beside it.
+            .scrollEdgeEffectStyle(.hard, for: .top)
     }
 }

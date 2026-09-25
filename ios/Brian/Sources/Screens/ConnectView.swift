@@ -150,7 +150,7 @@ struct ConnectView: View {
 
     /// Disabled (dimmed) until the rows above are ready; Stop is always live.
     private func primaryButton(canStart: Bool) -> some View {
-        Button(appState.watching ? "Stop" : "Start watching") {
+        Button {
             if appState.watching {
                 Task { await appState.stopWatching() }
             } else if appState.consentGiven || StreamingConsent.isGranted {
@@ -159,6 +159,10 @@ struct ConnectView: View {
             } else {
                 askConsent = true
             }
+        } label: {
+            // The ink tint is near-white in dark mode: the page colour keeps the label readable.
+            Text(appState.watching ? "Stop" : "Start watching")
+                .foregroundStyle(Brian.page)
         }
         .buttonStyle(.glassProminent)
         .controlSize(.large)
