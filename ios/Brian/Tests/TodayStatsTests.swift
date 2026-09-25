@@ -123,6 +123,117 @@ struct TodayStatsTests {
         #expect(metrics.screens == "2 h 05 min")
     }
 
+    // MARK: Stats sheet (D-007)
+
+    private let chicago = TimeZone(identifier: "America/Chicago")!
+    private let us = Locale(identifier: "en_US")
+
+    /// An episode at `hour:minute` today in Chicago lasting `minutes`.
+    private func at(_ kind: String, _ hour: Int, _ minute: Int, minutes: Double, label: String? = nil) -> Episode {
+        let start = calendar.date(from: DateComponents(year: 2026, month: 9, day: 24, hour: hour, minute: minute))!
+            .timeIntervalSince1970
+        return Episode(id: UUID().uuidString, kind: kind, label: label, startT: start, endT: start + minutes * 60,
+                       reported: nil)
+    }
+
+    private func stats(_ episodes: [Episode]) -> [String: TodayStats.Cell] {
+        let cells = TodayStats.derive(episodes: episodes, now: now, locale: us, timeZone: chicago)
+        return Dictionary(uniqueKeysWithValues: cells.map { ($0.label, $0) })
+    }
+
+    /// ICU puts U+202F before AM/PM and U+2009 around the en dash; compare with plain spaces.
+    private func plain(_ s: String?) -> String? {
+        s?.replacingOccurrences(of: "\u{202F}", with: " ").replacingOccurrences(of: "\u{2009}", with: "")
+    }
+
+    @Test func eightCellsInThePRDsOrder() {
+        let labels = TodayStats.derive(episodes: [], now: now).map(\.label)
+        #expect(labels == ["First daylight", "Eating window", "Last caffeine", "Screens",
+                           "Longest focus", "Alcohol", "Time with people", "Hydration"])
+    }
+
+    @Test func everyEmptyWord() {
+        let cells = stats([])
+        #expect(cells.values.filter { !$0.isEmpty }.isEmpty)
+        #expect(cells["First daylight"]?.text == "Not yet")
+        #expect(cells["Eating window"]?.text == "No meals seen")
+        #expect(cells["Last caffeine"]?.text == "None seen")
+        #expect(cells["Screens"]?.text == "None seen")
+        #expect(cells["Longest focus"]?.text == "—")
+        #expect(cells["Alcohol"]?.text == "None seen")
+        #expect(cells["Time with people"]?.text == "Not tracked yet")
+        #expect(cells["Hydration"]?.text == "Not tracked yet")
+    }
+
+    @Test func firstDaylightIsTheEarliestOutdoorStart() {
+        let cells = stats([at("outdoor_block", 13, 5, minutes: 20), at("outdoor_block", 8, 52, minutes: 10),
+                           at("screen_block", 7, 0, minutes: 30)])
+        #expect(plain(cells["First daylight"]?.value) == "8:52 AM")
+    }
+
+    @Test func eatingWindowRunsFirstMealStartToLastMealEnd() {
+        let cells = stats([at("meal", 12, 10, minutes: 20), at("food_sighting", 19, 30, minutes: 15),
+                           at("meal", 15, 0, minutes: 5), at("caffeine_sighting", 20, 0, minutes: 5)])
+        let eating = cells["Eating window"]
+        #expect(plain(eating?.value) == "12:10–7:45 PM")
+        #expect(eating?.detail == "7 h 35 min")
+        #expect(plain(eating?.text) == "12:10–7:45 PM · 7 h 35 min")
+        let crossing = stats([at("meal", 11, 50, minutes: 10), at("meal", 13, 0, minutes: 10)])["Eating window"]
+        #expect(plain(crossing?.value) == "11:50 AM–1:10 PM")
+        #expect(crossing?.detail == "1 h 20 min")
+    }
+
+    @Test func lastCaffeineIsTheLatestStart() {
+        let cells = stats([at("caffeine_sighting", 8, 0, minutes: 1), at("caffeine_sighting", 14, 40, minutes: 1),
+                           at("caffeine_sighting", 11, 0, minutes: 1)])
+        #expect(plain(cells["Last caffeine"]?.value) == "2:40 PM")
+    }
+
+    @Test func screensSumAndLongestFocus() {
+        let cells = stats([at("screen_block", 9, 0, minutes: 48), at("screen_block", 13, 0, minutes: 47),
+                           at("screen_block", 16, 0, minutes: 30), at("outdoor_block", 10, 0, minutes: 90)])
+        #expect(cells["Screens"]?.value == "2 h 05 min")
+        #expect(cells["Longest focus"]?.value == "48 min")
+        #expect(stats([at("screen_block", 9, 0, minutes: 0.3)])["Longest focus"]?.value == "Under a minute")
+    }
+
+    @Test func alcoholCountsSightings() {
+        #expect(stats([at("alcohol_sighting", 19, 0, minutes: 1)])["Alcohol"]?.value == "1 sighting")
+        #expect(stats([at("alcohol_sighting", 19, 0, minutes: 1),
+                       at("alcohol_sighting", 20, 0, minutes: 1)])["Alcohol"]?.value == "2 sightings")
+    }
+
+    @Test func timeWithPeopleSumsSocialKindsAndLabels() {
+        let cells = stats([at("conversation", 9, 0, minutes: 25), at("social", 12, 0, minutes: 10),
+                           at("meal", 13, 0, minutes: 30, label: "lunch with people"),
+                           at("meal", 18, 0, minutes: 30, label: "dinner alone")])
+        #expect(cells["Time with people"]?.value == "1 h 05 min")
+    }
+
+    @Test func hydrationCountsWaterLabelsButNotAlcoholOrCoffee() {
+        let cells = stats([at("food_sighting", 9, 0, minutes: 1, label: "water bottle"),
+                           at("food_sighting", 12, 0, minutes: 1, label: "drink, glass of water"),
+                           at("alcohol_sighting", 19, 0, minutes: 1, label: "drink in hand"),
+                           at("caffeine_sighting", 8, 0, minutes: 1, label: "coffee drink")])
+        #expect(cells["Hydration"]?.value == "2 sightings")
+    }
+
+    @Test func statsFromTheFixtureDay() throws {
+        let api = APIClient(mode: .fixtures, fixtureBundle: Bundle(for: AppState.self))
+        let episodes: [Episode] = try api.fixture("today_episodes")
+        let cells = Dictionary(uniqueKeysWithValues: TodayStats.derive(episodes: episodes, now: Date(), locale: us,
+                                                                      timeZone: chicago).map { ($0.label, $0) })
+        #expect(plain(cells["First daylight"]?.value) == "3:29 PM")
+        #expect(plain(cells["Eating window"]?.value) == "3:28–4:08 PM")
+        #expect(cells["Eating window"]?.detail == "40 min")
+        #expect(plain(cells["Last caffeine"]?.value) == "4:06 PM")
+        #expect(cells["Screens"]?.value == "28 min")
+        #expect(cells["Longest focus"]?.value != nil)
+        #expect(cells["Alcohol"]?.value == "7 sightings")
+        #expect(cells["Time with people"]?.isEmpty == true)
+        #expect(cells["Hydration"]?.isEmpty == true)
+    }
+
     // MARK: Hero sheet words
 
     private func factor(_ key: String, dose: Double?, hours: Double = 0, provenance: String = "seeded",

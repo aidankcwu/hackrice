@@ -135,6 +135,11 @@ final class AppState {
                            dayStart: dayStart(now: now))
     }
 
+    /// Home's "Today's stats" sheet (D-007).
+    func todayStats(now: Date) -> [TodayStats.Cell] {
+        TodayStats.derive(episodes: episodes, now: now)
+    }
+
     /// Home's Sessions row and the session detail (D-006).
     func sessionsSummary(now: Date) -> SessionsSummary {
         SessionsSummary.derive(sessions: sessions, recaps: recapListings, bodies: recapBodies,

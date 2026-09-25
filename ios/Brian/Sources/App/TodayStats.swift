@@ -1,9 +1,88 @@
 // DEMO_UI_PRD.md "Home · 1. Metrics": the Daylight and Screens tiles, the watched line,
 // and the words in the "How this is measured" sheet. Pure; views read the results.
-// D-007 adds the stats sheet (`TodayStats.derive`) here.
+// "Home · 5. Stats sheet" (D-007) is `TodayStats.derive`: eight cells, one rule each.
 import Foundation
 
 enum TodayStats {
+    /// One cell of "Today's stats". The value, or nil when its rule found nothing, in which
+    /// case the cell shows `emptyWord` in muted and keeps its place in the grid.
+    struct Cell: Identifiable, Equatable {
+        let label: String
+        let value: String?
+        /// A second line under the value: the eating window's length.
+        var detail: String? = nil
+        let emptyWord: String
+
+        var id: String { label }
+        var isEmpty: Bool { value == nil }
+        /// The PRD's one-line form: "3:25–4:09 PM · 44 min", or the empty word.
+        var text: String { value.map { v in detail.map { "\(v) · \($0)" } ?? v } ?? emptyWord }
+    }
+
+    /// The backend emits `meal`; `food_sighting` is the older name for the same thing.
+    static let foodKinds: Set<String> = ["meal", "food_sighting"]
+
+    /// DEMO_UI_PRD.md's table, in its order. `episodes` are today's (the server's day).
+    static func derive(episodes: [Episode], now: Date, locale: Locale = .current,
+                       timeZone: TimeZone = .current) -> [Cell] {
+        func time(_ t: Double) -> String {
+            SummaryCard.time(Date(timeIntervalSince1970: t), locale: locale, timeZone: timeZone)
+        }
+        func end(_ e: Episode) -> Double { e.startT + length(e, now: now) }
+        func of(_ kind: String) -> [Episode] { episodes.filter { $0.kind == kind } }
+        func mentions(_ e: Episode, _ words: [String]) -> Bool {
+            let text = (e.kind + " " + (e.label ?? "")).lowercased()
+            return words.contains { text.contains($0) }
+        }
+
+        let daylight = of("outdoor_block").map(\.startT).min()
+
+        let meals = episodes.filter { foodKinds.contains($0.kind) }
+        var eating: (value: String, detail: String)?
+        if let first = meals.map(\.startT).min(), let last = meals.map(end).max() {
+            let formatter = DateIntervalFormatter()
+            formatter.locale = locale
+            formatter.timeZone = timeZone
+            formatter.dateStyle = .none
+            formatter.timeStyle = .short
+            let span = formatter.string(from: Date(timeIntervalSince1970: first),
+                                        to: Date(timeIntervalSince1970: max(first, last)))
+            eating = (span, lengthText(seconds: last - first))
+        }
+
+        let caffeine = of("caffeine_sighting").map(\.startT).max()
+        let screens = minutes(kind: "screen_block", episodes: episodes, now: now).map(durationText)
+        let focus = of("screen_block").map { length($0, now: now) }.max().map(lengthText)
+        let alcohol = of("alcohol_sighting").count
+
+        let social = episodes.filter { mentions($0, ["people", "social", "conversation"]) }
+        let people = social.isEmpty ? nil : lengthText(seconds: social.reduce(0) { $0 + length($1, now: now) })
+        // Alcohol and caffeine are drinks too, but not water.
+        let water = episodes.filter {
+            $0.kind != "alcohol_sighting" && $0.kind != "caffeine_sighting" && mentions($0, ["water", "bottle", "drink"])
+        }.count
+
+        return [
+            Cell(label: "First daylight", value: daylight.map(time), emptyWord: "Not yet"),
+            Cell(label: "Eating window", value: eating?.value, detail: eating?.detail, emptyWord: "No meals seen"),
+            Cell(label: "Last caffeine", value: caffeine.map(time), emptyWord: "None seen"),
+            Cell(label: "Screens", value: screens, emptyWord: "None seen"),
+            Cell(label: "Longest focus", value: focus, emptyWord: "—"),
+            Cell(label: "Alcohol", value: alcohol == 0 ? nil : sightings(alcohol), emptyWord: "None seen"),
+            Cell(label: "Time with people", value: people, emptyWord: "Not tracked yet"),
+            Cell(label: "Hydration", value: water == 0 ? nil : sightings(water), emptyWord: "Not tracked yet"),
+        ]
+    }
+
+    /// Rounded minutes as `durationText`; "Under a minute" when that rounds to zero.
+    static func lengthText(seconds: TimeInterval) -> String {
+        let minutes = Int((seconds / 60).rounded())
+        return minutes == 0 ? "Under a minute" : durationText(minutes: minutes)
+    }
+
+    /// "1 sighting", "8 sightings".
+    static func sightings(_ count: Int) -> String { count == 1 ? "1 sighting" : "\(count) sightings" }
+
     /// Minutes of today's episodes of one kind (`outdoor_block`, `screen_block`). Nil when
     /// no episode of that kind was seen, so the tile can say "—" instead of a misleading "0 min".
     static func minutes(kind: String, episodes: [Episode], now: Date) -> Int? {

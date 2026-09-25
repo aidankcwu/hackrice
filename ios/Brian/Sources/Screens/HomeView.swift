@@ -1,11 +1,11 @@
 // DEMO_UI_PRD.md "Home". Start watching / Stop lives in the shared header now. Metrics
 // (hero, Daylight / Screens tiles, watched line) are D-003; the daily summary is D-004; the
-// protocol card is D-005; sessions, stats and log arrive in D-006 … D-008.
+// protocol card is D-005; sessions are D-006; the stats sheet is D-007; the log arrives in D-008.
 import SwiftUI
 
 /// Home's sections, top to bottom; the ids `-scrollTo` accepts (screenshots).
 enum HomeSection: String, CaseIterable {
-    case metrics, summary, `protocol`, sessions, log
+    case metrics, summary, `protocol`, sessions, stats, log
 }
 
 /// `-scrollTo summary` puts the section's top under the header; `summary-end` its bottom
@@ -52,6 +52,7 @@ struct HomeView: View {
                     summary.id(HomeSection.summary)
                     protocolCard.id(HomeSection.protocol)
                     sessionsCard.id(HomeSection.sessions)
+                    statsSheet.id(HomeSection.stats)
                     ledger.id(HomeSection.log)
                 }
                 .padding(.horizontal, Space.gutter)
@@ -62,11 +63,9 @@ struct HomeView: View {
                 await appState.loadSummaryIfNeeded()
                 if let target = appState.homeScrollTarget {
                     appState.homeScrollTarget = nil
-                    if target.section == .sessions {
-                        sessionsExpanded = true
-                        // Let the expanded rows lay out first, or the scroll lands short.
-                        try? await Task.sleep(for: .milliseconds(400))
-                    }
+                    if target.section == .sessions { sessionsExpanded = true }
+                    // Let the page (and expanded rows) lay out first, or the scroll lands short at XXL.
+                    try? await Task.sleep(for: .milliseconds(400))
                     proxy.scrollTo(target.section, anchor: target.atEnd ? .bottom : .top)
                 }
                 openLaunchSession()
@@ -343,6 +342,56 @@ struct HomeView: View {
         .frame(minHeight: Space.logRow)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+
+    /// "Today's stats" (D-007): eight cells that keep their place when empty. Two columns;
+    /// one at accessibility sizes, where a time range would break a digit per line.
+    private var statsSheet: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            let cells = appState.todayStats(now: context.date)
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Today's stats")
+                    .font(BrianType.title)
+                    .foregroundStyle(Brian.ink)
+                    .accessibilityAddTraits(.isHeader)
+                if typeSize.isAccessibilitySize {
+                    ForEach(cells) { statCell($0) }
+                } else {
+                    // A Grid, so both cells of a row share the taller one's height.
+                    Grid(horizontalSpacing: 16, verticalSpacing: 16) {
+                        ForEach(Array(stride(from: 0, to: cells.count, by: 2)), id: \.self) { i in
+                            GridRow {
+                                statCell(cells[i])
+                                if i + 1 < cells.count { statCell(cells[i + 1]) } else { Color.clear }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func statCell(_ cell: TodayStats.Cell) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(cell.value ?? cell.emptyWord)
+                .font(cell.isEmpty ? BrianType.body : BrianType.number)
+                .foregroundStyle(cell.isEmpty ? Brian.muted : Brian.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            if let detail = cell.detail {
+                Text(detail)
+                    .font(BrianType.secondary.monospacedDigit())
+                    .foregroundStyle(Brian.text)
+            }
+            Spacer(minLength: 0)
+            Text(cell.label)
+                .font(BrianType.secondary)
+                .foregroundStyle(Brian.muted)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(16)
+        .background(Brian.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(cell.label), \(cell.text)")
     }
 
     private func summarySentence(_ text: String) -> some View {
