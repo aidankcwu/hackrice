@@ -14,8 +14,8 @@
         "lint, tsc, test, build exit 0"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shell -> ShellFrame({embedded}); embedded tabs render no TopBar/Find pill, hamburger, h1, tab bar or Menu (CSS embed: variant covers first paint); Shell.test.tsx."
     },
     {
       "id": "W-102",

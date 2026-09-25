@@ -1,0 +1,15 @@
+# Ralph progress (demo, web)
+Started: Thu Sep 24 20:14:51 CDT 2026
+---
+
+## 2026-09-24 W-101 passes
+- phone/src/components/Shell.tsx: Shell = ShellFrame + useEmbedded() (useSyncExternalStore, false on
+  server/hydration). Embedded tabs render no top pill (so no Find pill), no hamburger, no h1, no tab
+  bar, and never mount Menu. Before hydration the `embed:hidden` classes hide the same chrome, and
+  main gets embed:pt-[safe-area+16px] so the first element sits where the title row started.
+- An embedded tab with an `action` gets an action-only row (none of the embedded tabs have one).
+- Test: phone/src/components/Shell.test.tsx (renderToStaticMarkup, next/navigation mocked).
+- Screenshots: phone/screenshots/W-101-analysis.png, W-101-calendar.png.
+- Learned: vitest renders .tsx fine in node env with react-dom/server; no jsdom needed for
+  markup assertions. Week chart left clipping still visible (W-102).
+- git push was not approved in this iteration's sandbox; commits are local until pushed.
