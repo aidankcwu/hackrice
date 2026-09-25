@@ -72,8 +72,8 @@
         "Build and tests exit 0"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SessionsSummary.derive + Ledger.entries (pure, tested); demo sessions sit inside the 3:25-4:10 PM fixture day (dayStart = healthspan.day in demo); -scrollTo sessions, -screen session."
     },
     {
       "id": "D-007",

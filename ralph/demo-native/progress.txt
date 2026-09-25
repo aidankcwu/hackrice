@@ -128,3 +128,38 @@ Launch: -scrollTo protocol; -screen protocol-templates; -screen protocol-edit.
 Next iteration must know
 - Tests with times normalise ICU's U+202F before AM/PM (see plain() in ProtocolSummaryTests).
 - The -empty (D-009) card state is "No protocol yet." + Set one up; tab says "Nothing yet today".
+
+## 2026-09-24 D-006 Sessions row and session detail (passes)
+What I did
+- App/SessionsSummary.swift (pure): derive(sessions:recaps:bodies:dayStart:now:...) -> rows newest
+  first (span "3:25–3:39 PM" / "Since 3:53 PM", duration, recapID = newest listing for the
+  session, recap body, recapState .recap/.writing/.running), title "Sessions · 3 · 43 min",
+  entries(_:in:now:) for the log rows inside a session. Tests/SessionsSummaryTests.swift (13).
+- App/Ledger.swift: HomeView's log derivation (entries, outcome, labels, held-back count) moved
+  out verbatim so SessionDetailView reuses it. D-008 should coalesce inside Ledger.
+- Models: RecapListing {id, sessionId, generatedAt}, RecapList (GET /api/recaps {"recaps": [...]}).
+- APIClient: startSession, endSession, sessions(limit:), recaps(limit:), recap(id:). Fixture
+  mode reads Fixtures/sessions_today.json and Fixtures/recaps.json (list + bodies in one file).
+- AppState: recapListings, recapBodies (fetched once per id), sessionsLoading, refreshSessions()
+  (end of refreshToday; failures logged via os.Logger "sessions", never shown), sessionsSummary,
+  dayStart(now:). Start/Stop fire POST /api/session/start | /end in a detached Task (live only),
+  then refetch sessions.
+- Decision: demo fixtures are one recorded day (2026-09-22, 3:25–4:10 PM CDT), so in demo mode
+  dayStart is healthspan.day's midnight; live uses the phone's day. HomeMetrics.watchedSeconds
+  takes the same dayStart, so the watched line and the Sessions total agree ("43 min").
+  The three demo sessions sit inside the fixture window, each with a recap about its own rows.
+- HomeView: Sessions panel (DisclosureGroup, title in the label, muted chevron) between the
+  protocol card and the Log; rows push SessionDetailView via navigationDestination(item:).
+  Empty: "Sessions" + "No sessions yet today."
+- SessionDetailView: duration (number) + span, Summary panel (RecapText, or "Summary still
+  writing…" + Refresh, or "The summary writes itself when you stop watching." while open),
+  then the Log rows inside the session. RecapText is shared with Home's daily summary.
+
+Screenshots: D-006-home-sessions, -home-sessions-xxl, -session, -session-dark.
+Launch: -scrollTo sessions (expands, waits 400 ms so it lands at XXL); -screen session.
+
+Next iteration must know
+- -screen session is consumed when sessions arrive (onChange), because bootstrap and Home's task
+  race and refreshSessions skips while one is in flight.
+- The session detail's Log shows duplicate adjacent "Outdoors" rows until D-008 coalesces.
+- Untested on hardware: session start/end against the real backend, recap arriving after Stop.

@@ -62,13 +62,14 @@ struct HomeView: View {
                 await appState.loadSummaryIfNeeded()
                 if let target = appState.homeScrollTarget {
                     appState.homeScrollTarget = nil
-                    if target.section == .sessions { sessionsExpanded = true }
+                    if target.section == .sessions {
+                        sessionsExpanded = true
+                        // Let the expanded rows lay out first, or the scroll lands short.
+                        try? await Task.sleep(for: .milliseconds(400))
+                    }
                     proxy.scrollTo(target.section, anchor: target.atEnd ? .bottom : .top)
                 }
-                if appState.homeLaunch == .session {
-                    appState.homeLaunch = nil
-                    openSession = appState.sessionsSummary(now: .now).rows.first?.id
-                }
+                openLaunchSession()
             }
         }
         .background(Brian.page)
@@ -83,6 +84,16 @@ struct HomeView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await appState.refreshToday() } }
         }
+        // Bootstrap and this view's task both fetch; the sessions may land after the task.
+        .onChange(of: appState.sessions) { _, _ in openLaunchSession() }
+    }
+
+    /// Demo `-screen session`: push the newest session once today's sessions are in.
+    private func openLaunchSession() {
+        guard appState.homeLaunch == .session,
+              let newest = appState.sessionsSummary(now: .now).rows.first else { return }
+        appState.homeLaunch = nil
+        openSession = newest.id
     }
 
     /// Connection problems live in the status pill; this is everything else that failed
@@ -292,6 +303,7 @@ struct HomeView: View {
                         Text(summary.title)
                             .font(BrianType.title)
                             .foregroundStyle(Brian.ink)
+                            .multilineTextAlignment(.leading)
                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     }
                     .tint(Brian.muted)
