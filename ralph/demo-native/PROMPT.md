@@ -47,3 +47,9 @@ label ("Stop" / "Start watching"), centered in its bar, not full width; keep it 
 scrolling. If the top bar has room at 402 pt when the pill is short (e.g. "Glasses off"), it
 may sit trailing beside Preview; otherwise the second bar stays but compact. Also check
 .glassProminent labels in dark mode on ConnectView and AddItemView (D-004 found white-on-white).
+
+ORCHESTRATOR REVIEW 21:10 (D-010): D-005-protocol.png puts the Protocol list in a white inset
+card on the system grey grouped background, while Home is a white `Brian.page`. Every tab must
+share one canvas: Protocol (and its Templates section) on `Brian.page` with the same row style
+as Home's Log (full-width `Brian.line` hairlines, 24 pt gutters), no inset card. Settings and
+Connect are sheets and may keep the grouped list style.
