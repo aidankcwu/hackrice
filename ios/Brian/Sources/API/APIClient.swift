@@ -135,11 +135,12 @@ final class APIClient {
         }
     }
 
-    /// `PUT /api/persona` `{text}`: replace the server's wearer persona.
+    /// `PUT /api/persona/wearer` `{text}`: the questionnaire's paragraph about the wearer.
+    /// Its own slot on the server, under Bryan's persona, never replacing it.
     func putPersona(text: String) async throws {
         if isFixtures { return }
         let data = try JSONSerialization.data(withJSONObject: ["text": text])
-        let _: Data = try await raw("PUT", "/api/persona", body: data)
+        let _: Data = try await raw("PUT", "/api/persona/wearer", body: data)
     }
 
     // MARK: Sessions (D-006)

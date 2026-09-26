@@ -1410,6 +1410,11 @@ class Database:
     # rather than evaporating with today's summary.
 
     PERSONA_KEY = "persona"
+    #: The wearer's own paragraph from the phone's first-launch questionnaire
+    #: (``PUT /api/persona/wearer``). Kept apart from the operator's persona so
+    #: neither overwrites the other; :func:`pipeline.persona.effective_persona`
+    #: joins them for every prompt.
+    WEARER_KEY = "wearer"
 
     #: A learned line is one fact, not a paragraph (mirrors
     #: ``reasoner.schema.REMEMBER_MAX_CHARS``).
@@ -1423,32 +1428,46 @@ class Database:
         fall back to the built-in persona, not brief the model with "".
         """
 
+        return self._profile_text(self.PERSONA_KEY)
+
+    def set_persona(self, text: str, t: float | None = None) -> None:
+        """Store (or, with empty text, clear) the persona override."""
+
+        self._set_profile_text(self.PERSONA_KEY, text, t)
+
+    def get_wearer_profile(self) -> str | None:
+        """The wearer's questionnaire paragraph, or ``None`` when there is none."""
+
+        return self._profile_text(self.WEARER_KEY)
+
+    def set_wearer_profile(self, text: str, t: float | None = None) -> None:
+        """Store (or, with empty text, clear) the wearer's paragraph."""
+
+        self._set_profile_text(self.WEARER_KEY, text, t)
+
+    def _profile_text(self, key: str) -> str | None:
         with self._lock:
             row = self.conn.execute(
-                "SELECT value FROM profile WHERE key = ?", (self.PERSONA_KEY,)
+                "SELECT value FROM profile WHERE key = ?", (key,)
             ).fetchone()
         if row is None:
             return None
         text = (row["value"] or "").strip()
         return text or None
 
-    def set_persona(self, text: str, t: float | None = None) -> None:
-        """Store (or, with empty text, clear) the persona override."""
-
+    def _set_profile_text(self, key: str, text: str, t: float | None) -> None:
         import time as _time
 
         stamp = _time.time() if t is None else t
         value = (text or "").strip()
         with self._lock:
             if not value:
-                self.conn.execute(
-                    "DELETE FROM profile WHERE key = ?", (self.PERSONA_KEY,)
-                )
+                self.conn.execute("DELETE FROM profile WHERE key = ?", (key,))
             else:
                 self.conn.execute(
                     "INSERT OR REPLACE INTO profile (key, value, updated_t)"
                     " VALUES (?,?,?)",
-                    (self.PERSONA_KEY, value, stamp),
+                    (key, value, stamp),
                 )
             self.conn.commit()
 

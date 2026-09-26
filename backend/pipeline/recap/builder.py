@@ -30,6 +30,8 @@ from ..db import Database, day_key
 from ..scoring.scorer import rollup
 from ..scoring.thresholds import THRESHOLDS
 from .moments import select_moments
+from ..persona import effective_persona
+from ..reasoner.prompts import DEFAULT_PERSONA
 from .narrative import RecapContext, RecapNarrative, make_narrative_client
 
 log = logging.getLogger(__name__)
@@ -394,12 +396,16 @@ async def build_recap(
     subscores = assembled["subscores"]
     overall = assembled["overall"]
 
+    reasoner = getattr(pipeline, "reasoner", None)
     context = RecapContext(
         duration_s=max(0.0, end - start),
         subscores=subscores,
         moments=[m.model_dump() for m in moments],
         summary_lines=assembled["summary_lines"],
         overall=overall,
+        # The same brief the thinker and the voice agent get: operator persona
+        # (or the built-in one), then the wearer's questionnaire paragraph.
+        persona=effective_persona(pipeline.db, getattr(reasoner, "persona", "") or DEFAULT_PERSONA),
     )
     client = _narrative_client(pipeline)
     try:

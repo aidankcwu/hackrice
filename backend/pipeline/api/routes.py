@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
 
 from ..actions.speech import get_speak_fn
+from ..persona import join_persona
 from ..db import ALL_DAYS, PROTOCOL_KINDS, day_key
 from ..models import PendingCheck, SeededRow
 from ..reasoner.prompts import DEFAULT_PERSONA
@@ -617,8 +618,11 @@ async def get_persona(request: Request) -> dict:
     override = pipeline.db.get_persona()
     reasoner = getattr(pipeline, "reasoner", None)
     fallback = getattr(reasoner, "persona", "") or DEFAULT_PERSONA
+    wearer = pipeline.db.get_wearer_profile()
     return {"text": override or fallback,
-            "source": "custom" if override else "default"}
+            "source": "custom" if override else "default",
+            "wearer": wearer or "",
+            "effective": join_persona(override or fallback, wearer)}
 
 
 @router.put("/api/persona")
@@ -635,6 +639,22 @@ async def put_persona(request: Request, body: dict[str, Any]) -> dict:
         raise HTTPException(400, "text must be a string")
     pipeline = _pipeline(request)
     pipeline.db.set_persona(text, _now(pipeline))
+    return await get_persona(request)
+
+
+@router.put("/api/persona/wearer")
+async def put_wearer_profile(request: Request, body: dict[str, Any]) -> dict:
+    """Set the wearer's paragraph (the phone's questionnaire); empty text clears it.
+
+    Its own slot, never the persona's: the questionnaire is *about* the wearer
+    and sits under the behaviour instructions (``pipeline.persona``), it does
+    not replace them.
+    """
+    text = body.get("text", "")
+    if not isinstance(text, str):
+        raise HTTPException(400, "text must be a string")
+    pipeline = _pipeline(request)
+    pipeline.db.set_wearer_profile(text, _now(pipeline))
     return await get_persona(request)
 
 

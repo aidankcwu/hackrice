@@ -36,6 +36,7 @@ from uuid import uuid4
 
 from ..actions.speech import SpeechLimiter, get_speak_fn, spoken
 from ..config import Settings
+from ..persona import effective_persona
 from ..db import Database, day_key
 from ..frames import FrameStore
 from ..gate.triggers import same_item, topic_about_cue
@@ -969,11 +970,7 @@ class ConversationAgent:
             self.db.update_conversation(conv)
 
     def _system_prompt(self) -> str:
-        persona = self.persona
-        try:
-            persona = self.db.get_persona() or self.persona
-        except Exception:  # pragma: no cover - defensive
-            log.exception("could not read the persona override; using the default")
+        persona = effective_persona(self.db, self.persona)
         learned: list[str] = []
         try:
             learned = [str(row["line"]) for row in self.db.profile_lines(LEARNED_MAX)
