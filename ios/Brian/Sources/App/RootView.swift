@@ -1,6 +1,7 @@
 // DEMO_UI_PRD.md "The product in one screen": three tabs (Home, Analysis, Protocol; the
 // middle one is the web app) under one fixed header (AppHeader: status pill, Start
-// watching / Stop, Preview, Settings). Connect opens full screen on first launch.
+// watching / Stop, Preview, Settings). On first launch the questionnaire opens full
+// screen, then Connect follows it full screen.
 // RootView owns the navigation stacks and every sheet the header opens.
 import SwiftUI
 
@@ -15,6 +16,8 @@ enum AppScreen: String, CaseIterable {
     case protocolEdit = "protocol-edit"
     /// Home with the newest session's detail pushed (screenshots).
     case session
+    /// The first-launch questionnaire, full screen, even in demo mode (screenshots).
+    case onboarding
 
     static let argument = "-screen"
 
@@ -31,7 +34,7 @@ enum AppScreen: String, CaseIterable {
         switch self {
         case .analysis: .analysis
         case .protocol, .protocolTemplates, .protocolEdit: .protocol
-        case .home, .connect, .settings, .preview, .measured, .session: .home
+        case .home, .connect, .settings, .preview, .measured, .session, .onboarding: .home
         }
     }
 }
@@ -49,6 +52,13 @@ struct RootView: View {
     @State private var showConnect = false
     /// Connect on first launch: full screen, closed with Done.
     @State private var showConnectFullScreen = false
+    /// The first-launch questionnaire (and Settings' "Redo questions"): full screen.
+    @State private var showOnboarding = false
+    /// Set when the questionnaire finishes on first launch; its cover's onDismiss then
+    /// opens Connect, since two full-screen covers cannot be up at once.
+    @State private var connectAfterOnboarding = false
+    /// Settings asked for the questionnaire; it opens once the Settings sheet is gone.
+    @State private var onboardingAfterSettings = false
     @State private var showSettings = false
     @State private var showPreview = false
     @State private var showMeasured = false
@@ -81,13 +91,20 @@ struct RootView: View {
             }
         }
         .tint(Brian.ink)
+        .fullScreenCover(isPresented: $showOnboarding, onDismiss: openConnectAfterOnboarding) {
+            OnboardingView(questions: PersonaQuestion.all) { answers in
+                Task { await appState.completeOnboarding(answers) }
+                showOnboarding = false
+            }
+            .interactiveDismissDisabled()
+        }
         .fullScreenCover(isPresented: $showConnectFullScreen, onDismiss: markConnectSeen) {
             ConnectView()
         }
         .sheet(isPresented: $showConnect, onDismiss: markConnectSeen) {
             ConnectView()
         }
-        .sheet(isPresented: $showSettings) {
+        .sheet(isPresented: $showSettings, onDismiss: openOnboardingAfterSettings) {
             SettingsView()
         }
         .sheet(isPresented: $showPreview) {
@@ -106,6 +123,18 @@ struct RootView: View {
             showConnect = true
             appState.connectRequested = false
         }
+        .onChange(of: appState.onboardingRequested) { _, requested in
+            guard requested else { return }
+            appState.onboardingRequested = false
+            // A redo does not reopen Connect afterwards; the glasses are already set up.
+            connectAfterOnboarding = false
+            if showSettings {
+                onboardingAfterSettings = true
+                showSettings = false
+            } else {
+                showOnboarding = true
+            }
+        }
         .task {
             guard !bootstrapped else { return }
             bootstrapped = true
@@ -118,7 +147,12 @@ struct RootView: View {
             if appState.demo, screen == .session { appState.homeLaunch = screen }
             let forced = arguments.contains(Self.showSetupArgument) || screen == .connect
             let firstLaunch = !appState.demo && !UserDefaults.standard.bool(forKey: Self.connectSeenKey)
-            if forced || (firstLaunch && screen == nil) {
+            let needsQuestions = !appState.demo && !OnboardingStore().isComplete
+            if screen == .onboarding || (needsQuestions && screen == nil && !forced) {
+                // Connect follows the questionnaire (openConnectAfterOnboarding).
+                connectAfterOnboarding = true
+                showOnboarding = true
+            } else if forced || (firstLaunch && screen == nil) {
                 showConnectFullScreen = true
             } else if screen == .settings {
                 showSettings = true
@@ -141,6 +175,19 @@ struct RootView: View {
                 await GlassesFactory.handleIncomingURL(url)
             }
         }
+    }
+
+    /// The questionnaire's cover is gone: Connect can now take the screen.
+    private func openConnectAfterOnboarding() {
+        guard connectAfterOnboarding else { return }
+        connectAfterOnboarding = false
+        showConnectFullScreen = true
+    }
+
+    private func openOnboardingAfterSettings() {
+        guard onboardingAfterSettings else { return }
+        onboardingAfterSettings = false
+        showOnboarding = true
     }
 
     private func markConnectSeen() {

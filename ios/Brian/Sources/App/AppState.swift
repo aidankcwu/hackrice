@@ -45,6 +45,8 @@ final class AppState {
     }
     /// The status pill and Settings request Connect; RootView owns the presentation.
     var connectRequested = false
+    /// Settings' "Redo questions" asks for the questionnaire again; RootView presents it.
+    var onboardingRequested = false
     /// Settings' "Change": Connect opens with the paste field showing, then clears this.
     var linkChangeRequested = false
     /// A link test is in flight (Connect's invite row reads "Checking…").
@@ -380,6 +382,26 @@ final class AppState {
         if case .reachable = link {
             await refreshToday()
             await refreshProtocol()
+            await syncPersonaIfNeeded()
+        }
+    }
+
+    func completeOnboarding(_ answers: PersonaAnswers) async {
+        // A demo run (`-screen onboarding`) must not queue its answers for a real server.
+        guard !demo else { return }
+        OnboardingStore(defaults: .standard).save(answers)
+        await syncPersonaIfNeeded()
+    }
+
+    func syncPersonaIfNeeded() async {
+        let store = OnboardingStore(defaults: .standard)
+        guard !demo, server != nil, case .reachable = link, store.needsSync,
+              let persona = store.persona else { return }
+        do {
+            try await api.putPersona(text: persona)
+            store.markSynced()
+        } catch {
+            Self.log.error("Persona sync failed: \(String(describing: error), privacy: .public)")
         }
     }
 
@@ -388,6 +410,7 @@ final class AppState {
         if watching { startPolling() }
         guard demo || server != nil else { return }
         await refreshToday()
+        await syncPersonaIfNeeded()          // retry a persona PUT that failed earlier
     }
 
     /// Background: stop polling. The stream itself keeps running (external-accessory mode).
@@ -429,6 +452,7 @@ final class AppState {
         // MacLink just wrote the token to its own key as a side effect; scrub it back.
         ServerURLStore.scrubLegacyKey(tokenlessURLString: parsed.tokenlessURLString, defaults: .standard)
         await testServer()
+        await syncPersonaIfNeeded()
     }
 
     func testServer() async {

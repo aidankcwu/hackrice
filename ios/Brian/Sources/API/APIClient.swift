@@ -135,6 +135,13 @@ final class APIClient {
         }
     }
 
+    /// `PUT /api/persona` `{text}`: replace the server's wearer persona.
+    func putPersona(text: String) async throws {
+        if isFixtures { return }
+        let data = try JSONSerialization.data(withJSONObject: ["text": text])
+        let _: Data = try await raw("PUT", "/api/persona", body: data)
+    }
+
     // MARK: Sessions (D-006)
 
     /// `POST /api/session/start` `{"name": ""}`: Start watching opens a session.
