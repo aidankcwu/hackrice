@@ -131,6 +131,25 @@ def _clean_speech():
     clear_spoken()
 
 
+@pytest.fixture(autouse=True)
+def _no_voice_gap(request, monkeypatch):
+    """Most tests here are about other rules and open lines seconds apart, so
+    the 90 s floor between lines is off for them. A test that asks for the
+    ``keep_voice_gap`` fixture gets the real demo value."""
+
+    if "keep_voice_gap" in request.fixturenames:
+        return
+    from pipeline.config import Timings
+    real = Timings.demo
+    monkeypatch.setattr(Timings, "demo", classmethod(
+        lambda cls, *a, **k: dataclasses.replace(real(*a, **k), voice_min_gap_s=0.0)))
+
+
+@pytest.fixture
+def keep_voice_gap():
+    """Marker: leave the demo's floor between lines as it is."""
+
+
 @pytest.fixture
 def h():
     harness = build()
@@ -1284,3 +1303,70 @@ async def test_inside_a_session_the_same_item_is_said_once_for_the_whole_session
             if hasattr(FakeVoiceClient, "_user_text") else True
     finally:
         h.db.close()
+
+
+# -- hard limits: a floor between lines, a ceiling per session ---------------
+
+
+async def test_a_different_item_inside_the_gap_is_dropped(h, keep_voice_gap):
+    """Replayed evening: "late snack, sleep" five times in three minutes, once
+    each for yogurt, soda, cereal and a box. The repeat check keys on the
+    item, so only a floor between lines, whatever they are about, stops it."""
+
+    from pipeline.conversation.agent import GAP
+
+    assert h.settings.timings.voice_min_gap_s == 90.0
+    assert h.agent.request("yogurt cup in hand, late snack", "statement",
+                           decision_id="d1", esc=None).startswith("handed_off:")
+    await settle()
+    h.clock.t += 30
+    assert h.agent.request("soda can in hand, late snack", "statement",
+                           decision_id="d2", esc=None) == GAP
+    assert h.agent.client.calls == 1, "a dropped line costs no model call"
+    assert h.agent.stats()["dropped_gap"] == 1
+
+    h.clock.t += 70  # 100 s after the first line
+    assert h.agent.request("cereal box in hand, late snack", "statement",
+                           decision_id="d3", esc=None).startswith("handed_off:")
+    await settle()
+
+
+async def test_a_session_says_at_most_six_lines(h, keep_voice_gap):
+    from pipeline.conversation.agent import CAP
+    from pipeline.models import Session
+
+    h.db.insert_session(Session(id="s_cap", started_t=h.clock() - 5.0))
+    for i in range(6):
+        assert h.agent.request(f"item {i} in hand", "statement", decision_id=f"d{i}",
+                               esc=None).startswith("handed_off:"), i
+        await settle()
+        h.clock.t += 100
+    assert h.agent.request("item 6 in hand", "statement", decision_id="d6",
+                           esc=None) == CAP
+    assert h.agent.stats()["dropped_cap"] == 1
+
+
+async def test_with_no_session_there_is_no_cap(h, keep_voice_gap):
+    for i in range(8):
+        assert h.agent.request(f"item {i} in hand", "statement", decision_id=f"d{i}",
+                               esc=None).startswith("handed_off:"), i
+        await settle()
+        h.clock.t += 100
+    assert h.agent.stats()["dropped_cap"] == 0
+
+
+async def test_a_manual_open_skips_the_gap_and_the_cap(h, keep_voice_gap):
+    from pipeline.conversation.agent import CAP, GAP
+    from pipeline.models import Session
+
+    h.db.insert_session(Session(id="s_manual", started_t=h.clock() - 5.0))
+    for i in range(6):
+        h.agent.request(f"item {i} in hand", "statement", decision_id=f"d{i}", esc=None)
+        await settle()
+        h.clock.t += 100
+    h.clock.t -= 90  # 10 s after the sixth line: inside the gap and at the cap
+    assert h.agent.request("item 6 in hand", "statement", decision_id="d6",
+                           esc=None) in (GAP, CAP)
+    assert h.agent.request("item 6 in hand", "statement", decision_id="manual",
+                           reason="manual").startswith("handed_off:")
+    await settle()

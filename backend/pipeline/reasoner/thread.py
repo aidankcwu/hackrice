@@ -14,9 +14,9 @@ notes. This module keeps the session as one conversation instead:
                 since the model last rewrote it; then this wake-up
 
 Images ride only on the newest ``image_turns`` turns; older turns keep their
-text. When a turn falls off the far end it is not lost: its one-line residue
-joins the picture block until the model's next reply, whose ``summary`` field
-is the picture rewritten with it folded in. The window is therefore always
+text. When the window is full the picture block names the oldest turn as
+leaving, and the same reply's ``summary`` folds it in; a reply without a
+summary leaves its one-line residue in the picture block until one does. The window is therefore always
 full and the picture always current, and nothing leaves the context without
 first passing through the summary.
 
@@ -48,6 +48,8 @@ PICTURE_HEADING = "Running picture of this session (your own words, rewritten ea
 PICTURE_EMPTY = "nothing yet: this is the first wake-up of the session"
 AGED_HEADING = ("Aged out of the raw window since you last rewrote the picture; "
                 "fold these into your next `summary`:")
+LEAVING_HEADING = ("Leaving the raw window after this reply (your oldest turn above); "
+                   "fold what matters from it into `summary` now:")
 
 #: Longest reply text kept per raw turn. A reply is thinking + reading +
 #: actions; past this it is the model repeating itself.
@@ -172,6 +174,12 @@ class SessionThread:
             lines.append("")
             lines.append(AGED_HEADING)
             lines.extend(f"  {line}" for line in self.aged)
+        if self.turns and len(self.turns) >= self.max_turns:
+            # The window is full: this reply's commit pushes the oldest turn
+            # out, so the model folds it in now, while it can still read it raw.
+            lines.append("")
+            lines.append(LEAVING_HEADING)
+            lines.append(f"  {self.turns[0].residue}")
         return "\n".join(lines)
 
     def messages(self, system_text: str, user_content: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -202,16 +210,21 @@ class SessionThread:
         """Append the finished turn, age the window, absorb the new picture."""
 
         self.turns.append(turn)
+        leaving: list[Turn] = []
         while len(self.turns) > self.max_turns:
-            old = self.turns.popleft()
-            self.aged.append(old.residue)
+            leaving.append(self.turns.popleft())
             self.folded += 1
         text = (summary or "").strip()
         if text:
-            # The model was shown the aged lines and asked to fold them in;
-            # a rewritten picture supersedes them.
+            # This reply was shown the aged lines and the leaving turn (see
+            # picture_block) and asked to fold them in; the rewritten picture
+            # supersedes them. (Aging out BEFORE this check wiped the leaving
+            # turn's residue unseen whenever the model wrote a summary.)
             self.summary = text
             self.aged = []
+        else:
+            # No rewrite: the leaving turn waits as a residue line until one.
+            self.aged.extend(old.residue for old in leaving)
 
     # -- restart ------------------------------------------------------------------
 

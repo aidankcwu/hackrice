@@ -21,6 +21,8 @@ real pixels at exactly the moments that matter.
     --no-cue-trigger     CUE_TRIGGER=0: no one-tick persona cues
     --no-fast-path       FAST_PATH=0: cues wake the clerk instead of the mouth
     --no-thread          REASONER_THREAD=0: fresh prompt per wake-up (the old clerk)
+    --no-screen-trigger  SCREEN_TRIGGER=0: a screen in view never wakes the clerk
+    --no-seeded-context  SEEDED_CONTEXT=0: no seeded history or wearable line
     --model NAME         T1_MODEL for this run (e.g. gpt-5.4)
     --persona FILE       PERSONA_FILE: replaces the built-in persona
     --env-file FILE      where OPENAI_API_KEY lives (e.g. ../deploy/.env)
@@ -165,6 +167,7 @@ async def run(args: argparse.Namespace, rec: dict[str, Any], db_path: Path) -> d
         demo_mode=True, db_path=db_path, speech_mode="text",
         cue_trigger=args.cue_trigger, fast_path=args.fast_path,
         reasoner_thread=args.thread, persona_file=args.persona,
+        screen_trigger=args.screen_trigger, seeded_context=args.seeded_context,
         **overrides,
     )
     if args.reasoner == "openai" and not settings.openai_api_key:
@@ -258,7 +261,8 @@ def report(args: argparse.Namespace, rec: dict[str, Any], res: dict[str, Any],
     p.append(f"- ticks {res['n_ticks']}, {res['span_s']:.0f} s, ai coverage {res['ai_cov']:.0%}, "
              f"evidence frames {len(rec['frames'])}")
     p.append(f"- speed x{args.speed}, reasoner {args.reasoner}, cue_trigger {args.cue_trigger}, "
-             f"fast_path {args.fast_path}, thread {args.thread}, persona override {res['persona_override']}"
+             f"fast_path {args.fast_path}, thread {args.thread}, "
+             f"screen_trigger {args.screen_trigger}, seeded_context {args.seeded_context}, persona override {res['persona_override']}"
              + (f" ({args.persona})" if args.persona else ""))
     lat = [d["latency_ms"] for d in res["decisions"] if d.get("latency_ms")]
     if lat:
@@ -325,6 +329,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-fast-path", dest="fast_path", action="store_false", default=True)
     ap.add_argument("--no-thread", dest="thread", action="store_false", default=True,
                     help="REASONER_THREAD=0: a fresh prompt per wake-up, as before")
+    ap.add_argument("--no-screen-trigger", dest="screen_trigger", action="store_false", default=True,
+                    help="SCREEN_TRIGGER=0: no sustained-screen trigger")
+    ap.add_argument("--no-seeded-context", dest="seeded_context", action="store_false", default=True,
+                    help="SEEDED_CONTEXT=0: the models never see the seeded history")
     ap.add_argument("--model", help="T1_MODEL override, e.g. gpt-5.4")
     ap.add_argument("--persona", type=Path, help="persona text file (PERSONA_FILE)")
     ap.add_argument("--env-file", type=Path,

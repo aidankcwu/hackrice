@@ -200,6 +200,9 @@ def test_voice_client_keeps_its_connection_warm_between_conversations():
 
 # -- the prompt -------------------------------------------------------------
 
+#: The objective with its line breaks folded, so a pinned phrase survives rewrapping.
+FLAT = " ".join(VOICE_OBJECTIVE.split())
+
 
 def test_objective_is_trimmed_but_keeps_its_rules():
     assert len(VOICE_OBJECTIVE) < 3200, "was 5.2k chars, re-sent on every line"
@@ -211,27 +214,50 @@ def test_objective_is_trimmed_but_keeps_its_rules():
         "NOISE IS NOT AN ANSWER",
         "RETURN THE FACTS",
         "CLOSE WITH SOMETHING USEFUL",
-        "under twelve words",
+        "two short ones when the line carries an effect and an action",
+        "No citations, no precise numbers, no lecturing",
         "set heard false",
     ):
-        assert rule in VOICE_OBJECTIVE, rule
+        assert rule in FLAT, rule
 
 
-def test_objective_earns_the_line_but_keeps_scripted_lines():
-    """Two failures bracket this text. Demo night: 'silence is usually right'
-    plus a persona saying speak every time, and the agent said nothing. The
-    2026-09-25 desk session: 'a hand-off gets a line', and it read the frame
-    back ('phone and laptop again; give the water bottle a sip too'). Now:
-    silence unless a person in the room would have said it, but a line the
-    persona scripts is still said."""
+def test_objective_asks_only_when_the_answer_changes_the_advice():
+    """The 2026-09-25 evening session: 'yours, and you drinking it?' about a
+    friend's milk tea, 'eating the yogurt now, nice'. Questions about whose
+    it is or how many are gone, and so are the word caps and the quoted good
+    lines ('the salad, good pick') that made it sound canned."""
+
+    assert "the answer would change what you would tell them" in FLAT
+    assert "never whether a thing is theirs" in FLAT
+    for gone in ("under twelve words", "about twenty", "No lectures, guilt",
+                 "calories", "the salad, good pick", "second coffee already",
+                 "what it is or how many"):
+        assert gone not in FLAT, gone
+
+
+def test_both_agents_read_the_coach_playbook():
+    from pipeline.reasoner.prompts import COACH_PLAYBOOK, build_system_prompt
+
+    assert COACH_PLAYBOOK in build_voice_system_prompt("p", ["x"])
+    assert COACH_PLAYBOOK in build_system_prompt("p", "s")
+    assert 300 <= len(COACH_PLAYBOOK.split()) <= 450
+
+
+def test_objective_earns_the_line():
+    """Two failures bracket this text. Demo night: 'silence is usually right',
+    and the agent said nothing. The 2026-09-25 desk session: 'a hand-off gets
+    a line', and it read the frame back ('phone and laptop again; give the
+    water bottle a sip too'). Now: silence unless a person in the room would
+    have said it, and what is said has a point, not a description."""
 
     assert "last minute" not in VOICE_OBJECTIVE
     assert "more often than a filler" not in VOICE_OBJECTIVE
     assert "A HAND-OFF GETS A LINE" not in VOICE_OBJECTIVE
     assert "EARN THE LINE" in VOICE_OBJECTIVE
-    assert "Never read the scene back" in VOICE_OBJECTIVE
-    assert "An observation, not an order" in VOICE_OBJECTIVE
-    assert "speak every time, speak" in VOICE_OBJECTIVE
+    assert "Never read the scene back" in FLAT
+    assert "An observation, not an order" in FLAT
+    assert "Naming what they are doing is not a point" in FLAT
+    assert "never a point already said aloud this session" in FLAT
 
 
 def test_system_prompt_is_byte_stable_for_the_prompt_cache():

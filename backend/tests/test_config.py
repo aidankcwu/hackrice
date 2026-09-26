@@ -168,7 +168,9 @@ def test_demo_timings_are_tuned_for_reactive_glasses() -> None:
 
 def test_the_demo_preset_is_frozen() -> None:
     """Every latency number in the plan was measured against these values.
-    Changing one is a deliberate act: update this test with the reason."""
+    Changing one is a deliberate act: update this test with the reason.
+    voice_min_gap_s / voice_max_per_session (90 s, 6): added so the voice
+    agent cannot say five lines in three minutes about five different items."""
 
     s = Settings(_env_file=None)  # type: ignore[call-arg]
     assert s.demo_mode is True and s.tick_interval_s == 1.5
@@ -181,6 +183,7 @@ def test_the_demo_preset_is_frozen() -> None:
     assert (demo.ask_listen_s, demo.ask_expire_s, demo.conversation_cooldown_s,
             demo.conversation_lifetime_s, demo.conversation_max_questions) == (
                 6.0, 25.0, 0.0, 60.0, 2)
+    assert (demo.voice_min_gap_s, demo.voice_max_per_session) == (90.0, 6)
     assert demo.t1_max_concurrent == 1
 
 

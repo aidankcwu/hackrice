@@ -92,6 +92,13 @@ NO_TRANSPORT = "no_transport"
 #: Checked before the model call: seven conversations on demo night paid a
 #: whole voice turn (1.2-5.0 s of held slot) only to be closed as a repeat.
 REPEAT = "conversation_repeat"
+#: A line was spoken less than ``Timings.voice_min_gap_s`` ago, whatever it
+#: was about. The repeat check keys on the item, so a replayed evening said
+#: "late snack, sleep" five times in three minutes -- yogurt, soda, cereal, a
+#: box -- and every one passed it. This is the floor that stops that.
+GAP = "conversation_gap"
+#: ``Timings.voice_max_per_session`` lines already spoken this session.
+CAP = "conversation_cap"
 #: The last clip is still playing on the glasses. Dropped, never queued, like
 #: ACTIVE: the gate leaves the cue unspent and retries it on the next fresh
 #: tick, so the next line starts only once the mouth is actually free. This is
@@ -246,6 +253,8 @@ class ConversationAgent:
         self.dropped_cooldown = 0
         self.dropped_no_transport = 0
         self.dropped_repeat = 0
+        self.dropped_gap = 0
+        self.dropped_cap = 0
         self.dropped_mouth_busy = 0
         self.dropped_deliver_expired = 0
         self.dropped_deliver_superseded = 0
@@ -268,7 +277,8 @@ class ConversationAgent:
 
         Returns ``handed_off:<id>`` when a conversation opened, else one of
         ``conversation_active``, ``conversation_cooldown``,
-        ``conversation_repeat``, ``mouth_busy``, ``no_transport``.
+        ``conversation_repeat``, ``conversation_gap``, ``conversation_cap``,
+        ``mouth_busy``, ``no_transport``.
         The model call happens on a task: the reasoner holds the single T1 slot
         while it calls this, and must not wait on a conversation to finish.
 
@@ -307,6 +317,25 @@ class ConversationAgent:
                 log.info("conversation: hand-off dropped · conversation_repeat · %s · \"%s\"",
                          cue or "-", text[:80])
                 return REPEAT
+            if decision_id != "manual":
+                # Hard limits in code, whatever the topic: prompt rules alone
+                # did not stop one thought said once per item. Before the mouth
+                # check, like the repeat check, so a line that would be dropped
+                # anyway is spent now. An operator's manual open is exempt.
+                last = self._said[-1][0] if self._said else None
+                if last is not None and t - last < self.timings.voice_min_gap_s:
+                    self.dropped_gap += 1
+                    log.info("conversation: hand-off dropped · conversation_gap · %.0f s since the "
+                             "last line · \"%s\"", t - last, text[:80])
+                    return GAP
+                start = session_start(self.db, t)
+                if start is not None:
+                    n = sum(1 for said_t, *_ in self._said if said_t >= start)
+                    if n >= self.timings.voice_max_per_session:
+                        self.dropped_cap += 1
+                        log.info("conversation: hand-off dropped · conversation_cap · %d lines "
+                                 "this session · \"%s\"", n, text[:80])
+                        return CAP
             busy = self._mouth_busy()
             if busy > 0.0:
                 # After the repeat check, so a line that would be a repeat
@@ -486,6 +515,8 @@ class ConversationAgent:
             "dropped_cooldown": self.dropped_cooldown,
             "dropped_no_transport": self.dropped_no_transport,
             "dropped_repeat": self.dropped_repeat,
+            "dropped_gap": self.dropped_gap,
+            "dropped_cap": self.dropped_cap,
             "dropped_mouth_busy": self.dropped_mouth_busy,
             "dropped_deliver_expired": self.dropped_deliver_expired,
             "dropped_deliver_superseded": self.dropped_deliver_superseded,

@@ -79,6 +79,7 @@ The `scene` / `activity` / `food_type` / `drink` menus live in `src/longevity/ai
 | `GET /api/persona` | `{text, source: "default"\|"custom"}` — the persona T1 is briefed with |
 | `PUT /api/persona` | `{text}` → the same shape; empty `text` clears the override back to the default |
 | `GET /api/profile?limit=50` | learned lines `[{id, t, line, source_decision_id}]`, oldest first |
+| `POST /api/profile` | `{line}` → `201 {id, added: true}`, or `200 {id: null, added: false}` for a duplicate; `400` if `line` is missing, blank or over 200 characters |
 | `DELETE /api/profile/{id}` | retire one learned line → `{id, removed}`; `404` if it is not active |
 | `GET /api/questions?limit=20` | `pending_questions` rows, newest first (docs/ASK_DESIGN.md §5) |
 | `POST /api/answer` | `{question_id?, text, heard?=true}` → `{question_id, accepted}`; answers by hand what the phone would have transcribed |
@@ -305,6 +306,10 @@ A line whose casefolded text is already active is ignored, not stored twice:
 the model re-derives the same fact several times a day. `DELETE
 /api/profile/{id}` deactivates one (`404` if it is not active); the row stays
 as history, so the same fact can legitimately be learned again later.
+
+`POST /api/profile` `{line}` adds a line from outside the clerk: the phone's
+onboarding quiz posts the wearer's answers here ("Usually in bed by 11:30 pm").
+It only adds lines, never touches the persona, and skips duplicates the same way.
 
 `remember` is distinct from its two neighbours on purpose. `annotate` is about
 *today* and is read back for one day; `log_insight` is a health observation for

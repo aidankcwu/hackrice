@@ -645,6 +645,33 @@ async def profile(request: Request, limit: int = Query(50, ge=1)) -> list[dict]:
     return _pipeline(request).db.profile_lines(limit)
 
 
+PROFILE_POST_MAX_CHARS = 200
+
+
+@router.post("/api/profile")
+async def add_profile_line(request: Request, body: dict[str, Any]) -> JSONResponse:
+    """Add one learned line about the wearer, from outside the clerk.
+
+    The onboarding quiz on the phone posts the wearer's answers here, one line
+    each ("Usually in bed by 11:30 pm"). Lines are facts about the wearer that
+    both models read under the persona. This only adds lines; it never touches
+    the persona text. A line that is already there (ignoring case) is skipped
+    and answered with ``added: false``.
+    """
+
+    line = body.get("line")
+    if not isinstance(line, str) or not line.strip():
+        raise HTTPException(400, "line must be a non-empty string")
+    line = line.strip()
+    if len(line) > PROFILE_POST_MAX_CHARS:
+        raise HTTPException(400, f"line must be at most {PROFILE_POST_MAX_CHARS} characters")
+    pipeline = _pipeline(request)
+    line_id = pipeline.db.add_profile_line(line, _now(pipeline))
+    if line_id is None:
+        return JSONResponse(status_code=200, content={"id": None, "added": False})
+    return JSONResponse(status_code=201, content={"id": line_id, "added": True})
+
+
 @router.delete("/api/profile/{line_id}")
 async def delete_profile_line(request: Request, line_id: str) -> dict:
     """Retire one learned line. 404 when it is already gone or never existed."""

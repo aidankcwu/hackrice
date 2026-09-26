@@ -101,6 +101,24 @@ def test_oldest_turn_folds_into_the_picture_then_the_rewritten_summary_absorbs_i
     assert thread.folded == 2
 
 
+def test_a_full_window_names_the_leaving_turn_and_a_summary_in_that_reply_folds_it():
+    thread = SessionThread(max_turns=2, image_turns=1)
+    thread.commit(_turn(0), summary="p0")
+    assert "Leaving the raw window" not in thread.picture_block()
+    thread.commit(_turn(1), summary="p1")
+    # Full: the next reply's commit pushes turn 0 out, so it is named now.
+    block = thread.picture_block()
+    assert "Leaving the raw window" in block and "16:00 change: turn 0" in block
+    # The model rewrites the picture in that same reply: turn 0 is folded,
+    # not left as a residue line (it used to be wiped unseen here).
+    thread.commit(_turn(2), summary="p2 with turn 0")
+    assert thread.aged == [] and thread.summary == "p2 with turn 0"
+    assert [t.t for t in thread.turns] == [T0 + 1, T0 + 2]
+    # A reply with no summary leaves the leaving turn waiting as residue.
+    thread.commit(_turn(3), summary=None)
+    assert thread.aged == ["16:01 change: turn 1"]
+
+
 def test_bind_resets_on_a_new_session_only():
     thread = SessionThread()
     thread.commit(_turn(0), summary="picture")
@@ -166,7 +184,9 @@ def test_thread_objective_is_appended_only_in_thread_mode_after_the_cached_prefi
     assert THREAD_OBJECTIVE not in plain and THREAD_OBJECTIVE in threaded
     # The objective stays first and byte-identical; the addendum follows it.
     assert threaded.startswith(plain.split("\n\n## Who you are working for")[0])
-    assert "ONE CONTINUING CONVERSATION" in threaded
+    # Structural, not textual: the threaded prompt is the plain one with the
+    # addendum inserted once, so either text can be rewritten freely.
+    assert threaded.replace(THREAD_OBJECTIVE, "", 1) == plain
 
 
 def test_voice_prompt_carries_the_clerks_picture_between_learned_and_job():

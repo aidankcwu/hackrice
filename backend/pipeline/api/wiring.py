@@ -663,7 +663,9 @@ def build_pipeline(settings: Settings, *,
     thread = (SessionThread(settings.thread_turns, settings.thread_image_turns)
               if settings.reasoner_thread and extras.decider is None else None)
     reasoner = Reasoner(db, frame_store, client, speech, settings,
-                        seven_day_summary=lambda: seven_day_summary(db, end_day),
+                        # SEEDED_CONTEXT=0: no callable, so the clerk reads NO_SEVEN_DAY.
+                        seven_day_summary=((lambda: seven_day_summary(db, end_day))
+                                           if settings.seeded_context else None),
                         parser=parser, questions=questions,
                         t1_deadline_s=settings.clerk_deadline_s, thread=thread,
                         **extras.as_kwargs())
@@ -721,15 +723,23 @@ def build_pipeline(settings: Settings, *,
     # startup says which were in effect, so a rehearsal log is never ambiguous.
     log.info("switches: %s", settings.switches_line())
     log.info("perception: %s", settings.perception_line())
-    gate = TriggerGate(default_triggers(timings, settings.demo_mode, feed=feed,
+    # SEEDED_CONTEXT=0: no feed for the triggers either, so the heart-rate
+    # trigger is not installed and the seeded spike cannot wake the clerk.
+    gate = TriggerGate(default_triggers(timings, settings.demo_mode,
+                                       feed=feed if settings.seeded_context else None,
                                        keyword_triggers=settings.keyword_triggers,
                                        cues=settings.cue_trigger,
+                                       # SCREEN_TRIGGER=0: no sustained-screen trigger.
+                                       screen=settings.screen_trigger,
                                        cue_bypass_gap=settings.fast_path,
                                        reads_watch=settings.capture.gate_reads_watch,
                                        watch_thresholds=settings.capture.thresholds(),
                                        novelty_enter=settings.capture.watch_novelty_enter),
                        timings, db,
-                       episodes, reasoner.try_escalate, settings.demo_mode, feed=feed,
+                       episodes, reasoner.try_escalate, settings.demo_mode,
+                       # SEEDED_CONTEXT=0: no feed here, so no "wearable now"
+                       # line on escalations.
+                       feed=feed if settings.seeded_context else None,
                        fast_path=reasoner.fast_path if settings.fast_path else None)
     reasoner.handler.gate = gate  # an armed `watch` re-escalates through `escalate_armed` (US-M05)
     if source == "sim":

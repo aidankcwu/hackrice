@@ -256,6 +256,16 @@ class Timings:
     #: window on top only loses the next prop (seen live: a cucumber dropped
     #: 1.7 s after the coffee conversation closed).
     conversation_cooldown_s: float
+    #: Shortest time between two spoken lines, whatever they are about. A
+    #: hand-off inside it is dropped with ``conversation_gap``. Measured from
+    #: the last line actually said, not the last hand-off. Added after a
+    #: replayed evening said "late snack, sleep" five times in three minutes,
+    #: once per item (yogurt, soda, cereal, a box): the repeat check keys on
+    #: the item, so it let every one through.
+    voice_min_gap_s: float
+    #: Most lines the voice agent may say in one session. Past it every
+    #: hand-off is dropped with ``conversation_cap``. No session, no cap.
+    voice_max_per_session: int
 
     # T1 reasoner (SPEC §5.4: drop on contention, never queue) -----------
     t1_max_concurrent: int
@@ -324,6 +334,8 @@ class Timings:
             conversation_max_questions=2,
             conversation_lifetime_s=90.0,
             conversation_cooldown_s=60.0,
+            voice_min_gap_s=120.0,
+            voice_max_per_session=12,
             t1_max_concurrent=1,
             watch_default_after_s=900.0,
             tick_interval_s=tick_interval_s,
@@ -386,6 +398,10 @@ class Timings:
             # the last close while that 2.2 s clip is still playing. If the
             # guard is not in, this must be 2.0.
             conversation_cooldown_s=0.0,
+            # A hard floor between lines and a ceiling per session, in code,
+            # because prompt rules alone let five lines out in three minutes.
+            voice_min_gap_s=90.0,
+            voice_max_per_session=6,
             t1_max_concurrent=1,
             watch_default_after_s=60.0,
             tick_interval_s=tick_interval_s,
@@ -477,6 +493,16 @@ class Settings(BaseSettings):
     #: VOICE_OPEN_SCHEMA=0: every voice turn uses the full schema again, not
     #: the short {utterance, kind} one on the opening turn.
     voice_open_schema: Switch = True
+    #: SEEDED_CONTEXT=0: the models are not told the seven-day summary or the
+    #: wearable-now line; both come from seeded data, which is another
+    #: person's history when a visitor is wearing the glasses. The seeded rows
+    #: stay in the database, so the dashboard and scoring still read them.
+    seeded_context: Switch = True
+    #: SCREEN_TRIGGER=0: the sustained-screen trigger is not installed, so the
+    #: clerk is never woken just because a screen has been in view for a
+    #: while. For a visitor demo at a desk, screen-time coaching reads as
+    #: nagging.
+    screen_trigger: Switch = True
     #: REASONER_THREAD=0: every clerk wake-up is a fresh prompt again. On, the
     #: session is one continuing conversation (pipeline.reasoner.thread): the
     #: clerk reads its own earlier reasoning, keeps a running picture it

@@ -12,6 +12,8 @@ per-wake-up goes in the user message.
 from __future__ import annotations
 
 __all__ = [
+    "COACH_PLAYBOOK",
+    "COACH_PLAYBOOK_HEADING",
     "DEFAULT_PERSONA",
     "LEARNED_HEADING",
     "LEARNED_MAX",
@@ -53,6 +55,57 @@ DEFAULT_PERSONA = (
 )
 
 NO_SEVEN_DAY = "No 7-day history available."
+
+#: Background a good coach carries into the room. Read by both the clerk
+#: (build_system_prompt) and the voice agent (build_voice_system_prompt), so
+#: the one who decides what is worth saying and the one who says it know the
+#: same things. Written as how things work and roughly when, never as lines to
+#: say: the earlier persona quoted its lines and the voice sounded canned.
+COACH_PLAYBOOK_HEADING = "## What a good coach knows"
+COACH_PLAYBOOK = """\
+Sleep and late meals. A real meal within about two hours of bedtime keeps the
+gut busy while the body is trying to settle, and cuts into the deep sleep of
+the first half of the night. A small snack matters far less than a full plate.
+
+Caffeine. Its half-life is roughly five to six hours, so half of an afternoon
+coffee is still in the system at dinner and a real share of it at bedtime. It
+can blunt deep sleep even in people who fall asleep fine. Tea, colas and
+energy drinks count too; in the evening, decaf is the easy swap.
+
+Sugar and sugary drinks. A sweet drink or snack on its own sends blood sugar
+up fast and down again an hour or two later, which is the slump and the next
+craving. A ten-minute walk soon after blunts the rise, and having it with
+protein or fibre, or after a meal, softens it.
+
+Screens and sitting. Long unbroken sitting is its own risk, whatever exercise
+someone does; getting up every thirty to forty-five minutes, even briefly,
+undoes much of it. A few seconds looking far away rests eyes locked
+at screen distance.
+
+Light. Bright light early in the day, outdoor light above all, anchors the
+body clock so sleep comes on time. Bright light late in the evening, a screen
+close to the face included, pushes that clock later.
+
+Supplements. Many that have good evidence build up in the body over weeks,
+so taking them daily matters far more than the time of day, and with food
+helps them go down. A big first dose is rarely needed.
+
+Alcohol. It helps people fall asleep but fragments the second half of the
+night and cuts REM sleep, the more so within about three hours of bed. A
+glass of water alongside and stopping earlier both help.
+
+Hydration. Thirst lags behind need. A long stretch with clearly nothing to
+drink is worth a nudge; a bottle sitting there is not news.
+
+Eating with people. Shared meals are good for mood and for eating more
+slowly. Worth noticing, never worth instructing.
+
+This is background to draw on when a moment fits, not a script and not a list
+of things to say. It attaches to what the wearer does -- drinking, eating,
+picking something up, sitting a long time, going outside -- never to an
+object merely being in view. Anything else you know about health works the
+same way, in your own words each time. What he has told you (bedtime,
+wake time, goals) in the learned lines decides which of it matters to him."""
 
 #: Appended to the objective in thread mode (pipeline.reasoner.thread), after
 #: it so the cached prefix is unchanged for every call of every session.
@@ -119,17 +172,20 @@ response may annotate and watch, or speak and log an insight.
                  what happens next.
   speak          Hand a topic to the voice agent, leaning towards a remark
                  rather than a question. You are NOT writing the sentence: the
-                 text is the topic and the reason in plain words -- "picked up
-                 a wine glass, ownership unknown", "third hour at the screen,
-                 no break since 13:00". The voice agent writes the words, in
+                 text is the topic and the reason in plain words -- "glass
+                 of wine an hour before he means to sleep; it breaks up the
+                 second half of the night", "stood up after two hours
+                 sitting". The voice agent writes the words, in
                  the persona's voice, and may decide a question is the better
                  shape. To stay silent, OMIT the action entirely. Never put
                  "nothing", an empty string, or JSON in the text.
-  ask            The same hand-off, leaning towards a question -- use it when
-                 the frames leave the what, the whose, or the how much
-                 genuinely unsettled and only the wearer can close the gap. The
-                 text is still a topic and a reason, not the question itself;
-                 answer_kind and fills describe the answer you are hoping for.
+  ask            The same hand-off, leaning towards a question -- use it only
+                 when the wearer's answer would change what is worth telling
+                 him, and only he can give it. Never to find out whether a
+                 thing is his or how much of it he has had, unless the persona
+                 explicitly asks for that. The text is still a topic and a
+                 reason, not the question itself; answer_kind and fills
+                 describe the answer you are hoping for.
                  The voice agent decides the wording, whether to ask at all,
                  and what to do with whatever comes back.
                  AT MOST ONE HAND-OFF PER WAKE-UP. The agent holds one
@@ -152,11 +208,17 @@ Rules that matter:
   HAND OFF AS THE PERSONA ASKS. The persona below sets how talkative the
   system is and what it talks about, and it wins over the default here. The
   default, when the persona is silent on it: speech interrupts a human being,
-  so reserve a hand-off for something time-sensitive and actionable right now
-  -- a caffeine cutoff about to be crossed, a third straight hour at a screen
-  -- and otherwise write. If the persona asks for commentary, suggestions, or
-  reminders about something specific, hand those off whenever the frames show
-  that thing.
+  so reserve a hand-off for a moment where you can attach a real point to
+  what the wearer just did: a known effect given the time or what came before
+  (caffeine late in the evening, a sweet drink on its own, a meal close to
+  bedtime, a long stretch without getting up), or one specific thing he could
+  do next that follows from it. Put that effect and action in the reason, so
+  the voice has something to say. If all you could say is what he is doing or
+  what is in front of him, write it and hand off nothing. A point already
+  said aloud today (the "said" lines in today's memory) is spent, whatever
+  the object: write the moment down instead. If the persona asks
+  for commentary, suggestions, or reminders about something specific, hand
+  those off whenever the frames show that thing.
   BE SPECIFIC AND SHORT. "Mixed plate, two colleagues, restaurant" beats "the
   user appears to be eating a meal in a social setting". One clause, no hedging
   preamble. Never invent detail the frames do not support; say what you saw.
@@ -177,18 +239,19 @@ Rules that matter:
   "Questions you already asked" block: it is the last few questions and what
   became of each. Handing off one of them again, or a rewording of it, is the
   one thing that makes the wearer stop answering.
-  ASK WHEN THE MOMENT IS NEW AND THE FRAMES LEAVE A GAP. A new eating,
-  drinking, or in-hand moment -- or a wake-up whose trigger name starts with
-  "change", meaning the scene, the activity, or the object in front of the
-  wearer just shifted -- may be a reason to ask ONE short question, when the
-  frames do not settle the what, the whose, the how much, or the is-it-yours.
-  Whether the wearer wants that is the persona's call. If the persona asks
-  for check-ins, do not hoard the budget: a moment that goes by unasked is
-  logged as a guess forever. If the persona names things it never wants to
-  hear about, or asks for quiet, a change in one of those things is written
-  down and nothing is handed off, however new it looks. What holds it down
-  otherwise is memory, not reluctance: ONE question per episode, and never
-  re-ask what is already settled -- today's memory lines and the learned
+  ASK WHEN THE MOMENT IS NEW AND THE ANSWER WOULD CHANGE THE ADVICE. A new
+  eating, drinking, or in-hand moment -- or a wake-up whose trigger name
+  starts with "change", meaning the scene, the activity, or the object in
+  front of the wearer just shifted -- is a reason to look closely, and only
+  rarely a reason to ask. A question is worth it when something only the
+  wearer knows (when he means to sleep, what he is about to do) would change
+  what you would tell him. Whose a thing is, whether he will eat or drink it,
+  and how many he has had are never asked unless the persona explicitly asks
+  for exactly that; what other people are eating or drinking is not his
+  business. If the persona names things it never wants to hear about, or
+  asks for quiet, a change in one of those things is written down and
+  nothing is handed off, however new it looks. Beyond that, memory holds it
+  down: ONE question per episode, and never re-ask what is already settled -- today's memory lines and the learned
   lines below tell you what you asked and what you were told, and if either
   already answers it, write the line and stay quiet. A wake-up whose trigger
   starts with "answer:" is the wearer replying to you: read it, write what it
@@ -203,14 +266,13 @@ Rules that matter:
   something the persona or the learned lines already say, and never remember a
   guess: one line, only when you actually learned it.
 
-  KEYWORD TRIGGERS. When the wake-up is a keyword trigger, first verify against
-  the frames and caption that it is really happening. If it is, hand it off as
-  an `ask` — the topic being what is in frame and who is holding it, and the
-  reason being what is unsettled (are they going to eat it, how many, is it
-  theirs) — and annotate. A keyword trigger is the one case where the exchange
-  is always worth it: the wearer set the keyword because they want it. If the
-  frames do not support it, annotate that it was a false match and hand off
-  nothing.
+  KEYWORD TRIGGERS. When the wake-up is a keyword trigger, first verify
+  against the frames and caption that it is really happening. If it is, hand
+  it off as an `ask` -- the topic being what is in frame, and the reason being
+  what the wearer set the keyword to find out -- and annotate. A keyword
+  trigger is the one case where the exchange is always worth it: the wearer
+  set the keyword because they want it. If the frames do not support it,
+  annotate that it was a false match and hand off nothing.
   CONFIDENCE IS HONEST. 0.9 when the frames are unambiguous, 0.4 when you are
   reading a blurry corner of one image.
 
@@ -267,7 +329,7 @@ def build_system_prompt(
     persona: str, seven_day: str, learned: list[str] | None = None,
     *, thread: bool = False,
 ) -> str:
-    """Assemble the system prompt: objective, persona, learned, 7-day.
+    """Assemble the system prompt: objective, persona, playbook, learned, 7-day.
 
     The order is for the prompt cache, not for reading. OpenAI caches the
     longest byte-identical prefix of a request once it passes 1024 tokens, and
@@ -306,6 +368,8 @@ def build_system_prompt(
         f"{objective}\n\n"
         "## Who you are working for\n"
         f"{persona.strip()}\n\n"
+        f"{COACH_PLAYBOOK_HEADING}\n"
+        f"{COACH_PLAYBOOK}\n\n"
         f"{learned_block}"
         "## 7-day summary (trends and baselines)\n"
         f"{seven_day.strip()}"

@@ -1292,13 +1292,17 @@ def default_triggers(
     keyword_triggers: list[dict] | None = None, *, cues: bool = True,
     cue_bypass_gap: bool = True, reads_watch: bool = False,
     watch_thresholds: Mapping[str, tuple[float, float]] | None = None,
-    novelty_enter: float = 0.35,
+    novelty_enter: float = 0.35, screen: bool = True,
 ) -> list[Trigger]:
     """Return shipped triggers in deterministic priority order.
 
     ``cues=False`` is the CUE_TRIGGER=0 kill switch: no one-tick ``cue``
     trigger, and ``change`` gets no moments, so it goes back to reporting food,
     drink and objects in the hand itself -- the pre-fast-path trigger set.
+
+    ``screen=False`` is the SCREEN_TRIGGER=0 kill switch: no
+    ``screen_sustained`` trigger, so a screen in view never wakes the clerk
+    on its own.
 
     ``cue_bypass_gap=False`` is what FAST_PATH=0 passes: the cue then goes
     into the clerk's queue, so it must respect the global escalation gap like
@@ -1384,6 +1388,8 @@ def default_triggers(
         ("medication_seen", _condition_hits(medication, 10.0, sighting_hits), "medication_sighting", "Medication was seen repeatedly"),
         ("stillness", _stillness(timings.stillness_window), None, "Low frame motion was sustained"),
     ]
+    if not screen:
+        specs = [spec for spec in specs if spec[0] != "screen_sustained"]
     # The cue trigger runs first and, in the demo, skips the global gap: a
     # coffee in the hand is answered on the tick it appears, whatever else woke
     # the clerk. It shares its moments with `change`, which then keeps out of

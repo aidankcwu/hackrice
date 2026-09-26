@@ -160,3 +160,78 @@ def test_wiring_passes_the_mouth_guard_switch_from_settings(tmp_path) -> None:
             assert pipeline.reasoner.conversation.mouth_guard is guard
         finally:
             pipeline.db.close()
+
+
+def test_seeded_context_is_on_by_default_and_turns_off_from_env(monkeypatch) -> None:
+    monkeypatch.delenv("SEEDED_CONTEXT", raising=False)
+    assert Settings(_env_file=None).seeded_context is True  # type: ignore[call-arg]
+    monkeypatch.setenv("SEEDED_CONTEXT", "0")
+    assert Settings(_env_file=None).seeded_context is False  # type: ignore[call-arg]
+
+
+def test_seeded_context_off_keeps_seeded_history_away_from_the_models(tmp_path) -> None:
+    """SEEDED_CONTEXT=0: the clerk reads NO_SEVEN_DAY and an escalation carries
+    no "wearable now" line, although the seeded rows are still in the
+    database. On (the default), both come through as before."""
+
+    from pipeline.reasoner import NO_SEVEN_DAY
+
+    for seeded in (True, False):
+        p = build_pipeline(
+            Settings(_env_file=None, db_path=tmp_path / f"seeded_{seeded}.db",  # type: ignore[call-arg]
+                     seeded_context=seeded),
+            source="sim", reasoner_mode="fake", speed=1, seed_db=True)
+        try:
+            t = p.source.start_t + 60.0
+            esc = Escalation(trigger="change", t=t, tick=tick(0))
+            _today, seven_day = p.reasoner._context(esc)
+            wearable = p.gate._wearable_lines(t)
+            if seeded:
+                assert seven_day != NO_SEVEN_DAY and seven_day.strip()
+                assert p.gate.feed is not None and wearable, wearable
+            else:
+                assert seven_day == NO_SEVEN_DAY
+                assert p.gate.feed is None and wearable == []
+            # The seeded rows themselves are untouched either way.
+            assert p.db.biometric_series("heart_rate", t - 600, t + 600)
+        finally:
+            p.db.close()
+
+
+def test_seeded_context_off_removes_the_heart_rate_trigger(tmp_path) -> None:
+    """The seeded series has a planted heart-rate spike; with SEEDED_CONTEXT=0
+    a visitor wearing no watch must not wake the clerk with it."""
+
+    for seeded in (True, False):
+        p = build_pipeline(
+            Settings(_env_file=None, db_path=tmp_path / f"hr_{seeded}.db",  # type: ignore[call-arg]
+                     seeded_context=seeded),
+            source="sim", reasoner_mode="fake", speed=1, seed_db=False)
+        try:
+            names = [t.name for t in p.gate.triggers]
+            assert ("biometric_anomaly" in names) is seeded, names
+        finally:
+            p.db.close()
+
+
+def test_screen_trigger_is_on_by_default_and_turns_off_from_env(monkeypatch) -> None:
+    monkeypatch.delenv("SCREEN_TRIGGER", raising=False)
+    assert Settings(_env_file=None).screen_trigger is True  # type: ignore[call-arg]
+    monkeypatch.setenv("SCREEN_TRIGGER", "0")
+    assert Settings(_env_file=None).screen_trigger is False  # type: ignore[call-arg]
+
+
+def test_screen_trigger_off_removes_the_sustained_screen_trigger(tmp_path) -> None:
+    """SCREEN_TRIGGER=0: a visitor at a desk is never coached about the screen
+    in front of them, because the trigger is not in the gate at all."""
+
+    for screen in (True, False):
+        p = build_pipeline(
+            Settings(_env_file=None, db_path=tmp_path / f"screen_{screen}.db",  # type: ignore[call-arg]
+                     screen_trigger=screen),
+            source="sim", reasoner_mode="fake", speed=1, seed_db=False)
+        try:
+            names = [t.name for t in p.gate.triggers]
+            assert ("screen_sustained" in names) is screen, names
+        finally:
+            p.db.close()

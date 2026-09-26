@@ -558,3 +558,36 @@ async def test_status_passes_watcher_and_labeler_through(tmp_path):
     assert capture["labeler_stale_after_s"] == 120.0
     assert "labeler_heartbeat_stale" in status["health"]["problems"]
     assert "ai_coverage_low" not in status["health"]["problems"]
+
+
+async def test_post_profile_adds_a_learned_line(tmp_path):
+    """The onboarding quiz posts answers as learned lines: added once, listed by
+    GET, duplicates ignored, blank or over-long lines refused."""
+
+    pipeline = build_pipeline(
+        Settings(db_path=tmp_path / "profile.db"),
+        source="sim", reasoner_mode="fake", speed=200, seed_db=False,
+    )
+    try:
+        async with client_for(create_app(pipeline)) as client:
+            added = await client.post("/api/profile",
+                                      json={"line": "  Usually in bed by 11:30 pm "})
+            assert added.status_code == 201
+            body = added.json()
+            assert body["added"] is True and body["id"].startswith("p_")
+
+            rows = (await client.get("/api/profile")).json()
+            assert [(r["id"], r["line"]) for r in rows] == [
+                (body["id"], "Usually in bed by 11:30 pm")]
+            assert rows[0]["source_decision_id"] is None
+
+            again = await client.post("/api/profile",
+                                      json={"line": "usually in bed by 11:30 PM"})
+            assert again.status_code == 200
+            assert again.json() == {"id": None, "added": False}
+
+            for bad in ({}, {"line": 7}, {"line": "   "}, {"line": "x" * 201}):
+                assert (await client.post("/api/profile", json=bad)).status_code == 400, bad
+            assert len((await client.get("/api/profile")).json()) == 1
+    finally:
+        pipeline.db.close()
