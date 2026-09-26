@@ -124,8 +124,11 @@ def test_the_gate_hands_persona_cues_to_the_reasoners_fast_path(tmp_path):
         assert pipeline.reasoner.conversation is pipeline.conversation
         assert pipeline.gate.triggers[0].name == "cue", "cues are looked at first"
         assert pipeline.gate.triggers[0].bypass_gap
-        # The clerk lets go of a stalled call just after its client does (8 s).
-        assert pipeline.reasoner.t1_deadline_s == 9.0
+        # The clerk's deadline follows the settings: 20 s with the session
+        # thread on (the default), 9 s with REASONER_THREAD=0, as before.
+        assert pipeline.reasoner.t1_deadline_s == 20.0
+        assert Settings(db_path=tmp_path / "x.db", reasoner_thread=False).clerk_deadline_s == 9.0
+        assert pipeline.reasoner.thread is not None
     finally:
         pipeline.db.close()
 

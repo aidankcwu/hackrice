@@ -459,6 +459,8 @@ class Decision(BaseModel):
     path: str | None = None
     #: Names of the writers that ran for this decision.
     writers: list[str] = Field(default_factory=list)
+    #: The clerk's visible reasoning for this wake-up (reasoner.thread).
+    thinking: str = ""
 
 
 class Insight(BaseModel):

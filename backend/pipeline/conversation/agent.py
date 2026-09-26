@@ -980,7 +980,9 @@ class ConversationAgent:
                        if row.get("line")]
         except Exception:  # pragma: no cover - defensive
             log.exception("could not read the learned lines; sending none")
-        return build_voice_system_prompt(persona, learned)
+        thread = getattr(self.reasoner, "thread", None)
+        picture = getattr(thread, "summary", "") if thread is not None else ""
+        return build_voice_system_prompt(persona, learned, picture=picture)
 
     def _opening_content(
         self, conv: dict[str, Any], mode: str, esc: Escalation | None

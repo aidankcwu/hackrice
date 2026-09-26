@@ -20,6 +20,8 @@ real pixels at exactly the moments that matter.
                          it would be live. Use 1 for the final check.
     --no-cue-trigger     CUE_TRIGGER=0: no one-tick persona cues
     --no-fast-path       FAST_PATH=0: cues wake the clerk instead of the mouth
+    --no-thread          REASONER_THREAD=0: fresh prompt per wake-up (the old clerk)
+    --model NAME         T1_MODEL for this run (e.g. gpt-5.4)
     --persona FILE       PERSONA_FILE: replaces the built-in persona
     --env-file FILE      where OPENAI_API_KEY lives (e.g. ../deploy/.env)
     --expect FILE        JSON: {"max_spoken": 2, "forbid": ["phone", ...],
@@ -155,11 +157,15 @@ def shift(tick: Tick, delta: float) -> Tick:
 
 async def run(args: argparse.Namespace, rec: dict[str, Any], db_path: Path) -> dict[str, Any]:
     env_file = str(args.env_file) if args.env_file else ".env"
+    overrides: dict[str, Any] = {}
+    if args.model:
+        overrides["t1_model"] = args.model
     settings = Settings(
         _env_file=env_file,
         demo_mode=True, db_path=db_path, speech_mode="text",
         cue_trigger=args.cue_trigger, fast_path=args.fast_path,
-        persona_file=args.persona,
+        reasoner_thread=args.thread, persona_file=args.persona,
+        **overrides,
     )
     if args.reasoner == "openai" and not settings.openai_api_key:
         raise SystemExit(f"OPENAI_API_KEY not found in {env_file}; pass --env-file or use --reasoner fake")
@@ -201,16 +207,18 @@ async def run(args: argparse.Namespace, rec: dict[str, Any], db_path: Path) -> d
     said.sort()
 
     decisions = [dict(r) for r in con.execute(
-        "select t, trigger, actions, spoke, drop_reason, interpretation"
-        " from decisions order by t")]
+        "select t, trigger, actions, spoke, drop_reason, interpretation, thinking,"
+        " latency_ms from decisions order by t")]
     lines = [dict(r) for r in con.execute("select t, line from today_summary order by t")]
+    pictures = [dict(r) for r in con.execute(
+        "select session_id, summary, updated_t from thread_summary order by updated_t")]
     con.close()
     return {
         "delta": delta, "said": said, "decisions": decisions, "lines": lines,
         "n_ticks": len(ticks), "span_s": span,
         "ai_cov": sum(1 for t in ticks if t.ai is not None) / max(1, len(ticks)),
         "gate": gate_stats, "conversation": conv_stats, "reasoner": reasoner_stats,
-        "persona_override": persona_override,
+        "persona_override": persona_override, "pictures": pictures,
         "n_convs": len(conv_ids),
     }
 
@@ -250,8 +258,12 @@ def report(args: argparse.Namespace, rec: dict[str, Any], res: dict[str, Any],
     p.append(f"- ticks {res['n_ticks']}, {res['span_s']:.0f} s, ai coverage {res['ai_cov']:.0%}, "
              f"evidence frames {len(rec['frames'])}")
     p.append(f"- speed x{args.speed}, reasoner {args.reasoner}, cue_trigger {args.cue_trigger}, "
-             f"fast_path {args.fast_path}, persona override {res['persona_override']}"
+             f"fast_path {args.fast_path}, thread {args.thread}, persona override {res['persona_override']}"
              + (f" ({args.persona})" if args.persona else ""))
+    lat = [d["latency_ms"] for d in res["decisions"] if d.get("latency_ms")]
+    if lat:
+        lat.sort()
+        p.append(f"- clerk latency ms: median {lat[len(lat)//2]}, max {lat[-1]}, n {len(lat)}")
     p.append(f"- clock shift {res['delta']:+.0f} s (times below are the original run's)\n")
 
     p.append(f"## Before: what the original run said ({len(rec['said'])})\n")
@@ -271,17 +283,23 @@ def report(args: argparse.Namespace, rec: dict[str, Any], res: dict[str, Any],
             p.append(f"- {'ok  ' if good else 'FAIL'} {label}")
         p.append("")
 
+    if res.get("pictures"):
+        p.append("## The clerk's running picture at the end\n")
+        for row in res["pictures"]:
+            p.append(row["summary"].strip())
+            p.append("")
     p.append(f"## Decisions ({len(res['decisions'])})\n")
-    p.append("| time | trigger | actions | spoke | dropped | interpretation |")
-    p.append("|---|---|---|---|---|---|")
+    p.append("| time | trigger | actions | spoke | dropped | interpretation | thinking |")
+    p.append("|---|---|---|---|---|---|---|")
     for d in res["decisions"]:
         try:
             kinds = ",".join(a.get("type", "?") for a in json.loads(d["actions"] or "[]"))
         except Exception:
             kinds = "?"
         interp = (d.get("interpretation") or "").replace("|", "/")[:70]
+        think = (d.get("thinking") or "").replace("|", "/").replace("\n", " ")[:160]
         p.append(f"| {hms(d['t'] - res['delta'])} | {d['trigger']} | {kinds} | "
-                 f"{'yes' if d['spoke'] else ''} | {d.get('drop_reason') or ''} | {interp} |")
+                 f"{'yes' if d['spoke'] else ''} | {d.get('drop_reason') or ''} | {interp} | {think} |")
     p.append("")
     p.append(f"## Log lines the clerk wrote ({len(res['lines'])})\n")
     for line in res["lines"]:
@@ -305,6 +323,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--reasoner", choices=["openai", "fake"], default="openai")
     ap.add_argument("--no-cue-trigger", dest="cue_trigger", action="store_false", default=True)
     ap.add_argument("--no-fast-path", dest="fast_path", action="store_false", default=True)
+    ap.add_argument("--no-thread", dest="thread", action="store_false", default=True,
+                    help="REASONER_THREAD=0: a fresh prompt per wake-up, as before")
+    ap.add_argument("--model", help="T1_MODEL override, e.g. gpt-5.4")
     ap.add_argument("--persona", type=Path, help="persona text file (PERSONA_FILE)")
     ap.add_argument("--env-file", type=Path,
                     help="env file with the model keys (default backend/.env); never printed")

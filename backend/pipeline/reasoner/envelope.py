@@ -34,6 +34,8 @@ __all__ = [
     "select_frames",
     "tick_table",
     "frame_label",
+    "trigger_item",
+    "moment_items",
     "build_envelope",
 ]
 
@@ -330,48 +332,31 @@ def _data_url(jpeg: bytes) -> str:
 # -- the envelope ---------------------------------------------------------
 
 
-def build_envelope(
-    esc: Escalation,
-    frames: dict[str, bytes],
-    today_lines: list[TodaySummaryLine],
-    seven_day: str,
-    persona: str,
-    k: int = CLERK_FRAMES,
-    learned: list[str] | None = None,
-    recent_questions: list[Any] | None = None,
-    said: str | None = None,
-    constant: str | None = None,
+def trigger_item(esc: Escalation) -> dict[str, Any]:
+    """The first line of any wake-up: which trigger, when, and why."""
+
+    return {
+        "type": "input_text",
+        "text": (
+            f"Trigger: {esc.trigger} at {local_time(esc.t)}"
+            + (f" — {esc.reason}" if esc.reason else "")
+        ),
+    }
+
+
+def moment_items(
+    esc: Escalation, frames: dict[str, bytes], k: int = CLERK_FRAMES,
 ) -> list[dict[str, Any]]:
-    """Build the Responses API ``input`` for one escalation.
+    """The moment itself: tick table, extra lines, labelled frames, the ask.
 
-    ``said`` and ``constant`` are the session blocks from
-    :mod:`session_context`: what was already spoken aloud, and what has been in
-    view for most of the session. They sit right after today's lines, before
-    the tick table, so the model reads "already said" and "furniture" before
-    it reads the moment.
-
-    ``frames`` is the durable copy already taken at admission, keyed by
-    ``frame_ref``; a ref missing from it (expired before the copy) simply drops
-    its image and label. Selection is deterministic, so re-running
-    :func:`select_frames` here yields exactly the ticks the caller copied.
-
-    ``learned`` is the active profile lines, oldest first; it joins the system
-    prompt rather than the user turn because it is stable across a day, like
-    the persona it extends.
+    Shared by the one-shot envelope and the session thread
+    (:mod:`pipeline.reasoner.thread`), whose per-turn content is exactly this
+    behind the trigger line -- the thread carries the memory the one-shot
+    envelope has to restate in blocks.
     """
 
     origin = esc.t
     content: list[dict[str, Any]] = [
-        {
-            "type": "input_text",
-            "text": (
-                f"Trigger: {esc.trigger} at {local_time(esc.t)}"
-                + (f" — {esc.reason}" if esc.reason else "")
-            ),
-        },
-        {"type": "input_text", "text": _today_block(today_lines)},
-        *({"type": "input_text", "text": block} for block in (said, constant) if block),
-        {"type": "input_text", "text": _questions_block(recent_questions or [])},
         {
             "type": "input_text",
             "text": (
@@ -408,6 +393,46 @@ def build_envelope(
         )
 
     content.append({"type": "input_text", "text": "Decide the actions."})
+    return content
+
+
+def build_envelope(
+    esc: Escalation,
+    frames: dict[str, bytes],
+    today_lines: list[TodaySummaryLine],
+    seven_day: str,
+    persona: str,
+    k: int = CLERK_FRAMES,
+    learned: list[str] | None = None,
+    recent_questions: list[Any] | None = None,
+    said: str | None = None,
+    constant: str | None = None,
+) -> list[dict[str, Any]]:
+    """Build the Responses API ``input`` for one escalation.
+
+    ``said`` and ``constant`` are the session blocks from
+    :mod:`session_context`: what was already spoken aloud, and what has been in
+    view for most of the session. They sit right after today's lines, before
+    the tick table, so the model reads "already said" and "furniture" before
+    it reads the moment.
+
+    ``frames`` is the durable copy already taken at admission, keyed by
+    ``frame_ref``; a ref missing from it (expired before the copy) simply drops
+    its image and label. Selection is deterministic, so re-running
+    :func:`select_frames` here yields exactly the ticks the caller copied.
+
+    ``learned`` is the active profile lines, oldest first; it joins the system
+    prompt rather than the user turn because it is stable across a day, like
+    the persona it extends.
+    """
+
+    content: list[dict[str, Any]] = [
+        trigger_item(esc),
+        {"type": "input_text", "text": _today_block(today_lines)},
+        *({"type": "input_text", "text": block} for block in (said, constant) if block),
+        {"type": "input_text", "text": _questions_block(recent_questions or [])},
+        *moment_items(esc, frames, k=k),
+    ]
 
     return [
         {

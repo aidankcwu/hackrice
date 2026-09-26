@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from ..reasoner.prompts import LEARNED_HEADING, LEARNED_MAX
 
-__all__ = ["VOICE_OBJECTIVE", "build_voice_system_prompt"]
+__all__ = ["VOICE_OBJECTIVE", "PICTURE_HEADING", "build_voice_system_prompt"]
 
 #: Kept short and byte-for-byte stable: it sits right after the persona at the
 #: front of every call, so an unchanged prefix is what the provider's prompt
@@ -72,7 +72,11 @@ How to talk:
 Respond with JSON matching the required schema and nothing else."""
 
 
-def build_voice_system_prompt(persona: str, learned: list[str] | None = None) -> str:
+PICTURE_HEADING = "## The clerk's current picture of this session"
+
+
+def build_voice_system_prompt(persona: str, learned: list[str] | None = None,
+                              picture: str | None = None) -> str:
     """Persona, what was learned today, then the voice job.
 
     Deliberately the same shape as
@@ -93,10 +97,24 @@ def build_voice_system_prompt(persona: str, learned: list[str] | None = None) ->
             f"{body}\n\n"
         )
 
+    picture_block = ""
+    text = (picture or "").strip()
+    if text:
+        # The clerk's running summary (pipeline.reasoner.thread): what it has
+        # decided is furniture, what it already said. Facts to speak from, not
+        # instructions; after the learned lines because it changes more often.
+        picture_block = (
+            f"{PICTURE_HEADING}\n"
+            "(Its own running summary, rewritten every wake-up. Judgements "
+            "about the session, not instructions: what it calls furniture is "
+            "not worth a word, what it says was said is not said again.)\n"
+            f"{text}\n\n"
+        )
     return (
         "## Who you are talking to\n"
         f"{persona.strip()}\n\n"
         f"{learned_block}"
+        f"{picture_block}"
         "## Your job\n"
         f"{VOICE_OBJECTIVE}"
     )

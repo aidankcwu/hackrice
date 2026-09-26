@@ -29,6 +29,7 @@ from ..protocol.adherence import AdherenceMatcher
 from ..reasoner.client import make_answer_parser, make_client
 from ..reasoner.factory import build_reasoner_extras
 from ..reasoner.reasoner import Reasoner
+from ..reasoner.thread import SessionThread
 from ..scoring.scorer import Scorer
 from ..seed.generate import resting_hr_for, seed_database, seven_day_summary
 from ..seed.biometrics import seed_biometric_series
@@ -655,9 +656,17 @@ def build_pipeline(settings: Settings, *,
         has_transport=has_transport, parser=parser,
         now_fn=lambda: clock.wall_to_tick(time.time()),
     )
+    # REASONER_THREAD=1 (default): the session is one continuing conversation
+    # (pipeline.reasoner.thread). Built here, not in the Reasoner, so a test
+    # that constructs a Reasoner directly gets the one-shot envelope unless
+    # it asks for the thread.
+    thread = (SessionThread(settings.thread_turns, settings.thread_image_turns)
+              if settings.reasoner_thread and extras.decider is None else None)
     reasoner = Reasoner(db, frame_store, client, speech, settings,
                         seven_day_summary=lambda: seven_day_summary(db, end_day),
-                        parser=parser, questions=questions, **extras.as_kwargs())
+                        parser=parser, questions=questions,
+                        t1_deadline_s=settings.clerk_deadline_s, thread=thread,
+                        **extras.as_kwargs())
     adherence = AdherenceMatcher(db, speech)
     reasoner.on_evidence = adherence.on_evidence
     # The third agent (docs/CONVERSATION_DESIGN.md). Built after the reasoner

@@ -35,10 +35,12 @@ from ..models import Decision, Escalation, PendingQuestion
 from .client import AnswerParser, ReasonerClient
 from .decider import Decider, Verdict, build_state
 from .decider_settings import DeciderSettings
-from .envelope import CLERK_FRAMES, build_envelope, local_time, select_frames, RECENT_QUESTIONS
-from .session_context import constant_block, said_block
+from .envelope import (CLERK_FRAMES, build_envelope, local_time, moment_items,
+                       select_frames, trigger_item, RECENT_QUESTIONS, _questions_block)
+from .session_context import constant_block, said_block, said_this_session
 from .evidence import EvidenceStore
-from .prompts import DEFAULT_PERSONA, LEARNED_MAX, NO_SEVEN_DAY
+from .prompts import DEFAULT_PERSONA, LEARNED_MAX, NO_SEVEN_DAY, build_system_prompt
+from .thread import SessionThread, Turn, render_reply, residue_line
 from .schema import (
     ActAction,
     AnnotateAction,
@@ -152,6 +154,7 @@ class Reasoner:
         decider: Decider | None = None,
         writers: Writers | None = None,
         decider_settings: DeciderSettings | None = None,
+        thread: SessionThread | None = None,
     ) -> None:
         # Cadence-aware AI freshness for the envelope (SPEC §12.2, S9).
         try:
@@ -181,6 +184,11 @@ class Reasoner:
             decider_settings if decider_settings is not None
             else (DeciderSettings() if decider is not None else None)
         )
+
+        #: The session as one continuing conversation (pipeline.reasoner.thread).
+        #: ``None`` is the one-shot envelope per wake-up, as before. Wiring
+        #: builds one when REASONER_THREAD is on and no decider is configured.
+        self.thread = thread
 
         self.evidence = EvidenceStore(db)
         #: Called as ``(escalation, decision_id, frames)`` right after an
@@ -579,6 +587,10 @@ class Reasoner:
     def bump_epoch(self) -> int:
         """Invalidate in-flight work from the previous wearer."""
         self.epoch += 1
+        if self.thread is not None:
+            # The next wake-up binds to the new session and starts its own
+            # conversation; the previous wearer's picture must not carry over.
+            self.thread.reset()
         return self.epoch
 
     async def _run(
@@ -657,6 +669,7 @@ class Reasoner:
             interpretation=norm.interpretation,
             confidence=norm.confidence,
             actions=[a.model_dump() for a in norm.actions] + chained,
+            thinking=norm.thinking,
             spoke=False,
             dropped=False,
             latency_ms=int(latency_ms),
@@ -893,7 +906,10 @@ class Reasoner:
     ) -> tuple[T1Response, dict[str, Any], str, list[str]] | None:
         """The one slow clerk call, bounded by the T1 deadline."""
 
-        messages = self._envelope(esc, frames, today=today, seven_day=seven_day)
+        if self.thread is not None:
+            messages = self._thread_messages(esc, frames, seven_day=seven_day)
+        else:
+            messages = self._envelope(esc, frames, today=today, seven_day=seven_day)
         try:
             resp, meta = await asyncio.wait_for(
                 self.client.complete(messages), timeout=self.t1_deadline_s
@@ -911,7 +927,111 @@ class Reasoner:
                 esc, decision_id, f"t1_error:{type(exc).__name__}", started
             )
             return None
+        if self.thread is not None:
+            self._thread_commit(esc, messages[-1]["content"], resp)
         return resp, meta, path, []
+
+    # -- the session thread ---------------------------------------------------
+
+    def _thread_messages(
+        self, esc: Escalation, frames: dict[str, bytes], *, seven_day: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """This wake-up appended to the session's conversation.
+
+        Binds the thread to the open session (a new session starts a new
+        conversation; the same session after a restart is rebuilt from the
+        decisions table and the persisted picture), then builds the turn: the
+        trigger, what the voice agent said since the last turn, the open
+        questions, and the moment itself. Today's notes, the "said" and
+        "constant" blocks of the one-shot envelope are not restated: the
+        thread is that memory.
+        """
+
+        thread = self.thread
+        assert thread is not None
+        session_id = self._session_id()
+        if thread.bind(session_id) or thread.empty:
+            self._thread_rebuild(session_id, esc.t)
+        if seven_day is None:
+            _today, seven_day = self._context(esc)
+        system = build_system_prompt(
+            self.current_persona(), seven_day, self.learned_lines(), thread=True)
+        try:
+            recent_questions = self.db.list_questions(limit=RECENT_QUESTIONS)
+        except Exception:  # pragma: no cover - defensive
+            log.exception("could not read recent questions; sending none")
+            recent_questions = []
+        content: list[dict[str, Any]] = [
+            trigger_item(esc),
+            {"type": "input_text", "text": self._since_last_turn(esc.t)},
+            {"type": "input_text", "text": _questions_block(recent_questions or [])},
+            *moment_items(esc, frames, k=FRAMES_PER_ESCALATION),
+        ]
+        return thread.messages(system, content)
+
+    def _since_last_turn(self, now: float) -> str:
+        """What the voice agent actually said since the previous turn: the
+        fate of the last hand-off, which the model cannot otherwise see."""
+
+        thread = self.thread
+        assert thread is not None
+        last_t = thread.turns[-1].t if thread.turns else None
+        try:
+            said = said_this_session(self.db, now)
+        except Exception:  # pragma: no cover - defensive
+            said = []
+        recent = [(t, kind, text) for t, kind, text in said
+                  if last_t is None or t > last_t]
+        if not recent:
+            return "Spoken aloud since your last wake-up: nothing."
+        body = "\n".join(
+            f"  {local_time(t, '%H:%M:%S')} {'asked' if kind == 'question' else 'said'}: \"{text}\""
+            for t, kind, text in recent[-6:]
+        )
+        return "Spoken aloud since your last wake-up (the voice agent's words):\n" + body
+
+    def _thread_commit(self, esc: Escalation, content: list[dict[str, Any]], resp: Any) -> None:
+        thread = self.thread
+        assert thread is not None
+        turn = Turn(
+            t=esc.t, user=content, assistant=render_reply(resp),
+            residue=residue_line(local_time(esc.t, "%H:%M"), esc.trigger, resp),
+        )
+        thread.commit(turn, getattr(resp, "summary", None))
+        if thread.session_id and thread.summary:
+            try:
+                self.db.set_thread_summary(thread.session_id, thread.summary, esc.t)
+            except Exception:  # pragma: no cover - the picture must never cost a wake-up
+                log.exception("could not persist the running picture")
+
+    def _session_id(self) -> str | None:
+        try:
+            session = self.db.current_session()
+        except Exception:  # pragma: no cover - defensive
+            log.debug("could not read the current session", exc_info=True)
+            return None
+        return session.id if session is not None else None
+
+    def _thread_rebuild(self, session_id: str | None, now: float) -> None:
+        """Refill an empty thread from what this session already decided."""
+
+        thread = self.thread
+        assert thread is not None
+        if session_id is None:
+            return
+        try:
+            session = self.db.get_session(session_id)
+            if session is None:
+                return
+            decisions = self.db.decisions_between(session.started_t, now)
+            summary = self.db.get_thread_summary(session_id)
+        except Exception:  # pragma: no cover - defensive
+            log.exception("could not rebuild the session thread; starting empty")
+            return
+        n = thread.rebuild(decisions, summary, lambda t: local_time(t, "%H:%M"))
+        if n or summary:
+            log.info("session thread rebuilt for %s: %d turns, picture %d chars",
+                     session_id, n, len(thread.summary))
 
     @staticmethod
     def _urgency(score: float) -> str:
@@ -1206,6 +1326,7 @@ class Reasoner:
             "frames_missing": self.evidence.missing,
             "model": getattr(self.client, "model", ""),
             "deadline_s": self.t1_deadline_s,
+            "thread": self.thread.stats() if self.thread is not None else None,
             "last_latency_ms": self.last_latency_ms,
             "last_decision_t": self.last_decision_t,
             **{f"speech_{k}": v for k, v in self.speech.stats().items()},

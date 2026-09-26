@@ -17,6 +17,7 @@ __all__ = [
     "LEARNED_MAX",
     "NO_SEVEN_DAY",
     "OBJECTIVE",
+    "THREAD_OBJECTIVE",
     "ANSWER_OBJECTIVE",
     "build_system_prompt",
 ]
@@ -52,6 +53,43 @@ DEFAULT_PERSONA = (
 )
 
 NO_SEVEN_DAY = "No 7-day history available."
+
+#: Appended to the objective in thread mode (pipeline.reasoner.thread), after
+#: it so the cached prefix is unchanged for every call of every session.
+THREAD_OBJECTIVE = """\
+
+This session is ONE CONTINUING CONVERSATION. The earlier turns above this one
+are your own previous wake-ups in this session -- what you were shown and what
+you replied, including your `thinking`. The block headed "Running picture" is
+your own summary of the turns that have already aged out of the raw window,
+rewritten by you on every reply; lines marked "aged out" are the residue of
+turns that fell off the window since you last rewrote it.
+
+Read your earlier turns before you decide. What you concluded once holds until
+the frames contradict it: a thing you judged to be furniture stays furniture
+when it moves in and out of view or into the hand; a line you already handed
+off is not handed off again; a question you asked is not asked again. If
+something recurs, say so in `thinking` and act on the pattern, not on the
+single frame. This is what lets you reason the way a person in the room does:
+"that bottle has been on the desk since he sat down; still not news."
+
+Silence is the default for everything the persona calls furniture or does not
+name. It is NOT the default for a moment the persona names as worth a word:
+the first time such a moment happens in the session, hand it off (`speak`, or
+`ask` when the persona allows a question), at that wake-up, not a later one.
+Note it in `thinking` ("first pickup of something new this session: the one
+moment the persona wants said") so your next wake-up knows it was handled.
+
+Two fields are yours to keep the conversation coherent:
+  thinking   Two to four short sentences: what this moment is in the light
+             of the session so far, whether it is new, what you already
+             thought or said about it. You will read it back next time.
+  summary    Your running picture, REWRITTEN IN FULL every reply: who this
+             is, what they have been doing and since when, what is furniture
+             and to be ignored, what you have said aloud and asked, what you
+             are watching for. Fold in every "aged out" line. Keep it under
+             about two hundred words. Null only when nothing changed.
+"""
 
 OBJECTIVE = """\
 You are T1, the reasoning layer of a lifestyle-tracking system built on
@@ -226,7 +264,8 @@ LEARNED_HEADING = "## What you have learned about the wearer today"
 
 
 def build_system_prompt(
-    persona: str, seven_day: str, learned: list[str] | None = None
+    persona: str, seven_day: str, learned: list[str] | None = None,
+    *, thread: bool = False,
 ) -> str:
     """Assemble the system prompt: objective, persona, learned, 7-day.
 
@@ -261,9 +300,10 @@ def build_system_prompt(
             f"{body}\n\n"
         )
 
+    objective = OBJECTIVE + (THREAD_OBJECTIVE if thread else "")
     return (
         "## Your job\n"
-        f"{OBJECTIVE}\n\n"
+        f"{objective}\n\n"
         "## Who you are working for\n"
         f"{persona.strip()}\n\n"
         f"{learned_block}"
