@@ -443,12 +443,15 @@ final class AppState {
             return
         }
         // Token to the Keychain, tokenless endpoint to UserDefaults — never the token.
-        ServerURLStore.persist(parsed, defaults: .standard, tokenStore: tokenStore)
+        guard ServerURLStore.persist(parsed, defaults: .standard, tokenStore: tokenStore) else {
+            lastError = "Zeroist could not save this invite securely. Restart the phone, then paste the link again."
+            return
+        }
         serverURL = ""                       // never round-trip the token into the paste box
         endpointLabel = parsed.endpointLabel
         server = parsed
         api.configure(.live(parsed))
-        glue.configure(serverURL: trimmed)   // existing seam: MacLink still gets the token
+        glue.configure(serverURL: parsed.socketURL.absoluteString) // canonical link, token included
         // MacLink just wrote the token to its own key as a side effect; scrub it back.
         ServerURLStore.scrubLegacyKey(tokenlessURLString: parsed.tokenlessURLString, defaults: .standard)
         await testServer()

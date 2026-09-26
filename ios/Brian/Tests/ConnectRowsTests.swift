@@ -117,7 +117,9 @@ struct ConnectRowsTests {
         #expect(!ServerURL.isInviteLink("ws://10.0.0.5:8010/ws/glasses"))
         #expect(!ServerURL.isInviteLink("wss://glasses.example.com/t/alice/ws/glasses"))
         #expect(!ServerURL.isInviteLink("wss://glasses.example.com/t/alice/ws/glasses?token="))
-        #expect(!ServerURL.isInviteLink("https://glasses.example.com/t/alice/ws/glasses?token=abc"))
+        #expect(ServerURL.isInviteLink("https://glasses.example.com/t/alice/ws/glasses?token=abc"))
+        #expect(ServerURL.isInviteLink("Open https://glasses.example.com/t/alice/app?token=abc to begin"))
+        #expect(ServerURL.isInviteLink("https://glasses.example.com/t/alice/dashboard/day?token=abc"))
         #expect(!ServerURL.isInviteLink("buy milk"))
     }
 }

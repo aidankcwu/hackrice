@@ -89,8 +89,7 @@ extension ServerURL {
     /// A hosted invite link as testers receive it: wss://DOMAIN/…/ws/glasses?token=T.
     /// The clipboard offer on Connect only proposes strings that pass this.
     static func isInviteLink(_ raw: String) -> Bool {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.lowercased().hasPrefix("wss://"), let parsed = ServerURL(trimmed) else { return false }
+        guard let parsed = ServerURL(raw), parsed.secure else { return false }
         return parsed.token != nil && parsed.socketURL.path.hasSuffix(socketPath)
     }
 }
