@@ -25,6 +25,7 @@ struct HeaderState: Equatable {
         var status: ConnectionStatus
         var watching: Bool
         var canStart: Bool
+        var starting: Bool = false
     }
 
     static func derive(_ input: Inputs) -> HeaderState {
@@ -49,8 +50,8 @@ struct HeaderState: Equatable {
             glassesActive: active,
             glassesLabel: label,
             status: input.status,
-            primaryTitle: input.watching ? "Stop" : "Start watching",
-            primaryEnabled: input.watching || input.canStart,
+            primaryTitle: input.watching ? "Stop" : (input.starting ? "Starting…" : "Start watching"),
+            primaryEnabled: input.watching || (!input.starting && input.canStart),
             previewEnabled: connected)
     }
 }

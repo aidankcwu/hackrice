@@ -89,6 +89,17 @@ struct ConnectRowsTests {
         #expect(rows(input).stream == ConnectRow(level: .amber, text: "Starting…"))
         input.stats.secondsSinceLastFrame = 25
         #expect(rows(input).stream == ConnectRow(level: .amber, text: "No frames for 25 s"))
+        input = healthy()
+        input.glasses = .registered
+        #expect(rows(input).stream == ConnectRow(level: .amber, text: "Glasses not streaming"))
+    }
+
+    @Test func startingDisablesStartAndLabelsTheStream() {
+        var input = healthy()
+        input.watching = false
+        let result = ConnectRows.derive(input, checking: false, registering: false, starting: true)
+        #expect(!result.canStart)
+        #expect(result.stream == ConnectRow(level: .amber, text: "Starting…"))
     }
 
     @Test func startNeedsReachableLinkAndRegisteredGlasses() {
@@ -114,12 +125,12 @@ struct ConnectRowsTests {
     @Test func inviteLinkDetection() {
         #expect(ServerURL.isInviteLink("wss://glasses.example.com/t/alice/ws/glasses?token=abc123"))
         #expect(ServerURL.isInviteLink("  wss://glasses.example.com/ws/glasses?token=abc\n"))
+        #expect(ServerURL.isInviteLink("Open https://glasses.example.com/t/alice/app?token=abc to begin"))
+        #expect(ServerURL.isInviteLink("https://glasses.example.com/t/alice/dashboard/day?token=abc"))
         #expect(!ServerURL.isInviteLink("ws://10.0.0.5:8010/ws/glasses"))
         #expect(!ServerURL.isInviteLink("wss://glasses.example.com/t/alice/ws/glasses"))
         #expect(!ServerURL.isInviteLink("wss://glasses.example.com/t/alice/ws/glasses?token="))
         #expect(ServerURL.isInviteLink("https://glasses.example.com/t/alice/ws/glasses?token=abc"))
-        #expect(ServerURL.isInviteLink("Open https://glasses.example.com/t/alice/app?token=abc to begin"))
-        #expect(ServerURL.isInviteLink("https://glasses.example.com/t/alice/dashboard/day?token=abc"))
         #expect(!ServerURL.isInviteLink("buy milk"))
     }
 }

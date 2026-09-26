@@ -21,12 +21,13 @@ struct ConnectRows: Equatable {
     let canStart: Bool
 
     /// `checking`: a link test is in flight. `registering`: DAT registration is running.
-    static func derive(_ input: ConnectionInputs, checking: Bool, registering: Bool) -> ConnectRows {
+    static func derive(_ input: ConnectionInputs, checking: Bool, registering: Bool,
+                       starting: Bool = false) -> ConnectRows {
         ConnectRows(
             invite: invite(input, checking: checking),
             glasses: glasses(input, registering: registering),
-            stream: stream(input),
-            canStart: canStart(input))
+            stream: starting ? ConnectRow(level: .amber, text: "Starting…") : stream(input),
+            canStart: !starting && canStart(input))
     }
 
     static func canStart(_ input: ConnectionInputs) -> Bool {
@@ -70,6 +71,11 @@ struct ConnectRows: Equatable {
 
     static func stream(_ input: ConnectionInputs) -> ConnectRow {
         guard input.watching else { return ConnectRow(level: .grey, text: "Not watching") }
+        guard input.glasses == .connected else {
+            return input.recovering
+                ? ConnectRow(level: .amber, text: "Glasses paused, reconnecting…")
+                : ConnectRow(level: .amber, text: "Glasses not streaming")
+        }
         guard input.backendConnected else { return ConnectRow(level: .amber, text: "Reconnecting…") }
         guard let sinceLast = input.stats.secondsSinceLastFrame else {
             return ConnectRow(level: .amber, text: "Starting…")

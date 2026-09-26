@@ -36,8 +36,13 @@ struct ConnectionInputs {
     var link: LinkState
     var watching: Bool
     var watchingSince: Date?
+    var starting: Bool = false
     /// The server refused the token (MacLink close 4401, or 401/403 from the API).
     var accessDenied: Bool
+    /// DEFECT 1 recovery is in flight: the glasses left `.connected` mid-watch and
+    /// `WatchRecovery` is waiting out the grace period, has tried its one restart, or is
+    /// about to give up. Sourced from `AppState.recovering`.
+    var recovering: Bool = false
     /// MacLink's socket is up and its hello was confirmed.
     var backendConnected: Bool
     var stats: StreamStats
@@ -65,11 +70,15 @@ extension ConnectionStatus {
         if input.glasses == .unavailable || input.glasses == .notRegistered {
             return ConnectionStatus(level: .red, text: "Glasses off")
         }
+        if input.starting { return ConnectionStatus(level: .amber, text: "Starting…") }
         guard input.watching else {
             return ConnectionStatus(level: .grey, text: "Not watching")
         }
         guard input.backendConnected else {
             return ConnectionStatus(level: .amber, text: "Reconnecting…")
+        }
+        if input.recovering {
+            return ConnectionStatus(level: .amber, text: "Glasses paused, reconnecting…")
         }
         guard let sinceLast = input.stats.secondsSinceLastFrame else {
             return ConnectionStatus(level: .amber, text: "Starting…")

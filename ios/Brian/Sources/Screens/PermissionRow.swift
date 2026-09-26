@@ -9,6 +9,7 @@ import UIKit
 import UserNotifications
 
 struct PermissionRow: View {
+    @Environment(AppState.self) private var appState
     enum Kind: CaseIterable {
         case bluetooth, localNetwork, microphone, speech, motion, notifications
 
@@ -29,6 +30,14 @@ struct PermissionRow: View {
     @State private var bluetoothProbe: BluetoothPermissionProbe?
 
     var body: some View {
+        Group {
+            if kind != .localNetwork || !appState.usesHostedServer {
+                row
+            }
+        }
+    }
+
+    private var row: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(kind.title)
