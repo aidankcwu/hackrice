@@ -1,5 +1,5 @@
-// APP_PRD.md "Settings": invite link (label + Change), Connect, voice, permissions, record
-// corpus, version. The link is only ever pasted in Connect; "Change" opens it there.
+// APP_PRD.md "Settings": invite link (label + Change), Connect, redo questions, voice,
+// permissions, record corpus, version. The link is only ever pasted in Connect; "Change" opens it there.
 import SwiftUI
 
 struct SettingsView: View {
@@ -63,6 +63,19 @@ struct SettingsView: View {
                         }
                     }
                     .frame(minHeight: 44)
+                }
+
+                Section {
+                    // RootView closes Settings and opens the questionnaire once it is gone.
+                    Button {
+                        OnboardingStore().reset()
+                        appState.onboardingRequested = true
+                    } label: {
+                        Text("Redo questions").foregroundStyle(Brian.ink)
+                    }
+                    .frame(minHeight: 44)
+                } footer: {
+                    Text("The answers shape how Bryan talks to you.")
                 }
 
                 Section {
