@@ -59,6 +59,11 @@ Deliver = Literal["now", "quiet"]
 
 ANNOTATE_MAX_CHARS = 80
 
+#: Thread mode (reasoner.thread): the visible reasoning and the running
+#: picture are bounded here, not in the schema, which cannot express a length.
+THINKING_MAX_CHARS = 600
+SUMMARY_MAX_CHARS = 2000
+
 #: A ``remember`` line is one durable fact, not a paragraph. Mirrors
 #: ``Database.PROFILE_LINE_MAX_CHARS``; :func:`normalize` is where it is
 #: enforced, because the schema cannot express a length.
@@ -236,9 +241,15 @@ class T1Response(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
+    #: The model's visible reasoning for this wake-up (thread mode); it reads
+    #: this back on the next one. Empty on the decider path and in the fake.
+    thinking: str = ""
     interpretation: str = ""
     confidence: float = 0.0
     actions: list[Action] = Field(default_factory=list)
+    #: The rewritten running picture of the session (thread mode), or None
+    #: when the model left it as it was.
+    summary: str | None = None
     #: Set by :func:`normalize` when a ``look`` displaced this response's
     #: ``speak``/``ask``: the re-run after the answer decides them afresh.
     deferred_for_look: bool = False
@@ -394,6 +405,13 @@ _NOTHING = _obj({"type": {"type": "string", "enum": ["nothing"]}})
 
 T1_JSON_SCHEMA: dict[str, Any] = _obj(
     {
+        "thinking": {
+            "type": "string",
+            "description": "Your reasoning about this moment in the light of the "
+            "whole session so far: what it is, whether it is new, what you "
+            "already thought or said about it. Two to four short sentences. "
+            "You will read this back on your next wake-up.",
+        },
         "interpretation": {
             "type": "string",
             "description": "What is happening, in one specific clause.",
@@ -418,6 +436,14 @@ T1_JSON_SCHEMA: dict[str, Any] = _obj(
                     _NOTHING,
                 ],
             },
+        },
+        "summary": {
+            "type": ["string", "null"],
+            "description": "Your running picture of this session, rewritten in "
+            "full: who this is, what they have been doing, what is furniture "
+            "and to be ignored, what you have said aloud, what you are "
+            "watching for. Fold in any lines marked as aged out. Null only "
+            "when nothing about the picture changed.",
         },
     }
 )
@@ -618,6 +644,10 @@ def normalize(resp: T1Response, t: float | None = None) -> T1Response:
 
     stamp = time.time() if t is None else t
     actions = list(resp.actions)
+    resp.thinking = " ".join((resp.thinking or "").split())[:THINKING_MAX_CHARS]
+    if resp.summary is not None:
+        summary = resp.summary.strip()
+        resp.summary = summary[:SUMMARY_MAX_CHARS] if summary else None
 
     # A speak whose text is empty, a bare "nothing", or a JSON-looking blob is
     # the model trying to stay silent the wrong way (seen live: ElevenLabs
@@ -685,8 +715,10 @@ def normalize(resp: T1Response, t: float | None = None) -> T1Response:
 
     confidence = min(1.0, max(0.0, float(resp.confidence)))
     return T1Response(
+        thinking=resp.thinking,
         interpretation=resp.interpretation,
         confidence=confidence,
         actions=actions,
+        summary=resp.summary,
         deferred_for_look=deferred,
     )

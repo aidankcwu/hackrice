@@ -477,6 +477,27 @@ class Settings(BaseSettings):
     #: VOICE_OPEN_SCHEMA=0: every voice turn uses the full schema again, not
     #: the short {utterance, kind} one on the opening turn.
     voice_open_schema: Switch = True
+    #: REASONER_THREAD=0: every clerk wake-up is a fresh prompt again. On, the
+    #: session is one continuing conversation (pipeline.reasoner.thread): the
+    #: clerk reads its own earlier reasoning, keeps a running picture it
+    #: rewrites every reply, and the oldest raw turn folds into that picture
+    #: as the window slides.
+    reasoner_thread: Switch = True
+    #: THREAD_TURNS: raw wake-ups kept in the window before the oldest folds
+    #: into the picture. THREAD_IMAGE_TURNS: newest turns that keep frames.
+    thread_turns: int = 20
+    thread_image_turns: int = 3
+    #: T1_DEADLINE_S: seconds a clerk call may take before it is dropped.
+    #: Unset: 9 s as before, or 20 s in thread mode, where a longer context
+    #: and a slower answer are the point (an accurate line two seconds late
+    #: beats an immediate useless one).
+    t1_deadline_s: float | None = None
+
+    @property
+    def clerk_deadline_s(self) -> float:
+        if self.t1_deadline_s is not None:
+            return float(self.t1_deadline_s)
+        return 20.0 if self.reasoner_thread else 9.0
     #: VLM_MAX_IN_FLIGHT (alias T0_MAX_IN_FLIGHT): Gemini calls allowed in
     #: flight at once. 2 = overlapping tagger; 1 = the old serial tagger (a call
     #: is still only cancelled at the ~3 s ceiling, never at the tick budget).

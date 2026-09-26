@@ -290,18 +290,22 @@ class FakeReasonerClient:
 
     @staticmethod
     def _user_text(input_messages: list[dict[str, Any]]) -> str:
-        parts: list[str] = []
+        """The text of the NEWEST user message: the moment being decided.
+
+        In thread mode the input carries every earlier wake-up as well; the
+        fake decides on the last one, as the real model is told to.
+        """
+
+        newest: Any = None
         for message in input_messages:
-            if message.get("role") != "user":
-                continue
-            content = message.get("content")
-            if isinstance(content, str):
-                parts.append(content)
-                continue
-            for item in content or []:
-                if item.get("type") == "input_text":
-                    parts.append(str(item.get("text", "")))
-        return "\n".join(parts)
+            if message.get("role") == "user":
+                newest = message.get("content")
+        if newest is None:
+            return ""
+        if isinstance(newest, str):
+            return newest
+        return "\n".join(str(item.get("text", "")) for item in newest
+                         if item.get("type") == "input_text")
 
     @staticmethod
     def _trigger(text: str) -> tuple[str, int]:
@@ -795,7 +799,12 @@ def make_client(
         raise RuntimeError(
             "OPENAI_API_KEY is not set; use mode='fake' for a key-less run"
         )
-    return OpenAIReasonerClient(settings.openai_api_key, settings.t1_model)
+    # The HTTP timeout follows the clerk deadline (thread mode is slower by
+    # design); one second under it so the deadline, not the socket, decides.
+    deadline = getattr(settings, "clerk_deadline_s", None)
+    timeout = max(T1_TIMEOUT_S, float(deadline) - 1.0) if deadline else T1_TIMEOUT_S
+    return OpenAIReasonerClient(settings.openai_api_key, settings.t1_model,
+                                timeout=timeout)
 
 
 def make_answer_parser(

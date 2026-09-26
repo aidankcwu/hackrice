@@ -90,9 +90,20 @@ CREATE TABLE IF NOT EXISTS decisions (
     -- writers ran (JSON list). Added after the table shipped: init_schema also
     -- applies them to existing files via ALTER TABLE.
     path           TEXT,
-    writers        TEXT
+    writers        TEXT,
+    -- The clerk's visible reasoning (reasoner.thread). Added after the table
+    -- shipped: init_schema also applies it to existing files via ALTER TABLE.
+    thinking       TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_decisions_t ON decisions(t);
+
+-- The clerk's running picture of a session (reasoner.thread): rewritten by
+-- the model on every wake-up, read back to rebuild the thread after a restart.
+CREATE TABLE IF NOT EXISTS thread_summary (
+    session_id TEXT PRIMARY KEY,
+    summary    TEXT NOT NULL,
+    updated_t  REAL NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS insights (
     id          TEXT PRIMARY KEY,
@@ -395,6 +406,8 @@ class Database:
             self.conn.execute("ALTER TABLE decisions ADD COLUMN path TEXT")
         if "writers" not in columns:
             self.conn.execute("ALTER TABLE decisions ADD COLUMN writers TEXT")
+        if "thinking" not in columns:
+            self.conn.execute("ALTER TABLE decisions ADD COLUMN thinking TEXT")
 
     def close(self) -> None:
         with self._lock:
@@ -631,8 +644,8 @@ class Database:
                 "INSERT OR REPLACE INTO decisions"
                 " (id, t, \"trigger\", trigger_tick_id, episode_id, interpretation,"
                 "  confidence, actions, spoke, dropped, drop_reason, latency_ms, model,"
-                "  path, writers)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "  path, writers, thinking)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     decision.id,
                     decision.t,
@@ -649,6 +662,7 @@ class Database:
                     decision.model,
                     decision.path,
                     _json(decision.writers),
+                    decision.thinking or None,
                 ),
             )
             self.conn.commit()
@@ -677,6 +691,7 @@ class Database:
             model=r["model"],
             path=r["path"],
             writers=writers,
+            thinking=(r["thinking"] or "") if "thinking" in r.keys() else "",
         )
 
     def list_decisions(self, limit: int = 50) -> list[Decision]:
@@ -833,6 +848,24 @@ class Database:
                 "SELECT * FROM sessions WHERE id = ?", (session_id,)
             ).fetchone()
         return Session(**dict(row)) if row is not None else None
+
+    # -- the clerk's running picture (reasoner.thread) ----------------------
+
+    def set_thread_summary(self, session_id: str, summary: str, t: float) -> None:
+        with self._lock:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO thread_summary (session_id, summary, updated_t)"
+                " VALUES (?,?,?)",
+                (session_id, summary, t),
+            )
+            self.conn.commit()
+
+    def get_thread_summary(self, session_id: str) -> str | None:
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT summary FROM thread_summary WHERE session_id = ?", (session_id,)
+            ).fetchone()
+        return str(row["summary"]) if row is not None else None
 
     def current_session(self) -> Session | None:
         with self._lock:
