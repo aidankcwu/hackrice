@@ -1,6 +1,7 @@
 // First-launch questionnaire: a welcome step, then one multiple-choice question per
-// screen. Single choice advances on tap after a short beat; multi choice toggles up to
-// `maxPicks` and continues with a button. The answers feed Bryan's persona only. Full
+// screen. Single choice advances on tap after a short beat; multi choice toggles any
+// number (or up to `maxPicks`) and continues with a button. An "Other" option opens a
+// text field and waits for Continue. The answers feed Bryan's persona only. Full
 // screen before Connect on the first launch, and again from Settings' "Redo questions".
 import SwiftUI
 
@@ -17,6 +18,7 @@ struct OnboardingView: View {
     @State private var forward = true
     /// Set during the beat after a single-choice tap, so a second tap cannot double-advance.
     @State private var advancing = false
+    @FocusState private var textFocused: Bool
 
     var body: some View {
         ZStack {
@@ -63,6 +65,7 @@ struct OnboardingView: View {
         let picked = answers[question.id] ?? []
         return VStack(spacing: 0) {
             header
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.panel) {
                     VStack(alignment: .leading, spacing: 8) {
@@ -87,6 +90,10 @@ struct OnboardingView: View {
                             ) {
                                 tap(option, in: question)
                             }
+                            if option.id == question.freeTextOptionID, picked.contains(option.id) {
+                                freeTextField(question)
+                                    .id(question.textKey)
+                            }
                         }
                     }
                 }
@@ -96,13 +103,61 @@ struct OnboardingView: View {
                 .padding(.bottom, Space.section)
             }
             .scrollBounceBehavior(.basedOnSize)
+            // The keyboard's own avoidance ignores the Continue inset; scroll the field
+            // clear of it once the keyboard has come up.
+            .onChange(of: textFocused) { _, focused in
+                guard focused else { return }
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(350))
+                    withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) {
+                        proxy.scrollTo(question.textKey, anchor: .bottom)
+                    }
+                }
+            }
+            }
         }
         .safeAreaInset(edge: .bottom) {
-            if question.isMulti {
-                primaryButton("Continue", enabled: !picked.isEmpty) { advance() }
+            if question.isMulti || freeTextPicked(question) {
+                primaryButton("Continue", enabled: canContinue(question)) { advance() }
             }
         }
         .sensoryFeedback(.selection, trigger: picked)
+    }
+
+    /// The wearer's own words under an "Other" option. Same shape as an answer row.
+    private func freeTextField(_ question: PersonaQuestion) -> some View {
+        TextField(question.freeTextPlaceholder, text: Binding(
+            get: { answers[question.textKey]?.first ?? "" },
+            set: { answers[question.textKey] = [String($0.prefix(40))] }))
+            .font(BrianType.body)
+            .foregroundStyle(Brian.ink)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .submitLabel(.done)
+            .focused($textFocused)
+            .onSubmit { if canContinue(question) { advance() } }
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, minHeight: 56)
+            .background(Brian.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(Brian.ink, lineWidth: 1.5)
+            }
+            .accessibilityLabel(question.freeTextPlaceholder)
+            .onAppear { textFocused = true }
+    }
+
+    private func freeTextPicked(_ question: PersonaQuestion) -> Bool {
+        guard let free = question.freeTextOptionID else { return false }
+        return answers[question.id]?.contains(free) == true
+    }
+
+    /// Multi: at least one pick. Free text picked: the text must not be empty.
+    private func canContinue(_ question: PersonaQuestion) -> Bool {
+        let picked = answers[question.id] ?? []
+        guard !picked.isEmpty else { return false }
+        if freeTextPicked(question) { return answers.freeText(for: question) != nil }
+        return true
     }
 
     /// Back, then "3 of 11" and a thin bar.
@@ -158,6 +213,9 @@ struct OnboardingView: View {
         var picked = answers[question.id] ?? []
         if !question.isMulti {
             answers[question.id] = [option.id]
+            // "Other" waits for the text and Continue instead of advancing on the tap.
+            if option.id == question.freeTextOptionID { return }
+            textFocused = false
             advancing = true
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(250))
@@ -172,7 +230,7 @@ struct OnboardingView: View {
             picked = [option.id]
         } else {
             if let exclusive = question.exclusiveOptionID { picked.removeAll { $0 == exclusive } }
-            guard picked.count < question.maxPicks else { return }
+            guard question.isUnlimited || picked.count < question.maxPicks else { return }
             picked.append(option.id)
         }
         // Keep the order the options are shown in.
@@ -181,6 +239,7 @@ struct OnboardingView: View {
     }
 
     private func advance() {
+        textFocused = false
         if step + 1 >= questions.count {
             onFinish(answers)
         } else {

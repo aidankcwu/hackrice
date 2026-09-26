@@ -16,6 +16,7 @@ final class PersonaComposerTests: XCTestCase {
             "caffeine": ["noon"],
             "cut": ["alcohol", "nicotine"],
             "frequency": ["often"],
+            "quiet": ["morning", "driving"],
             "tone": ["warm"],
             "people": ["matters"]
         ]
@@ -24,7 +25,8 @@ final class PersonaComposerTests: XCTestCase {
     /// Ungrammatical they/them pairs the fixed composer must never produce.
     private let badTheyPairs = [
         "They is", "They has", "They does", "They usually falls",
-        "They skips", "They works", "They tends", "They eats", "They wants"
+        "They skips", "They works", "They tends", "They eats", "They wants",
+        "They keeps", "They cooks", "They snacks", "They moves", "They is"
     ]
 
     func testQuestionAndOptionIDsAreUniqueAndHaveChoices() {
@@ -87,12 +89,15 @@ final class PersonaComposerTests: XCTestCase {
     /// to pick) is checked against the ungrammatical pairs.
     func testTheyAgreementAcrossEveryOptionBranch() {
         let optionsByQuestion: [String: [String]] = [
-            "days": ["student", "desk", "feet", "mixed"],
-            "bedtime": ["early", "late", "verylate", "varies"],
-            "training": ["none", "casual", "event"],
-            "food": ["regular", "skip", "desk", "night"],
-            "caffeine": ["none", "keep", "less", "noon"],
-            "frequency": ["rarely", "moments", "often"]
+            "days": ["student", "desk", "meetings", "feet", "physical", "driving", "care", "creative", "travel", "home", "mixed"],
+            "bedtime": ["early", "late", "verylate", "shift", "varies"],
+            "training": ["none", "casual", "routine", "event", "rehab"],
+            "food": ["regular", "cook", "out", "skip", "desk", "night"],
+            "caffeine": ["none", "keep", "less", "noon", "track"],
+            "frequency": ["patterns", "daily", "moments", "often", "every"],
+            "quiet": ["morning", "work", "meals", "driving", "evening"],
+            "tone": ["dry", "warm", "blunt", "coach", "curious", "light"],
+            "people": ["silent", "matters", "brief", "noask"]
         ]
         for (question, options) in optionsByQuestion {
             for option in options {
@@ -105,6 +110,59 @@ final class PersonaComposerTests: XCTestCase {
                     XCTAssertFalse(text.contains(bad), "\(question)=\(option) produced ungrammatical '\(bad)': \(text)")
                 }
             }
+        }
+    }
+
+    /// Every option id the composer maps must exist in the question list, and vice versa,
+    /// so a renamed option cannot silently drop out of the paragraph.
+    func testEveryOptionOfEveryQuestionChangesTheParagraph() {
+        let base = PersonaComposer.compose([:])
+        for question in PersonaQuestion.all {
+            for option in question.options {
+                var answers: PersonaAnswers = [question.id: [option.id]]
+                if option.id == question.freeTextOptionID { answers[question.textKey] = ["ze/zir"] }
+                let text = PersonaComposer.compose(answers)
+                // "Nothing"/"No quiet times" add nothing by design, and they/them is the default.
+                let inert = ["nothing", "never"].contains(option.id) || (question.id == "pronouns" && option.id == "they")
+                if !inert {
+                    XCTAssertNotEqual(text, base, "\(question.id)=\(option.id) left the paragraph unchanged")
+                }
+            }
+        }
+    }
+
+    func testCustomPronounsAreQuotedAndConjugatedSafely() {
+        let text = PersonaComposer.compose(["pronouns": ["other"], "pronouns.text": ["ze/zir"],
+                                            "goals": ["sleep"], "days": ["feet"], "training": ["casual"]])
+        XCTAssertTrue(text.hasPrefix("The wearer uses ze/zir pronouns."), text)
+        XCTAssertTrue(text.contains("The wearer wants help"), text)
+        XCTAssertTrue(text.contains("on the wearer's feet"), text)
+        XCTAssertFalse(text.contains("they/them"), text)
+        for bad in badTheyPairs { XCTAssertFalse(text.contains(bad), text) }
+    }
+
+    func testCustomPronounsWithoutTextFallBackToTheyThem() {
+        let text = PersonaComposer.compose(["pronouns": ["other"], "pronouns.text": ["   "]])
+        XCTAssertTrue(text.contains("they/them"), text)
+    }
+
+    func testFreeTextIsTrimmedAndCapped() {
+        XCTAssertNil(PersonaAnswers.cleanFreeText(nil))
+        XCTAssertNil(PersonaAnswers.cleanFreeText(" \n "))
+        XCTAssertEqual(PersonaAnswers.cleanFreeText("  xe/xem\n"), "xe/xem")
+        XCTAssertEqual(PersonaAnswers.cleanFreeText(String(repeating: "a", count: 80))?.count, 40)
+    }
+
+    func testMultiChoiceQuestionsTakeAnyNumberOfPicks() {
+        for question in PersonaQuestion.all where question.isMulti {
+            XCTAssertTrue(question.isUnlimited, "\(question.id) still caps picks at \(question.maxPicks)")
+        }
+        XCTAssertNotNil(PersonaQuestion.all.first { $0.id == "pronouns" }?.freeTextOptionID)
+    }
+
+    func testTheStandardClosesEveryParagraph() {
+        for answers in [[:], fullAnswers(pronoun: "she")] {
+            XCTAssertTrue(PersonaComposer.compose(answers).hasSuffix(PersonaComposer.standard))
         }
     }
 }
