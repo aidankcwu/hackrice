@@ -151,13 +151,13 @@ exit 0, 174 tests in 17 suites, every D-010 screenshot read (light, dark, XXXL).
 notes in [APP_NATIVE_NOTES.md](APP_NATIVE_NOTES.md). Untested on hardware: DAT device state
 (battery / worn), the live Preview feed, session start/end against the hosted backend.
 
-## Onboarding quiz must prepend to the persona, not replace it (planned 2026-09-25, not built)
+## Onboarding quiz prepends to the persona, not replaces it (built 2026-09-25 on demo)
 
 Found: the phone turns the 11 quiz answers into one paragraph about the wearer and sends it
 to `PUT /api/persona`, which overwrites the single persona slot that `deploy/persona.txt`
 loads into. After the quiz, Bryan's behaviour instructions are gone for that tester.
 
-Plan (backend first, then one line on the phone):
+Done (backend, then one line on the phone):
 1. A second slot, "wearer profile", stored beside the persona in the `profile` table
    (`db.get_wearer_profile` / `set_wearer_profile`), cleared by an empty string, wiped by
    the same demo reset as the persona.
