@@ -71,6 +71,7 @@
 		A6A4449114C504C1CE92E3CA /* ConnectRowsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 629137CFB3B7BE25551A391C /* ConnectRowsTests.swift */; };
 		AB40D6691CF4B0EF721E9CFD /* SessionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 365EC3F0F03C71B25E48CC6F /* SessionDetailView.swift */; };
 		AEF10D75634A96EF05ED6CE7 /* protocol_today.json in Resources */ = {isa = PBXBuildFile; fileRef = 89C5D79D3A26E176A1CCD1C4 /* protocol_today.json */; };
+		AF0C47874269606C0976A7F2 /* GlassesErrorsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E8DFB5F3593C41F90FAD6FE /* GlassesErrorsTests.swift */; };
 		B1FE4548C1109C9BBC5EFB69 /* ProtocolSummaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7883CA2D2A147A7193706643 /* ProtocolSummaryTests.swift */; };
 		B66163CF2BA5861008AEC5B7 /* GlassesSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3879206B156592457CC7472A /* GlassesSession.swift */; };
 		BBF7C290FAC04DDA8E295235 /* status.json in Resources */ = {isa = PBXBuildFile; fileRef = 38D9B5FF65A81476EABAD4BE /* status.json */; };
@@ -156,6 +157,7 @@
 		6859C0E70A4F1B86BBE2D3AB /* ProtocolSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolSummary.swift; sourceTree = "<group>"; };
 		6B72D12F2F62C5EC2D86166A /* PersonaComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaComposer.swift; sourceTree = "<group>"; };
 		6D98DBF53563BEF901573BB1 /* WebSourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSourceTests.swift; sourceTree = "<group>"; };
+		6E8DFB5F3593C41F90FAD6FE /* GlassesErrorsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassesErrorsTests.swift; sourceTree = "<group>"; };
 		715F3B168C8A4AF5B79AE260 /* LedgerCoalescer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerCoalescer.swift; sourceTree = "<group>"; };
 		748D9A901BEFC598A8404BC9 /* PersonaQuestion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaQuestion.swift; sourceTree = "<group>"; };
 		7883CA2D2A147A7193706643 /* ProtocolSummaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolSummaryTests.swift; sourceTree = "<group>"; };
@@ -193,7 +195,7 @@
 		FA977405BE4B4EF1BEDEF75D /* PersonaComposerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaComposerTests.swift; sourceTree = "<group>"; };
 		FC0FBA5F12B4F1CA114B1D05 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		FC2C75102A7E6B02D881985A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		"TEMP_75D0DA11-8F73-4C1C-9667-6FC87DE380B9" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
+		"TEMP_D9A3F8C3-EC70-4F4F-9E28-2A2A9AF03A84" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -333,6 +335,7 @@
 				863CF68F9EB53AF75F79DCFA /* ConnectionStatusTests.swift */,
 				629137CFB3B7BE25551A391C /* ConnectRowsTests.swift */,
 				341B506A2B1F154438D6B656 /* EmptyStateTests.swift */,
+				6E8DFB5F3593C41F90FAD6FE /* GlassesErrorsTests.swift */,
 				F7429361390E6D18FE85B496 /* HeaderStateTests.swift */,
 				555C3FA2D6763A6135E61DDE /* LedgerCoalescerTests.swift */,
 				34CA65A06BE3C5F30E52D1B6 /* ModelsTests.swift */,
@@ -390,10 +393,10 @@
 			);
 			sourceTree = "<group>";
 		};
-		"TEMP_3D0942AE-1928-4478-8858-E85206FFA725" /* Brian */ = {
+		"TEMP_0F82625E-D566-4BA7-8ED0-68BF36BA7CA4" /* Brian */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_75D0DA11-8F73-4C1C-9667-6FC87DE380B9" /* Config.xcconfig */,
+				"TEMP_D9A3F8C3-EC70-4F4F-9E28-2A2A9AF03A84" /* Config.xcconfig */,
 			);
 			path = Brian;
 			sourceTree = "<group>";
@@ -539,6 +542,7 @@
 				A6A4449114C504C1CE92E3CA /* ConnectRowsTests.swift in Sources */,
 				ED26871AF9E5A219EA3979F0 /* ConnectionStatusTests.swift in Sources */,
 				BFC7E3E3B6064869713A194C /* EmptyStateTests.swift in Sources */,
+				AF0C47874269606C0976A7F2 /* GlassesErrorsTests.swift in Sources */,
 				696DB6207F770A8C1A370D18 /* HeaderStateTests.swift in Sources */,
 				1740899EEEBCDA46E8E39866 /* LedgerCoalescerTests.swift in Sources */,
 				49CC45830016BCCB18D833C2 /* ModelsTests.swift in Sources */,
@@ -717,7 +721,7 @@
 		};
 		B6722B02BBFA64746616D7BD /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_75D0DA11-8F73-4C1C-9667-6FC87DE380B9" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_D9A3F8C3-EC70-4F4F-9E28-2A2A9AF03A84" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Brian.entitlements;
@@ -742,7 +746,7 @@
 		};
 		EA025B21F11DCFD0598B3322 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_75D0DA11-8F73-4C1C-9667-6FC87DE380B9" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_D9A3F8C3-EC70-4F4F-9E28-2A2A9AF03A84" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Brian.entitlements;

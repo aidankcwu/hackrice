@@ -299,6 +299,11 @@ final class AppState {
         session.onDeviceStateChange = { [weak self] device in
             self?.glassesDevice = device
         }
+        session.onRegistrationFailure = { [weak self] sentence in
+            guard let self else { return }
+            self.registeringGlasses = false     // Register's own await may still be pending
+            self.lastError = sentence
+        }
         glue.onAccessDenied = { [weak self] in
             self?.watching = false
             self?.watchingSince = nil

@@ -38,7 +38,7 @@ struct ConnectRowsTests {
         input.watching = false
         let r = rows(input)
         #expect(r.invite == ConnectRow(level: .grey, text: "Paste the link from your invite"))
-        #expect(r.glasses == ConnectRow(level: .grey, text: "Open Meta AI and tap Allow"))
+        #expect(r.glasses == ConnectRow(level: .grey, text: "Tap Register, then allow Zeroist in Meta AI"))
         #expect(r.stream == ConnectRow(level: .grey, text: "Not watching"))
     }
 

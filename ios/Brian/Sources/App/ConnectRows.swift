@@ -57,7 +57,7 @@ struct ConnectRows: Equatable {
         case .unavailable:
             return ConnectRow(level: .red, text: "Glasses off", fix: glassesOffFix)
         case .notRegistered:
-            return ConnectRow(level: .grey, text: "Open Meta AI and tap Allow")
+            return ConnectRow(level: .grey, text: "Tap Register, then allow Zeroist in Meta AI")
         case .registered:
             // Registered glasses open their camera session when watching starts.
             return input.watching
