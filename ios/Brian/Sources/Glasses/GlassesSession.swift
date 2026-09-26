@@ -250,7 +250,7 @@ private enum GlassesSessionError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .registration:
-            return "Open Meta AI and turn on Developer Mode, then tap Register."
+            return "Meta AI did not approve the connection. Check that you accepted the invite email and that Zeroist's release channel is selected in Meta AI under your glasses' settings, then tap Register again."
         case .permission:
             return "Open Meta AI, allow camera access for Zeroist, then tap Start again."
         case .connection:

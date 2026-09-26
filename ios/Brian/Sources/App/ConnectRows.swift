@@ -34,7 +34,7 @@ struct ConnectRows: Equatable {
         return input.glasses == .registered || input.glasses == .connected
     }
 
-    static let glassesOffFix = "Turn the glasses on, then open Meta AI to reconnect them."
+    static let glassesOffFix = "Turn the glasses on and check they are paired and connected in Meta AI, then come back here."
 
     static func invite(_ input: ConnectionInputs, checking: Bool) -> ConnectRow {
         if checking { return ConnectRow(level: .amber, text: "Checking…") }
