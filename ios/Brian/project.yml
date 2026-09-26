@@ -38,7 +38,7 @@ targets:
       properties:
         CFBundleDisplayName: Zeroist          # the product is Zeroist; Bryan is the voice persona
         CFBundleShortVersionString: "1.0"
-        CFBundleVersion: "2"                # build 1 is on App Store Connect; bump before every upload
+        CFBundleVersion: "4"                # builds 1-3 are on App Store Connect (Developer Mode era); bump before every upload
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         ITSAppUsesNonExemptEncryption: false
