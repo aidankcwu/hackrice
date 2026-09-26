@@ -53,12 +53,12 @@ __all__ = [
 #: judging session is about two minutes; 15 covers the demo that ran long.
 DEFAULT_WINDOW_S = 15 * 60.0
 
-#: The longest window a recap will assemble. A judging session is minutes; a
-#: request for "the last week" would read a week of ticks, episodes, decisions
-#: and evidence into memory and score them on one thread. Past this the recap
-#: keeps the *most recent* four hours and says so, which is the part anyone
-#: asking for a recap actually means.
-MAX_WINDOW_S = 4 * 3600.0
+#: The longest window a recap will assemble. The phone's Home summary asks for
+#: local midnight to now (docs/DEMO_UI_PRD.md "Daily summary"), so one day must
+#: fit; a request for "the last week" would read a week of ticks, episodes,
+#: decisions and evidence into memory and score them on one thread. Past this
+#: the recap keeps the *most recent* day and says so.
+MAX_WINDOW_S = 24 * 3600.0
 
 RECAP_SCHEMA = """
 CREATE TABLE IF NOT EXISTS recaps (
