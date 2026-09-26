@@ -11,7 +11,7 @@ enum GlassesState: Equatable {
     case unavailable      // SDK reports no device / not paired in Meta AI
     case notRegistered    // paired but this app is not registered with the glasses
     case registered
-    case connected        // a DAT session is up; frames flow while streaming
+    case connected        // camera frames are flowing; left on any stop or pause
 }
 
 /// What the glasses report about themselves (DAT "Device state"): the header's battery
@@ -38,6 +38,10 @@ protocol GlassesSessioning: AnyObject {
     /// Set only while the Preview sheet is open: every camera frame, on the main actor.
     /// Nil otherwise, so no frame is handed on or held.
     var onPreviewFrame: ((UIImage, Date) -> Void)? { get set }
+    /// Fired when `handleIncomingURL` recognizes a URL as a registration attempt and Meta
+    /// AI rejected it (e.g. the release channel is not selected). Never fired for a URL
+    /// that is not for this integration. Mock and demo sessions never call it.
+    var onRegistrationFailure: ((String) -> Void)? { get set }
     /// Deep-link to the Meta AI app for pairing / Developer Mode.
     func openMetaAI()
     /// DAT registration flow. Throws with a sentence a person can act on.
@@ -45,8 +49,10 @@ protocol GlassesSessioning: AnyObject {
     /// Hands Meta AI's registration callback to DAT. Mock and demo sessions ignore it.
     func handleIncomingURL(_ url: URL) async
     /// Start the camera stream at the cadence CapturePacketSender expects; frames go to
-    /// the sender internally. Idempotent.
+    /// the sender internally. Idempotent. Never waits forever: throws with a sentence a
+    /// person can act on within 20 s, or 90 s more while Meta AI asks for camera access.
     func startStream() async throws
+    /// Stops frames; `state` leaves `.connected` and `onStateChange` fires.
     func stopStream()
 }
 

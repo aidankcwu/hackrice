@@ -67,6 +67,13 @@ struct ConnectionStatusTests {
         #expect(ConnectionStatus.derive(input) == ConnectionStatus(level: .amber, text: "Starting…"))
     }
 
+    @Test func startInFlightIsAmberBeforeWatchingBegins() {
+        var input = healthy()
+        input.watching = false
+        input.starting = true
+        #expect(ConnectionStatus.derive(input) == ConnectionStatus(level: .amber, text: "Starting…"))
+    }
+
     @Test func framesStopped() {
         var input = healthy()
         input.stats.secondsSinceLastFrame = 14

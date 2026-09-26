@@ -79,7 +79,7 @@ def speak_message(text: str, urgency: str = "normal") -> str:
     )
 
 
-def audio_message(data: bytes, fmt: str = "mp3") -> str:
+def audio_message(data: bytes, fmt: str = "mp3", text: str = "") -> str:
     """Mac->phone. Pre-rendered audio, the ElevenLabs upgrade path (A18)."""
     return json.dumps(
         {
@@ -87,6 +87,7 @@ def audio_message(data: bytes, fmt: str = "mp3") -> str:
             "type": AUDIO,
             "format": fmt,
             "data": base64.b64encode(data).decode("ascii"),
+            "text": text,
         }
     )
 

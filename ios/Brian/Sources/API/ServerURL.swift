@@ -29,7 +29,8 @@ struct ServerURL: Equatable, Sendable {
     static let socketPath = "/ws/glasses"
 
     init?(_ raw: String) {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let extracted = Self.firstURL(in: raw) else { return nil }
+        let trimmed = extracted.trimmingCharacters(in: CharacterSet(charactersIn: ".,;:!?)]}"))
         guard !trimmed.isEmpty, var parts = URLComponents(string: trimmed),
               let scheme = parts.scheme?.lowercased()
         else { return nil }
@@ -39,6 +40,11 @@ struct ServerURL: Equatable, Sendable {
         default: return nil
         }
         guard let host = parts.host, !host.isEmpty else { return nil }
+        let segments = parts.path.split(separator: "/")
+        if segments.count >= 3, segments[0] == "t",
+           segments[2] == "app" || segments[2] == "dashboard" {
+            parts.path = "/t/\(segments[1])\(Self.socketPath)"
+        }
         if parts.path.isEmpty || parts.path == "/" { parts.path = Self.socketPath }
         guard let socket = parts.url else { return nil }
         let secure = parts.scheme == "wss"
@@ -63,6 +69,12 @@ struct ServerURL: Equatable, Sendable {
         self.secure = secure
         let portSuffix = parts.port.map { ":\($0)" } ?? ""
         self.label = "\(host)\(portSuffix)\(basePath)"
+    }
+
+    private static func firstURL(in raw: String) -> String? {
+        let pattern = #"(?i)(?:wss?|https?)://[^\s<>\"']+"#
+        guard let range = raw.range(of: pattern, options: .regularExpression) else { return nil }
+        return String(raw[range])
     }
 
     /// `apiBase` + an absolute path like "/api/decisions", with optional query items.

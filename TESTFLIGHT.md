@@ -40,7 +40,7 @@ only as a backup.
 |---|---|
 | The email of their **Apple Account** | They become an App Store Connect user, and TestFlight invites go there |
 | The email/identity of the **Meta account** signed into their Meta AI app | Aidan adds it to the Meta release channel (A2) |
-| Glasses model (Ray-Ban Meta Gen 1 / Gen 2), iPhone model, iOS version | Deployment target is iOS 17.2; DAT supports the regular Ray-Ban Meta |
+| Glasses model (Ray-Ban Meta Gen 1 / Gen 2), iPhone model, iOS version | Zeroist needs iOS 26 or newer (iPhone 11 or newer); DAT supports the regular Ray-Ban Meta |
 | A tester name for their backend slot | The URL is `wss://DOMAIN/t/NAME/ws/glasses?token=…` |
 
 Tell them to update the Meta AI app and the glasses firmware before Friday. SPEC notes
@@ -325,6 +325,9 @@ Don't update the Meta SDK Swift package between now and Friday.
 ---
 
 ## What the VC does (send this, with their personal URL, by private message)
+
+> **Out of date for Zeroist.** This card describes the old CameraAccess app. Use
+> [docs/TESTER_SETUP.md](docs/TESTER_SETUP.md) Part 2 instead.
 
 The URL carries a password (`token=…`). Send it one-to-one, not in a group chat.
 

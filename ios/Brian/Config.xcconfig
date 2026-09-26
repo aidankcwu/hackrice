@@ -2,7 +2,9 @@
 //
 // The Meta client token is deliberately NOT in git: this repo is public.
 // Put it in Local.xcconfig (gitignored, see Local.xcconfig.example).
-// `#include?` is the optional form -- a missing Local.xcconfig is not an error,
-// so a fresh clone still generates and builds. The app then has an empty
-// ClientToken and Meta registration fails, which is the visible, correct symptom.
+// `#include?` is the optional form -- a missing Local.xcconfig is not an error, so a
+// fresh clone still generates and builds a Debug run: the app has an empty ClientToken
+// and Meta registration fails at runtime, which is the visible, correct symptom there.
+// A Release build (what TestFlight gets) fails on purpose instead, at a pre-build script
+// step in project.yml, so a token-less build never reaches App Store Connect.
 #include? "Local.xcconfig"

@@ -7,13 +7,14 @@
 // through its existing `configure(serverURL:)` seam and keeps managing its own
 // UserDefaults key exactly as it already does (see MacLink.swift's own TODO on that).
 import Foundation
+import os
 import Security
 
 /// A place to keep one bearer token per server link, keyed by `ServerURL.accountKey`.
 protocol TokenStoring {
     func token(for key: String) -> String?
     /// `nil` or empty deletes the stored token for `key`.
-    func setToken(_ token: String?, for key: String)
+    @discardableResult func setToken(_ token: String?, for key: String) -> Bool
 }
 
 /// Keychain-backed store: `kSecClassGenericPassword`, service "com.zeroist.app.token",
@@ -21,6 +22,7 @@ protocol TokenStoring {
 /// generic-password item just needs the app's own (implicit) keychain access group.
 struct KeychainTokenStore: TokenStoring {
     static let service = "com.zeroist.app.token"
+    private static let log = Logger(subsystem: "com.zeroist.app", category: "keychain")
 
     func token(for key: String) -> String? {
         var query = baseQuery(key)
@@ -32,19 +34,32 @@ struct KeychainTokenStore: TokenStoring {
         return String(data: data, encoding: .utf8)
     }
 
-    func setToken(_ token: String?, for key: String) {
+    @discardableResult func setToken(_ token: String?, for key: String) -> Bool {
         let query = baseQuery(key)
         guard let token, !token.isEmpty else {
-            SecItemDelete(query as CFDictionary)
-            return
+            let status = SecItemDelete(query as CFDictionary)
+            if status != errSecSuccess && status != errSecItemNotFound {
+                Self.log.error("Token delete failed with status \(status, privacy: .public)")
+                return false
+            }
+            return true
         }
         let data = Data(token.utf8)
         let update = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
-        guard update == errSecItemNotFound else { return }
+        if update == errSecSuccess { return true }
+        guard update == errSecItemNotFound else {
+            Self.log.error("Token update failed with status \(update, privacy: .public)")
+            return false
+        }
         var attributes = query
         attributes[kSecValueData as String] = data
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        SecItemAdd(attributes as CFDictionary, nil)
+        let add = SecItemAdd(attributes as CFDictionary, nil)
+        guard add == errSecSuccess else {
+            Self.log.error("Token add failed with status \(add, privacy: .public)")
+            return false
+        }
+        return true
     }
 
     private func baseQuery(_ key: String) -> [String: Any] {
@@ -61,12 +76,13 @@ struct KeychainTokenStore: TokenStoring {
 final class InMemoryTokenStore: TokenStoring {
     private var storage: [String: String] = [:]
     func token(for key: String) -> String? { storage[key] }
-    func setToken(_ token: String?, for key: String) {
+    @discardableResult func setToken(_ token: String?, for key: String) -> Bool {
         if let token, !token.isEmpty {
             storage[key] = token
         } else {
             storage.removeValue(forKey: key)
         }
+        return true
     }
 }
 
@@ -94,7 +110,7 @@ enum ServerURLStore {
         let legacy = (defaults.string(forKey: legacyKey) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !legacy.isEmpty, let parsed = ServerURL(legacy) else { return }
         if let token = parsed.token {
-            tokenStore.setToken(token, for: parsed.accountKey)
+            guard tokenStore.setToken(token, for: parsed.accountKey) else { return }
         }
         defaults.set(parsed.tokenlessURLString, forKey: endpointKey)
     }
@@ -111,9 +127,11 @@ enum ServerURLStore {
 
     /// Splits a freshly-parsed link: token to the Keychain, tokenless endpoint to
     /// UserDefaults. Never writes the token anywhere in `defaults`.
-    static func persist(_ parsed: ServerURL, defaults: UserDefaults, tokenStore: TokenStoring) {
-        tokenStore.setToken(parsed.token, for: parsed.accountKey)
+    @discardableResult
+    static func persist(_ parsed: ServerURL, defaults: UserDefaults, tokenStore: TokenStoring) -> Bool {
+        guard tokenStore.setToken(parsed.token, for: parsed.accountKey) else { return false }
         defaults.set(parsed.tokenlessURLString, forKey: endpointKey)
+        return true
     }
 
     /// MacLink's own `configure(serverURL:)` is a plain synchronous function: by the

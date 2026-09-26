@@ -16,6 +16,7 @@
 		12C4A074679EE257D402E056 /* PreviewFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 475FCE63988058D5D7A493CC /* PreviewFeed.swift */; };
 		1740899EEEBCDA46E8E39866 /* LedgerCoalescerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 555C3FA2D6763A6135E61DDE /* LedgerCoalescerTests.swift */; };
 		17A1599D759C39DF2970D60C /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5648C60CCCE2DAEA597B2FEC /* Theme.swift */; };
+		1C3F69E9E3840FAAB252F2A2 /* WatchRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31CEE512CE01EFE286523C23 /* WatchRecoveryTests.swift */; };
 		26999A42A5351E71D4F74A33 /* OnboardingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 252F43A246CEAF5971A6C8CA /* OnboardingStore.swift */; };
 		290FC8893A72237213E91FA0 /* PersonaComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B72D12F2F62C5EC2D86166A /* PersonaComposer.swift */; };
 		298C8DD74BD4AC7990927CD3 /* AddItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B16D781364F5366E4984DEA /* AddItemView.swift */; };
@@ -71,11 +72,14 @@
 		A6A4449114C504C1CE92E3CA /* ConnectRowsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 629137CFB3B7BE25551A391C /* ConnectRowsTests.swift */; };
 		AB40D6691CF4B0EF721E9CFD /* SessionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 365EC3F0F03C71B25E48CC6F /* SessionDetailView.swift */; };
 		AEF10D75634A96EF05ED6CE7 /* protocol_today.json in Resources */ = {isa = PBXBuildFile; fileRef = 89C5D79D3A26E176A1CCD1C4 /* protocol_today.json */; };
+		AF0C47874269606C0976A7F2 /* GlassesErrorsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E8DFB5F3593C41F90FAD6FE /* GlassesErrorsTests.swift */; };
 		B1FE4548C1109C9BBC5EFB69 /* ProtocolSummaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7883CA2D2A147A7193706643 /* ProtocolSummaryTests.swift */; };
 		B66163CF2BA5861008AEC5B7 /* GlassesSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3879206B156592457CC7472A /* GlassesSession.swift */; };
 		BBF7C290FAC04DDA8E295235 /* status.json in Resources */ = {isa = PBXBuildFile; fileRef = 38D9B5FF65A81476EABAD4BE /* status.json */; };
+		BBFF61156300BE5D9CD1B413 /* WatchRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = C932DC9B581C12C619AF5747 /* WatchRecovery.swift */; };
 		BDDD9C9DBBD437CB337AF18D /* GlassesSessioning.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B5BF52D62551B1B8DB81894 /* GlassesSessioning.swift */; };
 		BFC7E3E3B6064869713A194C /* EmptyStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 341B506A2B1F154438D6B656 /* EmptyStateTests.swift */; };
+		C1505CC18DC22FD08E82BE42 /* AudioSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36F53653B134E13B67CC8108 /* AudioSessionTests.swift */; };
 		C1B19C8AEBFD91058B23C797 /* CorpusRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DADCD752FC08855D793C233 /* CorpusRecorder.swift */; };
 		C3BAB02BA79CC9529F18AB8F /* DecisionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFB8CE49186524D14922312D /* DecisionDetailView.swift */; };
 		C44EEEA70DE25B0F3929D246 /* ProtocolTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 001A825ED887460A25332C9E /* ProtocolTemplates.swift */; };
@@ -122,6 +126,7 @@
 		252F43A246CEAF5971A6C8CA /* OnboardingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingStore.swift; sourceTree = "<group>"; };
 		2BCADBBF40322D38574CB21D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		31B7301E972AC63897D50606 /* ServerURL.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerURL.swift; sourceTree = "<group>"; };
+		31CEE512CE01EFE286523C23 /* WatchRecoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRecoveryTests.swift; sourceTree = "<group>"; };
 		31F9CCC2710A68583F0AB20E /* MacLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacLink.swift; sourceTree = "<group>"; };
 		341B506A2B1F154438D6B656 /* EmptyStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateTests.swift; sourceTree = "<group>"; };
 		34CA65A06BE3C5F30E52D1B6 /* ModelsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsTests.swift; sourceTree = "<group>"; };
@@ -129,6 +134,7 @@
 		3658F220ECCAB2B380C6C318 /* PreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewView.swift; sourceTree = "<group>"; };
 		365EC3F0F03C71B25E48CC6F /* SessionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDetailView.swift; sourceTree = "<group>"; };
 		36F3F795C9A60AB0830B0FC3 /* ProtocolStateLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolStateLabel.swift; sourceTree = "<group>"; };
+		36F53653B134E13B67CC8108 /* AudioSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSessionTests.swift; sourceTree = "<group>"; };
 		3879206B156592457CC7472A /* GlassesSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassesSession.swift; sourceTree = "<group>"; };
 		38D9B5FF65A81476EABAD4BE /* status.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = status.json; sourceTree = "<group>"; };
 		3C13CF89D57DE0ABF3076BC0 /* WebSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSource.swift; sourceTree = "<group>"; };
@@ -156,6 +162,7 @@
 		6859C0E70A4F1B86BBE2D3AB /* ProtocolSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolSummary.swift; sourceTree = "<group>"; };
 		6B72D12F2F62C5EC2D86166A /* PersonaComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaComposer.swift; sourceTree = "<group>"; };
 		6D98DBF53563BEF901573BB1 /* WebSourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSourceTests.swift; sourceTree = "<group>"; };
+		6E8DFB5F3593C41F90FAD6FE /* GlassesErrorsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassesErrorsTests.swift; sourceTree = "<group>"; };
 		715F3B168C8A4AF5B79AE260 /* LedgerCoalescer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerCoalescer.swift; sourceTree = "<group>"; };
 		748D9A901BEFC598A8404BC9 /* PersonaQuestion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaQuestion.swift; sourceTree = "<group>"; };
 		7883CA2D2A147A7193706643 /* ProtocolSummaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolSummaryTests.swift; sourceTree = "<group>"; };
@@ -175,6 +182,7 @@
 		C45658E09E2105D6D7C79FA0 /* OnboardingStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingStoreTests.swift; sourceTree = "<group>"; };
 		C49AB1D10E25462AA3670E96 /* today_decisions.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = today_decisions.json; sourceTree = "<group>"; };
 		C7BDB86B2CE2D6C1359E16DD /* ServerURLTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerURLTests.swift; sourceTree = "<group>"; };
+		C932DC9B581C12C619AF5747 /* WatchRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRecovery.swift; sourceTree = "<group>"; };
 		CE9D3A7EC8DAE1EF721A13E4 /* PersonaQuestions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaQuestions.swift; sourceTree = "<group>"; };
 		D185AA5E744DD82671E29E56 /* preview.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = preview.jpg; sourceTree = "<group>"; };
 		D620E55A873A742A0FCEBF4C /* recap_today.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = recap_today.json; sourceTree = "<group>"; };
@@ -193,7 +201,7 @@
 		FA977405BE4B4EF1BEDEF75D /* PersonaComposerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaComposerTests.swift; sourceTree = "<group>"; };
 		FC0FBA5F12B4F1CA114B1D05 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		FC2C75102A7E6B02D881985A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		"TEMP_AAB18605-2F9B-45E3-A88D-8C1FD196EFAB" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
+		"TEMP_6ADB1258-AD6D-4DD0-85B8-8CD981078CAC" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -288,6 +296,7 @@
 				5BF0184ABCFE220381BD6944 /* SessionsSummary.swift */,
 				559B05FCD80E626C8EA8F515 /* SummaryCard.swift */,
 				90FF499C63696F9C19EBAD25 /* TodayStats.swift */,
+				C932DC9B581C12C619AF5747 /* WatchRecovery.swift */,
 				3C13CF89D57DE0ABF3076BC0 /* WebSource.swift */,
 			);
 			path = App;
@@ -330,9 +339,11 @@
 			isa = PBXGroup;
 			children = (
 				8FE9FA96F40EC589D2C0D778 /* AppScreenTests.swift */,
+				36F53653B134E13B67CC8108 /* AudioSessionTests.swift */,
 				863CF68F9EB53AF75F79DCFA /* ConnectionStatusTests.swift */,
 				629137CFB3B7BE25551A391C /* ConnectRowsTests.swift */,
 				341B506A2B1F154438D6B656 /* EmptyStateTests.swift */,
+				6E8DFB5F3593C41F90FAD6FE /* GlassesErrorsTests.swift */,
 				F7429361390E6D18FE85B496 /* HeaderStateTests.swift */,
 				555C3FA2D6763A6135E61DDE /* LedgerCoalescerTests.swift */,
 				34CA65A06BE3C5F30E52D1B6 /* ModelsTests.swift */,
@@ -344,6 +355,7 @@
 				1C10907B03C557CA23101740 /* SessionsSummaryTests.swift */,
 				0DC21F36E1792326CE143F9A /* SummaryCardTests.swift */,
 				235B47D14C7DD3F8FE35168E /* TodayStatsTests.swift */,
+				31CEE512CE01EFE286523C23 /* WatchRecoveryTests.swift */,
 				6D98DBF53563BEF901573BB1 /* WebSourceTests.swift */,
 			);
 			path = Tests;
@@ -390,10 +402,10 @@
 			);
 			sourceTree = "<group>";
 		};
-		"TEMP_F0EDBA6B-4297-4FFD-870A-330F22229E71" /* Brian */ = {
+		"TEMP_38D3717D-5983-48DB-80D3-13849332817E" /* Brian */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_AAB18605-2F9B-45E3-A88D-8C1FD196EFAB" /* Config.xcconfig */,
+				"TEMP_6ADB1258-AD6D-4DD0-85B8-8CD981078CAC" /* Config.xcconfig */,
 			);
 			path = Brian;
 			sourceTree = "<group>";
@@ -423,6 +435,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 974AB263BFAFDFFCCE84BC68 /* Build configuration list for PBXNativeTarget "Brian" */;
 			buildPhases = (
+				3D7CF6A7E95D0A61B6AD1865 /* Require CLIENT_TOKEN in Release */,
 				4712FE0CF139ACFDC349EFC2 /* Sources */,
 				5BA6CEEA6CAFD93A829C6901 /* Resources */,
 				F108581719C0EDEBEB85C3BC /* Frameworks */,
@@ -506,15 +519,40 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		3D7CF6A7E95D0A61B6AD1865 /* Require CLIENT_TOKEN in Release */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Require CLIENT_TOKEN in Release";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "[ \"${CONFIGURATION}\" = \"Release\" ] || exit 0\ncase \"${CLIENT_TOKEN}\" in\n  \"\") echo \"error: CLIENT_TOKEN is empty. Create ios/Brian/Local.xcconfig from Local.xcconfig.example before archiving.\"; exit 1 ;;\n  *\"<\"*|*\">\"*) echo \"error: CLIENT_TOKEN is still the Local.xcconfig.example placeholder. Put the real token from the Meta Wearables Developer Center in ios/Brian/Local.xcconfig.\"; exit 1 ;;\n  \"AR|2802824706754749|\"*) ;;\n  \"AR|\"*) echo \"error: CLIENT_TOKEN belongs to a different Meta app. Use the token for app 2802824706754749.\"; exit 1 ;;\n  *) echo \"error: CLIENT_TOKEN does not look like AR|<app id>|<token>. Copy it again from the Meta Wearables Developer Center.\"; exit 1 ;;\nesac\n# Fail closed on a truncated or mangled token too: the part after the app id is hex.\nif ! printf '%s' \"${CLIENT_TOKEN}\" | grep -Eq '^AR\\|2802824706754749\\|[0-9A-Fa-f]{16,}$'; then\n  echo \"error: CLIENT_TOKEN for app 2802824706754749 looks truncated or mangled. Copy it again from the Meta Wearables Developer Center.\"\n  exit 1\nfi\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		1122D034ED7784AA1AF70EC5 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				F894AEF019AA6115DBB386FB /* AppScreenTests.swift in Sources */,
+				C1505CC18DC22FD08E82BE42 /* AudioSessionTests.swift in Sources */,
 				A6A4449114C504C1CE92E3CA /* ConnectRowsTests.swift in Sources */,
 				ED26871AF9E5A219EA3979F0 /* ConnectionStatusTests.swift in Sources */,
 				BFC7E3E3B6064869713A194C /* EmptyStateTests.swift in Sources */,
+				AF0C47874269606C0976A7F2 /* GlassesErrorsTests.swift in Sources */,
 				696DB6207F770A8C1A370D18 /* HeaderStateTests.swift in Sources */,
 				1740899EEEBCDA46E8E39866 /* LedgerCoalescerTests.swift in Sources */,
 				49CC45830016BCCB18D833C2 /* ModelsTests.swift in Sources */,
@@ -526,6 +564,7 @@
 				3A2E3768E5D0172905F6C878 /* SessionsSummaryTests.swift in Sources */,
 				C8F552D3F2100BFC15ED67B5 /* SummaryCardTests.swift in Sources */,
 				A53FD8076532128F454DE488 /* TodayStatsTests.swift in Sources */,
+				1C3F69E9E3840FAAB252F2A2 /* WatchRecoveryTests.swift in Sources */,
 				12B5F6F88BD3EF4657194A09 /* WebSourceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -583,6 +622,7 @@
 				17A1599D759C39DF2970D60C /* Theme.swift in Sources */,
 				0CD39EBD2E42C3627444B1E6 /* TodayStats.swift in Sources */,
 				8ACD724DE73F6B1AAC0C6FEC /* TokenStore.swift in Sources */,
+				BBFF61156300BE5D9CD1B413 /* WatchRecovery.swift in Sources */,
 				4B7E48E6EC8539D7B1A0E419 /* WebScreen.swift in Sources */,
 				3356AC4E1741CDD7B04CC694 /* WebSource.swift in Sources */,
 			);
@@ -693,7 +733,7 @@
 		};
 		B6722B02BBFA64746616D7BD /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_AAB18605-2F9B-45E3-A88D-8C1FD196EFAB" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_6ADB1258-AD6D-4DD0-85B8-8CD981078CAC" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Brian.entitlements;
@@ -718,7 +758,7 @@
 		};
 		EA025B21F11DCFD0598B3322 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_AAB18605-2F9B-45E3-A88D-8C1FD196EFAB" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_6ADB1258-AD6D-4DD0-85B8-8CD981078CAC" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Brian.entitlements;

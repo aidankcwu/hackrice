@@ -79,10 +79,11 @@ struct ConnectView: View {
             switch appState.link {
             case .reachable where !isEditingLink:
                 Button("Change") { isEditingLink = true }.buttonStyle(.glass)
-            case .unreachable where !appState.link.isTokenRejected && !isEditingLink:
-                Button("Try again") { Task { await appState.testServer() } }.buttonStyle(.glass)
             case .unreachable where !isEditingLink:
-                Button("Change") { isEditingLink = true }.buttonStyle(.glass)
+                HStack {
+                    Button("Try again") { Task { await appState.testServer() } }.buttonStyle(.glass)
+                    Button("Change") { isEditingLink = true }.buttonStyle(.glass)
+                }
             default:
                 EmptyView()
             }
@@ -161,13 +162,13 @@ struct ConnectView: View {
             }
         } label: {
             // The ink tint is near-white in dark mode: the page colour keeps the label readable.
-            Text(appState.watching ? "Stop" : "Start watching")
+            Text(appState.watching ? "Stop" : (appState.startingWatch ? "Starting…" : "Start watching"))
                 .foregroundStyle(Brian.page)
         }
         .buttonStyle(.glassProminent)
         .controlSize(.large)
         .frame(maxWidth: .infinity)
-        .disabled(!appState.watching && !canStart)
+        .disabled(appState.startingWatch || (!appState.watching && !canStart))
     }
 
     // MARK: Live panel

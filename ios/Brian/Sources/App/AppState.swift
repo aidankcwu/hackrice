@@ -4,7 +4,10 @@
 import Foundation
 import Observation
 import os
+import AVFoundation
+import Speech
 import UIKit
+import UserNotifications
 
 enum LinkState: Equatable {
     case notSet
@@ -37,9 +40,13 @@ final class AppState {
             } else {
                 StreamingConsent.revoke()
                 glue.disconnect()
+                cancelRecovery()
+                startingWatch = false
                 watching = false
                 watchingSince = nil
+                UIApplication.shared.isIdleTimerDisabled = false
                 stopPolling()
+                if !demo { Task { await self.sessionCall("end") { try await self.api.endSession() } } }
             }
         }
     }
@@ -73,7 +80,13 @@ final class AppState {
     var homeLaunch: AppScreen? = nil
     // Today
     var watching: Bool = false
+    /// A Start tap is already opening the transport and DAT camera session.
+    var startingWatch: Bool = false
     var watchingSince: Date? = nil
+    /// DEFECT 1: the glasses left `.connected` mid-watch and `WatchRecovery` is waiting
+    /// out the grace period, has tried its one restart, or is about to give up. Feeds
+    /// `ConnectionInputs.recovering` (Connect's Stream row, the header pill).
+    var recovering: Bool = false
     var healthspan: Healthspan? = nil
     var episodes: [Episode] = []
     var decisions: [Decision] = []
@@ -109,6 +122,8 @@ final class AppState {
     var linkStatusLine: String { demo ? "connected 10.0.0.5:8010 · sent 412" : glue.statusLine }
     /// Live socket state while capture is running (feeds `connectionStatus`).
     var backendConnected: Bool { demo || glue.backendConnected }
+    /// Hosted links do not need the inert local-network permission row.
+    var usesHostedServer: Bool { server?.secure == true }
 
     // MARK: Connection status (N-001)
 
@@ -122,7 +137,8 @@ final class AppState {
 
     /// Connect's three rows, from the same inputs as the pill.
     func connectRows(now: Date) -> ConnectRows {
-        ConnectRows.derive(connectionInputs(now: now), checking: checkingLink, registering: registeringGlasses)
+        ConnectRows.derive(connectionInputs(now: now), checking: checkingLink,
+                           registering: registeringGlasses, starting: startingWatch)
     }
 
     /// The header above every tab (D-001), from the same inputs as the pill.
@@ -133,7 +149,8 @@ final class AppState {
             glasses: glasses,
             status: ConnectionStatus.derive(inputs),
             watching: watching,
-            canStart: ConnectRows.canStart(inputs)))
+            canStart: ConnectRows.canStart(inputs),
+            starting: startingWatch))
     }
 
     /// Home's tiles and watched line (D-003).
@@ -184,7 +201,9 @@ final class AppState {
             link: link,
             watching: watching,
             watchingSince: watchingSince,
+            starting: startingWatch,
             accessDenied: !demo && glue.accessDenied,
+            recovering: recovering,
             backendConnected: backendConnected,
             stats: streamStats(now: now),
             now: now)
@@ -273,6 +292,22 @@ final class AppState {
     @ObservationIgnored private var demoPreviewTask: Task<Void, Never>?
     /// `glue.framesSent` when this watching session started; the sender's count is cumulative.
     @ObservationIgnored private var framesAtStart = 0
+    /// Prevents startup's normal registered state from looking like a mid-watch stop.
+    @ObservationIgnored private var connectedDuringWatch = false
+    /// DEFECT 1 recovery: the task polling `WatchRecovery` while the glasses are down mid-watch.
+    @ObservationIgnored private var recoveryTask: Task<Void, Never>?
+    /// Active seconds counted before the current segment (see `recoverySegmentStart`):
+    /// together they give `WatchRecovery` a clock that freezes while backgrounded.
+    @ObservationIgnored private var recoveryActiveSeconds: TimeInterval = 0
+    /// Start of the current active segment; nil while backgrounded or not recovering.
+    @ObservationIgnored private var recoverySegmentStart: Date?
+    /// The one automatic `session.startStream()` retry for the current drop already ran.
+    @ObservationIgnored private var recoveryRestarted = false
+    /// The restart's own thrown sentence, shown instead of the generic one if recovery
+    /// gives up right after a failed restart.
+    @ObservationIgnored private var recoveryFailureSentence: String?
+    /// Foreground/background, from `didBecomeActive` / `didEnterBackground`.
+    @ObservationIgnored private var appActive = true
     /// Where the applied link's token lives (Keychain in the app; in-memory in tests).
     @ObservationIgnored private let tokenStore: TokenStoring
 
@@ -293,17 +328,30 @@ final class AppState {
         self.session = GlassesFactory.make(demo: demo, defaults: defaults)
         self.glasses = session.state
         session.onStateChange = { [weak self] state in
-            self?.glasses = state
+            guard let self else { return }
+            self.glasses = state
+            if state == .connected {
+                if self.watching || self.startingWatch { self.connectedDuringWatch = true }
+                self.cancelRecovery()
+            } else if self.watching, self.connectedDuringWatch {
+                self.beginRecoveryIfNeeded()
+            }
         }
         self.glassesDevice = session.deviceState
         session.onDeviceStateChange = { [weak self] device in
             self?.glassesDevice = device
         }
+        session.onRegistrationFailure = { [weak self] sentence in
+            guard let self else { return }
+            self.registeringGlasses = false     // Register's own await may still be pending
+            self.lastError = sentence
+        }
         glue.onAccessDenied = { [weak self] in
-            self?.watching = false
-            self?.watchingSince = nil
-            self?.stopPolling()
-            self?.lastError = "This link no longer has access. Replace the link from your invite, then start watching again."
+            guard let self else { return }
+            Task {
+                await self.endWatching(stopGlue: false, refreshSummary: false)
+                self.lastError = "This link no longer has access. Replace the link from your invite, then start watching again."
+            }
         }
 
         if demo {
@@ -405,16 +453,33 @@ final class AppState {
         }
     }
 
-    /// Foreground: refresh now, and resume the 30 s poll if watching.
+    /// Foreground: refresh now, resume the 30 s poll if watching, and resume DEFECT 1's
+    /// recovery clock (frozen while backgrounded, so time spent locked never counts
+    /// against the grace period or the total budget).
     func didBecomeActive() async {
+        appActive = true
+        if recovering, recoverySegmentStart == nil { recoverySegmentStart = Date() }
         if watching { startPolling() }
         guard demo || server != nil else { return }
+        if !demo, !checkingLink {
+            if case .reachable = link {} else { await testServer() }
+        }
+        if !demo {
+            guard case .reachable = link else { return }
+        }
         await refreshToday()
         await syncPersonaIfNeeded()          // retry a persona PUT that failed earlier
     }
 
     /// Background: stop polling. The stream itself keeps running (external-accessory mode).
+    /// Freeze DEFECT 1's recovery clock too: it must never restart or end the watch while
+    /// the app cannot see or drive DAT.
     func didEnterBackground() {
+        appActive = false
+        if let start = recoverySegmentStart {
+            recoveryActiveSeconds += Date().timeIntervalSince(start)
+            recoverySegmentStart = nil
+        }
         stopPolling()
     }
 
@@ -443,12 +508,15 @@ final class AppState {
             return
         }
         // Token to the Keychain, tokenless endpoint to UserDefaults — never the token.
-        ServerURLStore.persist(parsed, defaults: .standard, tokenStore: tokenStore)
+        guard ServerURLStore.persist(parsed, defaults: .standard, tokenStore: tokenStore) else {
+            lastError = "Zeroist could not save this invite securely. Restart the phone, then paste the link again."
+            return
+        }
         serverURL = ""                       // never round-trip the token into the paste box
         endpointLabel = parsed.endpointLabel
         server = parsed
         api.configure(.live(parsed))
-        glue.configure(serverURL: trimmed)   // existing seam: MacLink still gets the token
+        glue.configure(serverURL: parsed.socketURL.absoluteString) // canonical link, token included
         // MacLink just wrote the token to its own key as a side effect; scrub it back.
         ServerURLStore.scrubLegacyKey(tokenlessURLString: parsed.tokenlessURLString, defaults: .standard)
         await testServer()
@@ -537,6 +605,9 @@ final class AppState {
     // MARK: - Watching
 
     func startWatching() async {
+        guard !startingWatch else { return }
+        startingWatch = true
+        defer { startingWatch = false }
         if !consentGiven, StreamingConsent.isGranted { consentGiven = true }
         guard consentGiven else {
             lastError = "Agree to what is sent before the first stream. Tap Start watching again."
@@ -545,6 +616,7 @@ final class AppState {
         if demo {
             watching = true
             watchingSince = watchingSince ?? Date()
+            UIApplication.shared.isIdleTimerDisabled = true
             startPolling()
             return
         }
@@ -552,30 +624,35 @@ final class AppState {
             lastError = APIError.notConfigured.sentence
             return
         }
+        await requestWatchingPermissionsIfNeeded()
         framesAtStart = glue.framesSent
+        connectedDuringWatch = false
         do {
             try await glue.start(session: session)
             watching = true
+            // The camera start has settled. End the in-flight window here, not at the end of
+            // this method: recovery waits on it, and refreshToday below can take many seconds.
+            startingWatch = false
             watchingSince = Date()
+            connectedDuringWatch = session.state == .connected
+            // startStream returns once the camera is asked to start, not once frames flow.
+            // If they never arrive, no state change would ever trigger recovery: arm it now.
+            // The first `.connected` cancels it, normally well inside the grace period.
+            if !connectedDuringWatch { beginRecoveryIfNeeded() }
+            UIApplication.shared.isIdleTimerDisabled = true
             lastError = nil
             startPolling()
             Task { await self.sessionCall("start") { try await self.api.startSession() } }
             await refreshToday()
         } catch {
+            UIApplication.shared.isIdleTimerDisabled = false
+            connectedDuringWatch = false
             lastError = Self.sentence(for: error)
         }
     }
 
     func stopWatching() async {
-        if !demo {
-            glue.stop()
-            Task { await self.sessionCall("end") { try await self.api.endSession() } }
-        }
-        watching = false
-        watchingSince = nil
-        stopPolling()
-        // A session just ended: today's summary is out of date.
-        if !episodes.isEmpty { await refreshSummary() }
+        await endWatching(stopGlue: true, refreshSummary: true)
     }
 
     // MARK: - Preview (D-002)
@@ -799,8 +876,12 @@ final class AppState {
     // MARK: - Debug
 
     func sayTestLine() async {
-        if demo { return }
-        glue.sayTestLine()
+        do {
+            try await api.speak(text: "This is Bryan. If you can hear me, the glasses are working.")
+            lastError = nil
+        } catch {
+            lastError = "Bryan could not play the test line. Check your connection, then try Test voice again."
+        }
     }
 
     // MARK: - Private
@@ -819,6 +900,115 @@ final class AppState {
     private func stopPolling() {
         pollTask?.cancel()
         pollTask = nil
+    }
+
+    // MARK: - DEFECT 1: recover from the glasses leaving `.connected` mid-watch
+
+    /// A lock-button press, a glance at another app, a brief DAT flicker, or a touchpad
+    /// pause all leave `.connected` for a moment. None of them should end the watch: keep
+    /// the transport up and let `WatchRecovery` decide whether to wait, restart the
+    /// camera stream once, or give up. Never runs two recoveries at once.
+    private func beginRecoveryIfNeeded() {
+        guard recoveryTask == nil else { return }
+        recoveryRestarted = false
+        recoveryFailureSentence = nil
+        recoveryActiveSeconds = 0
+        recoverySegmentStart = appActive ? Date() : nil
+        recovering = true
+        recoveryTask = Task { [weak self] in
+            await self?.runRecovery()
+        }
+    }
+
+    /// Any return to `.connected`, or the person's own Stop, cancels a pending recovery.
+    private func cancelRecovery() {
+        recoveryTask?.cancel()
+        recoveryTask = nil
+        recovering = false
+        recoverySegmentStart = nil
+        recoveryActiveSeconds = 0
+        recoveryRestarted = false
+        recoveryFailureSentence = nil
+    }
+
+    /// Active seconds since the drop: frozen (via `recoverySegmentStart`) while backgrounded,
+    /// so a long spell locked never itself burns through `WatchRecovery`'s budget.
+    private var recoveryElapsedSeconds: TimeInterval {
+        recoveryActiveSeconds + (recoverySegmentStart.map { Date().timeIntervalSince($0) } ?? 0)
+    }
+
+    /// Polls `WatchRecovery.action` at a steady tick until the glasses come back
+    /// (`cancelRecovery` stops this task from the outside) or it gives up.
+    private func runRecovery() async {
+        while !Task.isCancelled {
+            guard watching, glasses != .connected else { return }
+            switch WatchRecovery.action(watching: watching, glasses: glasses, appActive: appActive,
+                                        secondsSinceDropped: recoveryElapsedSeconds,
+                                        restartAttempted: recoveryRestarted) {
+            case .wait:
+                break
+            case .restart:
+                // Never race a Start already in flight; try again once it settles.
+                if !startingWatch {
+                    recoveryRestarted = true
+                    do {
+                        try await session.startStream()
+                    } catch {
+                        if !Task.isCancelled { recoveryFailureSentence = Self.sentence(for: error) }
+                    }
+                    // Stop (and maybe a new Start) happened while the restart waited: this
+                    // recovery is stale and must not touch the newer watch's state.
+                    if Task.isCancelled { return }
+                }
+            case .end:
+                await endRecoveryAndStopWatch()
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+    }
+
+    /// Recovery gave up: end the watch with the most specific sentence available -- the
+    /// restart's own error when there was one, otherwise the generic "stopped sending".
+    private func endRecoveryAndStopWatch() async {
+        let sentence = recoveryFailureSentence
+            ?? "The glasses stopped sending video. Put them on, unfold them, and tap Start watching."
+        cancelRecovery()
+        await endWatching(stopGlue: true, refreshSummary: false)
+        lastError = sentence
+    }
+
+    private func endWatching(stopGlue: Bool, refreshSummary: Bool) async {
+        cancelRecovery()
+        let wasWatching = watching
+        if !demo, stopGlue { glue.stop() }
+        watching = false
+        watchingSince = nil
+        connectedDuringWatch = false
+        UIApplication.shared.isIdleTimerDisabled = false
+        stopPolling()
+        if !demo, wasWatching {
+            Task { await self.sessionCall("end") { try await self.api.endSession() } }
+        }
+        if refreshSummary, !episodes.isEmpty { await self.refreshSummary() }
+    }
+
+    /// These prompts are useful to the question flow, but a denial must not stop video.
+    private func requestWatchingPermissionsIfNeeded() async {
+        if AVAudioApplication.shared.recordPermission == .undetermined {
+            await withCheckedContinuation { continuation in
+                AVAudioApplication.requestRecordPermission { _ in continuation.resume() }
+            }
+        }
+        if SFSpeechRecognizer.authorizationStatus() == .notDetermined {
+            await withCheckedContinuation { continuation in
+                SFSpeechRecognizer.requestAuthorization { _ in continuation.resume() }
+            }
+        }
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        if settings.authorizationStatus == .notDetermined {
+            _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+        }
     }
 
     /// MacLink stops reconnecting once the server refuses the token; say so.

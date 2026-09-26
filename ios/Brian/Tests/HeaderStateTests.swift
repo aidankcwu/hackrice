@@ -57,6 +57,14 @@ struct HeaderStateTests {
         #expect(header.status.text == "Watching · 14 min")
     }
 
+    @Test func startingHasProgressTitleAndIsDisabled() {
+        let header = HeaderState.derive(.init(device: .demo, glasses: .registered,
+                                              status: idleStatus, watching: false,
+                                              canStart: true, starting: true))
+        #expect(header.primaryTitle == "Starting…")
+        #expect(!header.primaryEnabled)
+    }
+
     @Test func registeredButNotStreamingCannotPreview() {
         let header = derive(device: nil, glasses: .registered, status: idleStatus)
         #expect(!header.previewEnabled)
