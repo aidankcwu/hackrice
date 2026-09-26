@@ -10,6 +10,7 @@ struct AppScreenTests {
         #expect(AppScreen.from(arguments: ["-screen", "protocol-edit"]) == .protocolEdit)
         #expect(AppScreen.from(arguments: ["-screen", "protocol-templates"]) == .protocolTemplates)
         #expect(AppScreen.from(arguments: ["-screen", "session"]) == .session)
+        #expect(AppScreen.from(arguments: ["-screen", "onboarding"]) == .onboarding)
     }
 
     @Test func todayIsAnAliasOfHome() {
@@ -34,6 +35,7 @@ struct AppScreenTests {
         #expect(AppScreen.protocolTemplates.tab == .protocol)
         #expect(AppScreen.protocolEdit.tab == .protocol)
         #expect(AppScreen.session.tab == .home)
+        #expect(AppScreen.onboarding.tab == .home)
     }
 
     @Test func threeTabsInPRDOrder() {

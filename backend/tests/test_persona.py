@@ -487,7 +487,8 @@ async def test_persona_routes(client) -> None:
 
     put = await http.put("/api/persona", json={"text": "  A night-shift nurse.  "})
     assert put.status_code == 200
-    assert put.json() == {"text": "A night-shift nurse.", "source": "custom"}
+    assert put.json() == {"text": "A night-shift nurse.", "source": "custom",
+                          "wearer": "", "effective": "A night-shift nurse."}
     assert (await http.get("/api/persona")).json()["source"] == "custom"
     assert pipeline.reasoner.current_persona() == "A night-shift nurse."
 

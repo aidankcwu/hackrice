@@ -93,10 +93,6 @@ final class Link {
         (session as? CorpusRecordingConfigurable)?.useCorpusRecorder(recorder)
     }
 
-    func sayTestLine() {
-        macLink.send("Say this test line through the glasses.")
-    }
-
     func postWhisperNotification(_ text: String) {
         let content = UNMutableNotificationContent()
         content.body = text

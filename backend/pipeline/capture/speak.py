@@ -133,7 +133,7 @@ class Speech:
             self.stats.last_error = f"{type(exc).__name__}: {exc}"
             log.exception("ElevenLabs TTS failed; falling back to phone speech")
             return wire.speak_message(text, urgency), "text-fallback", 0
-        return wire.audio_message(audio, "mp3"), "elevenlabs", len(audio)
+        return wire.audio_message(audio, "mp3", text), "elevenlabs", len(audio)
 
     def _account(self, sent: int, mode: str, n_bytes: int, started: float) -> int:
         elapsed_ms = (time.perf_counter() - started) * 1000

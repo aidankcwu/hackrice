@@ -21,12 +21,13 @@ struct ConnectRows: Equatable {
     let canStart: Bool
 
     /// `checking`: a link test is in flight. `registering`: DAT registration is running.
-    static func derive(_ input: ConnectionInputs, checking: Bool, registering: Bool) -> ConnectRows {
+    static func derive(_ input: ConnectionInputs, checking: Bool, registering: Bool,
+                       starting: Bool = false) -> ConnectRows {
         ConnectRows(
             invite: invite(input, checking: checking),
             glasses: glasses(input, registering: registering),
-            stream: stream(input),
-            canStart: canStart(input))
+            stream: starting ? ConnectRow(level: .amber, text: "Starting…") : stream(input),
+            canStart: !starting && canStart(input))
     }
 
     static func canStart(_ input: ConnectionInputs) -> Bool {
@@ -34,7 +35,7 @@ struct ConnectRows: Equatable {
         return input.glasses == .registered || input.glasses == .connected
     }
 
-    static let glassesOffFix = "Turn the glasses on, then open Meta AI to reconnect them."
+    static let glassesOffFix = "Turn the glasses on and check they are paired and connected in Meta AI, then come back here."
 
     static func invite(_ input: ConnectionInputs, checking: Bool) -> ConnectRow {
         if checking { return ConnectRow(level: .amber, text: "Checking…") }
@@ -57,7 +58,7 @@ struct ConnectRows: Equatable {
         case .unavailable:
             return ConnectRow(level: .red, text: "Glasses off", fix: glassesOffFix)
         case .notRegistered:
-            return ConnectRow(level: .grey, text: "Open Meta AI and tap Allow")
+            return ConnectRow(level: .grey, text: "Tap Register, then allow Zeroist in Meta AI")
         case .registered:
             // Registered glasses open their camera session when watching starts.
             return input.watching
@@ -70,6 +71,11 @@ struct ConnectRows: Equatable {
 
     static func stream(_ input: ConnectionInputs) -> ConnectRow {
         guard input.watching else { return ConnectRow(level: .grey, text: "Not watching") }
+        guard input.glasses == .connected else {
+            return input.recovering
+                ? ConnectRow(level: .amber, text: "Glasses paused, reconnecting…")
+                : ConnectRow(level: .amber, text: "Glasses not streaming")
+        }
         guard input.backendConnected else { return ConnectRow(level: .amber, text: "Reconnecting…") }
         guard let sinceLast = input.stats.secondsSinceLastFrame else {
             return ConnectRow(level: .amber, text: "Starting…")
@@ -89,8 +95,7 @@ extension ServerURL {
     /// A hosted invite link as testers receive it: wss://DOMAIN/…/ws/glasses?token=T.
     /// The clipboard offer on Connect only proposes strings that pass this.
     static func isInviteLink(_ raw: String) -> Bool {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.lowercased().hasPrefix("wss://"), let parsed = ServerURL(trimmed) else { return false }
+        guard let parsed = ServerURL(raw), parsed.secure else { return false }
         return parsed.token != nil && parsed.socketURL.path.hasSuffix(socketPath)
     }
 }

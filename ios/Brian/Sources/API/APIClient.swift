@@ -135,6 +135,21 @@ final class APIClient {
         }
     }
 
+    /// `PUT /api/persona/wearer` `{text}`: the questionnaire's paragraph about the wearer.
+    /// Its own slot on the server, under Bryan's persona, never replacing it.
+    func putPersona(text: String) async throws {
+        if isFixtures { return }
+        let data = try JSONSerialization.data(withJSONObject: ["text": text])
+        let _: Data = try await raw("PUT", "/api/persona/wearer", body: data)
+    }
+
+    /// `POST /api/speak` `{text}`: play a short test line through the glasses.
+    func speak(text: String) async throws {
+        if isFixtures { return }
+        let data = try JSONSerialization.data(withJSONObject: ["text": text])
+        let _: Data = try await raw("POST", "/api/speak", body: data)
+    }
+
     // MARK: Sessions (D-006)
 
     /// `POST /api/session/start` `{"name": ""}`: Start watching opens a session.

@@ -2,7 +2,8 @@
 //
 //   demo (-demo / BRIAN_DEMO=1)         MockGlasses in DEBUG, else DemoGlasses (below)
 //   Settings "Use mock glasses" (DEBUG)  MockGlasses (read at launch; relaunch to switch)
-//   otherwise                            GlassesSession (Meta DAT)
+//   otherwise                            GlassesSession (Meta DAT), or UnconfiguredGlasses
+//                                        when DAT will not configure (the build lacks its Meta setup)
 import Foundation
 import UIKit
 
@@ -18,13 +19,13 @@ enum GlassesFactory {
         if demo || defaults.bool(forKey: useMockKey) {
             session = MockGlasses()
         } else {
-            session = GlassesSession()
+            session = GlassesSession.live()
         }
 #else
         if demo {
             session = DemoGlasses()
         } else {
-            session = GlassesSession()
+            session = GlassesSession.live()
         }
 #endif
         activeSession = session
@@ -45,9 +46,30 @@ final class DemoGlasses: GlassesSessioning {
     private(set) var deviceState: GlassesDeviceState? = .demo
     var onDeviceStateChange: ((GlassesDeviceState?) -> Void)?
     var onPreviewFrame: ((UIImage, Date) -> Void)?
+    var onRegistrationFailure: ((String) -> Void)?
     func openMetaAI() {}
     func register() async throws {}
     func handleIncomingURL(_ url: URL) async {}
     func startStream() async throws {}
+    func stopStream() {}
+}
+
+/// Stands in when `Wearables.configure()` failed at launch: DAT must not be touched after
+/// that, so Register and Start watching say the build lacks its Meta setup instead.
+@MainActor
+final class UnconfiguredGlasses: GlassesSessioning {
+    private(set) var state: GlassesState = .notRegistered
+    var onStateChange: ((GlassesState) -> Void)?
+    private(set) var deviceState: GlassesDeviceState? = nil
+    var onDeviceStateChange: ((GlassesDeviceState?) -> Void)?
+    var onPreviewFrame: ((UIImage, Date) -> Void)?
+    var onRegistrationFailure: ((String) -> Void)?
+    func openMetaAI() {
+        guard let url = URL(string: "fb-viewapp://") else { return }
+        UIApplication.shared.open(url)
+    }
+    func register() async throws { throw GlassesSessionError.notConfigured }
+    func handleIncomingURL(_ url: URL) async {}
+    func startStream() async throws { throw GlassesSessionError.notConfigured }
     func stopStream() {}
 }

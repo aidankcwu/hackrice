@@ -29,6 +29,7 @@ from typing import Any, Callable
 from ..actions.handlers import LOOK_CHAINED, ActionHandler
 from ..actions.speech import SpeechLimiter
 from ..config import Settings
+from ..persona import effective_persona
 from ..db import Database, day_key
 from ..frames import FrameStore
 from ..models import Decision, Escalation, PendingQuestion
@@ -1191,14 +1192,10 @@ class Reasoner:
     # adds to what it has learned with every `remember` it emits.
 
     def current_persona(self) -> str:
-        """The operator's override if there is one, else the persona we were given."""
+        """The operator's override if there is one, else the persona we were given;
+        then the wearer's questionnaire paragraph (:mod:`pipeline.persona`)."""
 
-        try:
-            override = self.db.get_persona()
-        except Exception:  # pragma: no cover - defensive
-            log.exception("could not read the persona override; using the default")
-            return self.persona
-        return override or self.persona
+        return effective_persona(self.db, self.persona)
 
     def learned_lines(self) -> list[str]:
         """Active profile lines, oldest first, capped for the prompt."""

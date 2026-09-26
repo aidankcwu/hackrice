@@ -139,14 +139,14 @@ tester:      $name
 host port:   $port  (127.0.0.1 only, the backend)
 token:       $token
 
-phone app (the link to send the tester; open it in Safari on the phone):
-  https://$DOMAIN/t/$name/app/?token=$token
-
-iOS app (glasses socket):
+SEND THIS ONE to the tester — paste into the Zeroist iOS app:
   wss://$DOMAIN/t/$name/ws/glasses?token=$token
 
-dashboard (the link to send the tester):
-  https://$DOMAIN/t/$name/dashboard/?token=$token
+Optional (browser only, not for the iOS app):
+  phone app:
+    https://$DOMAIN/t/$name/app/?token=$token
+  dashboard:
+    https://$DOMAIN/t/$name/dashboard/?token=$token
 
 backend API base (header X-Access-Token: <token>, or ?token=):
   https://$DOMAIN/t/$name

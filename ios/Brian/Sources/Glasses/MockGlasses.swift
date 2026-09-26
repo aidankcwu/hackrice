@@ -8,7 +8,8 @@ final class MockGlasses: GlassesSessioning, CaptureSenderConfigurable, CorpusRec
     private var recorder: CorpusRecorder?
     private var streamTask: Task<Void, Never>?
 
-    private(set) var state: GlassesState = .connected {
+    /// `.connected` only while the fixture frames flow, like GlassesSession.
+    private(set) var state: GlassesState = .registered {
         didSet {
             guard oldValue != state else { return }
             onStateChange?(state)
@@ -18,6 +19,8 @@ final class MockGlasses: GlassesSessioning, CaptureSenderConfigurable, CorpusRec
     private(set) var deviceState: GlassesDeviceState? = .demo
     var onDeviceStateChange: ((GlassesDeviceState?) -> Void)?
     var onPreviewFrame: ((UIImage, Date) -> Void)?
+    /// No hardware to reject a registration, so this is stored and never called.
+    var onRegistrationFailure: ((String) -> Void)?
 
     func useCaptureSender(_ sender: CapturePacketSender) {
         self.sender = sender
@@ -28,7 +31,7 @@ final class MockGlasses: GlassesSessioning, CaptureSenderConfigurable, CorpusRec
     }
 
     func openMetaAI() {}
-    func register() async throws { state = .connected }
+    func register() async throws {}
     func handleIncomingURL(_ url: URL) async {}
 
     func startStream() async throws {
@@ -52,6 +55,7 @@ final class MockGlasses: GlassesSessioning, CaptureSenderConfigurable, CorpusRec
     func stopStream() {
         streamTask?.cancel()
         streamTask = nil
+        state = .registered
     }
 
     private static func fixtureImage() -> UIImage? {

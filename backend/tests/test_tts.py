@@ -63,6 +63,7 @@ async def test_make_speak_fn_sends_audio(monkeypatch):
         Settings(speech_mode="elevenlabs", elevenlabs_api_key="key"), monkeypatch
     )
     assert msg["type"] == "audio"
+    assert msg["text"] == "Take a walk"
     assert msg["format"] == "mp3"
     assert base64.b64decode(msg["data"]) == b"mp3-bytes"
 

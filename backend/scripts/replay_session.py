@@ -25,6 +25,7 @@ real pixels at exactly the moments that matter.
     --no-seeded-context  SEEDED_CONTEXT=0: no seeded history or wearable line
     --model NAME         T1_MODEL for this run (e.g. gpt-5.4)
     --persona FILE       PERSONA_FILE: replaces the built-in persona
+    --wearer FILE        the wearer paragraph the phone's questionnaire sends
     --env-file FILE      where OPENAI_API_KEY lives (e.g. ../deploy/.env)
     --expect FILE        JSON: {"max_spoken": 2, "forbid": ["phone", ...],
                          "require_once": ["creatine"]}; exit 1 when violated
@@ -174,6 +175,8 @@ async def run(args: argparse.Namespace, rec: dict[str, Any], db_path: Path) -> d
         raise SystemExit(f"OPENAI_API_KEY not found in {env_file}; pass --env-file or use --reasoner fake")
     pipeline = build_pipeline(settings, source="sim", reasoner_mode=args.reasoner,
                               speed=args.speed, seed_db=False)
+    if args.wearer:
+        pipeline.db.set_wearer_profile(args.wearer.read_text(encoding="utf-8"))
     delta = pipeline.clock.sim_start_t - rec["ticks"][0].t
     ticks = [shift(t, delta) for t in rec["ticks"]]
     source = ReplaySource(ticks, args.speed, pipeline.frame_store, rec["frames"])
@@ -335,6 +338,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="SEEDED_CONTEXT=0: the models never see the seeded history")
     ap.add_argument("--model", help="T1_MODEL override, e.g. gpt-5.4")
     ap.add_argument("--persona", type=Path, help="persona text file (PERSONA_FILE)")
+    ap.add_argument("--wearer", type=Path,
+                    help="wearer paragraph, as the phone's questionnaire would send it")
     ap.add_argument("--env-file", type=Path,
                     help="env file with the model keys (default backend/.env); never printed")
     ap.add_argument("--expect", type=Path, help="expectations JSON")

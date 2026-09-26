@@ -58,6 +58,19 @@ struct ServerURLTests {
         #expect(s.apiBase.absoluteString == "https://glasses.example.com/t/alice")
     }
 
+    @Test func firstURLIsExtractedFromPastedWords() throws {
+        let s = try #require(ServerURL("Cory, open this link: https://glasses.example.com/t/cory/app?token=T please"))
+        #expect(s.socketURL.absoluteString == "wss://glasses.example.com/t/cory/ws/glasses?token=T")
+        #expect(s.apiBase.absoluteString == "https://glasses.example.com/t/cory")
+    }
+
+    @Test(arguments: ["app", "app/today", "dashboard", "dashboard/session/123"])
+    func hostedWebPathsBecomeTheGlassesSocket(_ suffix: String) throws {
+        let s = try #require(ServerURL("https://glasses.example.com/t/cory/\(suffix)?token=secret"))
+        #expect(s.socketURL.absoluteString == "wss://glasses.example.com/t/cory/ws/glasses?token=secret")
+        #expect(s.token == "secret")
+    }
+
     @Test func emptyTokenIsNoToken() throws {
         let s = try #require(ServerURL("wss://glasses.example.com/t/alice/ws/glasses?token="))
         #expect(s.token == nil)
