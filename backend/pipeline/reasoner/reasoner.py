@@ -36,6 +36,7 @@ from .client import AnswerParser, ReasonerClient
 from .decider import Decider, Verdict, build_state
 from .decider_settings import DeciderSettings
 from .envelope import CLERK_FRAMES, build_envelope, local_time, select_frames, RECENT_QUESTIONS
+from .session_context import constant_block, said_block
 from .evidence import EvidenceStore
 from .prompts import DEFAULT_PERSONA, LEARNED_MAX, NO_SEVEN_DAY
 from .schema import (
@@ -1042,6 +1043,13 @@ class Reasoner:
             log.exception("could not read recent questions; sending none")
             recent_questions = []
 
+        try:
+            said = said_block(self.db, esc.t)
+            constant = constant_block(self.db, esc.t)
+        except Exception:  # pragma: no cover - a context block must never cost a wake-up
+            log.exception("could not build the session context; sending none")
+            said, constant = None, None
+
         return build_envelope(
             esc,
             frames,
@@ -1051,6 +1059,8 @@ class Reasoner:
             k=FRAMES_PER_ESCALATION,
             learned=self.learned_lines(),
             recent_questions=recent_questions,
+            said=said,
+            constant=constant,
         )
 
     # -- the growing persona ----------------------------------------------

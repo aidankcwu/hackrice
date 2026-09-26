@@ -17,3 +17,6 @@ runs/
 # Meta client token: this repo is public (ios/Brian/Local.xcconfig.example)
 ios/Brian/Local.xcconfig
 ralph/*/logs/
+
+# Recorded sessions for backend/scripts/replay_session.py (frames of real rooms; keep local)
+deploy/recordings/

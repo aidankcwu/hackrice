@@ -1,0 +1,6 @@
+{
+  "_about": "A desk session with a phone, a laptop and a water bottle always in view. At most two spoken lines, at most one question, nothing about the furniture. 'bottle' is deliberately not banned: a supplement bottle picked up and read is the one line we want.",
+  "max_spoken": 2,
+  "max_questions": 1,
+  "forbid": ["phone", "laptop", "keyboard", "screen", "monitor", "timer", "water", "sip", "code"]
+}

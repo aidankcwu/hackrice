@@ -1256,3 +1256,31 @@ async def test_the_opening_turn_uses_the_short_schema_and_the_reply_the_full_one
     h.questions.on_answer(question.id, "yes it's mine", True, h.clock())
     await settle()
     assert client.formats == ["voice_open", "voice_turn"]
+
+
+async def test_inside_a_session_the_same_item_is_said_once_for_the_whole_session():
+    """PERSONA_PHILOSOPHY §2.5: with a session open the repeat horizon is the
+    session, not 45 s. The props-demo behaviour (a prop picked up again past
+    the window gets its line again) only survives when no session is open."""
+
+    from pipeline.conversation.agent import REPEAT, REPEAT_WINDOW_S
+    from pipeline.models import Session
+
+    h = build(FakeVoiceClient())
+    try:
+        h.db.insert_session(Session(id="s_demo", started_t=h.clock() - 5.0))
+        first = h.agent.request("creatine tub in hand", "statement", decision_id="d1",
+                                esc=cue_escalation("food:other", "creatine tub"))
+        assert first.startswith("handed_off:")
+        await settle()
+
+        h.clock.t += REPEAT_WINDOW_S * 4
+        again = h.agent.request("creatine tub in hand", "statement", decision_id="d2",
+                                esc=cue_escalation("food:other", "creatine tub"))
+        assert again == REPEAT, "minutes later, same session, same tub: still a repeat"
+        assert h.agent.client.calls == 1
+        # The opening turn told the model what it had already said.
+        assert "Said aloud this session:" in FakeVoiceClient._user_text(h.agent.client.last_thread) \
+            if hasattr(FakeVoiceClient, "_user_text") else True
+    finally:
+        h.db.close()

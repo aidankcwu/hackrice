@@ -339,8 +339,16 @@ def build_envelope(
     k: int = CLERK_FRAMES,
     learned: list[str] | None = None,
     recent_questions: list[Any] | None = None,
+    said: str | None = None,
+    constant: str | None = None,
 ) -> list[dict[str, Any]]:
     """Build the Responses API ``input`` for one escalation.
+
+    ``said`` and ``constant`` are the session blocks from
+    :mod:`session_context`: what was already spoken aloud, and what has been in
+    view for most of the session. They sit right after today's lines, before
+    the tick table, so the model reads "already said" and "furniture" before
+    it reads the moment.
 
     ``frames`` is the durable copy already taken at admission, keyed by
     ``frame_ref``; a ref missing from it (expired before the copy) simply drops
@@ -362,6 +370,7 @@ def build_envelope(
             ),
         },
         {"type": "input_text", "text": _today_block(today_lines)},
+        *({"type": "input_text", "text": block} for block in (said, constant) if block),
         {"type": "input_text", "text": _questions_block(recent_questions or [])},
         {
             "type": "input_text",

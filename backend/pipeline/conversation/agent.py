@@ -39,6 +39,7 @@ from ..config import Settings
 from ..db import Database, day_key
 from ..frames import FrameStore
 from ..gate.triggers import same_item, topic_about_cue
+from ..reasoner.session_context import said_block, session_start
 from ..models import Escalation, PendingQuestion, Tick, TodaySummaryLine
 from ..reasoner.envelope import (
     _data_url,
@@ -684,8 +685,15 @@ class ConversationAgent:
                 return True
         want = _norm(topic)
         kind = cue.split(":", 1)[0] if cue else None
+        # Inside an open session the same item is said once for the whole
+        # session (PERSONA_PHILOSOPHY §2.5: "they remember what they just
+        # said"); with no session open the 45 s window applies, as before.
+        horizon = REPEAT_WINDOW_S
+        start = session_start(self.db, t)
+        if start is not None:
+            horizon = max(horizon, t - start)
         for said_t, said_cue, said_item, said_topic in reversed(self._said):
-            if t - said_t > REPEAT_WINDOW_S:
+            if t - said_t > horizon:
                 break
             if kind and said_cue and said_cue.split(":", 1)[0] == kind \
                     and same_item(item, said_item):
@@ -985,6 +993,7 @@ class ConversationAgent:
         content: list[dict[str, Any]] = [
             {"type": "input_text", "text": "\n".join(head)},
             {"type": "input_text", "text": self._today_block(t)},
+            {"type": "input_text", "text": self._said_block(t)},
             {"type": "input_text", "text": self._settled_block(t)},
         ]
         if esc is not None:
@@ -1114,6 +1123,15 @@ class ConversationAgent:
             return "Today so far:\nnothing yet"
         body = "\n".join(f"  {local_time(l.t, '%H:%M')} {l.line}" for l in lines)
         return "Today so far:\n" + body
+
+    def _said_block(self, t: float) -> str:
+        """Every line spoken aloud since the session began (session_context)."""
+
+        try:
+            return said_block(self.db, t)
+        except Exception:  # pragma: no cover - defensive
+            log.exception("could not read what was said this session; sending none")
+            return "Said aloud this session:\nunknown"
 
     def _settled_block(self, t: float) -> str:
         try:

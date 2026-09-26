@@ -217,14 +217,20 @@ def test_objective_is_trimmed_but_keeps_its_rules():
         assert rule in VOICE_OBJECTIVE, rule
 
 
-def test_objective_no_longer_pushes_silence_against_the_persona():
-    """The old text said 'said in the last minute, stay silent' and 'silence is
-    the right answer more often than a filler line' while the persona said
-    speak every time; the code already suppresses back-to-back repeats."""
+def test_objective_earns_the_line_but_keeps_scripted_lines():
+    """Two failures bracket this text. Demo night: 'silence is usually right'
+    plus a persona saying speak every time, and the agent said nothing. The
+    2026-09-25 desk session: 'a hand-off gets a line', and it read the frame
+    back ('phone and laptop again; give the water bottle a sip too'). Now:
+    silence unless a person in the room would have said it, but a line the
+    persona scripts is still said."""
 
     assert "last minute" not in VOICE_OBJECTIVE
     assert "more often than a filler" not in VOICE_OBJECTIVE
-    assert "A HAND-OFF GETS A LINE" in VOICE_OBJECTIVE
+    assert "A HAND-OFF GETS A LINE" not in VOICE_OBJECTIVE
+    assert "EARN THE LINE" in VOICE_OBJECTIVE
+    assert "Never read the scene back" in VOICE_OBJECTIVE
+    assert "An observation, not an order" in VOICE_OBJECTIVE
     assert "speak every time, speak" in VOICE_OBJECTIVE
 
 
