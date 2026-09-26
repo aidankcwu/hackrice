@@ -193,7 +193,7 @@
 		FA977405BE4B4EF1BEDEF75D /* PersonaComposerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaComposerTests.swift; sourceTree = "<group>"; };
 		FC0FBA5F12B4F1CA114B1D05 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		FC2C75102A7E6B02D881985A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		"TEMP_AAB18605-2F9B-45E3-A88D-8C1FD196EFAB" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
+		"TEMP_75D0DA11-8F73-4C1C-9667-6FC87DE380B9" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -390,10 +390,10 @@
 			);
 			sourceTree = "<group>";
 		};
-		"TEMP_F0EDBA6B-4297-4FFD-870A-330F22229E71" /* Brian */ = {
+		"TEMP_3D0942AE-1928-4478-8858-E85206FFA725" /* Brian */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_AAB18605-2F9B-45E3-A88D-8C1FD196EFAB" /* Config.xcconfig */,
+				"TEMP_75D0DA11-8F73-4C1C-9667-6FC87DE380B9" /* Config.xcconfig */,
 			);
 			path = Brian;
 			sourceTree = "<group>";
@@ -423,6 +423,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 974AB263BFAFDFFCCE84BC68 /* Build configuration list for PBXNativeTarget "Brian" */;
 			buildPhases = (
+				3D7CF6A7E95D0A61B6AD1865 /* Require CLIENT_TOKEN in Release */,
 				4712FE0CF139ACFDC349EFC2 /* Sources */,
 				5BA6CEEA6CAFD93A829C6901 /* Resources */,
 				F108581719C0EDEBEB85C3BC /* Frameworks */,
@@ -505,6 +506,29 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		3D7CF6A7E95D0A61B6AD1865 /* Require CLIENT_TOKEN in Release */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Require CLIENT_TOKEN in Release";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "[ \"${CONFIGURATION}\" = \"Release\" ] || exit 0\ncase \"${CLIENT_TOKEN}\" in\n  \"\") echo \"error: CLIENT_TOKEN is empty. Create ios/Brian/Local.xcconfig from Local.xcconfig.example before archiving.\"; exit 1 ;;\n  *\"<\"*|*\">\"*) echo \"error: CLIENT_TOKEN is still the Local.xcconfig.example placeholder. Put the real token from the Meta Wearables Developer Center in ios/Brian/Local.xcconfig.\"; exit 1 ;;\n  \"AR|2802824706754749|\"*) ;;\n  \"AR|\"*) echo \"error: CLIENT_TOKEN belongs to a different Meta app. Use the token for app 2802824706754749.\"; exit 1 ;;\n  *) echo \"error: CLIENT_TOKEN does not look like AR|<app id>|<token>. Copy it again from the Meta Wearables Developer Center.\"; exit 1 ;;\nesac\n# Fail closed on a truncated or mangled token too: the part after the app id is hex.\nif ! printf '%s' \"${CLIENT_TOKEN}\" | grep -Eq '^AR\\|2802824706754749\\|[0-9A-Fa-f]{16,}$'; then\n  echo \"error: CLIENT_TOKEN for app 2802824706754749 looks truncated or mangled. Copy it again from the Meta Wearables Developer Center.\"\n  exit 1\nfi\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		1122D034ED7784AA1AF70EC5 /* Sources */ = {
@@ -693,7 +717,7 @@
 		};
 		B6722B02BBFA64746616D7BD /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_AAB18605-2F9B-45E3-A88D-8C1FD196EFAB" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_75D0DA11-8F73-4C1C-9667-6FC87DE380B9" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Brian.entitlements;
@@ -718,7 +742,7 @@
 		};
 		EA025B21F11DCFD0598B3322 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_AAB18605-2F9B-45E3-A88D-8C1FD196EFAB" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_75D0DA11-8F73-4C1C-9667-6FC87DE380B9" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Brian.entitlements;

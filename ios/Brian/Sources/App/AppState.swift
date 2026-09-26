@@ -799,8 +799,12 @@ final class AppState {
     // MARK: - Debug
 
     func sayTestLine() async {
-        if demo { return }
-        glue.sayTestLine()
+        do {
+            try await api.speak(text: "This is Bryan. If you can hear me, the glasses are working.")
+            lastError = nil
+        } catch {
+            lastError = "Bryan could not play the test line. Check your connection, then try Test voice again."
+        }
     }
 
     // MARK: - Private
