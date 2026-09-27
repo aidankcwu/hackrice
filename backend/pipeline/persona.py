@@ -1,4 +1,4 @@
-"""The persona every prompt is briefed with: operator persona, then the wearer.
+"""The persona every prompt is briefed with: the wearer, then the operator persona.
 
 Two slots in the ``profile`` table (:class:`pipeline.db.Database`):
 
@@ -19,18 +19,26 @@ log = logging.getLogger(__name__)
 
 __all__ = ["WEARER_HEADING", "effective_persona", "join_persona"]
 
-#: Introduces the wearer paragraph under the persona.
+#: Introduces the wearer paragraph, above the persona.
 WEARER_HEADING = "About the wearer:"
 
 
 def join_persona(persona: str, wearer: str | None) -> str:
-    """``persona`` alone, or ``persona`` + a blank line + heading + ``wearer``."""
+    """The wearer's paragraph first, then the persona.
+
+    The questionnaire paragraph is who the model is working for; the persona
+    is how it behaves. Who comes first, so the behaviour text reads as
+    instructions about that person. With no wearer paragraph the persona
+    stands alone. The wearer slot holds one paragraph, so the next person's
+    questionnaire replaces the previous one rather than stacking under it.
+    """
 
     base = (persona or "").strip()
     extra = (wearer or "").strip()
     if not extra:
         return base
-    return f"{base}\n\n{WEARER_HEADING}\n{extra}" if base else f"{WEARER_HEADING}\n{extra}"
+    head = f"{WEARER_HEADING}\n{extra}"
+    return f"{head}\n\n{base}" if base else head
 
 
 def effective_persona(db, base: str) -> str:
