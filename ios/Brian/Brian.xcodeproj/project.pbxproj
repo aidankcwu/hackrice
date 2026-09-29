@@ -201,7 +201,7 @@
 		FA977405BE4B4EF1BEDEF75D /* PersonaComposerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaComposerTests.swift; sourceTree = "<group>"; };
 		FC0FBA5F12B4F1CA114B1D05 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		FC2C75102A7E6B02D881985A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		"TEMP_B0863335-5371-4E9B-971F-6E35AD46F503" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
+		"TEMP_3236B695-B3EE-4C00-957C-CFB241C62469" /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -402,10 +402,10 @@
 			);
 			sourceTree = "<group>";
 		};
-		"TEMP_FB505279-F2E8-470B-B515-DDB17C0148DA" /* Brian */ = {
+		"TEMP_7D84E556-2E09-4F8D-ADED-3FB246597479" /* Brian */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_B0863335-5371-4E9B-971F-6E35AD46F503" /* Config.xcconfig */,
+				"TEMP_3236B695-B3EE-4C00-957C-CFB241C62469" /* Config.xcconfig */,
 			);
 			path = Brian;
 			sourceTree = "<group>";
@@ -733,7 +733,7 @@
 		};
 		B6722B02BBFA64746616D7BD /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_B0863335-5371-4E9B-971F-6E35AD46F503" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_3236B695-B3EE-4C00-957C-CFB241C62469" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Brian.entitlements;
@@ -758,7 +758,7 @@
 		};
 		EA025B21F11DCFD0598B3322 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_B0863335-5371-4E9B-971F-6E35AD46F503" /* Config.xcconfig */;
+			baseConfigurationReference = "TEMP_3236B695-B3EE-4C00-957C-CFB241C62469" /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Brian.entitlements;
